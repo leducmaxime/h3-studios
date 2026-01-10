@@ -2,10 +2,12 @@
 
 import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getAvailableRanges, type StudioId } from "@/lib/booking";
 
 interface WeekCalendarProps {
   onSelectDate: (date: Date) => void;
   selectedDate: Date | null;
+  studioFilter?: StudioId | null;
 }
 
 const DAYS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -50,7 +52,7 @@ function isPast(date: Date): boolean {
   return compareDate < today;
 }
 
-export function WeekCalendar({ onSelectDate, selectedDate }: WeekCalendarProps) {
+export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekCalendarProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   
   const weekDates = useMemo(() => {
@@ -68,6 +70,13 @@ export function WeekCalendar({ onSelectDate, selectedDate }: WeekCalendarProps) 
     }
     return `${first.getDate()} ${MONTHS_FR[first.getMonth()]} - ${last.getDate()} ${MONTHS_FR[last.getMonth()]} ${last.getFullYear()}`;
   }, [weekDates]);
+
+  const availabilityByDay = useMemo(() => {
+    return weekDates.map((date) => {
+      if (isPast(date)) return [];
+      return getAvailableRanges(date, studioFilter);
+    });
+  }, [weekDates, studioFilter]);
 
   const goToPreviousWeek = () => {
     if (weekOffset > 0) setWeekOffset((w) => w - 1);
@@ -101,21 +110,23 @@ export function WeekCalendar({ onSelectDate, selectedDate }: WeekCalendarProps) 
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
-        {weekDates.map((date) => {
+      <div className="grid grid-cols-7 gap-1 sm:gap-2">
+        {weekDates.map((date, idx) => {
           const past = isPast(date);
           const today = isToday(date);
           const selected = selectedDate && isSameDay(date, selectedDate);
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          const ranges = availabilityByDay[idx];
+          const hasAvailability = ranges.length > 0;
           
           return (
             <button
               key={date.toISOString()}
-              onClick={() => !past && onSelectDate(date)}
-              disabled={past}
+              onClick={() => !past && hasAvailability && onSelectDate(date)}
+              disabled={past || !hasAvailability}
               className={`
-                flex flex-col items-center gap-1 rounded-lg p-2 sm:p-3 transition-all
-                ${past 
+                flex flex-col items-center gap-0.5 rounded-lg p-1.5 sm:p-2 transition-all min-h-[80px] sm:min-h-[100px]
+                ${past || !hasAvailability
                   ? "opacity-40 cursor-not-allowed bg-white/5" 
                   : "hover:bg-primary/20 cursor-pointer"
                 }
@@ -127,21 +138,35 @@ export function WeekCalendar({ onSelectDate, selectedDate }: WeekCalendarProps) 
                   ? "ring-2 ring-white/50" 
                   : ""
                 }
-                ${isWeekend && !selected && !past
+                ${isWeekend && !selected && !past && hasAvailability
                   ? "bg-primary/10" 
                   : ""
                 }
               `}
             >
-              <span className="text-xs sm:text-sm font-medium opacity-70">
+              <span className="text-[10px] sm:text-xs font-medium opacity-70">
                 {DAYS_FR[date.getDay()]}
               </span>
-              <span className={`text-lg sm:text-2xl font-bold ${selected ? "text-black" : ""}`}>
+              <span className={`text-base sm:text-xl font-bold ${selected ? "text-black" : ""}`}>
                 {date.getDate()}
               </span>
-              {isWeekend && !past && (
-                <span className={`text-[10px] sm:text-xs ${selected ? "text-black/70" : "text-primary"}`}>
-                  Pointe
+              {!past && hasAvailability && (
+                <div className={`flex flex-col items-center gap-0 mt-0.5 ${selected ? "text-black/70" : "text-white/50"}`}>
+                  {ranges.slice(0, 2).map((range, i) => (
+                    <span key={i} className="text-[8px] sm:text-[10px] leading-tight">
+                      {range}
+                    </span>
+                  ))}
+                  {ranges.length > 2 && (
+                    <span className="text-[8px] sm:text-[10px] leading-tight">
+                      +{ranges.length - 2}
+                    </span>
+                  )}
+                </div>
+              )}
+              {!past && !hasAvailability && (
+                <span className="text-[8px] sm:text-[10px] text-white/30 mt-1">
+                  Complet
                 </span>
               )}
             </button>

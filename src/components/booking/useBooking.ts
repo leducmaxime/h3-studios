@@ -3,15 +3,18 @@
 import { useState, useCallback, useMemo } from "react";
 import {
   type BookingState,
+  type BookingFlow,
   type StudioId,
   type GroupType,
+  type CompletedBooking,
   calculatePrice,
   generateBookingRef,
   generateMockAvailability,
 } from "@/lib/booking";
 
 const initialState: BookingState = {
-  step: 1,
+  flow: null,
+  step: 0,
   selectedDate: null,
   startTime: null,
   endTime: null,
@@ -22,6 +25,7 @@ const initialState: BookingState = {
   userPhone: "",
   bandName: "",
   bookingRef: null,
+  cart: [],
 };
 
 export function useBooking() {
@@ -31,12 +35,39 @@ export function useBooking() {
     setState((s) => ({ ...s, step }));
   }, []);
 
-  const selectDate = useCallback((date: Date) => {
+  const selectFlow = useCallback((flow: BookingFlow) => {
     setState((s) => ({
       ...s,
-      selectedDate: date,
-      startTime: null,
-      endTime: null,
+      flow,
+      step: 1,
+    }));
+  }, []);
+
+  const selectDate = useCallback((date: Date) => {
+    setState((s) => {
+      if (s.flow === "time-first") {
+        return {
+          ...s,
+          selectedDate: date,
+          startTime: null,
+          endTime: null,
+          step: 2,
+        };
+      }
+      return {
+        ...s,
+        selectedDate: date,
+        startTime: null,
+        endTime: null,
+        step: 3,
+      };
+    });
+  }, []);
+
+  const selectStudioFirst = useCallback((studioId: StudioId) => {
+    setState((s) => ({
+      ...s,
+      studioId,
       step: 2,
     }));
   }, []);
@@ -52,7 +83,10 @@ export function useBooking() {
   const confirmTimeSelection = useCallback(() => {
     setState((s) => {
       if (s.startTime && s.endTime) {
-        return { ...s, step: 3 };
+        if (s.flow === "time-first") {
+          return { ...s, step: 3 };
+        }
+        return { ...s, step: 4 };
       }
       return s;
     });
@@ -74,10 +108,57 @@ export function useBooking() {
   );
 
   const confirmBooking = useCallback(() => {
+    setState((s) => {
+      if (!s.selectedDate || !s.startTime || !s.endTime || !s.studioId) return s;
+
+      const pricing = calculatePrice(s.studioId, s.groupType, s.selectedDate, s.startTime, s.endTime);
+      const bookingRef = generateBookingRef();
+
+      const newBooking: CompletedBooking = {
+        id: crypto.randomUUID(),
+        date: s.selectedDate,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        studioId: s.studioId,
+        groupType: s.groupType,
+        userName: s.userName,
+        userEmail: s.userEmail,
+        userPhone: s.userPhone,
+        bandName: s.bandName,
+        bookingRef,
+        price: pricing.total,
+      };
+
+      return {
+        ...s,
+        bookingRef,
+        cart: [...s.cart, newBooking],
+        step: 5,
+      };
+    });
+  }, []);
+
+  const addAnotherBooking = useCallback(() => {
     setState((s) => ({
       ...s,
-      bookingRef: generateBookingRef(),
-      step: 5,
+      selectedDate: null,
+      startTime: null,
+      endTime: null,
+      studioId: null,
+      groupType: "group",
+      bookingRef: null,
+      step: 1,
+    }));
+  }, []);
+
+  const goToCheckout = useCallback(() => {
+    setState((s) => ({ ...s, step: 6 }));
+  }, []);
+
+  const removeFromCart = useCallback((bookingId: string) => {
+    setState((s) => ({
+      ...s,
+      cart: s.cart.filter((b) => b.id !== bookingId),
     }));
   }, []);
 
@@ -87,10 +168,20 @@ export function useBooking() {
 
   const goBack = useCallback(() => {
     setState((s) => {
-      if (s.step === 1) return s;
-      if (s.step === 2) return { ...s, step: 1, selectedDate: null, startTime: null, endTime: null };
-      if (s.step === 3) return { ...s, step: 2, studioId: null };
-      if (s.step === 4) return { ...s, step: 3 };
+      if (s.step === 0) return s;
+      if (s.step === 1) return { ...s, step: 0, flow: null };
+
+      if (s.flow === "time-first") {
+        if (s.step === 2) return { ...s, step: 1, selectedDate: null, startTime: null, endTime: null };
+        if (s.step === 3) return { ...s, step: 2, studioId: null };
+        if (s.step === 4) return { ...s, step: 3 };
+      } else {
+        if (s.step === 2) return { ...s, step: 1, studioId: null, selectedDate: null };
+        if (s.step === 3) return { ...s, step: 2, startTime: null, endTime: null };
+        if (s.step === 4) return { ...s, step: 3 };
+      }
+
+      if (s.step === 6) return { ...s, step: 5 };
       return s;
     });
   }, []);
@@ -113,6 +204,10 @@ export function useBooking() {
     );
   }, [state.studioId, state.groupType, state.selectedDate, state.startTime, state.endTime]);
 
+  const cartTotal = useMemo(() => {
+    return state.cart.reduce((sum, booking) => sum + booking.price, 0);
+  }, [state.cart]);
+
   const canProceedToStudio = state.startTime !== null && state.endTime !== null;
   const canConfirmBooking =
     state.userName.trim() !== "" &&
@@ -123,10 +218,13 @@ export function useBooking() {
     state,
     availability,
     pricing,
+    cartTotal,
     canProceedToStudio,
     canConfirmBooking,
     setStep,
+    selectFlow,
     selectDate,
+    selectStudioFirst,
     selectTimeRange,
     clearTimeRange,
     confirmTimeSelection,
@@ -134,6 +232,9 @@ export function useBooking() {
     selectStudio,
     updateUserInfo,
     confirmBooking,
+    addAnotherBooking,
+    goToCheckout,
+    removeFromCart,
     resetBooking,
     goBack,
   };

@@ -1,5 +1,6 @@
 export type StudioId = "la-scene" | "le-podium";
 export type GroupType = "solo" | "duo" | "group";
+export type BookingFlow = "time-first" | "studio-first";
 
 export interface Studio {
   id: StudioId;
@@ -15,8 +16,24 @@ export interface PriceSlot {
   rate: number;
 }
 
+export interface CompletedBooking {
+  id: string;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  studioId: StudioId;
+  groupType: GroupType;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  bandName: string;
+  bookingRef: string;
+  price: number;
+}
+
 export interface BookingState {
-  step: 1 | 2 | 3 | 4 | 5;
+  flow: BookingFlow | null;
+  step: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = flow choice, 6 = final checkout
   selectedDate: Date | null;
   startTime: string | null;
   endTime: string | null;
@@ -27,6 +44,7 @@ export interface BookingState {
   userPhone: string;
   bandName: string;
   bookingRef: string | null;
+  cart: CompletedBooking[];
 }
 
 export const STUDIOS: Record<StudioId, Studio> = {
@@ -151,6 +169,52 @@ export function generateBookingRef(): string {
   const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
   const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `H3-${datePart}-${randomPart}`;
+}
+
+export function getAvailableRanges(
+  date: Date,
+  studioFilter?: StudioId | null
+): string[] {
+  const availability = generateMockAvailability(date);
+  const ranges: string[] = [];
+  let rangeStart: string | null = null;
+
+  const isSlotAvailable = (time: string) => {
+    if (studioFilter) {
+      return !availability.has(`${studioFilter}-${time}`);
+    }
+    return (
+      !availability.has(`la-scene-${time}`) ||
+      !availability.has(`le-podium-${time}`)
+    );
+  };
+
+  for (let i = 0; i < TIME_SLOTS.length; i++) {
+    const time = TIME_SLOTS[i];
+    const available = isSlotAvailable(time);
+
+    if (available && rangeStart === null) {
+      rangeStart = time;
+    } else if (!available && rangeStart !== null) {
+      const endTime = TIME_SLOTS[i];
+      ranges.push(formatTimeRange(rangeStart, endTime));
+      rangeStart = null;
+    }
+  }
+
+  if (rangeStart !== null) {
+    ranges.push(formatTimeRange(rangeStart, "22:30"));
+  }
+
+  return ranges;
+}
+
+function formatTimeRange(start: string, end: string): string {
+  const formatHour = (t: string) => {
+    const h = parseInt(t.split(":")[0], 10);
+    return `${h}h`;
+  };
+  return `${formatHour(start)}-${formatHour(end)}`;
 }
 
 export function generateMockAvailability(date: Date): Set<string> {

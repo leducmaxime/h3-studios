@@ -10,6 +10,8 @@ import {
   formatDuration,
 } from "@/lib/booking";
 
+import type { StudioId } from "@/lib/booking";
+
 interface TimeSlotPickerProps {
   date: Date;
   availability: Set<string>;
@@ -20,6 +22,8 @@ interface TimeSlotPickerProps {
   onConfirm: () => void;
   onBack: () => void;
   canConfirm: boolean;
+  studioFilter?: StudioId;
+  hideHeader?: boolean;
 }
 
 export function TimeSlotPicker({
@@ -32,18 +36,35 @@ export function TimeSlotPicker({
   onConfirm,
   onBack,
   canConfirm,
+  studioFilter,
+  hideHeader = false,
 }: TimeSlotPickerProps) {
   const [hoverSlot, setHoverSlot] = useState<string | null>(null);
   const [selectingStart, setSelectingStart] = useState(true);
 
   const isSlotBooked = useCallback(
     (time: string) => {
+      if (studioFilter) {
+        return availability.has(`${studioFilter}-${time}`);
+      }
       return (
         availability.has(`la-scene-${time}`) &&
         availability.has(`le-podium-${time}`)
       );
     },
-    [availability]
+    [availability, studioFilter]
+  );
+
+  const isRangeAvailable = useCallback(
+    (fromIdx: number, toIdx: number) => {
+      for (let i = fromIdx; i <= toIdx; i++) {
+        if (isSlotBooked(TIME_SLOTS[i])) {
+          return false;
+        }
+      }
+      return true;
+    },
+    [isSlotBooked]
   );
 
   const handleSlotClick = useCallback(
@@ -62,6 +83,9 @@ export function TimeSlotPicker({
           onSelectRange(time, "");
           setSelectingStart(false);
         } else {
+          if (!isRangeAvailable(startIdx, clickIdx)) {
+            return;
+          }
           const endTimeSlot = TIME_SLOTS[clickIdx + 1] || TIME_SLOTS[clickIdx];
           if (clickIdx - startIdx + 1 >= MIN_BOOKING_SLOTS) {
             onSelectRange(startTime, endTimeSlot);
@@ -70,7 +94,7 @@ export function TimeSlotPicker({
         }
       }
     },
-    [startTime, selectingStart, onSelectRange, isSlotBooked]
+    [startTime, selectingStart, onSelectRange, isSlotBooked, isRangeAvailable]
   );
 
   const handleClear = useCallback(() => {
@@ -99,13 +123,15 @@ export function TimeSlotPicker({
       if (!selectingStart && startTime && hoverSlot) {
         const hoverIdx = TIME_SLOTS.indexOf(hoverSlot);
         if (hoverIdx > startIdx && index >= startIdx && index <= hoverIdx) {
-          return peak ? "preview-peak" : "preview";
+          if (isRangeAvailable(startIdx, hoverIdx)) {
+            return peak ? "preview-peak" : "preview";
+          }
         }
       }
 
       return peak ? "available-peak" : "available";
     },
-    [date, startTime, endTime, hoverSlot, selectingStart, isSlotBooked]
+    [date, startTime, endTime, hoverSlot, selectingStart, isSlotBooked, isRangeAvailable]
   );
 
   const morningSlots = TIME_SLOTS.slice(0, 8);
@@ -127,23 +153,33 @@ export function TimeSlotPicker({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onBack}
-          className="rounded-full p-2 transition-colors hover:bg-white/10"
-          aria-label="Retour"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <div>
-          <h3 className="text-lg font-semibold capitalize">{formatDate(date)}</h3>
-          <p className="text-sm text-white/60">
-            {selectingStart
-              ? "Cliquez sur l'heure de début"
-              : "Cliquez sur l'heure de fin (min. 1h)"}
-          </p>
+      {!hideHeader && (
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="rounded-full p-2 transition-colors hover:bg-white/10"
+            aria-label="Retour"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <h3 className="text-lg font-semibold capitalize">{formatDate(date)}</h3>
+            <p className="text-sm text-white/60">
+              {selectingStart
+                ? "Cliquez sur l'heure de début"
+                : "Cliquez sur l'heure de fin (min. 1h)"}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
+
+      {hideHeader && (
+        <p className="text-sm text-white/60">
+          {selectingStart
+            ? "Cliquez sur l'heure de début"
+            : "Cliquez sur l'heure de fin (min. 1h)"}
+        </p>
+      )}
 
       <div className="flex flex-col gap-6">
         {slotGroups.map(({ label, slots, startIndex }) => (
