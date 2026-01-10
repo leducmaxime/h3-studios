@@ -1,0 +1,222 @@
+export type StudioId = "la-scene" | "le-podium";
+export type GroupType = "solo" | "duo" | "group";
+
+export interface Studio {
+  id: StudioId;
+  name: string;
+  size: string;
+  description: string;
+  features: string[];
+}
+
+export interface PriceSlot {
+  time: string;
+  isPeak: boolean;
+  rate: number;
+}
+
+export interface BookingState {
+  step: 1 | 2 | 3 | 4 | 5;
+  selectedDate: Date | null;
+  startTime: string | null;
+  endTime: string | null;
+  studioId: StudioId | null;
+  groupType: GroupType;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  bandName: string;
+  bookingRef: string | null;
+}
+
+export const STUDIOS: Record<StudioId, Studio> = {
+  "la-scene": {
+    id: "la-scene",
+    name: "La Scène",
+    size: "42m²",
+    description: "Scène intimiste avec rampe d'éclairage, écran géant et vidéoprojecteur",
+    features: ["Scène", "Éclairage", "Écran géant", "Vidéoprojecteur"],
+  },
+  "le-podium": {
+    id: "le-podium",
+    name: "Le Podium",
+    size: "35m²",
+    description: "Espace simple et fonctionnel, idéal pour répétitions et cours",
+    features: ["Compact", "Fonctionnel", "Cours"],
+  },
+};
+
+export const PRICING: Record<StudioId, Record<GroupType, { offPeak: number; peak: number }>> = {
+  "la-scene": {
+    solo: { offPeak: 6, peak: 6 },
+    duo: { offPeak: 12, peak: 12 },
+    group: { offPeak: 18, peak: 22 },
+  },
+  "le-podium": {
+    solo: { offPeak: 6, peak: 6 },
+    duo: { offPeak: 12, peak: 12 },
+    group: { offPeak: 15, peak: 18 },
+  },
+};
+
+export const TIME_SLOTS = [
+  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+  "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
+  "18:00", "18:30", "19:00", "19:30", "20:00", "20:30",
+  "21:00", "21:30", "22:00",
+];
+
+export const SLOT_DURATION_MINUTES = 30;
+export const MIN_BOOKING_SLOTS = 2;
+
+export function isPeakTime(date: Date, time: string): boolean {
+  const hour = parseInt(time.split(":")[0], 10);
+  const dayOfWeek = date.getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  return hour >= 18 || isWeekend;
+}
+
+export function getSlotRate(
+  studioId: StudioId,
+  groupType: GroupType,
+  date: Date,
+  time: string
+): number {
+  const isPeak = isPeakTime(date, time);
+  return PRICING[studioId][groupType][isPeak ? "peak" : "offPeak"];
+}
+
+export function calculatePrice(
+  studioId: StudioId,
+  groupType: GroupType,
+  date: Date,
+  startTime: string,
+  endTime: string
+): { total: number; breakdown: PriceSlot[] } {
+  const startIndex = TIME_SLOTS.indexOf(startTime);
+  const endIndex = TIME_SLOTS.indexOf(endTime);
+  
+  if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
+    return { total: 0, breakdown: [] };
+  }
+
+  const breakdown: PriceSlot[] = [];
+  
+  for (let i = startIndex; i < endIndex; i++) {
+    const time = TIME_SLOTS[i];
+    const isPeak = isPeakTime(date, time);
+    const rate = PRICING[studioId][groupType][isPeak ? "peak" : "offPeak"];
+    breakdown.push({ time, isPeak, rate });
+  }
+
+  const total = breakdown.reduce(
+    (sum, slot) => sum + (slot.rate * SLOT_DURATION_MINUTES) / 60,
+    0
+  );
+
+  return { total, breakdown };
+}
+
+export function formatDuration(startTime: string, endTime: string): string {
+  const startIndex = TIME_SLOTS.indexOf(startTime);
+  const endIndex = TIME_SLOTS.indexOf(endTime);
+  
+  if (startIndex === -1 || endIndex === -1) return "";
+  
+  const slots = endIndex - startIndex;
+  const totalMinutes = slots * SLOT_DURATION_MINUTES;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  
+  if (hours === 0) return `${minutes}min`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h${minutes.toString().padStart(2, "0")}`;
+}
+
+export function formatDate(date: Date, format: "short" | "long" = "long"): string {
+  const options: Intl.DateTimeFormatOptions = format === "long"
+    ? { weekday: "long", day: "numeric", month: "long", year: "numeric" }
+    : { weekday: "short", day: "numeric", month: "short" };
+  
+  return date.toLocaleDateString("fr-FR", options);
+}
+
+export function formatPrice(amount: number): string {
+  return amount % 1 === 0 ? `${amount}€` : `${amount.toFixed(2).replace(".", ",")}€`;
+}
+
+export function generateBookingRef(): string {
+  const now = new Date();
+  const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `H3-${datePart}-${randomPart}`;
+}
+
+export function generateMockAvailability(date: Date): Set<string> {
+  const booked = new Set<string>();
+  const seed = date.getDate() + date.getMonth() * 31;
+  const random = (n: number) => ((seed * 9301 + 49297) % 233280) / 233280 * n;
+  
+  const numBooked = Math.floor(random(8)) + 2;
+  
+  for (let i = 0; i < numBooked; i++) {
+    const startIdx = Math.floor(random(TIME_SLOTS.length - 4));
+    const duration = Math.floor(random(4)) + 2;
+    
+    for (let j = 0; j < duration && startIdx + j < TIME_SLOTS.length; j++) {
+      if (random(1) > 0.5) {
+        booked.add(`la-scene-${TIME_SLOTS[startIdx + j]}`);
+      } else {
+        booked.add(`le-podium-${TIME_SLOTS[startIdx + j]}`);
+      }
+    }
+  }
+  
+  return booked;
+}
+
+export function generateICS(
+  date: Date,
+  startTime: string,
+  endTime: string,
+  studioName: string,
+  bookingRef: string
+): string {
+  const formatICSDate = (d: Date, time: string): string => {
+    const [hours, minutes] = time.split(":").map(Number);
+    const dt = new Date(d);
+    dt.setHours(hours, minutes, 0, 0);
+    return dt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  };
+
+  const dtStart = formatICSDate(date, startTime);
+  const dtEnd = formatICSDate(date, endTime);
+  const now = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+
+  return `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//H3 Studios//Reservation//FR
+BEGIN:VEVENT
+UID:${bookingRef}@h3-studios.fr
+DTSTAMP:${now}
+DTSTART:${dtStart}
+DTEND:${dtEnd}
+SUMMARY:Répétition - ${studioName}
+DESCRIPTION:Réservation ${bookingRef} chez H3 Studios
+LOCATION:3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie
+END:VEVENT
+END:VCALENDAR`;
+}
+
+export function downloadICS(icsContent: string, filename: string): void {
+  const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

@@ -1,4 +1,5 @@
 import { ScrollUp } from "@/components/common/ScrollUp";
+import { BookingWidget } from "@/components/booking/BookingWidget";
 import {
   Table,
   TableBody,
@@ -15,42 +16,15 @@ export function TarifsReservation() {
       <div className="text-center font-blanka text-3xl md:text-5xl">
         TARIFS ET RESERVATION
       </div>
-      <div className="flex w-full max-w-[1048px] flex-col gap-8">
+      
+      <div className="w-full max-w-[900px] px-4">
+        <BookingWidget />
+      </div>
+
+      <div className="mt-8 flex w-full max-w-[1048px] flex-col gap-8 px-4">
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="flex w-full flex-col items-center gap-8 text-center">
-            <div className="flex flex-col gap-8 bg-primary px-8 py-4 text-center text-black">
-              <div className="w-full text-2xl font-bold underline decoration-4 underline-offset-8">
-                RÉSERVATION
-              </div>
-              <div className="flex flex-col gap-2">
-                <p className="whitespace-pre-line font-bold">
-                  Prochainement, réservations en ligne !
-                </p>
-                <p className="whitespace-pre-line">
-                  {`En attendant, pour plus d'informations ou pour effectuer une réservation,
-n'hésitez pas à contacter notre équipe par e-mail à`}
-                </p>
-                <a
-                  className="whitespace-nowrap text-xl font-semibold"
-                  href="mailto:contact@h3-studios.fr?subject=Réservation+d%27un+studio"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  contact@h3-studios.fr
-                </a>
-                <p>ou à joindre Marcel par téléphone au</p>
-                <a
-                  className="whitespace-nowrap text-xl font-semibold"
-                  href="tel:0613440875"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  06 13 44 08 75
-                </a>
-              </div>
-            </div>
-
-            <div className="text-center font-blanka text-2xl">LES STUDIOS</div>
+            <div className="text-center font-blanka text-2xl">GRILLE TARIFAIRE</div>
             <div className="flex w-full flex-col gap-4">
               <Table className="w-full border-8 border-primary text-center">
                 <TableHeader>
