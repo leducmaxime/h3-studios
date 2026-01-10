@@ -1,0 +1,232 @@
+export const SITE_URL = "https://h3-studios.amis-harmonie-sucy.workers.dev";
+export const SITE_NAME = "H3 STUDIOS";
+
+export interface PageSEO {
+  title: string;
+  description: string;
+  keywords: string[];
+  path: string;
+}
+
+export const pageSEO: Record<string, PageSEO> = {
+  "/": {
+    title: "H3 STUDIOS - Studios de Répétition et Enregistrement à Sucy-en-Brie",
+    description:
+      "H3 Studios propose la location de studios de répétition et d'enregistrement à Sucy-en-Brie (94). Deux espaces équipés : La Scène (42m²) et Le Podium (35m²). À 2 min de la gare RER A Sucy-Bonneuil.",
+    keywords: [
+      "studio répétition",
+      "studio enregistrement",
+      "Sucy-en-Brie",
+      "location studio musique",
+      "répétition groupe",
+      "Val-de-Marne",
+      "94",
+      "RER A",
+    ],
+    path: "/",
+  },
+  "/les-studios": {
+    title: "Nos Studios de Répétition - La Scène & Le Podium | H3 STUDIOS",
+    description:
+      "Découvrez nos deux studios de répétition à Sucy-en-Brie : La Scène (42m², hauteur 3,50m, scène avec éclairage) et Le Podium (35m², idéal répétitions et cours). Équipement professionnel inclus.",
+    keywords: [
+      "studio La Scène",
+      "studio Le Podium",
+      "salle répétition équipée",
+      "studio musique 94",
+      "location salle répétition",
+      "studio groupe musique",
+    ],
+    path: "/les-studios",
+  },
+  "/le-materiel": {
+    title: "Matériel et Équipement des Studios | H3 STUDIOS Sucy-en-Brie",
+    description:
+      "Équipement professionnel inclus : batteries Yamaha et Pearl, amplis Marshall/Fender/Ampeg, sono complète, matériel d'enregistrement Focusrite. Location d'instruments disponible.",
+    keywords: [
+      "équipement studio",
+      "batterie Yamaha",
+      "ampli Marshall",
+      "matériel enregistrement",
+      "location instruments",
+      "sono répétition",
+      "Focusrite",
+    ],
+    path: "/le-materiel",
+  },
+  "/tarifs-et-reservation": {
+    title: "Tarifs et Réservation - Studios dès 6€/h | H3 STUDIOS",
+    description:
+      "Réservez votre créneau chez H3 Studios. Tarifs : Solo/Enseignant 6€/h, Duo 12€/h, Groupe dès 15€/h. Enregistrement 50€/h. Contactez-nous : contact@h3-studios.fr ou 06 13 44 08 75.",
+    keywords: [
+      "tarif studio répétition",
+      "réservation studio",
+      "prix location studio",
+      "enregistrement tarif",
+      "studio pas cher",
+      "réserver salle répétition",
+    ],
+    path: "/tarifs-et-reservation",
+  },
+  "/a-propos": {
+    title: "À Propos - H3 STUDIOS | Studio de Musique à Sucy-en-Brie",
+    description:
+      "H3 Studios, situé à 2 min de la gare RER A Sucy-Bonneuil. Studios de répétition et enregistrement pour groupes, musiciens solo, enseignants. Contact : 06 13 44 08 75.",
+    keywords: [
+      "H3 Studios",
+      "studio musique Sucy",
+      "gare Sucy-Bonneuil",
+      "contact studio",
+      "adresse studio répétition",
+      "RER A studio",
+    ],
+    path: "/a-propos",
+  },
+};
+
+export const routes = Object.keys(pageSEO);
+
+export const businessInfo = {
+  name: "H3 STUDIOS",
+  description:
+    "Studios de répétition et d'enregistrement pour groupes de musique à Sucy-en-Brie",
+  url: SITE_URL,
+  telephone: "+33613440875",
+  email: "contact@h3-studios.fr",
+  address: {
+    streetAddress: "3 Rue de la Grande Ceinture",
+    addressLocality: "Sucy-en-Brie",
+    postalCode: "94370",
+    addressCountry: "FR",
+  },
+  geo: {
+    latitude: 48.7697,
+    longitude: 2.5178,
+  },
+  openingHours: ["Mo-Su 09:00-23:00"],
+  priceRange: "€€",
+  image: `${SITE_URL}/images/opengraph.png`,
+};
+
+export function generateJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "MusicVenue",
+    name: businessInfo.name,
+    description: businessInfo.description,
+    url: businessInfo.url,
+    telephone: businessInfo.telephone,
+    email: businessInfo.email,
+    address: {
+      "@type": "PostalAddress",
+      ...businessInfo.address,
+    },
+    geo: {
+      "@type": "GeoCoordinates",
+      ...businessInfo.geo,
+    },
+    openingHoursSpecification: {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+      ],
+      opens: "09:00",
+      closes: "23:00",
+    },
+    priceRange: businessInfo.priceRange,
+    image: businessInfo.image,
+    sameAs: [],
+    amenityFeature: [
+      { "@type": "LocationFeatureSpecification", name: "Sound Equipment" },
+      { "@type": "LocationFeatureSpecification", name: "Recording Equipment" },
+      { "@type": "LocationFeatureSpecification", name: "Drum Kit" },
+      { "@type": "LocationFeatureSpecification", name: "Guitar Amplifiers" },
+      { "@type": "LocationFeatureSpecification", name: "Bass Amplifiers" },
+      { "@type": "LocationFeatureSpecification", name: "PA System" },
+    ],
+    hasOfferCatalog: {
+      "@type": "OfferCatalog",
+      name: "Studio Services",
+      itemListElement: [
+        {
+          "@type": "Offer",
+          itemOffered: {
+            "@type": "Service",
+            name: "Studio La Scène - Répétition Groupe",
+            description: "Studio de 42m² avec scène et éclairage",
+          },
+          priceSpecification: {
+            "@type": "PriceSpecification",
+            price: "18",
+            priceCurrency: "EUR",
+            unitText: "HOUR",
+          },
+        },
+        {
+          "@type": "Offer",
+          itemOffered: {
+            "@type": "Service",
+            name: "Studio Le Podium - Répétition Groupe",
+            description: "Studio de 35m² pour répétitions",
+          },
+          priceSpecification: {
+            "@type": "PriceSpecification",
+            price: "15",
+            priceCurrency: "EUR",
+            unitText: "HOUR",
+          },
+        },
+        {
+          "@type": "Offer",
+          itemOffered: {
+            "@type": "Service",
+            name: "Enregistrement",
+            description: "Prise de son professionnelle",
+          },
+          priceSpecification: {
+            "@type": "PriceSpecification",
+            price: "50",
+            priceCurrency: "EUR",
+            unitText: "HOUR",
+          },
+        },
+      ],
+    },
+  };
+}
+
+export function generateSitemap(): string {
+  const lastmod = new Date().toISOString().split("T")[0];
+  
+  const urls = routes.map((path) => {
+    const priority = path === "/" ? "1.0" : "0.8";
+    const changefreq = path === "/" ? "weekly" : "monthly";
+    return `  <url>
+    <loc>${SITE_URL}${path}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>`;
+  });
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.join("\n")}
+</urlset>`;
+}
+
+export function generateRobotsTxt(): string {
+  return `User-agent: *
+Allow: /
+
+Sitemap: ${SITE_URL}/sitemap.xml
+
+# Disallow admin/private paths (none currently)
+`;
+}

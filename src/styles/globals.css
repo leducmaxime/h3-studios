@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #ffde59;
+  
+  --font-sans: "Now", sans-serif;
+  --font-blanka: "Blanka", sans-serif;
+  
+  --breakpoint-xs: 450px;
+  --breakpoint-sm: 575px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 992px;
+  --breakpoint-xl: 1200px;
+  --breakpoint-2xl: 1400px;
+}
+
+@font-face {
+  font-family: "Now";
+  src: url("/fonts/Now-Thin.woff") format("woff");
+  font-weight: 250;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Now";
+  src: url("/fonts/Now-Light.woff") format("woff");
+  font-weight: 300;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Now";
+  src: url("/fonts/Now-Regular.woff") format("woff");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Now";
+  src: url("/fonts/Now-Medium.woff") format("woff");
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Now";
+  src: url("/fonts/Now-Bold.woff") format("woff");
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Now";
+  src: url("/fonts/Now-Black.woff") format("woff");
+  font-weight: 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Blanka";
+  src: url("/fonts/Blanka-Regular.woff") format("woff");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+  
+  .font-blanka {
+    font-family: var(--font-blanka);
+  }
+}
+
+@layer utilities {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  @media (min-width: 575px) {
+    .container {
+      max-width: 540px;
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .container {
+      max-width: 720px;
+    }
+  }
+  
+  @media (min-width: 992px) {
+    .container {
+      max-width: 960px;
+    }
+  }
+  
+  @media (min-width: 1200px) {
+    .container {
+      max-width: 1140px;
+    }
+  }
+  
+  @media (min-width: 1400px) {
+    .container {
+      max-width: 1320px;
+    }
+  }
+}
