@@ -10,26 +10,29 @@ interface WeekCalendarProps {
   studioFilter?: StudioId | null;
 }
 
-const DAYS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+const DAYS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const MONTHS_FR = [
   "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
   "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
 ];
 
-function getWeekDates(baseDate: Date): Date[] {
+function getWeekDates(startOfWeek: Date): Date[] {
   const dates: Date[] = [];
-  const start = new Date(baseDate);
-  const day = start.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  start.setDate(start.getDate() + diff);
-  
   for (let i = 0; i < 7; i++) {
-    const date = new Date(start);
-    date.setDate(start.getDate() + i);
-    dates.push(date);
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    dates.push(d);
   }
-  
   return dates;
+}
+
+function getStartOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day; // Monday = start of week
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -52,30 +55,44 @@ function isPast(date: Date): boolean {
   return compareDate < today;
 }
 
+function isTooFarInFuture(date: Date): boolean {
+  const maxDate = new Date();
+  maxDate.setMonth(maxDate.getMonth() + 2);
+  return date > maxDate;
+}
+
+function formatWeekRange(dates: Date[]): string {
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  
+  if (first.getMonth() === last.getMonth()) {
+    return `${first.getDate()} - ${last.getDate()} ${MONTHS_FR[first.getMonth()]} ${first.getFullYear()}`;
+  }
+  return `${first.getDate()} ${MONTHS_FR[first.getMonth()]} - ${last.getDate()} ${MONTHS_FR[last.getMonth()]} ${last.getFullYear()}`;
+}
+
 export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekCalendarProps) {
+  const today = new Date();
   const [weekOffset, setWeekOffset] = useState(0);
   
-  const weekDates = useMemo(() => {
-    const base = new Date();
-    base.setDate(base.getDate() + weekOffset * 7);
-    return getWeekDates(base);
-  }, [weekOffset]);
+  const startOfCurrentWeek = useMemo(() => getStartOfWeek(today), []);
+  
+  const weekStart = useMemo(() => {
+    const d = new Date(startOfCurrentWeek);
+    d.setDate(d.getDate() + weekOffset * 7);
+    return d;
+  }, [weekOffset, startOfCurrentWeek]);
+  
+  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
 
-  const weekRange = useMemo(() => {
-    const first = weekDates[0];
-    const last = weekDates[6];
-    
-    if (first.getMonth() === last.getMonth()) {
-      return `${first.getDate()} - ${last.getDate()} ${MONTHS_FR[first.getMonth()]} ${first.getFullYear()}`;
-    }
-    return `${first.getDate()} ${MONTHS_FR[first.getMonth()]} - ${last.getDate()} ${MONTHS_FR[last.getMonth()]} ${last.getFullYear()}`;
-  }, [weekDates]);
-
-  const availabilityByDay = useMemo(() => {
-    return weekDates.map((date) => {
-      if (isPast(date)) return [];
-      return getAvailableRanges(date, studioFilter);
+  const availabilityMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    weekDates.forEach((date) => {
+      if (isPast(date) || isTooFarInFuture(date)) return;
+      const key = date.toISOString().split("T")[0];
+      map.set(key, getAvailableRanges(date, studioFilter));
     });
+    return map;
   }, [weekDates, studioFilter]);
 
   const goToPreviousWeek = () => {
@@ -83,11 +100,11 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
   };
 
   const goToNextWeek = () => {
-    if (weekOffset < 8) setWeekOffset((w) => w + 1);
+    if (weekOffset < 8) setWeekOffset((w) => w + 1); // ~2 months = 8 weeks
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <button
           onClick={goToPreviousWeek}
@@ -98,7 +115,9 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
           <ChevronLeft className="h-6 w-6" />
         </button>
         
-        <span className="text-lg font-semibold">{weekRange}</span>
+        <span className="text-lg font-semibold text-center">
+          {formatWeekRange(weekDates)}
+        </span>
         
         <button
           onClick={goToNextWeek}
@@ -110,63 +129,49 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 sm:gap-2">
-        {weekDates.map((date, idx) => {
+      <div className="grid grid-cols-7 gap-2">
+        {weekDates.map((date) => {
+          const dateKey = date.toISOString().split("T")[0];
+          const dayOfWeek = date.getDay();
+          const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to Mon=0 index
           const past = isPast(date);
-          const today = isToday(date);
+          const tooFar = isTooFarInFuture(date);
+          const todayDate = isToday(date);
           const selected = selectedDate && isSameDay(date, selectedDate);
-          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          const ranges = availabilityByDay[idx];
+          const ranges = availabilityMap.get(dateKey) || [];
           const hasAvailability = ranges.length > 0;
+          const disabled = past || tooFar || !hasAvailability;
           
           return (
             <button
               key={date.toISOString()}
-              onClick={() => !past && hasAvailability && onSelectDate(date)}
-              disabled={past || !hasAvailability}
+              onClick={() => !disabled && onSelectDate(date)}
+              disabled={disabled}
               className={`
-                flex flex-col items-center gap-0.5 rounded-lg p-1.5 sm:p-2 transition-all min-h-[80px] sm:min-h-[100px]
-                ${past || !hasAvailability
-                  ? "opacity-40 cursor-not-allowed bg-white/5" 
-                  : "hover:bg-primary/20 cursor-pointer"
+                relative flex flex-col items-center justify-center rounded-xl p-3 min-h-[100px] transition-all
+                ${disabled
+                  ? "opacity-30 cursor-not-allowed bg-white/5" 
+                  : "hover:bg-primary/20 cursor-pointer bg-white/10"
                 }
                 ${selected 
                   ? "bg-primary text-black ring-2 ring-primary ring-offset-2 ring-offset-black" 
                   : ""
                 }
-                ${today && !selected 
+                ${todayDate && !selected 
                   ? "ring-2 ring-white/50" 
-                  : ""
-                }
-                ${isWeekend && !selected && !past && hasAvailability
-                  ? "bg-primary/10" 
                   : ""
                 }
               `}
             >
-              <span className="text-[10px] sm:text-xs font-medium opacity-70">
-                {DAYS_FR[date.getDay()]}
+              <span className={`text-xs font-medium mb-1 ${selected ? "text-black/60" : "text-white/50"}`}>
+                {DAYS_FR[dayIndex]}
               </span>
-              <span className={`text-base sm:text-xl font-bold ${selected ? "text-black" : ""}`}>
+              <span className={`text-2xl font-bold ${selected ? "text-black" : ""}`}>
                 {date.getDate()}
               </span>
-              {!past && hasAvailability && (
-                <div className={`flex flex-col items-center gap-0 mt-0.5 ${selected ? "text-black/70" : "text-white/50"}`}>
-                  {ranges.slice(0, 2).map((range, i) => (
-                    <span key={i} className="text-[8px] sm:text-[10px] leading-tight">
-                      {range}
-                    </span>
-                  ))}
-                  {ranges.length > 2 && (
-                    <span className="text-[8px] sm:text-[10px] leading-tight">
-                      +{ranges.length - 2}
-                    </span>
-                  )}
-                </div>
-              )}
-              {!past && !hasAvailability && (
-                <span className="text-[8px] sm:text-[10px] text-white/30 mt-1">
-                  Complet
+              {!disabled && hasAvailability && (
+                <span className={`text-xs mt-1 ${selected ? "text-black/60" : "text-white/40"}`}>
+                  {ranges.length} dispo
                 </span>
               )}
             </button>
@@ -175,9 +180,9 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
       </div>
 
       <div className="flex items-center justify-center gap-4 text-xs text-white/60">
-        <div className="flex items-center gap-1">
-          <div className="h-3 w-3 rounded bg-primary/10" />
-          <span>Week-end (tarif pointe)</span>
+        <div className="flex items-center gap-1.5">
+          <div className="h-3 w-3 rounded ring-2 ring-white/50" />
+          <span>Aujourd'hui</span>
         </div>
       </div>
     </div>

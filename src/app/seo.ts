@@ -54,19 +54,32 @@ export const pageSEO: Record<string, PageSEO> = {
     ],
     path: "/le-materiel",
   },
-  "/tarifs-et-reservation": {
-    title: "Tarifs et Réservation - Studios dès 6€/h | H3 STUDIOS",
+  "/tarifs": {
+    title: "Tarifs - Studios dès 6€/h | H3 STUDIOS Sucy-en-Brie",
     description:
-      "Réservez votre créneau chez H3 Studios. Tarifs : Solo/Enseignant 6€/h, Duo 12€/h, Groupe dès 15€/h. Enregistrement 50€/h. Contactez-nous : contact@h3-studios.fr ou 06 13 44 08 75.",
+      "Tarifs H3 Studios : Solo/Enseignant 6€/h, Duo 12€/h, Groupe dès 15€/h. Enregistrement 50€/h. Studios de répétition à Sucy-en-Brie, à 2 min du RER A.",
     keywords: [
       "tarif studio répétition",
-      "réservation studio",
       "prix location studio",
       "enregistrement tarif",
       "studio pas cher",
-      "réserver salle répétition",
+      "tarif groupe musique",
+      "prix répétition",
     ],
-    path: "/tarifs-et-reservation",
+    path: "/tarifs",
+  },
+  "/reservation": {
+    title: "Réservation en Ligne - Studio de Répétition | H3 STUDIOS",
+    description:
+      "Réservez votre créneau en ligne chez H3 Studios. Choisissez votre date, horaire et studio. Confirmation immédiate. Studios à Sucy-en-Brie.",
+    keywords: [
+      "réservation studio",
+      "réserver salle répétition",
+      "booking studio musique",
+      "réservation en ligne",
+      "créneau répétition",
+    ],
+    path: "/reservation",
   },
   "/a-propos": {
     title: "À Propos - H3 STUDIOS | Studio de Musique à Sucy-en-Brie",

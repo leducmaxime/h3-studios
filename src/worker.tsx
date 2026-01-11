@@ -7,7 +7,8 @@ import { MainLayout } from "@/app/layouts/MainLayout";
 import { Home } from "@/app/pages/Home";
 import { LesStudios } from "@/app/pages/LesStudios";
 import { LeMateriel } from "@/app/pages/LeMateriel";
-import { TarifsReservation } from "@/app/pages/TarifsReservation";
+import { Tarifs } from "@/app/pages/Tarifs";
+import { Reservation } from "@/app/pages/Reservation";
 import { APropos } from "@/app/pages/APropos";
 import { generateSitemap, generateRobotsTxt } from "@/app/seo";
 
@@ -56,9 +57,23 @@ export default defineApp([
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/tarifs-et-reservation">{children}</DocumentWithPath>, [
+  route("/tarifs-et-reservation", () => {
+    return new Response(null, {
+      status: 301,
+      headers: { Location: "/tarifs" },
+    });
+  }),
+
+  render(({ children }) => <DocumentWithPath path="/tarifs">{children}</DocumentWithPath>, [
     layout(MainLayout, [
-      route("/tarifs-et-reservation", TarifsReservation),
+      route("/tarifs", Tarifs),
+    ]),
+  ]),
+
+  render(({ children }) => <DocumentWithPath path="/reservation">{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/reservation", () => <Reservation />),
+      route("/reservation/:step", ({ params }) => <Reservation step={params.step} />),
     ]),
   ]),
 

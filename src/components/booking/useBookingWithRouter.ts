@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   type BookingState,
   type BookingFlow,
@@ -22,6 +22,108 @@ interface ExtendedBookingState extends BookingState {
   equipment: EquipmentSelection[];
 }
 
+const STEP_URL_MAP: Record<number, string> = {
+  0: "",
+  1: "date",
+  2: "creneau",
+  3: "studio",
+  4: "coordonnees",
+  5: "confirmation",
+  6: "recapitulatif",
+  7: "paiement-choix",
+  8: "paiement",
+  9: "termine",
+};
+
+const URL_STEP_MAP: Record<string, number> = {
+  "": 0,
+  "date": 1,
+  "creneau": 2,
+  "studio": 3,
+  "coordonnees": 4,
+  "confirmation": 5,
+  "recapitulatif": 6,
+  "paiement-choix": 7,
+  "paiement": 8,
+  "termine": 9,
+};
+
+const BOOKING_STORAGE_KEY = "h3-studios-booking-state";
+
+interface SerializedBookingState extends Omit<ExtendedBookingState, "selectedDate" | "cart"> {
+  selectedDate: string | null;
+  cart: Array<Omit<CompletedBooking, "date"> & { date: string }>;
+}
+
+function serializeState(state: ExtendedBookingState): SerializedBookingState {
+  return {
+    ...state,
+    selectedDate: state.selectedDate ? state.selectedDate.toISOString() : null,
+    cart: state.cart.map((booking) => ({
+      ...booking,
+      date: booking.date.toISOString(),
+    })),
+  };
+}
+
+function deserializeState(serialized: SerializedBookingState): ExtendedBookingState {
+  return {
+    ...serialized,
+    selectedDate: serialized.selectedDate ? new Date(serialized.selectedDate) : null,
+    cart: serialized.cart.map((booking) => ({
+      ...booking,
+      date: new Date(booking.date),
+    })),
+  };
+}
+
+function saveBookingState(state: ExtendedBookingState): void {
+  if (typeof window === "undefined") return;
+  try {
+    const serialized = serializeState(state);
+    localStorage.setItem(BOOKING_STORAGE_KEY, JSON.stringify(serialized));
+  } catch {
+    // localStorage not available
+  }
+}
+
+function loadBookingState(): ExtendedBookingState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const data = localStorage.getItem(BOOKING_STORAGE_KEY);
+    if (!data) return null;
+    const parsed = JSON.parse(data) as SerializedBookingState;
+    return deserializeState(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function clearBookingState(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(BOOKING_STORAGE_KEY);
+  } catch {
+    // localStorage not available
+  }
+}
+
+function getStepFromUrl(urlStep: string | undefined): number {
+  if (!urlStep) return 0;
+  return URL_STEP_MAP[urlStep] ?? 0;
+}
+
+function navigateToUrl(step: number, flow: BookingFlow | null) {
+  const stepSlug = STEP_URL_MAP[step];
+  let url = "/reservation";
+  if (stepSlug) {
+    url = `/reservation/${stepSlug}`;
+  }
+  if (typeof window !== "undefined" && window.location.pathname !== url) {
+    window.history.pushState({}, "", url);
+  }
+}
+
 const initialState: ExtendedBookingState = {
   flow: null,
   step: 0,
@@ -40,14 +142,37 @@ const initialState: ExtendedBookingState = {
   paymentMethod: null,
 };
 
-export function useBooking() {
-  const [state, setState] = useState<ExtendedBookingState>(initialState);
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
+export function useBookingWithRouter(urlStep?: string) {
+  const initialStep = getStepFromUrl(urlStep);
+  const [state, setState] = useState<ExtendedBookingState>({
+    ...initialState,
+    step: initialStep as BookingState["step"],
+  });
+  const [isHydrated, setIsHydrated] = useState(false);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
-    if (prefsLoaded) return;
+    if (isHydrated) return;
+    
+    const savedState = loadBookingState();
     const prefs = loadUserPreferences();
-    if (prefs) {
+    
+    if (savedState) {
+      const urlStepNum = getStepFromUrl(urlStep);
+      const restoredState = {
+        ...savedState,
+        step: (urlStepNum > 0 ? urlStepNum : savedState.step) as BookingState["step"],
+      };
+      
+      if (prefs) {
+        restoredState.userName = prefs.userName || restoredState.userName;
+        restoredState.userEmail = prefs.userEmail || restoredState.userEmail;
+        restoredState.userPhone = prefs.userPhone || restoredState.userPhone;
+        restoredState.bandName = prefs.bandName || restoredState.bandName;
+      }
+      
+      setState(restoredState);
+    } else if (prefs) {
       setState((s) => ({
         ...s,
         userName: prefs.userName || "",
@@ -56,11 +181,46 @@ export function useBooking() {
         bandName: prefs.bandName || "",
       }));
     }
-    setPrefsLoaded(true);
-  }, [prefsLoaded]);
+    
+    setIsHydrated(true);
+  }, [isHydrated, urlStep]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    saveBookingState(state);
+  }, [state, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    navigateToUrl(state.step, state.flow);
+  }, [state.step, state.flow, isHydrated]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      const stepMatch = path.match(/\/reservation\/?(.*)$/);
+      const urlStepStr = stepMatch ? stepMatch[1] : "";
+      const newStep = getStepFromUrl(urlStepStr || undefined);
+      
+      setState((s) => ({ ...s, step: newStep as BookingState["step"] }));
+    };
+    
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const setStep = useCallback((step: BookingState["step"]) => {
     setState((s) => ({ ...s, step }));
+  }, []);
+
+  const navigateToStep = useCallback((step: number) => {
+    setState((s) => ({ ...s, step: step as BookingState["step"] }));
   }, []);
 
   const selectFlow = useCallback((flow: BookingFlow) => {
@@ -181,6 +341,31 @@ export function useBooking() {
     });
   }, []);
 
+  const selectPaymentMethod = useCallback((method: PaymentMethod) => {
+    setState((s) => {
+      if (method === "card") {
+        return { ...s, paymentMethod: method, step: 8 };
+      }
+      const updatedCart = s.cart.map((booking) => ({
+        ...booking,
+        paymentMethod: "cash" as PaymentMethod,
+        paymentStatus: "pay-on-site" as const,
+      }));
+      return { ...s, paymentMethod: method, cart: updatedCart, step: 9 };
+    });
+  }, []);
+
+  const processPayment = useCallback(() => {
+    setState((s) => {
+      const updatedCart = s.cart.map((booking) => ({
+        ...booking,
+        paymentMethod: "card" as PaymentMethod,
+        paymentStatus: "paid" as const,
+      }));
+      return { ...s, cart: updatedCart, step: 9 };
+    });
+  }, []);
+
   const addAnotherBooking = useCallback(() => {
     setState((s) => ({
       ...s,
@@ -198,6 +383,10 @@ export function useBooking() {
     setState((s) => ({ ...s, step: 6 }));
   }, []);
 
+  const goToPayment = useCallback(() => {
+    setState((s) => ({ ...s, step: 7 }));
+  }, []);
+
   const removeFromCart = useCallback((bookingId: string) => {
     setState((s) => ({
       ...s,
@@ -206,6 +395,7 @@ export function useBooking() {
   }, []);
 
   const resetBooking = useCallback(() => {
+    clearBookingState();
     setState(initialState);
   }, []);
 
@@ -224,7 +414,11 @@ export function useBooking() {
         if (s.step === 4) return { ...s, step: 3 };
       }
 
+      if (s.step === 5) return { ...s, step: 4 };
       if (s.step === 6) return { ...s, step: 5 };
+      if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
+      if (s.step === 8) return { ...s, step: 7, paymentMethod: null };
+      if (s.step === 9) return { ...s, step: 7 };
       return s;
     });
   }, []);
@@ -276,6 +470,7 @@ export function useBooking() {
     canProceedToStudio,
     canConfirmBooking,
     setStep,
+    navigateToStep,
     selectFlow,
     selectDate,
     selectStudioFirst,
@@ -289,10 +484,13 @@ export function useBooking() {
     confirmBooking,
     addAnotherBooking,
     goToCheckout,
+    goToPayment,
     removeFromCart,
     resetBooking,
     goBack,
+    selectPaymentMethod,
+    processPayment,
   };
 }
 
-export type UseBookingReturn = ReturnType<typeof useBooking>;
+export type UseBookingWithRouterReturn = ReturnType<typeof useBookingWithRouter>;

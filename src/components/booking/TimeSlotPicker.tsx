@@ -4,13 +4,15 @@ import { useState, useCallback, useMemo } from "react";
 import { ChevronLeft } from "lucide-react";
 import {
   TIME_SLOTS,
-  MIN_BOOKING_SLOTS,
+  CLOSING_TIME,
   isPeakTime,
   formatDate,
-  formatDuration,
+  PRICING,
+  formatPrice,
+  calculatePrice,
+  type GroupType,
+  type StudioId,
 } from "@/lib/booking";
-
-import type { StudioId } from "@/lib/booking";
 
 interface TimeSlotPickerProps {
   date: Date;
@@ -24,7 +26,17 @@ interface TimeSlotPickerProps {
   canConfirm: boolean;
   studioFilter?: StudioId;
   hideHeader?: boolean;
+  groupType?: GroupType;
 }
+
+const DURATION_OPTIONS = [
+  { label: "1h", slots: 2 },
+  { label: "1h30", slots: 3 },
+  { label: "2h", slots: 4 },
+  { label: "2h30", slots: 5 },
+  { label: "3h", slots: 6 },
+  { label: "4h", slots: 8 },
+];
 
 export function TimeSlotPicker({
   date,
@@ -38,9 +50,9 @@ export function TimeSlotPicker({
   canConfirm,
   studioFilter,
   hideHeader = false,
+  groupType = "group",
 }: TimeSlotPickerProps) {
-  const [hoverSlot, setHoverSlot] = useState<string | null>(null);
-  const [selectingStart, setSelectingStart] = useState(true);
+  const [selectedDuration, setSelectedDuration] = useState(4);
 
   const isSlotBooked = useCallback(
     (time: string) => {
@@ -55,52 +67,49 @@ export function TimeSlotPicker({
     [availability, studioFilter]
   );
 
-  const isRangeAvailable = useCallback(
-    (fromIdx: number, toIdx: number) => {
-      for (let i = fromIdx; i <= toIdx; i++) {
-        if (isSlotBooked(TIME_SLOTS[i])) {
-          return false;
-        }
+  const canStartAt = useCallback(
+    (startIdx: number): boolean => {
+      const endIdx = startIdx + selectedDuration;
+      if (endIdx > TIME_SLOTS.length) return false;
+      
+      for (let i = startIdx; i < endIdx; i++) {
+        if (isSlotBooked(TIME_SLOTS[i])) return false;
       }
       return true;
     },
-    [isSlotBooked]
+    [selectedDuration, isSlotBooked]
   );
+
+  const getEndTime = (startIdx: number): string => {
+    const endIdx = startIdx + selectedDuration;
+    if (endIdx >= TIME_SLOTS.length) return CLOSING_TIME;
+    return TIME_SLOTS[endIdx];
+  };
 
   const handleSlotClick = useCallback(
     (time: string) => {
-      if (isSlotBooked(time)) return;
-
-      if (selectingStart || !startTime) {
-        onSelectRange(time, "");
-        setSelectingStart(false);
-        setHoverSlot(null);
-      } else {
-        const startIdx = TIME_SLOTS.indexOf(startTime);
-        const clickIdx = TIME_SLOTS.indexOf(time);
-
-        if (clickIdx <= startIdx) {
-          onSelectRange(time, "");
-          setSelectingStart(false);
-        } else {
-          if (!isRangeAvailable(startIdx, clickIdx)) {
-            return;
-          }
-          const endTimeSlot = TIME_SLOTS[clickIdx + 1] || TIME_SLOTS[clickIdx];
-          if (clickIdx - startIdx + 1 >= MIN_BOOKING_SLOTS) {
-            onSelectRange(startTime, endTimeSlot);
-            setSelectingStart(true);
-          }
-        }
-      }
+      const startIdx = TIME_SLOTS.indexOf(time);
+      if (!canStartAt(startIdx)) return;
+      
+      const endTimeSlot = getEndTime(startIdx);
+      onSelectRange(time, endTimeSlot);
     },
-    [startTime, selectingStart, onSelectRange, isSlotBooked, isRangeAvailable]
+    [selectedDuration, onSelectRange, canStartAt, getEndTime]
+  );
+
+  const isWithinCurrentSelection = useCallback(
+    (index: number): boolean => {
+      if (!startTime || !endTime) return false;
+      const selectedStartIdx = TIME_SLOTS.indexOf(startTime);
+      let selectedEndIdx = TIME_SLOTS.indexOf(endTime);
+      if (selectedEndIdx === -1) selectedEndIdx = TIME_SLOTS.length;
+      return index >= selectedStartIdx && index < selectedEndIdx;
+    },
+    [startTime, endTime]
   );
 
   const handleClear = useCallback(() => {
     onClear();
-    setSelectingStart(true);
-    setHoverSlot(null);
   }, [onClear]);
 
   const getSlotState = useCallback(
@@ -108,48 +117,87 @@ export function TimeSlotPicker({
       const booked = isSlotBooked(time);
       if (booked) return "booked";
 
+      const canStart = canStartAt(index);
       const peak = isPeakTime(date, time);
-      const startIdx = startTime ? TIME_SLOTS.indexOf(startTime) : -1;
-      const endIdx = endTime ? TIME_SLOTS.indexOf(endTime) : -1;
-
-      if (startIdx !== -1 && endIdx !== -1) {
-        if (index >= startIdx && index < endIdx) {
+      
+      if (startTime && endTime) {
+        const selectedStartIdx = TIME_SLOTS.indexOf(startTime);
+        let selectedEndIdx = TIME_SLOTS.indexOf(endTime);
+        if (selectedEndIdx === -1) selectedEndIdx = TIME_SLOTS.length;
+        if (index >= selectedStartIdx && index < selectedEndIdx) {
           return peak ? "selected-peak" : "selected";
         }
-      } else if (startIdx !== -1 && index === startIdx) {
-        return peak ? "start-peak" : "start";
       }
 
-      if (!selectingStart && startTime && hoverSlot) {
-        const hoverIdx = TIME_SLOTS.indexOf(hoverSlot);
-        if (hoverIdx > startIdx && index >= startIdx && index <= hoverIdx) {
-          if (isRangeAvailable(startIdx, hoverIdx)) {
-            return peak ? "preview-peak" : "preview";
-          }
-        }
-      }
-
+      if (!canStart) return "unavailable-duration";
       return peak ? "available-peak" : "available";
     },
-    [date, startTime, endTime, hoverSlot, selectingStart, isSlotBooked, isRangeAvailable]
+    [date, startTime, endTime, isSlotBooked, canStartAt]
   );
 
-  const morningSlots = TIME_SLOTS.slice(0, 8);
-  const afternoonSlots = TIME_SLOTS.slice(8, 18);
-  const eveningSlots = TIME_SLOTS.slice(18);
+  const formatEndTime = (start: string): string => {
+    const startIdx = TIME_SLOTS.indexOf(start);
+    return getEndTime(startIdx);
+  };
 
-  const slotGroups = [
-    { label: "Matin", slots: morningSlots, startIndex: 0 },
-    { label: "Après-midi", slots: afternoonSlots, startIndex: 8 },
-    { label: "Soir", slots: eveningSlots, startIndex: 18 },
-  ];
-
-  const selectedDuration = useMemo(() => {
-    if (startTime && endTime) {
-      return formatDuration(startTime, endTime);
+  const priceBreakdown = useMemo(() => {
+    if (!startTime || !endTime) return null;
+    
+    if (studioFilter) {
+      const price = calculatePrice(studioFilter, groupType, date, startTime, endTime);
+      const offPeakSlots = price.breakdown.filter((s) => !s.isPeak).length;
+      const peakSlots = price.breakdown.filter((s) => s.isPeak).length;
+      const offPeakRate = PRICING[studioFilter][groupType].offPeak;
+      const peakRate = PRICING[studioFilter][groupType].peak;
+      
+      return {
+        total: price.total,
+        offPeakHours: offPeakSlots * 0.5,
+        peakHours: peakSlots * 0.5,
+        offPeakRate,
+        peakRate,
+        offPeakSubtotal: offPeakSlots * 0.5 * offPeakRate,
+        peakSubtotal: peakSlots * 0.5 * peakRate,
+        isRange: false,
+      };
     }
-    return null;
-  }, [startTime, endTime]);
+    
+    const scenePrice = calculatePrice("la-scene", groupType, date, startTime, endTime);
+    const podiumPrice = calculatePrice("le-podium", groupType, date, startTime, endTime);
+    return {
+      total: Math.min(scenePrice.total, podiumPrice.total),
+      totalMax: Math.max(scenePrice.total, podiumPrice.total),
+      isRange: true,
+    };
+  }, [startTime, endTime, groupType, date, studioFilter]);
+
+  const hourlyRates = useMemo(() => {
+    if (studioFilter) {
+      const offPeak = PRICING[studioFilter][groupType].offPeak;
+      const peak = PRICING[studioFilter][groupType].peak;
+      return { offPeakMin: offPeak, offPeakMax: offPeak, peakMin: peak, peakMax: peak };
+    }
+    
+    const offPeakMin = Math.min(
+      PRICING["la-scene"][groupType].offPeak,
+      PRICING["le-podium"][groupType].offPeak
+    );
+    const offPeakMax = Math.max(
+      PRICING["la-scene"][groupType].offPeak,
+      PRICING["le-podium"][groupType].offPeak
+    );
+    const peakMin = Math.min(
+      PRICING["la-scene"][groupType].peak,
+      PRICING["le-podium"][groupType].peak
+    );
+    const peakMax = Math.max(
+      PRICING["la-scene"][groupType].peak,
+      PRICING["le-podium"][groupType].peak
+    );
+    return { offPeakMin, offPeakMax, peakMin, peakMax };
+  }, [groupType, studioFilter]);
+
+  const durationLabel = DURATION_OPTIONS.find(d => d.slots === selectedDuration)?.label || "2h";
 
   return (
     <div className="flex flex-col gap-4">
@@ -165,9 +213,7 @@ export function TimeSlotPicker({
           <div>
             <h3 className="text-lg font-semibold capitalize">{formatDate(date)}</h3>
             <p className="text-sm text-white/60">
-              {selectingStart
-                ? "Cliquez sur l'heure de début"
-                : "Cliquez sur l'heure de fin (min. 1h)"}
+              Choisissez la durée puis l'heure de début
             </p>
           </div>
         </div>
@@ -175,94 +221,129 @@ export function TimeSlotPicker({
 
       {hideHeader && (
         <p className="text-sm text-white/60">
-          {selectingStart
-            ? "Cliquez sur l'heure de début"
-            : "Cliquez sur l'heure de fin (min. 1h)"}
+          Choisissez la durée puis l'heure de début
         </p>
       )}
 
-      <div className="flex flex-col gap-6">
-        {slotGroups.map(({ label, slots, startIndex }) => (
-          <div key={label} className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-white/70">{label}</span>
-            <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              {slots.map((time, i) => {
-                const globalIndex = startIndex + i;
-                const state = getSlotState(time, globalIndex);
-                
-                return (
-                  <button
-                    key={time}
-                    onClick={() => handleSlotClick(time)}
-                    onMouseEnter={() => !selectingStart && setHoverSlot(time)}
-                    onMouseLeave={() => setHoverSlot(null)}
-                    disabled={state === "booked"}
-                    className={`
-                      relative rounded px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium transition-all
-                      ${state === "booked" 
-                        ? "bg-white/10 text-white/30 cursor-not-allowed line-through" 
-                        : ""
-                      }
-                      ${state === "available" 
-                        ? "bg-white/10 hover:bg-white/20 text-white" 
-                        : ""
-                      }
-                      ${state === "available-peak" 
-                        ? "bg-primary/20 hover:bg-primary/30 text-primary" 
-                        : ""
-                      }
-                      ${state === "selected" || state === "start"
-                        ? "bg-primary text-black" 
-                        : ""
-                      }
-                      ${state === "selected-peak" || state === "start-peak"
-                        ? "bg-primary text-black ring-2 ring-primary ring-offset-1 ring-offset-black" 
-                        : ""
-                      }
-                      ${state === "preview" 
-                        ? "bg-primary/40 text-white" 
-                        : ""
-                      }
-                      ${state === "preview-peak" 
-                        ? "bg-primary/50 text-black" 
-                        : ""
-                      }
-                    `}
-                  >
-                    {time}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-white/70">Durée de la répétition</span>
+        <div className="flex flex-wrap gap-2">
+          {DURATION_OPTIONS.map(({ label, slots }) => (
+            <button
+              key={slots}
+              onClick={() => {
+                setSelectedDuration(slots);
+                onClear();
+              }}
+              className={`
+                px-4 py-2 rounded-lg font-medium transition-all text-sm
+                ${selectedDuration === slots
+                  ? "bg-primary text-black"
+                  : "bg-white/10 text-white hover:bg-white/20"
+                }
+              `}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex items-center justify-center gap-4 text-xs text-white/60">
-        <div className="flex items-center gap-1">
-          <div className="h-3 w-3 rounded bg-white/10" />
-          <span>Disponible</span>
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-white/70">
+          Heure de début (pour {durationLabel})
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {TIME_SLOTS.map((time, index) => {
+            const state = getSlotState(time, index);
+            const canStart = canStartAt(index);
+            const withinSelection = isWithinCurrentSelection(index);
+            const isClickable = canStart || withinSelection;
+            const isSelected = state === "selected" || state === "selected-peak";
+            const isBooked = state === "booked";
+            const isUnavailableDuration = state === "unavailable-duration";
+            const peak = isPeakTime(date, time);
+            
+            return (
+              <button
+                key={time}
+                onClick={() => isClickable && handleSlotClick(time)}
+                disabled={!isClickable}
+                className={`
+                  relative rounded-lg px-3 py-2.5 text-sm font-medium transition-all min-w-[70px]
+                  ${isBooked
+                    ? "bg-red-500/10 text-red-400/50 cursor-not-allowed line-through border border-red-500/20" 
+                    : ""
+                  }
+                  ${isUnavailableDuration
+                    ? "bg-white/5 text-white/30 cursor-not-allowed border border-dashed border-white/10" 
+                    : ""
+                  }
+                  ${canStart && !isSelected && !peak
+                    ? "bg-white/10 hover:bg-white/20 text-white border border-white/10 cursor-pointer" 
+                    : ""
+                  }
+                  ${canStart && !isSelected && peak
+                    ? "bg-primary/10 hover:bg-primary/20 text-primary/70 border border-primary/20 cursor-pointer" 
+                    : ""
+                  }
+                  ${isSelected && !peak
+                    ? "bg-white text-black border-2 border-white cursor-pointer hover:bg-white/80" 
+                    : ""
+                  }
+                  ${isSelected && peak
+                    ? "bg-primary text-black border-2 border-primary cursor-pointer hover:bg-primary/80" 
+                    : ""
+                  }
+                `}
+              >
+                <span className="block">{time}</span>
+                {canStart && !isSelected && (
+                  <span className={`block text-[10px] mt-0.5 ${peak ? "text-primary/50" : "text-white/40"}`}>
+                    → {formatEndTime(time)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-        <div className="flex items-center gap-1">
-          <div className="h-3 w-3 rounded bg-primary/20" />
-          <span>Pointe</span>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-white/60">
+        <div className="flex items-center gap-1.5">
+          <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
+          <span>
+            {hourlyRates.offPeakMin === hourlyRates.offPeakMax
+              ? `${hourlyRates.offPeakMin}€/h`
+              : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
+          </span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="h-3 w-3 rounded bg-white/10 line-through" />
+        <div className="flex items-center gap-1.5">
+          <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
+          <span className="text-primary/70">
+            Pointe {hourlyRates.peakMin === hourlyRates.peakMax
+              ? `${hourlyRates.peakMin}€/h`
+              : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="h-4 w-4 rounded border border-red-500/20 bg-red-500/10 line-through text-[8px] text-red-400/50 flex items-center justify-center">×</div>
           <span>Réservé</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <div className="h-4 w-4 rounded border border-dashed border-white/10 bg-white/5" />
+          <span>Durée insuffisante</span>
+        </div>
       </div>
 
-      {startTime && (
+      {startTime && endTime && (
         <div className="flex flex-col gap-3 rounded-lg border border-primary/50 bg-primary/10 p-4">
           <div className="flex items-center justify-between">
             <div>
               <span className="text-sm text-white/70">Votre sélection</span>
               <div className="text-lg font-semibold">
-                {startTime} - {endTime || "..."}
-                {selectedDuration && (
-                  <span className="ml-2 text-primary">({selectedDuration})</span>
-                )}
+                {startTime} - {endTime}
+                <span className="ml-2 text-primary">({durationLabel})</span>
               </div>
             </div>
             <button
@@ -272,6 +353,44 @@ export function TimeSlotPicker({
               Effacer
             </button>
           </div>
+
+          {priceBreakdown && (
+            <div className="flex flex-col gap-2 rounded-md bg-black/30 px-3 py-2">
+              {priceBreakdown.isRange ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Estimation</span>
+                  <span className="text-lg font-bold text-primary">
+                    {priceBreakdown.total === priceBreakdown.totalMax
+                      ? formatPrice(priceBreakdown.total)
+                      : `${formatPrice(priceBreakdown.total)} - ${formatPrice(priceBreakdown.totalMax!)}`}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  {priceBreakdown.offPeakHours! > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-white/70">
+                        {priceBreakdown.offPeakHours}h × {priceBreakdown.offPeakRate}€/h
+                      </span>
+                      <span className="text-white">{formatPrice(priceBreakdown.offPeakSubtotal!)}</span>
+                    </div>
+                  )}
+                  {priceBreakdown.peakHours! > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-primary/80">
+                        {priceBreakdown.peakHours}h × {priceBreakdown.peakRate}€/h (pointe)
+                      </span>
+                      <span className="text-primary">{formatPrice(priceBreakdown.peakSubtotal!)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t border-white/10 pt-2">
+                    <span className="font-medium">Total</span>
+                    <span className="text-lg font-bold text-primary">{formatPrice(priceBreakdown.total)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           
           <button
             onClick={onConfirm}
@@ -284,7 +403,7 @@ export function TimeSlotPicker({
               }
             `}
           >
-            {canConfirm ? "Choisir ce créneau →" : "Sélectionnez l'heure de fin"}
+            Choisir ce créneau →
           </button>
         </div>
       )}

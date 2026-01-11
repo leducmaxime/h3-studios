@@ -1,8 +1,9 @@
 "use client";
 
-import { CheckCircle2, Calendar, Download, ExternalLink, ChevronLeft } from "lucide-react";
+import { CheckCircle2, Calendar, Download, ExternalLink, ChevronLeft, CreditCard, Banknote } from "lucide-react";
 import {
   STUDIOS,
+  EQUIPMENT,
   formatDate,
   formatDuration,
   formatPrice,
@@ -16,9 +17,13 @@ interface FinalCheckoutProps {
   total: number;
   onNewBooking: () => void;
   onBack: () => void;
+  onProceedToPayment?: () => void;
+  showPaymentButton?: boolean;
 }
 
-export function FinalCheckout({ cart, total, onNewBooking, onBack }: FinalCheckoutProps) {
+export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPayment, showPaymentButton }: FinalCheckoutProps) {
+  const isPending = cart[0]?.paymentStatus === "pending";
+  const isPaid = cart[0]?.paymentStatus === "paid";
   const handleDownloadAll = () => {
     cart.forEach((booking) => {
       const ics = generateICS(
@@ -60,9 +65,12 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack }: FinalChecko
         <div className="mb-4 inline-flex rounded-full bg-green-500/20 p-4">
           <CheckCircle2 className="h-12 w-12 text-green-500" />
         </div>
-        <h3 className="mb-2 text-2xl font-bold">Réservations confirmées !</h3>
+        <h3 className="mb-2 text-2xl font-bold">
+          {showPaymentButton ? "Récapitulatif de votre commande" : "Réservations confirmées !"}
+        </h3>
         <p className="text-white/60">
-          {cart.length} réservation{cart.length > 1 ? "s" : ""} • Paiement sur place
+          {cart.length} réservation{cart.length > 1 ? "s" : ""}
+          {!showPaymentButton && (isPaid ? " • Payé en ligne" : " • Paiement sur place")}
         </p>
       </div>
 
@@ -77,8 +85,31 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack }: FinalChecko
                 <h4 className="font-semibold">{STUDIOS[booking.studioId].name}</h4>
                 <p className="text-sm text-primary">Réf: {booking.bookingRef}</p>
               </div>
-              <span className="font-semibold text-primary">{formatPrice(booking.price)}</span>
+              <div className="flex flex-col items-end gap-1">
+                <span className="font-semibold text-primary">{formatPrice(booking.price)}</span>
+                {!showPaymentButton && (
+                  booking.paymentStatus === "paid" ? (
+                    <span className="flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+                      <CreditCard className="h-3 w-3" />
+                      Payé
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-medium text-yellow-400">
+                      <Banknote className="h-3 w-3" />
+                      À régler sur place
+                    </span>
+                  )
+                )}
+              </div>
             </div>
+            
+            {booking.equipmentPrice > 0 && (
+              <div className="mb-3 text-xs text-white/60">
+                Équipements: {booking.equipment.filter(e => e.quantity > 0).map(e => 
+                  `${EQUIPMENT[e.id]?.name || e.id} ×${e.quantity}`
+                ).join(", ")} ({formatPrice(booking.equipmentPrice)})
+              </div>
+            )}
 
             <div className="mb-3 flex items-center gap-2 text-sm text-white/70">
               <Calendar className="h-4 w-4" />
@@ -118,7 +149,9 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack }: FinalChecko
 
       <div className="rounded-xl bg-primary/10 p-4">
         <div className="flex items-center justify-between">
-          <span className="text-lg">Total à régler sur place</span>
+          <span className="text-lg">
+            {showPaymentButton ? "Total" : (isPaid ? "Total payé" : "Total à régler sur place")}
+          </span>
           <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
         </div>
       </div>
@@ -141,16 +174,28 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack }: FinalChecko
           <ChevronLeft className="h-4 w-4" />
           Retour
         </button>
-        <button
-          onClick={onNewBooking}
-          className="flex-1 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
-        >
-          Nouvelle réservation
-        </button>
+        {showPaymentButton && onProceedToPayment ? (
+          <button
+            onClick={onProceedToPayment}
+            className="flex-1 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+          >
+            Procéder au paiement
+          </button>
+        ) : (
+          <button
+            onClick={onNewBooking}
+            className="flex-1 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+          >
+            Nouvelle réservation
+          </button>
+        )}
       </div>
 
       <p className="text-center text-sm text-white/50">
-        Un email de confirmation vous sera envoyé à {cart[0]?.userEmail}
+        {showPaymentButton 
+          ? "Vous pourrez choisir de payer en ligne ou sur place à l'étape suivante"
+          : `Un email de confirmation vous sera envoyé à ${cart[0]?.userEmail}`
+        }
       </p>
     </div>
   );

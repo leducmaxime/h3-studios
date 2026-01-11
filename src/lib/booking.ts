@@ -1,6 +1,9 @@
 export type StudioId = "la-scene" | "le-podium";
 export type GroupType = "solo" | "duo" | "group";
 export type BookingFlow = "time-first" | "studio-first";
+export type EquipmentId = "cymbal" | "mic" | "instrument";
+export type PaymentMethod = "card" | "cash";
+export type PaymentStatus = "pending" | "paid" | "pay-on-site";
 
 export interface Studio {
   id: StudioId;
@@ -8,12 +11,31 @@ export interface Studio {
   size: string;
   description: string;
   features: string[];
+  image: string;
 }
+
+export interface Equipment {
+  id: EquipmentId;
+  name: string;
+  pricePerHour: number;
+  maxPerSession: number;
+}
+
+export const EQUIPMENT: Record<EquipmentId, Equipment> = {
+  cymbal: { id: "cymbal", name: "Cymbale crash", pricePerHour: 1, maxPerSession: 3 },
+  mic: { id: "mic", name: "Micro supplémentaire", pricePerHour: 1, maxPerSession: 3 },
+  instrument: { id: "instrument", name: "Instrument (guitare, basse...)", pricePerHour: 2, maxPerSession: 5 },
+};
 
 export interface PriceSlot {
   time: string;
   isPeak: boolean;
   rate: number;
+}
+
+export interface EquipmentSelection {
+  id: EquipmentId;
+  quantity: number;
 }
 
 export interface CompletedBooking {
@@ -29,22 +51,27 @@ export interface CompletedBooking {
   bandName: string;
   bookingRef: string;
   price: number;
+  equipment: EquipmentSelection[];
+  equipmentPrice: number;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
 }
 
 export interface BookingState {
   flow: BookingFlow | null;
-  step: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = flow choice, 6 = final checkout
+  step: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   selectedDate: Date | null;
   startTime: string | null;
   endTime: string | null;
   studioId: StudioId | null;
-  groupType: GroupType;
+  groupType: GroupType | null;
   userName: string;
   userEmail: string;
   userPhone: string;
   bandName: string;
   bookingRef: string | null;
   cart: CompletedBooking[];
+  paymentMethod: PaymentMethod | null;
 }
 
 export const STUDIOS: Record<StudioId, Studio> = {
@@ -54,6 +81,7 @@ export const STUDIOS: Record<StudioId, Studio> = {
     size: "42m²",
     description: "Scène intimiste avec rampe d'éclairage, écran géant et vidéoprojecteur",
     features: ["Scène", "Éclairage", "Écran géant", "Vidéoprojecteur"],
+    image: "/images/studios/scene-1.jpg",
   },
   "le-podium": {
     id: "le-podium",
@@ -61,6 +89,7 @@ export const STUDIOS: Record<StudioId, Studio> = {
     size: "35m²",
     description: "Espace simple et fonctionnel, idéal pour répétitions et cours",
     features: ["Compact", "Fonctionnel", "Cours"],
+    image: "/images/studios/podium-1.jpg",
   },
 };
 
@@ -82,8 +111,10 @@ export const TIME_SLOTS = [
   "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
   "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
   "18:00", "18:30", "19:00", "19:30", "20:00", "20:30",
-  "21:00", "21:30", "22:00",
+  "21:00", "21:30",
 ];
+
+export const CLOSING_TIME = "22:00";
 
 export const SLOT_DURATION_MINUTES = 30;
 export const MIN_BOOKING_SLOTS = 2;
@@ -113,7 +144,8 @@ export function calculatePrice(
   endTime: string
 ): { total: number; breakdown: PriceSlot[] } {
   const startIndex = TIME_SLOTS.indexOf(startTime);
-  const endIndex = TIME_SLOTS.indexOf(endTime);
+  let endIndex = TIME_SLOTS.indexOf(endTime);
+  if (endIndex === -1 && endTime === CLOSING_TIME) endIndex = TIME_SLOTS.length;
   
   if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
     return { total: 0, breakdown: [] };
@@ -138,7 +170,8 @@ export function calculatePrice(
 
 export function formatDuration(startTime: string, endTime: string): string {
   const startIndex = TIME_SLOTS.indexOf(startTime);
-  const endIndex = TIME_SLOTS.indexOf(endTime);
+  let endIndex = TIME_SLOTS.indexOf(endTime);
+  if (endIndex === -1 && endTime === CLOSING_TIME) endIndex = TIME_SLOTS.length;
   
   if (startIndex === -1 || endIndex === -1) return "";
   
@@ -283,4 +316,185 @@ export function downloadICS(icsContent: string, filename: string): void {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+// Calendar URL generators
+export function generateGoogleCalendarUrl(
+  date: Date,
+  startTime: string,
+  endTime: string,
+  studioName: string,
+  bookingRef: string
+): string {
+  const formatGoogleDate = (d: Date, time: string): string => {
+    const [hours, minutes] = time.split(":").map(Number);
+    const dt = new Date(d);
+    dt.setHours(hours, minutes, 0, 0);
+    return dt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  };
+
+  const start = formatGoogleDate(date, startTime);
+  const end = formatGoogleDate(date, endTime);
+  const title = encodeURIComponent(`Répétition - ${studioName}`);
+  const details = encodeURIComponent(`Réservation ${bookingRef} chez H3 Studios`);
+  const location = encodeURIComponent("3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie");
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${location}`;
+}
+
+export function generateOutlookCalendarUrl(
+  date: Date,
+  startTime: string,
+  endTime: string,
+  studioName: string,
+  bookingRef: string
+): string {
+  const formatOutlookDate = (d: Date, time: string): string => {
+    const [hours, minutes] = time.split(":").map(Number);
+    const dt = new Date(d);
+    dt.setHours(hours, minutes, 0, 0);
+    return dt.toISOString();
+  };
+
+  const start = formatOutlookDate(date, startTime);
+  const end = formatOutlookDate(date, endTime);
+  const title = encodeURIComponent(`Répétition - ${studioName}`);
+  const details = encodeURIComponent(`Réservation ${bookingRef} chez H3 Studios`);
+  const location = encodeURIComponent("3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie");
+
+  return `https://outlook.live.com/calendar/0/deeplink/compose?subject=${title}&startdt=${start}&enddt=${end}&body=${details}&location=${location}`;
+}
+
+// Alternative slot suggestions
+export interface AlternativeSlot {
+  date: Date;
+  startTime: string;
+  endTime: string;
+  studioId: StudioId;
+  reason: "same-day" | "same-time-other-studio" | "nearby-day";
+}
+
+export function findAlternativeSlots(
+  requestedDate: Date,
+  requestedStart: string,
+  requestedEnd: string,
+  unavailableStudio: StudioId | null,
+  availability: Set<string>
+): AlternativeSlot[] {
+  const alternatives: AlternativeSlot[] = [];
+  const startIdx = TIME_SLOTS.indexOf(requestedStart);
+  const endIdx = TIME_SLOTS.indexOf(requestedEnd);
+  const duration = endIdx - startIdx;
+
+  // 1. Try other studio same time
+  const otherStudio: StudioId = unavailableStudio === "la-scene" ? "le-podium" : "la-scene";
+  let otherStudioAvailable = true;
+  for (let i = startIdx; i < endIdx; i++) {
+    if (availability.has(`${otherStudio}-${TIME_SLOTS[i]}`)) {
+      otherStudioAvailable = false;
+      break;
+    }
+  }
+  if (otherStudioAvailable && unavailableStudio) {
+    alternatives.push({
+      date: requestedDate,
+      startTime: requestedStart,
+      endTime: requestedEnd,
+      studioId: otherStudio,
+      reason: "same-time-other-studio",
+    });
+  }
+
+  // 2. Try nearby times same day (2h before/after)
+  const studios: StudioId[] = ["la-scene", "le-podium"];
+  for (const studio of studios) {
+    for (let offset = -4; offset <= 4; offset++) {
+      if (offset === 0) continue;
+      const newStartIdx = startIdx + offset;
+      const newEndIdx = newStartIdx + duration;
+      if (newStartIdx < 0 || newEndIdx > TIME_SLOTS.length) continue;
+
+      let slotAvailable = true;
+      for (let i = newStartIdx; i < newEndIdx; i++) {
+        if (availability.has(`${studio}-${TIME_SLOTS[i]}`)) {
+          slotAvailable = false;
+          break;
+        }
+      }
+      if (slotAvailable) {
+        alternatives.push({
+          date: requestedDate,
+          startTime: TIME_SLOTS[newStartIdx],
+          endTime: TIME_SLOTS[newEndIdx],
+          studioId: studio,
+          reason: "same-day",
+        });
+        if (alternatives.length >= 5) break;
+      }
+    }
+    if (alternatives.length >= 5) break;
+  }
+
+  return alternatives.slice(0, 5);
+}
+
+// localStorage helpers
+const STORAGE_KEY = "h3-studios-user-prefs";
+
+export interface UserPreferences {
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  bandName: string;
+  lastVisit: string;
+}
+
+export function saveUserPreferences(prefs: Partial<UserPreferences>): void {
+  if (typeof window === "undefined") return;
+  try {
+    const existing = loadUserPreferences();
+    const updated = { ...existing, ...prefs, lastVisit: new Date().toISOString() };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch {
+    // localStorage not available
+  }
+}
+
+export function loadUserPreferences(): UserPreferences | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (!data) return null;
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+// Equipment price calculation
+export function calculateEquipmentPrice(
+  equipment: EquipmentSelection[],
+  durationHours: number
+): number {
+  return equipment.reduce((total, item) => {
+    const eq = EQUIPMENT[item.id];
+    return total + eq.pricePerHour * item.quantity * durationHours;
+  }, 0);
+}
+
+// Urgency indicator (mock - based on time of day and random factor)
+export function getUrgencyIndicator(date: Date, time: string): { viewers: number; recentBookings: number } | null {
+  const seed = date.getDate() + date.getMonth() * 31 + parseInt(time.split(":")[0], 10);
+  const random = ((seed * 9301 + 49297) % 233280) / 233280;
+  
+  // Only show urgency for popular times (evenings and weekends)
+  if (!isPeakTime(date, time)) return null;
+  
+  if (random > 0.6) {
+    return {
+      viewers: Math.floor(random * 5) + 1,
+      recentBookings: Math.floor(random * 3),
+    };
+  }
+  return null;
 }

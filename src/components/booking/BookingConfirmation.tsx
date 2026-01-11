@@ -1,17 +1,23 @@
 "use client";
 
-import { Check, Calendar, Download, Plus, ShoppingCart } from "lucide-react";
+import { Check, Calendar, Download, Plus, ShoppingCart, Apple } from "lucide-react";
 import {
   type StudioId,
   type GroupType,
   type CompletedBooking,
+  type EquipmentSelection,
   STUDIOS,
+  EQUIPMENT,
   calculatePrice,
+  calculateEquipmentPrice,
   formatPrice,
   formatDate,
   formatDuration,
+  TIME_SLOTS,
   generateICS,
   downloadICS,
+  generateGoogleCalendarUrl,
+  generateOutlookCalendarUrl,
 } from "@/lib/booking";
 
 interface BookingConfirmationProps {
@@ -44,8 +50,13 @@ export function BookingConfirmation({
   onCheckout,
 }: BookingConfirmationProps) {
   const studio = STUDIOS[studioId];
-  const { total } = calculatePrice(studioId, groupType, date, startTime, endTime);
   const duration = formatDuration(startTime, endTime);
+  
+  const latestBooking = cart[cart.length - 1];
+  const equipment = latestBooking?.equipment || [];
+  const equipmentPrice = latestBooking?.equipmentPrice || 0;
+  const slotTotal = latestBooking?.price || 0;
+  const studioPrice = slotTotal - equipmentPrice;
 
   const handleDownloadICS = () => {
     const ics = generateICS(date, startTime, endTime, studio.name, bookingRef);
@@ -53,40 +64,31 @@ export function BookingConfirmation({
   };
 
   const handleAddToGoogle = () => {
-    const formatGoogleDate = (d: Date, time: string): string => {
-      const [hours, minutes] = time.split(":").map(Number);
-      const dt = new Date(d);
-      dt.setHours(hours, minutes, 0, 0);
-      return dt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-    };
+    const url = generateGoogleCalendarUrl(date, startTime, endTime, studio.name, bookingRef);
+    window.open(url, "_blank");
+  };
 
-    const start = formatGoogleDate(date, startTime);
-    const end = formatGoogleDate(date, endTime);
-    const title = encodeURIComponent(`Répétition - ${studio.name}`);
-    const details = encodeURIComponent(`Réservation ${bookingRef} chez H3 Studios`);
-    const location = encodeURIComponent("3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie");
-
-    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${location}`;
+  const handleAddToOutlook = () => {
+    const url = generateOutlookCalendarUrl(date, startTime, endTime, studio.name, bookingRef);
     window.open(url, "_blank");
   };
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
-      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
-        <Check className="h-10 w-10 text-green-500" />
+      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/20">
+        <ShoppingCart className="h-10 w-10 text-primary" />
       </div>
 
       <div>
-        <h2 className="text-2xl font-bold">Réservation ajoutée !</h2>
-        <p className="mt-1 text-white/60">
-          Créneau ajouté au panier
+        <h2 className="text-2xl font-bold">Créneau ajouté au panier</h2>
+        <p className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-4 py-2 text-amber-400 text-sm">
+          ⚠️ Finalisez votre réservation pour la confirmer
         </p>
       </div>
 
-      <div className="w-full max-w-md rounded-xl border border-primary/50 bg-black p-6 text-left">
+      <div className="w-full max-w-md rounded-xl border border-white/20 bg-black p-6 text-left">
         <div className="mb-4 text-center">
-          <span className="text-sm text-white/60">Réservation</span>
-          <div className="font-mono text-lg font-bold text-primary">{bookingRef}</div>
+          <span className="text-sm text-white/60">Récapitulatif du créneau</span>
         </div>
 
         <div className="space-y-3 text-sm">
@@ -108,9 +110,25 @@ export function BookingConfirmation({
             <span className="text-white/70">Nom</span>
             <span className="font-medium">{userName}</span>
           </div>
-          <div className="mt-4 flex justify-between border-t border-white/10 pt-4">
-            <span className="font-semibold">Prix du créneau</span>
-            <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
+          <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4">
+            <div className="flex justify-between text-sm">
+              <span className="text-white/70">Studio</span>
+              <span className="font-medium">{formatPrice(studioPrice)}</span>
+            </div>
+            {equipment.length > 0 && equipmentPrice > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-white/70">
+                  Équipements ({equipment.filter(e => e.quantity > 0).map(e => 
+                    `${EQUIPMENT[e.id]?.name || e.id} ×${e.quantity}`
+                  ).join(", ")})
+                </span>
+                <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t border-white/10 pt-2">
+              <span className="font-semibold">Prix du créneau</span>
+              <span className="text-xl font-bold text-primary">{formatPrice(slotTotal)}</span>
+            </div>
           </div>
         </div>
 
@@ -121,22 +139,7 @@ export function BookingConfirmation({
         </div>
       </div>
 
-      <div className="flex flex-wrap justify-center gap-3">
-        <button
-          onClick={handleAddToGoogle}
-          className="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20"
-        >
-          <Calendar className="h-4 w-4" />
-          Google Calendar
-        </button>
-        <button
-          onClick={handleDownloadICS}
-          className="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20"
-        >
-          <Download className="h-4 w-4" />
-          Télécharger .ics
-        </button>
-      </div>
+
 
       {cart.length > 0 && (
         <div className="w-full max-w-md rounded-xl bg-primary/10 p-4">
@@ -150,20 +153,19 @@ export function BookingConfirmation({
         </div>
       )}
 
-      <div className="flex w-full max-w-md gap-3">
-        <button
-          onClick={onAddAnother}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-white/20 py-3 transition-colors hover:bg-white/5"
-        >
-          <Plus className="h-4 w-4" />
-          Ajouter un créneau
-        </button>
+      <div className="flex w-full max-w-md flex-col gap-3">
         <button
           onClick={onCheckout}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
         >
-          <ShoppingCart className="h-4 w-4" />
-          Finaliser ({formatPrice(cartTotal)})
+          Finaliser la réservation → {formatPrice(cartTotal)}
+        </button>
+        <button
+          onClick={onAddAnother}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/5"
+        >
+          <Plus className="h-4 w-4" />
+          Ajouter un autre créneau
         </button>
       </div>
     </div>

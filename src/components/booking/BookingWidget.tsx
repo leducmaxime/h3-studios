@@ -12,12 +12,14 @@ import { BookingForm } from "./BookingForm";
 import { BookingConfirmation } from "./BookingConfirmation";
 import { FinalCheckout } from "./FinalCheckout";
 import { CartSummary } from "./CartSummary";
-import { formatDate, formatDuration, STUDIOS, type StudioId } from "@/lib/booking";
+import { ProgressIndicator } from "./ProgressIndicator";
+import { formatDate, formatDuration, STUDIOS, TIME_SLOTS, type StudioId } from "@/lib/booking";
 
 export function BookingWidget() {
   const {
     state,
     availability,
+    pricing,
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,
@@ -30,6 +32,7 @@ export function BookingWidget() {
     setGroupType,
     selectStudio,
     updateUserInfo,
+    updateEquipment,
     confirmBooking,
     addAnotherBooking,
     goToCheckout,
@@ -37,6 +40,10 @@ export function BookingWidget() {
     resetBooking,
     goBack,
   } = useBooking();
+
+  const durationHours = state.startTime && state.endTime
+    ? (TIME_SLOTS.indexOf(state.endTime) - TIME_SLOTS.indexOf(state.startTime)) * 0.5
+    : 0;
 
   const getStepInfo = () => {
     if (state.flow === "time-first") {
@@ -61,34 +68,16 @@ export function BookingWidget() {
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
         <div className="relative p-4 sm:p-6 md:p-8">
-          {state.step !== 0 && state.step !== 5 && state.step !== 6 && (
-            <div className="mb-6">
-              <div className="flex items-center justify-between">
-                <h2 className="font-blanka text-xl sm:text-2xl">
-                  RÉSERVATION EN LIGNE
-                </h2>
-                <div className="flex items-center gap-1 text-sm text-white/60">
-                  {[1, 2, 3, 4].map((step) => (
-                    <span key={step}>
-                      <span className={state.step >= step ? "text-primary" : ""}>
-                        {step}
-                      </span>
-                      {step < 4 && <span className="mx-0.5">/</span>}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 flex gap-1">
-                {[1, 2, 3, 4].map((step) => (
-                  <div
-                    key={step}
-                    className={`h-1 flex-1 rounded-full transition-colors ${
-                      state.step >= step ? "bg-primary" : "bg-white/20"
-                    }`}
-                  />
-                ))}
-              </div>
+          {state.step !== 0 && state.step !== 5 && state.step !== 6 && state.flow && (
+            <div className="mb-2">
+              <h2 className="mb-4 text-center font-blanka text-xl sm:text-2xl">
+                RÉSERVATION EN LIGNE
+              </h2>
+              <ProgressIndicator
+                currentStep={state.step}
+                totalSteps={4}
+                flow={state.flow}
+              />
             </div>
           )}
 
@@ -171,7 +160,7 @@ export function BookingWidget() {
                           date={state.selectedDate!}
                           startTime={state.startTime!}
                           endTime={state.endTime!}
-                          groupType={state.groupType}
+                          groupType={state.groupType || "group"}
                           availability={availability}
                           onSelect={() => selectStudio(studioId)}
                         />
@@ -189,6 +178,7 @@ export function BookingWidget() {
                 <StudioPicker
                   onSelect={selectStudioFirst}
                   onBack={goBack}
+                  groupType={state.groupType || "group"}
                 />
               )}
 
@@ -267,12 +257,14 @@ export function BookingWidget() {
                 startTime={state.startTime}
                 endTime={state.endTime}
                 studioId={state.studioId}
-                groupType={state.groupType}
+                groupType={state.groupType || "group"}
                 userName={state.userName}
                 userEmail={state.userEmail}
                 userPhone={state.userPhone}
                 bandName={state.bandName}
+                equipment={state.equipment}
                 onUpdateField={updateUserInfo}
+                onUpdateEquipment={updateEquipment}
                 onConfirm={confirmBooking}
                 onBack={goBack}
                 canConfirm={canConfirmBooking}
@@ -290,7 +282,7 @@ export function BookingWidget() {
                 startTime={state.startTime}
                 endTime={state.endTime}
                 studioId={state.studioId}
-                groupType={state.groupType}
+                groupType={state.groupType || "group"}
                 userName={state.userName}
                 userEmail={state.userEmail}
                 bookingRef={state.bookingRef}
