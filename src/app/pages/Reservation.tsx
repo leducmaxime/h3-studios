@@ -14,7 +14,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { CartSummary } from "@/components/booking/CartSummary";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
-import { MockPaymentForm } from "@/components/booking/MockPaymentForm";
+import { StripeRedirect } from "@/components/booking/StripeRedirect";
 import { ChevronLeft, RotateCcw } from "lucide-react";
 import { formatDate, formatDuration, STUDIOS, TIME_SLOTS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
 
@@ -345,11 +345,11 @@ export function Reservation({ step }: ReservationProps) {
             )}
 
             {state.step === 8 && (
-              <MockPaymentForm
+              <StripeRedirect
                 cart={state.cart}
                 total={cartTotal}
+                userName={state.userName}
                 userEmail={state.userEmail}
-                onSuccess={processPayment}
                 onBack={goBack}
               />
             )}

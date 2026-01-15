@@ -12,5 +12,9 @@
   "observability": {
     "enabled": true
   },
-  "vars": {}
+  "vars": {
+    // PayPlug API key - use sk_test_ for testing, sk_live_ for production
+    // Set via: wrangler secret put PAYPLUG_SECRET_KEY
+    // Or add to .dev.vars for local development
+  }
 }
