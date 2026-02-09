@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { ChevronLeft } from "lucide-react";
+import { ChevronDown, ChevronLeft } from "lucide-react";
 import {
   ALL_TIME_SLOTS,
   getStudioTimeSlots,
@@ -31,14 +31,40 @@ interface TimeSlotPickerProps {
   groupType?: GroupType;
 }
 
-const DURATION_OPTIONS = [
+const DURATION_OPTIONS_MAIN = [
   { label: "1h", slots: 2 },
   { label: "1h30", slots: 3 },
   { label: "2h", slots: 4 },
   { label: "2h30", slots: 5 },
   { label: "3h", slots: 6 },
+  { label: "3h30", slots: 7 },
   { label: "4h", slots: 8 },
+  { label: "4h30", slots: 9 },
+  { label: "5h", slots: 10 },
+  { label: "5h30", slots: 11 },
+  { label: "6h", slots: 12 },
 ];
+
+const DURATION_OPTIONS_EXTRA = [
+  { label: "6h30", slots: 13 },
+  { label: "7h", slots: 14 },
+  { label: "7h30", slots: 15 },
+  { label: "8h", slots: 16 },
+  { label: "8h30", slots: 17 },
+  { label: "9h", slots: 18 },
+  { label: "9h30", slots: 19 },
+  { label: "10h", slots: 20 },
+  { label: "10h30", slots: 21 },
+  { label: "11h", slots: 22 },
+  { label: "11h30", slots: 23 },
+  { label: "12h", slots: 24 },
+  { label: "12h30", slots: 25 },
+  { label: "13h", slots: 26 },
+  { label: "13h30", slots: 27 },
+  { label: "14h", slots: 28 },
+];
+
+const ALL_DURATION_OPTIONS = [...DURATION_OPTIONS_MAIN, ...DURATION_OPTIONS_EXTRA];
 
 export function TimeSlotPicker({
   date,
@@ -55,6 +81,7 @@ export function TimeSlotPicker({
   groupType = "group",
 }: TimeSlotPickerProps) {
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
+  const [showMoreDurations, setShowMoreDurations] = useState(false);
 
   // Solo/duo have flat pricing (no peak/off-peak distinction)
   const hasPeakPricing = groupType === "group";
@@ -247,7 +274,7 @@ export function TimeSlotPicker({
   }, [visibleSlots, date]);
 
   const durationLabel = selectedDuration !== null
-    ? DURATION_OPTIONS.find(d => d.slots === selectedDuration)?.label || "2h"
+    ? ALL_DURATION_OPTIONS.find(d => d.slots === selectedDuration)?.label || "2h"
     : null;
 
   return (
@@ -270,7 +297,7 @@ export function TimeSlotPicker({
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium text-white/70">Durée de la répétition</span>
         <div className="flex flex-wrap gap-2">
-          {DURATION_OPTIONS.map(({ label, slots }) => (
+          {DURATION_OPTIONS_MAIN.map(({ label, slots }) => (
             <button
               key={slots}
               onClick={() => {
@@ -289,6 +316,35 @@ export function TimeSlotPicker({
             </button>
           ))}
         </div>
+        {showMoreDurations && (
+          <div className="flex flex-wrap gap-2">
+            {DURATION_OPTIONS_EXTRA.map(({ label, slots }) => (
+              <button
+                key={slots}
+                onClick={() => {
+                  setSelectedDuration(slots);
+                  onClear();
+                }}
+                className={`
+                  px-4 py-2 rounded-lg font-medium transition-all text-sm
+                  ${selectedDuration === slots
+                    ? "bg-primary text-black"
+                    : "bg-white/10 text-white hover:bg-white/20"
+                  }
+                `}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <button
+          onClick={() => setShowMoreDurations(!showMoreDurations)}
+          className="flex items-center gap-1 self-start text-xs text-white/50 transition-colors hover:text-white/80"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showMoreDurations ? "rotate-180" : ""}`} />
+          {showMoreDurations ? "Moins de choix" : "Plus de choix (jusqu'à 14h)"}
+        </button>
       </div>
 
       {selectedDuration !== null && (
