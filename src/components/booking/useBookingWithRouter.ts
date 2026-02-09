@@ -13,6 +13,7 @@ import {
   calculateEquipmentPrice,
   generateBookingRef,
   generateMockAvailability,
+  assignStudioForSoloDuo,
   loadUserPreferences,
   saveUserPreferences,
   TIME_SLOTS,
@@ -285,9 +286,11 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => {
       if (s.startTime && s.endTime) {
         if (s.flow === "time-first") {
-          // Solo/duo skip studio selection entirely
+          // Solo/duo skip studio selection — auto-assign based on availability
           if (s.groupType === "solo" || s.groupType === "duo") {
-            return { ...s, studioId: "la-scene", step: 4 };
+            const avail = s.selectedDate ? generateMockAvailability(s.selectedDate) : new Set<string>();
+            const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, avail);
+            return { ...s, studioId: studio, step: 4 };
           }
           return { ...s, step: 3 };
         }

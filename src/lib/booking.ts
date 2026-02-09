@@ -183,6 +183,47 @@ export const CLOSING_TIME = "00:00";
 export const SLOT_DURATION_MINUTES = 30;
 export const MIN_BOOKING_SLOTS = 2;
 
+/**
+ * Auto-assign studio for solo/duo bookings.
+ * Groups have priority — solo/duo gets whatever is left.
+ * If the slot extends past Le Podium's closing time, only La Scène is possible.
+ */
+export function assignStudioForSoloDuo(
+  date: Date,
+  startTime: string,
+  endTime: string,
+  availability: Set<string>
+): StudioId {
+  const podiumSlots = getStudioTimeSlots("le-podium", date);
+  const sceneSlots = getStudioTimeSlots("la-scene", date);
+
+  // Collect all slots in the booking range
+  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
+  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
+  if (endIdx === -1 && endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  const bookedRange = ALL_TIME_SLOTS.slice(startIdx, endIdx);
+
+  // Check if Le Podium can even cover this time range (opening hours)
+  const podiumCoversRange = bookedRange.every((t) => podiumSlots.includes(t));
+  const sceneCoversRange = bookedRange.every((t) => sceneSlots.includes(t));
+
+  // Check if a group already booked one of the studios on this range
+  const sceneBooked = bookedRange.some((t) => availability.has(`la-scene-${t}`));
+  const podiumBooked = bookedRange.some((t) => availability.has(`le-podium-${t}`));
+
+  // If only one studio covers the range, use that one
+  if (!podiumCoversRange && sceneCoversRange) return "la-scene";
+  if (!sceneCoversRange && podiumCoversRange) return "le-podium";
+
+  // If a group took La Scène, assign Le Podium (if it covers the range)
+  if (sceneBooked && !podiumBooked && podiumCoversRange) return "le-podium";
+  // If a group took Le Podium, assign La Scène (if it covers the range)
+  if (podiumBooked && !sceneBooked && sceneCoversRange) return "la-scene";
+
+  // Default: La Scène (larger room, open later)
+  return "la-scene";
+}
+
 export function isPeakTime(date: Date, time: string): boolean {
   const hour = parseInt(time.split(":")[0], 10);
   const dayOfWeek = date.getDay();
