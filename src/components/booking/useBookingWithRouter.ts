@@ -207,6 +207,12 @@ export function useBookingWithRouter(urlStep?: string) {
   }, [state.step, state.flow, isHydrated]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [state.step]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     
     const handlePopState = () => {

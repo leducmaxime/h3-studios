@@ -63,6 +63,12 @@ export function useBooking() {
     setPrefsLoaded(true);
   }, [prefsLoaded]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [state.step]);
+
   const setStep = useCallback((step: BookingState["step"]) => {
     setState((s) => ({ ...s, step }));
   }, []);
