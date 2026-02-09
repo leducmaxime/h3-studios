@@ -23,6 +23,11 @@ export function FlowChoice({ onSelect, disabled = false, groupType }: FlowChoice
             : "Choisissez votre méthode préférée pour commencer"
           }
         </p>
+        {isSoloDuo && !disabled && (
+          <p className="mt-1 text-xs text-white/50">
+            Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -68,11 +73,6 @@ export function FlowChoice({ onSelect, disabled = false, groupType }: FlowChoice
               Studio → Date → Créneau
             </span>
           </div>
-          {isSoloDuo && !disabled && (
-            <p className="mt-1 text-xs text-white/50">
-              Le choix du studio se fera selon la disponibilité, priorité aux groupes.
-            </p>
-          )}
         </button>
       </div>
     </div>
