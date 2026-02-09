@@ -96,7 +96,7 @@ export function Reservation({ step }: ReservationProps) {
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
-                  {state.step > 3 && state.studioId && state.groupType === "group" && (
+                  {state.studioId && state.groupType === "group" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
