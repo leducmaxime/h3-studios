@@ -154,11 +154,15 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
               <span className={`text-2xl font-bold ${selected ? "text-black" : ""}`}>
                 {date.getDate()}
               </span>
-              {!disabled && hasAvailability && (
-                <span className={`text-xs mt-1 ${selected ? "text-black/60" : "text-white/40"}`}>
-                  {ranges.length} dispo
-                </span>
-              )}
+              <span className={`text-xs mt-1 ${
+                disabled
+                  ? "text-white/30"
+                  : selected
+                    ? "text-black/60"
+                    : "text-emerald-400/80"
+              }`}>
+                {disabled ? "Complet" : "Disponible"}
+              </span>
             </button>
           );
         })}
