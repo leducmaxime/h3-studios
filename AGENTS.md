@@ -1,3 +1,13 @@
+## LANGUE — OBLIGATOIRE
+
+**Toutes les réponses doivent être rédigées en français.** L'utilisateur de ce projet ne parle pas anglais.
+- Répondre en français dans tous les cas : explications, questions, résumés, messages de progression, etc.
+- Les messages de commit git restent en anglais (convention technique).
+- Le code source (noms de variables, commentaires techniques) reste en anglais (convention technique).
+- En cas de doute, toujours privilégier le français.
+
+---
+
 # H3 STUDIOS - AGENT KNOWLEDGE BASE
 
 Music rehearsal studio booking website for H3 Studios (Sucy-en-Brie, France).

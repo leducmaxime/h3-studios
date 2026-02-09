@@ -118,13 +118,18 @@ export function BookingConfirmation({
               <span className="font-medium">{formatPrice(studioPrice)}</span>
             </div>
             {equipment.length > 0 && equipmentPrice > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">
-                  Équipements ({equipment.filter(e => e.quantity > 0).map(e => 
-                    `${EQUIPMENT[e.id]?.name || e.id} ×${e.quantity}`
-                  ).join(", ")})
-                </span>
-                <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/70">Options suppl.</span>
+                  <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+                </div>
+                <div className="space-y-0.5 pl-2 text-xs text-white/50">
+                  {equipment.filter(e => e.quantity > 0).map(e => (
+                    <div key={e.id} className="flex justify-between">
+                      <span>{EQUIPMENT[e.id]?.name || e.id} ×{e.quantity}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             <div className="flex justify-between border-t border-white/10 pt-2">

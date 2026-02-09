@@ -48,7 +48,7 @@ export function StickyBookingCTA({
             {equipmentPrice > 0 ? (
               <>
                 <span className="text-xs text-white/60">
-                  Studio {formatPrice(studioPrice)} + Équipements {formatPrice(equipmentPrice)}
+                  Studio {formatPrice(studioPrice)} + Options {formatPrice(equipmentPrice)}
                 </span>
                 <span className="text-xl font-bold text-primary">
                   {formatPrice(total)}

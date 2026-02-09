@@ -18,7 +18,7 @@ import { StripeRedirect } from "@/components/booking/StripeRedirect";
 import { ChevronLeft, RotateCcw } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, STUDIOS, TIME_SLOTS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, EQUIPMENT, STUDIOS, TIME_SLOTS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
 
 const GROUP_LABELS: Record<GroupType, string> = {
   solo: "Solo/Prof particulier",
@@ -380,9 +380,19 @@ export function Reservation({ step }: ReservationProps) {
                           <span className="font-medium">{formatPrice(total)}</span>
                         </div>
                         {equipmentPrice > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-white/70">Équipements</span>
-                            <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-white/70">Options suppl.</span>
+                              <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+                            </div>
+                            <div className="space-y-0.5 pl-2 text-xs text-white/50">
+                              {state.equipment.filter(e => e.quantity > 0).map(e => (
+                                <div key={e.id} className="flex justify-between">
+                                  <span>{EQUIPMENT[e.id]?.name || e.id} ×{e.quantity}</span>
+                                  <span>{formatPrice((EQUIPMENT[e.id]?.pricePerHour || 0) * e.quantity * durationH)}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                         <div className="mt-3 flex justify-between border-t border-primary/30 pt-3">

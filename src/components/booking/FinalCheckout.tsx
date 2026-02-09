@@ -107,7 +107,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
             
             {booking.equipmentPrice > 0 && (
               <div className="mb-3 text-xs text-white/60">
-                Équipements: {booking.equipment.filter(e => e.quantity > 0).map(e => 
+                Options suppl. : {booking.equipment.filter(e => e.quantity > 0).map(e => 
                   `${EQUIPMENT[e.id]?.name || e.id} ×${e.quantity}`
                 ).join(", ")} ({formatPrice(booking.equipmentPrice)})
               </div>

@@ -344,7 +344,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 </div>
                 {booking.equipmentPrice > 0 && (
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-400">Équipements</span>
+                    <span className="text-zinc-400">Options suppl.</span>
                     <span>{formatPrice(booking.equipmentPrice)}</span>
                   </div>
                 )}

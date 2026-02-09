@@ -15,7 +15,7 @@ import { CartSummary } from "./CartSummary";
 import { ProgressIndicator } from "./ProgressIndicator";
 import { EquipmentSelector } from "./EquipmentSelector";
 import { StickyBookingCTA } from "./StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, EQUIPMENT, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
 
 export function BookingWidget() {
   const {
@@ -314,9 +314,19 @@ export function BookingWidget() {
                         <span className="font-medium">{formatPrice(total)}</span>
                       </div>
                       {equipmentPrice > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-white/70">Équipements</span>
-                          <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+                        <div className="space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Options suppl.</span>
+                            <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+                          </div>
+                          <div className="space-y-0.5 pl-2 text-xs text-white/50">
+                            {state.equipment.filter(e => e.quantity > 0).map(e => (
+                              <div key={e.id} className="flex justify-between">
+                                <span>{EQUIPMENT[e.id]?.name || e.id} ×{e.quantity}</span>
+                                <span>{formatPrice((EQUIPMENT[e.id]?.pricePerHour || 0) * e.quantity * durationH)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                       <div className="mt-3 flex justify-between border-t border-primary/30 pt-3">
