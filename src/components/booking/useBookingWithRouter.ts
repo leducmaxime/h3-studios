@@ -68,6 +68,7 @@ function serializeState(state: ExtendedBookingState): SerializedBookingState {
 
 function deserializeState(serialized: SerializedBookingState): ExtendedBookingState {
   return {
+    ...initialState,
     ...serialized,
     selectedDate: serialized.selectedDate ? new Date(serialized.selectedDate) : null,
     cart: serialized.cart.map((booking) => ({
