@@ -96,17 +96,32 @@ export function Reservation({ step }: ReservationProps) {
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
+                  {/* Studio pill: show after the step where studio is chosen */}
                   {state.studioId && state.groupType === "group" && (
+                    state.flow === "studio-first"
+                      ? state.step > 1
+                      : state.step > 3
+                  ) && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
-                  {state.step > 1 && state.selectedDate && (
+                  {/* Date pill: show after the step where date is chosen */}
+                  {state.selectedDate && (
+                    state.flow === "studio-first"
+                      ? state.step > 2
+                      : state.step > 1
+                  ) && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.step > 2 && state.startTime && state.endTime && (
+                  {/* Time pill: show after the step where time is chosen */}
+                  {state.startTime && state.endTime && (
+                    state.flow === "studio-first"
+                      ? state.step > 3
+                      : state.step > 2
+                  ) && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
                     </span>
