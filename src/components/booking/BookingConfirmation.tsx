@@ -102,12 +102,12 @@ export function BookingConfirmation({
               {startTime} - {endTime} ({duration})
             </span>
           </div>
-          {groupType === "group" && (
-            <div className="flex justify-between">
-              <span className="text-white/70">Studio</span>
-              <span className="font-medium">{studio.name}</span>
-            </div>
-          )}
+          <div className="flex justify-between">
+            <span className="text-white/70">Studio</span>
+            <span className="font-medium">
+              {groupType === "group" ? studio.name : "Selon disponibilité"}
+            </span>
+          </div>
           <div className="flex justify-between">
             <span className="text-white/70">Nom</span>
             <span className="font-medium">{userName}</span>

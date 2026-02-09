@@ -314,18 +314,21 @@ export function TimeSlotPicker({
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-white/60">
-        <div className="flex items-center gap-1.5">
-          <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
-          <span>
-            {hourlyRates.offPeakMin === hourlyRates.offPeakMax
-              ? `${hourlyRates.offPeakMin}€/h`
-              : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
-          </span>
-        </div>
+        {!(date.getDay() === 0 || date.getDay() === 6) && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
+            <span>
+              {hourlyRates.offPeakMin === hourlyRates.offPeakMax
+                ? `${hourlyRates.offPeakMin}€/h`
+                : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-1.5">
           <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
           <span className="text-primary/70">
-            Soir, week-end & jour férié {hourlyRates.peakMin === hourlyRates.peakMax
+            {(date.getDay() === 0 || date.getDay() === 6) ? "Weekend & jour férié " : "Soir, week-end & jour férié "}
+            {hourlyRates.peakMin === hourlyRates.peakMax
               ? `${hourlyRates.peakMin}€/h`
               : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
           </span>

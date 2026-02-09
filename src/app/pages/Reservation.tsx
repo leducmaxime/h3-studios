@@ -25,7 +25,7 @@ const GROUP_LABELS: Record<GroupType, string> = {
 };
 
 function formatShortDate(date: Date): string {
-  const day = date.toLocaleDateString("fr-FR", { weekday: "short" });
+  const day = date.toLocaleDateString("fr-FR", { weekday: "long" });
   const dayNum = date.getDate().toString().padStart(2, "0");
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
   return `${day} ${dayNum}/${month}`;
@@ -376,15 +376,15 @@ export function Reservation({ step }: ReservationProps) {
         </div>
       </div>
 
-      <p className="mt-4 text-center text-sm text-white/50">
-        Les tarifs varient selon l'heure (après 18h) et le jour (weekend et jour férié).
+      <p className="mt-4 text-center text-sm font-medium text-primary/80">
+        Les tarifs varient selon l'heure (après 18h) et le jour (weekend & jour férié).
         Économisez jusqu'à 20% en réservant avant 18h en semaine !
       </p>
 
       {state.step > 0 && state.step < 9 && (
         <button
           onClick={resetBooking}
-          className="mt-2 flex items-center gap-2 text-sm text-white/40 transition-colors hover:text-white/70"
+          className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"
         >
           <RotateCcw className="h-4 w-4" />
           Annuler et recommencer
