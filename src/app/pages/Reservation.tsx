@@ -91,22 +91,22 @@ export function Reservation({ step }: ReservationProps) {
                   onStepClick={navigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {state.groupType && (
+                  {state.step > 0 && state.groupType && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
-                  {state.studioId && state.groupType === "group" && (
+                  {state.step > 3 && state.studioId && state.groupType === "group" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
-                  {state.selectedDate && (
+                  {state.step > 1 && state.selectedDate && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && (
+                  {state.step > 2 && state.startTime && state.endTime && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
                     </span>
