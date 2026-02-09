@@ -263,17 +263,8 @@ export function TimeSlotPicker({
           </button>
           <div>
             <h3 className="text-lg font-semibold capitalize">{formatDate(date)}</h3>
-            <p className="text-sm text-white/60">
-              Choisissez la durée puis l'heure de début
-            </p>
           </div>
         </div>
-      )}
-
-      {hideHeader && (
-        <p className="text-sm text-white/60">
-          Choisissez la durée puis l'heure de début
-        </p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -300,70 +291,90 @@ export function TimeSlotPicker({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium text-white/70">
-          {durationLabel ? `Heure de début (pour ${durationLabel})` : "Choisissez d'abord une durée"}
-        </span>
-        <div className="flex flex-wrap gap-2">
-          {visibleSlots.map((time: string, index: number) => {
-            const state = getSlotState(time, index);
-            const canStart = canStartAt(index);
-            const withinSelection = isWithinCurrentSelection(index);
-            const isClickable = canStart || withinSelection;
-            const isSelected = state === "selected" || state === "selected-peak";
-            const isBooked = state === "booked";
-            const isUnavailableDuration = state === "unavailable-duration";
-            const peak = hasPeakPricing && isPeakTime(date, time);
-            
-            return (
-              <button
-                key={time}
-                onClick={() => isClickable && handleSlotClick(time)}
-                disabled={!isClickable}
-                className={`
-                  relative rounded-lg px-3 py-2.5 text-sm font-medium transition-all min-w-[70px]
-                  ${isBooked
-                    ? "bg-red-500/10 text-red-400/50 cursor-not-allowed line-through border border-red-500/20" 
-                    : ""
-                  }
-                  ${isUnavailableDuration
-                    ? "bg-white/5 text-white/30 cursor-not-allowed border border-dashed border-white/10" 
-                    : ""
-                  }
-                  ${canStart && !isSelected && !peak
-                    ? "bg-white/10 hover:bg-white/20 text-white border border-white/10 cursor-pointer" 
-                    : ""
-                  }
-                  ${canStart && !isSelected && peak
-                    ? "bg-primary/10 hover:bg-primary/20 text-primary/70 border border-primary/20 cursor-pointer" 
-                    : ""
-                  }
-                  ${isSelected && !peak
-                    ? "bg-white text-black border-2 border-white cursor-pointer hover:bg-white/80" 
-                    : ""
-                  }
-                  ${isSelected && peak
-                    ? "bg-primary text-black border-2 border-primary cursor-pointer hover:bg-primary/80" 
-                    : ""
-                  }
-                `}
-              >
-                <span className="block">{time}</span>
-                {canStart && !isSelected && (
-                  <span className={`block text-[10px] mt-0.5 ${peak ? "text-primary/50" : "text-white/40"}`}>
-                    → {formatEndTime(time)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {selectedDuration !== null && (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-white/70">
+            Heure de début (pour {durationLabel})
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {visibleSlots.map((time: string, index: number) => {
+              const state = getSlotState(time, index);
+              const canStart = canStartAt(index);
+              const withinSelection = isWithinCurrentSelection(index);
+              const isClickable = canStart || withinSelection;
+              const isSelected = state === "selected" || state === "selected-peak";
+              const isBooked = state === "booked";
+              const isUnavailableDuration = state === "unavailable-duration";
+              const peak = hasPeakPricing && isPeakTime(date, time);
+              
+              return (
+                <button
+                  key={time}
+                  onClick={() => isClickable && handleSlotClick(time)}
+                  disabled={!isClickable}
+                  className={`
+                    relative rounded-lg px-3 py-2.5 text-sm font-medium transition-all min-w-[70px]
+                    ${isBooked
+                      ? "bg-red-500/10 text-red-400/50 cursor-not-allowed line-through border border-red-500/20" 
+                      : ""
+                    }
+                    ${isUnavailableDuration
+                      ? "bg-white/5 text-white/30 cursor-not-allowed border border-dashed border-white/10" 
+                      : ""
+                    }
+                    ${canStart && !isSelected && !peak
+                      ? "bg-white/10 hover:bg-white/20 text-white border border-white/10 cursor-pointer" 
+                      : ""
+                    }
+                    ${canStart && !isSelected && peak
+                      ? "bg-primary/10 hover:bg-primary/20 text-primary/70 border border-primary/20 cursor-pointer" 
+                      : ""
+                    }
+                    ${isSelected && !peak
+                      ? "bg-white text-black border-2 border-white cursor-pointer hover:bg-white/80" 
+                      : ""
+                    }
+                    ${isSelected && peak
+                      ? "bg-primary text-black border-2 border-primary cursor-pointer hover:bg-primary/80" 
+                      : ""
+                    }
+                  `}
+                >
+                  <span className="block">{time}</span>
+                  {canStart && !isSelected && (
+                    <span className={`block text-[10px] mt-0.5 ${peak ? "text-primary/50" : "text-white/40"}`}>
+                      → {formatEndTime(time)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-white/60">
-        {hasPeakPricing ? (
-          <>
-            {hasAnyOffPeakSlot && (
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-white/60">
+            {hasPeakPricing ? (
+              <>
+                {hasAnyOffPeakSlot && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
+                    <span>
+                      {hourlyRates.offPeakMin === hourlyRates.offPeakMax
+                        ? `${hourlyRates.offPeakMin}€/h`
+                        : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
+                  <span className="text-primary/70">
+                    {!hasAnyOffPeakSlot ? "Soir, week-end & jour férié " : (date.getDay() === 0 || date.getDay() === 6) ? "Weekend & jour férié " : "Soir, week-end & jour férié "}
+                    {hourlyRates.peakMin === hourlyRates.peakMax
+                      ? `${hourlyRates.peakMin}€/h`
+                      : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
+                  </span>
+                </div>
+              </>
+            ) : (
               <div className="flex items-center gap-1.5">
                 <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
                 <span>
@@ -374,34 +385,16 @@ export function TimeSlotPicker({
               </div>
             )}
             <div className="flex items-center gap-1.5">
-              <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
-              <span className="text-primary/70">
-                {!hasAnyOffPeakSlot ? "Soir, week-end & jour férié " : (date.getDay() === 0 || date.getDay() === 6) ? "Weekend & jour férié " : "Soir, week-end & jour férié "}
-                {hourlyRates.peakMin === hourlyRates.peakMax
-                  ? `${hourlyRates.peakMin}€/h`
-                  : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
-              </span>
+              <div className="h-4 w-4 rounded border border-red-500/20 bg-red-500/10 line-through text-[8px] text-red-400/50 flex items-center justify-center">×</div>
+              <span>Réservé</span>
             </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
-            <span>
-              {hourlyRates.offPeakMin === hourlyRates.offPeakMax
-                ? `${hourlyRates.offPeakMin}€/h`
-                : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <div className="h-4 w-4 rounded border border-dashed border-white/10 bg-white/5" />
+              <span>Durée insuffisante</span>
+            </div>
           </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          <div className="h-4 w-4 rounded border border-red-500/20 bg-red-500/10 line-through text-[8px] text-red-400/50 flex items-center justify-center">×</div>
-          <span>Réservé</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="h-4 w-4 rounded border border-dashed border-white/10 bg-white/5" />
-          <span>Durée insuffisante</span>
-        </div>
-      </div>
+      )}
 
       {startTime && endTime && (
         <div className="flex flex-col gap-3 rounded-lg border border-primary/50 bg-primary/10 p-4">
