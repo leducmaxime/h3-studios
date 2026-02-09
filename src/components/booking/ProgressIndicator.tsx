@@ -7,17 +7,31 @@ interface ProgressIndicatorProps {
   totalSteps: number;
   flow: "time-first" | "studio-first";
   skipStudio?: boolean;
+  onStepClick?: (step: number) => void;
 }
 
 const TimeFirstIcons = [Calendar, Clock, Music, User];
 const TimeFirstNoStudioIcons = [Calendar, Clock, User];
 const StudioFirstIcons = [Music, Calendar, Clock, User];
 
+// Maps visual position (1-based) back to actual state step
+function getActualStep(
+  visualStep: number,
+  skipStudio: boolean
+): number {
+  if (skipStudio && visualStep >= 3) {
+    // visual 3 → actual 4 (coordonnees)
+    return visualStep + 1;
+  }
+  return visualStep;
+}
+
 export function ProgressIndicator({
   currentStep,
   totalSteps,
   flow,
   skipStudio,
+  onStepClick,
 }: ProgressIndicatorProps) {
   const effectiveTotal = skipStudio ? totalSteps - 1 : totalSteps;
   const icons = flow === "time-first"
@@ -34,11 +48,19 @@ export function ProgressIndicator({
           const Icon = icons[index];
           const isCompleted = effectiveStep > step;
           const isCurrent = effectiveStep === step;
+          const isClickable = isCompleted && !!onStepClick;
 
           return (
             <div key={step} className="flex items-center">
               <div className="flex flex-col items-center">
-                <div
+                <button
+                  type="button"
+                  disabled={!isClickable}
+                  onClick={() => {
+                    if (isClickable) {
+                      onStepClick(getActualStep(step, !!skipStudio));
+                    }
+                  }}
                   className={`
                     relative flex h-10 w-10 items-center justify-center rounded-full
                     transition-all duration-300
@@ -49,6 +71,7 @@ export function ProgressIndicator({
                           ? "bg-primary/30 ring-2 ring-primary"
                           : "bg-white/5 ring-1 ring-white/20"
                     }
+                    ${isClickable ? "cursor-pointer hover:bg-primary/40 hover:scale-110" : ""}
                   `}
                 >
                   {isCurrent && (
@@ -60,7 +83,7 @@ export function ProgressIndicator({
                       ${isCompleted || isCurrent ? "text-primary" : "text-white/30"}
                     `}
                   />
-                </div>
+                </button>
                 <span
                   className={`
                     mt-1.5 text-xs font-medium transition-colors duration-300

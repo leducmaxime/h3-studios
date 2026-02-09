@@ -88,6 +88,7 @@ export function Reservation({ step }: ReservationProps) {
                   totalSteps={4}
                   flow={state.flow}
                   skipStudio={state.flow === "time-first" && (state.groupType === "solo" || state.groupType === "duo")}
+                  onStepClick={navigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
                   {state.groupType && (

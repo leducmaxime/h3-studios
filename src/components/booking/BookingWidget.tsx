@@ -39,6 +39,7 @@ export function BookingWidget() {
     removeFromCart,
     resetBooking,
     goBack,
+    setStep,
   } = useBooking();
 
   const durationHours = state.startTime && state.endTime
@@ -74,6 +75,7 @@ export function BookingWidget() {
                 currentStep={state.step}
                 totalSteps={4}
                 flow={state.flow}
+                onStepClick={(step) => setStep(step as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9)}
               />
             </div>
           )}
