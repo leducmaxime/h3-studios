@@ -62,7 +62,7 @@ export function BookingForm({
   const grandTotal = total + equipmentPrice;
 
   const groupLabels: Record<GroupType, string> = {
-    solo: "Solo / Enseignant",
+    solo: "Solo / Prof particulier",
     duo: "Duo",
     group: "Groupe (3+)",
   };

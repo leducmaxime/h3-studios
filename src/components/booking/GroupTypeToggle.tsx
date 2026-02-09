@@ -39,7 +39,7 @@ interface GroupTypeToggleProps {
 }
 
 const OPTIONS: { type: GroupType; label: string; sublabel: string; icon: ComponentType<{ className?: string }> }[] = [
-  { type: "solo", label: "Solo", sublabel: "ou Prof", icon: User },
+  { type: "solo", label: "Solo", sublabel: "ou Prof particulier", icon: User },
   { type: "duo", label: "Duo", sublabel: "2 pers.", icon: Users },
   { type: "group", label: "Groupe", sublabel: "3+ pers.", icon: UsersGroup },
 ];

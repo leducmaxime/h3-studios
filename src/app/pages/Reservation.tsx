@@ -19,7 +19,7 @@ import { ChevronLeft, RotateCcw } from "lucide-react";
 import { formatDate, formatDuration, STUDIOS, TIME_SLOTS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
 
 const GROUP_LABELS: Record<GroupType, string> = {
-  solo: "Solo/Prof",
+  solo: "Solo/Prof particulier",
   duo: "Duo",
   group: "Groupe",
 };
