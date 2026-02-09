@@ -256,6 +256,9 @@ export function BookingWidget() {
                 userEmail={state.userEmail}
                 userPhone={state.userPhone}
                 bandName={state.bandName}
+                billingAddress={state.billingAddress}
+                billingPostalCode={state.billingPostalCode}
+                billingCity={state.billingCity}
                 equipment={state.equipment}
                 onUpdateField={updateUserInfo}
                 onUpdateEquipment={updateEquipment}

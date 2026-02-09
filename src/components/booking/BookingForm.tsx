@@ -26,8 +26,11 @@ interface BookingFormProps {
   userEmail: string;
   userPhone: string;
   bandName: string;
+  billingAddress: string;
+  billingPostalCode: string;
+  billingCity: string;
   equipment: EquipmentSelection[];
-  onUpdateField: (field: "userName" | "userEmail" | "userPhone" | "bandName", value: string) => void;
+  onUpdateField: (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity", value: string) => void;
   onUpdateEquipment: (equipment: EquipmentSelection[]) => void;
   onConfirm: () => void;
   onBack: () => void;
@@ -44,6 +47,9 @@ export function BookingForm({
   userEmail,
   userPhone,
   bandName,
+  billingAddress,
+  billingPostalCode,
+  billingCity,
   equipment,
   onUpdateField,
   onUpdateEquipment,
@@ -135,6 +141,51 @@ export function BookingForm({
             placeholder="Les Rockers"
             className="rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <h4 className="text-sm font-semibold text-white/80">Adresse de facturation</h4>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="billingAddress" className="text-sm font-medium text-white/70">
+            Nom et numéro de rue <span className="text-primary">*</span>
+          </label>
+          <input
+            id="billingAddress"
+            type="text"
+            value={billingAddress}
+            onChange={(e) => onUpdateField("billingAddress", e.target.value)}
+            placeholder="12 Rue de la Musique"
+            className="rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="billingPostalCode" className="text-sm font-medium text-white/70">
+              Code postal <span className="text-primary">*</span>
+            </label>
+            <input
+              id="billingPostalCode"
+              type="text"
+              value={billingPostalCode}
+              onChange={(e) => onUpdateField("billingPostalCode", e.target.value)}
+              placeholder="94370"
+              className="rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="billingCity" className="text-sm font-medium text-white/70">
+              Ville <span className="text-primary">*</span>
+            </label>
+            <input
+              id="billingCity"
+              type="text"
+              value={billingCity}
+              onChange={(e) => onUpdateField("billingCity", e.target.value)}
+              placeholder="Sucy-en-Brie"
+              className="rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
         </div>
       </div>
 

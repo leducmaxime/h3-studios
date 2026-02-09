@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Check } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { STUDIOS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
 
 interface StudioPickerProps {
@@ -10,6 +10,36 @@ interface StudioPickerProps {
 }
 
 export function StudioPicker({ onSelect, onBack, groupType }: StudioPickerProps) {
+  if (groupType === "solo" || groupType === "duo") {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="rounded-full p-2 transition-colors hover:bg-white/10"
+            aria-label="Retour"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <p className="text-white/60">Studio</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-white/20 bg-white/5 p-6 text-center">
+          <p className="text-white/70">
+            Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+          </p>
+          <button
+            onClick={() => onSelect("la-scene")}
+            className="rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-all hover:bg-primary/90"
+          >
+            Continuer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-4">
@@ -56,18 +86,8 @@ export function StudioPicker({ onSelect, onBack, groupType }: StudioPickerProps)
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-3 p-4">
+              <div className="p-4">
                 <p className="text-sm text-white/70">{studio.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  {studio.features.map((feature) => (
-                    <span
-                      key={feature}
-                      className="rounded-full bg-white/10 px-2 py-1 text-xs"
-                    >
-                      {feature}
-                    </span>
-                  ))}
-                </div>
               </div>
             </button>
           );

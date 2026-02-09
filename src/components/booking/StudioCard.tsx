@@ -81,17 +81,6 @@ export function StudioCard({
       <div className="flex flex-col gap-4 px-4 pb-4">
         <p className="text-sm text-white/70">{studio.description}</p>
 
-        <div className="flex flex-wrap gap-1">
-          {studio.features.map((feature) => (
-            <span
-              key={feature}
-              className="rounded-full bg-white/10 px-2 py-0.5 text-xs"
-            >
-              {feature}
-            </span>
-          ))}
-        </div>
-
         <div className="rounded-lg bg-white/5 p-3">
           {hasUnavailableSlots ? (
             <div className="text-center text-white/50">

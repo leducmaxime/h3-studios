@@ -136,6 +136,9 @@ const initialState: ExtendedBookingState = {
   userEmail: "",
   userPhone: "",
   bandName: "",
+  billingAddress: "",
+  billingPostalCode: "",
+  billingCity: "",
   bookingRef: null,
   cart: [],
   equipment: [],
@@ -289,9 +292,11 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const updateUserInfo = useCallback(
-    (field: "userName" | "userEmail" | "userPhone" | "bandName", value: string) => {
+    (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity", value: string) => {
       setState((s) => ({ ...s, [field]: value }));
-      saveUserPreferences({ [field]: value });
+      if (field === "userName" || field === "userEmail" || field === "userPhone" || field === "bandName") {
+        saveUserPreferences({ [field]: value });
+      }
     },
     []
   );
@@ -460,7 +465,10 @@ export function useBookingWithRouter(urlStep?: string) {
   const canConfirmBooking =
     state.userName.trim() !== "" &&
     state.userEmail.trim() !== "" &&
-    state.userPhone.trim() !== "";
+    state.userPhone.trim() !== "" &&
+    state.billingAddress.trim() !== "" &&
+    state.billingPostalCode.trim() !== "" &&
+    state.billingCity.trim() !== "";
 
   return {
     state,

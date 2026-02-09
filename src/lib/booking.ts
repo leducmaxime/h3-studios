@@ -69,6 +69,9 @@ export interface BookingState {
   userEmail: string;
   userPhone: string;
   bandName: string;
+  billingAddress: string;
+  billingPostalCode: string;
+  billingCity: string;
   bookingRef: string | null;
   cart: CompletedBooking[];
   paymentMethod: PaymentMethod | null;
