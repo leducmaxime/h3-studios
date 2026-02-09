@@ -1,167 +1,170 @@
-# H3 STUDIOS - PROJECT KNOWLEDGE BASE
+# H3 STUDIOS - AGENT KNOWLEDGE BASE
 
-**Generated:** 2026-01-15
-**Commit:** 278bfb6
-**Branch:** master
-
-## OVERVIEW
-
-Music rehearsal studio booking website for H3 Studios (Sucy-en-Brie, France). Built with RedwoodSDK + Cloudflare Workers + React 19 + Tailwind CSS 4.
-
-## STRUCTURE
-
-```
-h3-studios/
-├── src/
-│   ├── worker.tsx          # Main entry - ALL routes + API handlers
-│   ├── client.tsx          # Client hydration (5 lines)
-│   ├── app/
-│   │   ├── Document.tsx    # HTML shell + SEO meta tags
-│   │   ├── seo.ts          # SEO config + JSON-LD
-│   │   ├── headers.ts      # Security headers
-│   │   ├── layouts/        # MainLayout, AdminLayout
-│   │   └── pages/          # Public pages + admin/
-│   ├── components/
-│   │   ├── booking/        # [20 files] Multi-step booking flow
-│   │   ├── ui/             # Button, Table, Carousel (shadcn-style)
-│   │   ├── common/         # Map, ImageCarousel, ScrollUp
-│   │   └── Header/         # Site header
-│   ├── lib/
-│   │   ├── booking.ts      # Domain logic: pricing, types, availability
-│   │   ├── admin-store.ts  # Mock admin data + CRUD
-│   │   ├── stripe.ts       # Stripe Checkout (no SDK)
-│   │   └── utils.ts        # cn() helper
-│   └── styles/
-│       └── globals.css     # Tailwind + custom fonts
-├── public/                 # Static assets (fonts, images)
-├── types/                  # TypeScript declarations
-└── wrangler.jsonc          # CF Workers config (staging/prod envs)
-```
-
-## WHERE TO LOOK
-
-| Task | Location | Notes |
-|------|----------|-------|
-| Add new public page | `src/worker.tsx` | Add route + render block |
-| Modify booking flow | `src/components/booking/` | See AGENTS.md there |
-| Change pricing/hours | `src/lib/booking.ts` | PRICING, TIME_SLOTS constants |
-| Admin functionality | `src/app/pages/admin/` + `src/lib/admin-store.ts` | Mock data, no real DB |
-| Payment integration | `src/lib/stripe.ts` + `src/worker.tsx` | API routes at /api/payment/* |
-| SEO/meta tags | `src/app/seo.ts` + `src/app/Document.tsx` | Per-page SEO config |
-| Styling/theming | `src/styles/globals.css` | primary=#ffde59, fonts=Now/Blanka |
-
-## CONVENTIONS
-
-### Routing (RedwoodSDK)
-```tsx
-// worker.tsx - NOT file-based routing
-render(({ children }) => <Document>{children}</Document>, [
-  layout(MainLayout, [
-    route("/path", Component),
-  ]),
-]);
-```
-
-### Component Pattern
-- `"use client"` directive for client-side state/hooks
-- Collocate hooks: `useBooking.ts` next to `BookingWidget.tsx`
-- No prop drilling - use hooks for shared state
-
-### Imports
-- Path alias: `@/` maps to `./src/`
-- CSS: `import styles from "@/styles/globals.css?url"`
-
-### Tailwind
-- Primary color: `text-primary`, `bg-primary` (#ffde59)
-- Custom fonts: `font-sans` (Now), `font-blanka` (logo)
-- Container: custom responsive breakpoints in globals.css
-
-## ANTI-PATTERNS
-
-- **NO database** - localStorage + mock data only. Don't assume persistent storage.
-- **NO Stripe SDK** - Raw fetch() to Stripe API. Don't npm install stripe.
-- **NO file-based routing** - All routes in worker.tsx
-- **NO SSR state** - State hydrates on client. Avoid server-side useState.
-
-## UNIQUE STYLES
-
-### Date/Time Formatting
-```typescript
-// Always French locale
-date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
-formatPrice(42); // Returns "42EUR" not "$42"
-```
-
-### Booking References
-```typescript
-// Format: H3-YYYYMMDD-XXXX
-generateBookingRef(); // "H3-20260115-A3B2"
-```
+Music rehearsal studio booking website for H3 Studios (Sucy-en-Brie, France).
+RedwoodSDK + Cloudflare Workers + React 19 + Tailwind CSS 4. No database — localStorage + mock data only.
 
 ## COMMANDS
 
 ```bash
-# Development
 pnpm dev                    # Local dev server (Vite + Wrangler)
+pnpm build                  # Production build
+pnpm check                  # Generate CF types + typecheck (run BEFORE build)
+pnpm types                  # TypeScript check only (no type generation)
+pnpm release:staging        # Build + deploy to h3-studios-staging
+pnpm release:prod           # Build + deploy to h3-studios-prod
+```
 
-# Build & Deploy
-pnpm build                  # Build for production
-pnpm release:staging        # Deploy to h3-studios-staging
-pnpm release:prod           # Deploy to h3-studios-prod
+**No test framework exists.** No vitest, jest, or any test runner is configured.
+**No linter/formatter exists.** No eslint, prettier, or biome config. `pnpm check` (tsc strict mode) is the only code quality gate.
 
-# Types
-pnpm check                  # Generate types + typecheck
-pnpm types                  # TypeScript check only
+## STRUCTURE
+
+```
+src/
+├── worker.tsx              # ALL routes + API handlers (not file-based routing)
+├── client.tsx              # Client hydration entry
+├── app/
+│   ├── Document.tsx        # HTML shell + SEO meta
+│   ├── seo.ts              # SEO config + JSON-LD
+│   ├── headers.ts          # Security headers middleware
+│   ├── layouts/            # MainLayout, AdminLayout
+│   └── pages/              # Public pages + admin/
+├── components/
+│   ├── booking/            # [20 files] Multi-step booking flow (see AGENTS.md there)
+│   ├── ui/                 # Button, Table, Carousel (shadcn-style, CVA)
+│   ├── common/             # Map, ImageCarousel, ScrollUp
+│   └── Header/             # Site header + nav
+├── lib/
+│   ├── booking.ts          # Domain logic: pricing, types, availability
+│   ├── admin-store.ts      # Mock admin data + CRUD
+│   ├── stripe.ts           # Stripe Checkout via raw fetch (no SDK)
+│   └── utils.ts            # cn() helper
+└── styles/
+    └── globals.css         # Tailwind 4 + custom fonts + container
+```
+
+## CODE STYLE
+
+### Imports — 3 groups separated by blank lines
+```typescript
+// 1. Framework/library imports
+import { useState, useCallback } from "react";
+import { render, route, layout } from "rwsdk/router";
+import { ChevronRight } from "lucide-react";
+
+// 2. Internal @/ alias imports
+import { Button } from "@/components/ui/button";
+import { type BookingState, calculatePrice } from "@/lib/booking";
+
+// 3. Relative imports (sibling files)
+import { useBooking } from "./useBooking";
+```
+
+Use `type` keyword in imports: `import { type BookingState } from "@/lib/booking"`.
+Path alias `@/` maps to `./src/`.
+
+### Naming
+- **Files:** PascalCase for components (`BookingWidget.tsx`), camelCase for non-components (`useBooking.ts`, `booking.ts`, `admin-store.ts`)
+- **Components:** `export function ComponentName()` — named export, PascalCase, matches filename
+- **Hooks:** `export function useHookName()` — camelCase with `use` prefix
+- **Types/Interfaces:** PascalCase (`StudioId`, `BookingState`)
+- **Constants:** UPPER_SNAKE_CASE for domain values (`TIME_SLOTS`, `PRICING`, `SLOT_DURATION_MINUTES`)
+
+### Types
+- **`interface`** for object shapes (props, state, configs):
+  ```typescript
+  interface FlowChoiceProps { onSelect: (flow: BookingFlow) => void; disabled?: boolean; }
+  ```
+- **`type`** for unions, aliases, utility types:
+  ```typescript
+  export type StudioId = "la-scene" | "le-podium";
+  export type GroupType = "solo" | "duo" | "group";
+  ```
+- Inline type annotations for simple sub-component props:
+  ```typescript
+  function StatCard({ title, value }: { title: string; value: string | number }) { ... }
+  ```
+
+### Formatting (no enforced config — follow existing patterns)
+- 2-space indentation
+- Double quotes for strings
+- Semicolons always
+- Trailing commas in multi-line structures
+- ~100-120 char line length
+
+### Exports
+- **Named exports everywhere** — no default exports (except `vite.config.mts` and `worker.tsx` which use framework-required defaults)
+- UI components: grouped exports at bottom (`export { Button, buttonVariants }`)
+- Hook return types: `export type UseBookingReturn = ReturnType<typeof useBooking>`
+
+### `"use client"` Directive
+Required at top of files using React hooks (useState, useEffect, etc.) or browser APIs.
+NOT used in: server-rendered pages without state, layouts without state, library/utility files, `Document.tsx`, `worker.tsx`.
+
+### Error Handling
+```typescript
+// API errors: try/catch with instanceof check
+catch (error) {
+  console.error("Payment creation error:", error);
+  return new Response(JSON.stringify({
+    error: error instanceof Error ? error.message : "Payment creation failed"
+  }), { status: 500, headers: { "Content-Type": "application/json" } });
+}
+
+// localStorage: silent catch with graceful degradation
+try { localStorage.setItem(KEY, JSON.stringify(data)); }
+catch { console.error("Failed to save"); }
+
+// CRUD operations return: { success: boolean; error?: string }
+```
+
+### Comments
+- Minimal — code should be self-documenting with descriptive names
+- JSDoc only for complex library functions
+- `//` inline comments for section headers in long files
+
+## ANTI-PATTERNS — DO NOT
+
+- **Add a database** — localStorage + mock data only, no persistent storage
+- **Install Stripe SDK** — raw `fetch()` to Stripe API, keep it that way
+- **Use file-based routing** — all routes defined in `worker.tsx`
+- **Use server-side useState** — state hydrates on client only
+- **Use default exports** — named exports everywhere
+
+## DOMAIN SPECIFICS
+
+- **French locale always**: `date.toLocaleDateString("fr-FR", { ... })`, `formatPrice(42)` → `"42EUR"`
+- **Booking ref format**: `H3-YYYYMMDD-XXXX` (e.g., `H3-20260115-A3B2`)
+- **Two studios**: "La Scene" (42m2), "Le Podium" (35m2) — hardcoded in `booking.ts`
+- **Peak pricing**: evenings (18h+) and weekends have higher rates
+- **Primary color**: `#ffde59` — use `text-primary`, `bg-primary`
+- **Custom fonts**: `font-sans` (Now), `font-blanka` (logo only)
+
+## ROUTING PATTERN
+
+```tsx
+// worker.tsx — RedwoodSDK declarative routing
+render(({ children }) => <Document>{children}</Document>, [
+  layout(MainLayout, [
+    route("/", Home),
+    route("/reservation", Reservation),
+    route("/reservation/:slug", Reservation),
+  ]),
+  layout(AdminLayout, [
+    route("/admin", AdminDashboard),
+  ]),
+]);
 ```
 
 ## AGENT WORKFLOW (MANDATORY)
 
-After completing ANY task, execute this verification loop:
+After completing ANY task, execute this loop:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  1. LINT & TYPE CHECK                                       │
-│     pnpm check                                              │
-│     → Fix any errors before proceeding                      │
-├─────────────────────────────────────────────────────────────┤
-│  2. BUILD                                                   │
-│     pnpm build                                              │
-│     → Must succeed with exit code 0                         │
-├─────────────────────────────────────────────────────────────┤
-│  3. COMMIT                                                  │
-│     git add . && git commit -m "descriptive message"        │
-│     → Only if lint/build pass                               │
-├─────────────────────────────────────────────────────────────┤
-│  4. DEPLOY TO STAGING                                       │
-│     pnpm release:staging                                    │
-│     → Wait for deployment to complete                       │
-├─────────────────────────────────────────────────────────────┤
-│  5. VISUAL & FUNCTIONAL TESTING                             │
-│     Use chrome-devtools MCP to:                             │
-│     - Navigate to https://h3-studios-staging.workers.dev    │
-│     - Take snapshots of affected pages                      │
-│     - Verify UI renders correctly                           │
-│     - Test user flows end-to-end                            │
-│     - Check console for errors                              │
-├─────────────────────────────────────────────────────────────┤
-│  6. ISSUES DETECTED?                                        │
-│     YES → Formulate fix plan → Implement → GOTO Step 1      │
-│     NO  → Task complete                                     │
-└─────────────────────────────────────────────────────────────┘
-```
+1. **Type check** — `pnpm check` → fix all errors
+2. **Build** — `pnpm build` → must exit 0
+3. **Commit** — `git add . && git commit -m "descriptive message"`
+4. **Deploy staging** — `pnpm release:staging`
+5. **Visual test** — use chrome-devtools MCP to navigate https://h3-studios-staging.workers.dev, take snapshots, verify UI, check console errors
+6. **Issues?** → fix and restart from step 1
 
-**DO NOT STOP** until:
-- All lint/type errors resolved
-- Build succeeds
-- Staging deployment works
-- Visual/functional tests pass in browser
-
-This loop is NON-NEGOTIABLE for every task completion.
-
-## NOTES
-
-- **Admin is demo-only**: All admin data is mock/localStorage. No auth.
-- **Stripe**: Needs STRIPE_SECRET_KEY env var. Test keys work.
-- **Two studios**: "La Scene" (42m2) and "Le Podium" (35m2). Hardcoded in booking.ts.
-- **Peak pricing**: Evenings (18h+) and weekends have higher rates.
-- **Multi-booking cart**: Users can book multiple slots before checkout.
+**DO NOT STOP** until all steps pass. This loop is non-negotiable.

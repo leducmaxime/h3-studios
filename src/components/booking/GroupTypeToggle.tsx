@@ -1,17 +1,47 @@
 "use client";
 
+import type { ComponentType } from "react";
 import { User, Users } from "lucide-react";
+
 import { type GroupType, PRICING } from "@/lib/booking";
+
+/** 3-person group icon matching lucide style (24x24, stroke-based) */
+function UsersGroup({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      {/* Center person (main) */}
+      <circle cx="12" cy="7" r="4" />
+      <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+      {/* Left person (behind) */}
+      <path d="M2 21v-2a4 4 0 0 1 3-3.87" />
+      <path d="M7 3.128a4 4 0 0 0 0 7.744" />
+      {/* Right person (behind) */}
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M17 3.128a4 4 0 0 1 0 7.744" />
+    </svg>
+  );
+}
 
 interface GroupTypeToggleProps {
   value: GroupType | null;
   onChange: (type: GroupType | null) => void;
 }
 
-const OPTIONS: { type: GroupType; label: string; sublabel: string; icon: typeof User }[] = [
+const OPTIONS: { type: GroupType; label: string; sublabel: string; icon: ComponentType<{ className?: string }> }[] = [
   { type: "solo", label: "Solo", sublabel: "ou Prof", icon: User },
   { type: "duo", label: "Duo", sublabel: "2 pers.", icon: Users },
-  { type: "group", label: "Groupe", sublabel: "3+ pers.", icon: Users },
+  { type: "group", label: "Groupe", sublabel: "3+ pers.", icon: UsersGroup },
 ];
 
 function getPriceRange(groupType: GroupType): string {
