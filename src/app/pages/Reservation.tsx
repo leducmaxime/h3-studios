@@ -119,7 +119,7 @@ export function Reservation({ step }: ReservationProps) {
                   value={state.groupType}
                   onChange={setGroupType}
                 />
-                <FlowChoice onSelect={selectFlow} disabled={!state.groupType} />
+                <FlowChoice onSelect={selectFlow} disabled={!state.groupType} groupType={state.groupType} />
               </div>
             )}
 

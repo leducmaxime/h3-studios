@@ -1,14 +1,18 @@
 "use client";
 
 import { Calendar, Music2 } from "lucide-react";
-import { type BookingFlow } from "@/lib/booking";
+import { type BookingFlow, type GroupType } from "@/lib/booking";
 
 interface FlowChoiceProps {
   onSelect: (flow: BookingFlow) => void;
   disabled?: boolean;
+  groupType?: GroupType | null;
 }
 
-export function FlowChoice({ onSelect, disabled = false }: FlowChoiceProps) {
+export function FlowChoice({ onSelect, disabled = false, groupType }: FlowChoiceProps) {
+  const isSoloDuo = groupType === "solo" || groupType === "duo";
+  const studioDisabled = disabled || isSoloDuo;
+
   return (
     <div className="flex flex-col gap-5">
       <div className="text-center">
@@ -45,25 +49,30 @@ export function FlowChoice({ onSelect, disabled = false }: FlowChoiceProps) {
         </button>
 
         <button
-          onClick={() => !disabled && onSelect("studio-first")}
-          disabled={disabled}
+          onClick={() => !studioDisabled && onSelect("studio-first")}
+          disabled={studioDisabled}
           className={`
             group flex flex-col items-center gap-3 rounded-xl border-2 p-5 transition-all
-            ${disabled
+            ${studioDisabled
               ? "cursor-not-allowed border-white/10 bg-white/5 opacity-50"
               : "border-white/20 bg-white/5 hover:border-primary hover:bg-primary/10"
             }
           `}
         >
-          <div className={`rounded-full p-3 transition-colors ${disabled ? "bg-white/10" : "bg-primary/20 group-hover:bg-primary/30"}`}>
-            <Music2 className={`h-7 w-7 ${disabled ? "text-white/30" : "text-primary"}`} />
+          <div className={`rounded-full p-3 transition-colors ${studioDisabled ? "bg-white/10" : "bg-primary/20 group-hover:bg-primary/30"}`}>
+            <Music2 className={`h-7 w-7 ${studioDisabled ? "text-white/30" : "text-primary"}`} />
           </div>
           <div className="text-center">
-            <span className={`block text-lg font-medium ${disabled ? "text-white/50" : ""}`}>Je choisis mon studio</span>
+            <span className={`block text-lg font-medium ${studioDisabled ? "text-white/50" : ""}`}>Je choisis mon studio</span>
             <span className="mt-1 block text-xs text-white/50">
               Studio → Date → Créneau
             </span>
           </div>
+          {isSoloDuo && !disabled && (
+            <p className="mt-1 text-xs text-white/50">
+              Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+            </p>
+          )}
         </button>
       </div>
     </div>
