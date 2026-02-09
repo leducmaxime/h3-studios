@@ -6,26 +6,34 @@ interface ProgressIndicatorProps {
   currentStep: number;
   totalSteps: number;
   flow: "time-first" | "studio-first";
+  skipStudio?: boolean;
 }
 
 const TimeFirstIcons = [Calendar, Clock, Music, User];
+const TimeFirstNoStudioIcons = [Calendar, Clock, User];
 const StudioFirstIcons = [Music, Calendar, Clock, User];
 
 export function ProgressIndicator({
   currentStep,
   totalSteps,
   flow,
+  skipStudio,
 }: ProgressIndicatorProps) {
-  const icons = flow === "time-first" ? TimeFirstIcons : StudioFirstIcons;
-  const steps = Array.from({ length: totalSteps }, (_, i) => i + 1);
+  const effectiveTotal = skipStudio ? totalSteps - 1 : totalSteps;
+  const icons = flow === "time-first"
+    ? (skipStudio ? TimeFirstNoStudioIcons : TimeFirstIcons)
+    : StudioFirstIcons;
+  // For solo/duo time-first: step 1→pos 1, step 2→pos 2, step 4→pos 3
+  const effectiveStep = skipStudio && currentStep >= 4 ? currentStep - 1 : currentStep;
+  const steps = Array.from({ length: effectiveTotal }, (_, i) => i + 1);
 
   return (
     <div className="mb-6">
       <div className="flex items-center justify-center gap-0">
         {steps.map((step, index) => {
           const Icon = icons[index];
-          const isCompleted = currentStep > step;
-          const isCurrent = currentStep === step;
+          const isCompleted = effectiveStep > step;
+          const isCurrent = effectiveStep === step;
 
           return (
             <div key={step} className="flex items-center">
@@ -67,7 +75,7 @@ export function ProgressIndicator({
                 <div
                   className={`
                     mx-2 h-0.5 w-6 sm:w-10 transition-colors duration-300
-                    ${currentStep > step ? "bg-primary" : "bg-white/20"}
+                    ${effectiveStep > step ? "bg-primary" : "bg-white/20"}
                   `}
                 />
               )}
@@ -81,7 +89,7 @@ export function ProgressIndicator({
           <div
             key={step}
             className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-              currentStep >= step ? "bg-primary" : "bg-white/20"
+              effectiveStep >= step ? "bg-primary" : "bg-white/20"
             }`}
           />
         ))}

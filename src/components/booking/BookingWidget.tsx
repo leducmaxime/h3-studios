@@ -142,25 +142,34 @@ export function BookingWidget() {
                     onChange={setGroupType}
                   />
 
-                  <div>
-                    <span className="mb-3 block text-sm font-medium text-white/70">
-                      Choisissez votre studio
-                    </span>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {(["la-scene", "le-podium"] as StudioId[]).map((studioId) => (
-                        <StudioCard
-                          key={studioId}
-                          studioId={studioId}
-                          date={state.selectedDate!}
-                          startTime={state.startTime!}
-                          endTime={state.endTime!}
-                          groupType={state.groupType || "group"}
-                          availability={availability}
-                          onSelect={() => selectStudio(studioId)}
-                        />
-                      ))}
+                  {(state.groupType === "solo" || state.groupType === "duo") ? (
+                    <button
+                      onClick={() => selectStudio("la-scene")}
+                      className="w-full rounded-lg bg-primary py-3 font-semibold text-black transition-all hover:bg-primary/90"
+                    >
+                      Continuer
+                    </button>
+                  ) : (
+                    <div>
+                      <span className="mb-3 block text-sm font-medium text-white/70">
+                        Choisissez votre studio
+                      </span>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {(["la-scene", "le-podium"] as StudioId[]).map((studioId) => (
+                          <StudioCard
+                            key={studioId}
+                            studioId={studioId}
+                            date={state.selectedDate!}
+                            startTime={state.startTime!}
+                            endTime={state.endTime!}
+                            groupType={state.groupType || "group"}
+                            availability={availability}
+                            onSelect={() => selectStudio(studioId)}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </>

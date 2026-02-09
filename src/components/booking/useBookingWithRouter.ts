@@ -277,6 +277,10 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => {
       if (s.startTime && s.endTime) {
         if (s.flow === "time-first") {
+          // Solo/duo skip studio selection entirely
+          if (s.groupType === "solo" || s.groupType === "duo") {
+            return { ...s, studioId: "la-scene", step: 4 };
+          }
           return { ...s, step: 3 };
         }
         return { ...s, step: 4 };
@@ -414,6 +418,10 @@ export function useBookingWithRouter(urlStep?: string) {
       if (s.flow === "time-first") {
         if (s.step === 2) return { ...s, step: 1, selectedDate: null, startTime: null, endTime: null };
         if (s.step === 3) return { ...s, step: 2, studioId: null };
+        // Solo/duo skip step 3, go back to step 2
+        if (s.step === 4 && (s.groupType === "solo" || s.groupType === "duo")) {
+          return { ...s, step: 2, studioId: null };
+        }
         if (s.step === 4) return { ...s, step: 3 };
       } else {
         if (s.step === 2) return { ...s, step: 1, studioId: null, selectedDate: null };

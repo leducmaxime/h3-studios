@@ -87,6 +87,7 @@ export function Reservation({ step }: ReservationProps) {
                   currentStep={state.step}
                   totalSteps={4}
                   flow={state.flow}
+                  skipStudio={state.flow === "time-first" && (state.groupType === "solo" || state.groupType === "duo")}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
                   {state.groupType && (
@@ -177,39 +178,25 @@ export function Reservation({ step }: ReservationProps) {
                       </div>
                     </div>
 
-                    {(state.groupType === "solo" || state.groupType === "duo") ? (
-                      <div className="flex flex-col items-center gap-4 rounded-xl border border-white/20 bg-white/5 p-6 text-center">
-                        <p className="text-white/70">
-                          Le choix du studio se fera selon la disponibilité, priorité aux groupes.
-                        </p>
-                        <button
-                          onClick={() => selectStudio("la-scene")}
-                          className="rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-all hover:bg-primary/90"
-                        >
-                          Continuer
-                        </button>
+                    <div>
+                      <span className="mb-3 block text-sm font-medium text-white/70">
+                        Choisissez votre studio
+                      </span>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {(["la-scene", "le-podium"] as StudioId[]).map((studioId) => (
+                          <StudioCard
+                            key={studioId}
+                            studioId={studioId}
+                            date={state.selectedDate!}
+                            startTime={state.startTime!}
+                            endTime={state.endTime!}
+                            groupType={state.groupType || "group"}
+                            availability={availability}
+                            onSelect={() => selectStudio(studioId)}
+                          />
+                        ))}
                       </div>
-                    ) : (
-                      <div>
-                        <span className="mb-3 block text-sm font-medium text-white/70">
-                          Choisissez votre studio
-                        </span>
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {(["la-scene", "le-podium"] as StudioId[]).map((studioId) => (
-                            <StudioCard
-                              key={studioId}
-                              studioId={studioId}
-                              date={state.selectedDate!}
-                              startTime={state.startTime!}
-                              endTime={state.endTime!}
-                              groupType={state.groupType || "group"}
-                              availability={availability}
-                              onSelect={() => selectStudio(studioId)}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
               </>
