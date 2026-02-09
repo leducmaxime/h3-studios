@@ -378,7 +378,7 @@ export function Reservation({ step }: ReservationProps) {
 
       {state.step === 1 && state.flow && (
         <p className="mt-4 text-center text-sm text-white/50">
-          Les créneaux en jaune sont en heure de pointe (tarif majoré)
+          Les créneaux en jaune sont en tarif soir & week-end / jour férié
         </p>
       )}
 

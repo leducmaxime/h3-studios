@@ -168,12 +168,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
         })}
       </div>
 
-      <div className="flex items-center justify-center gap-4 text-xs text-white/60">
-        <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded ring-2 ring-white/50" />
-          <span>Aujourd'hui</span>
-        </div>
-      </div>
+
     </div>
   );
 }

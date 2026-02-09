@@ -52,7 +52,7 @@ export function TimeSlotPicker({
   hideHeader = false,
   groupType = "group",
 }: TimeSlotPickerProps) {
-  const [selectedDuration, setSelectedDuration] = useState(4);
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
 
   const isSlotBooked = useCallback(
     (time: string) => {
@@ -69,6 +69,7 @@ export function TimeSlotPicker({
 
   const canStartAt = useCallback(
     (startIdx: number): boolean => {
+      if (selectedDuration === null) return false;
       const endIdx = startIdx + selectedDuration;
       if (endIdx > TIME_SLOTS.length) return false;
       
@@ -81,6 +82,7 @@ export function TimeSlotPicker({
   );
 
   const getEndTime = (startIdx: number): string => {
+    if (selectedDuration === null) return CLOSING_TIME;
     const endIdx = startIdx + selectedDuration;
     if (endIdx >= TIME_SLOTS.length) return CLOSING_TIME;
     return TIME_SLOTS[endIdx];
@@ -197,7 +199,9 @@ export function TimeSlotPicker({
     return { offPeakMin, offPeakMax, peakMin, peakMax };
   }, [groupType, studioFilter]);
 
-  const durationLabel = DURATION_OPTIONS.find(d => d.slots === selectedDuration)?.label || "2h";
+  const durationLabel = selectedDuration !== null
+    ? DURATION_OPTIONS.find(d => d.slots === selectedDuration)?.label || "2h"
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -251,7 +255,7 @@ export function TimeSlotPicker({
 
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium text-white/70">
-          Heure de début (pour {durationLabel})
+          {durationLabel ? `Heure de début (pour ${durationLabel})` : "Choisissez d'abord une durée"}
         </span>
         <div className="flex flex-wrap gap-2">
           {TIME_SLOTS.map((time, index) => {
@@ -321,7 +325,7 @@ export function TimeSlotPicker({
         <div className="flex items-center gap-1.5">
           <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
           <span className="text-primary/70">
-            Pointe {hourlyRates.peakMin === hourlyRates.peakMax
+            Soir & week-end {hourlyRates.peakMin === hourlyRates.peakMax
               ? `${hourlyRates.peakMin}€/h`
               : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
           </span>
@@ -343,7 +347,7 @@ export function TimeSlotPicker({
               <span className="text-sm text-white/70">Votre sélection</span>
               <div className="text-lg font-semibold">
                 {startTime} - {endTime}
-                <span className="ml-2 text-primary">({durationLabel})</span>
+                {durationLabel && <span className="ml-2 text-primary">({durationLabel})</span>}
               </div>
             </div>
             <button
@@ -378,7 +382,7 @@ export function TimeSlotPicker({
                   {priceBreakdown.peakHours! > 0 && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-primary/80">
-                        {priceBreakdown.peakHours}h × {priceBreakdown.peakRate}€/h (pointe)
+                        {priceBreakdown.peakHours}h × {priceBreakdown.peakRate}€/h (soir & week-end)
                       </span>
                       <span className="text-primary">{formatPrice(priceBreakdown.peakSubtotal!)}</span>
                     </div>

@@ -116,7 +116,7 @@ export function StudioCard({
                   )}
                   {peakTotal > 0 && (
                     <div className="flex justify-between">
-                      <span>Tarif pointe ⚡</span>
+                      <span>Soir & week-end ⚡</span>
                       <span>{formatPrice(peakTotal)}</span>
                     </div>
                   )}
@@ -125,7 +125,7 @@ export function StudioCard({
               
               {!isMixedPricing && hasPeakSlots && (
                 <div className="mt-1 text-xs text-primary/80">
-                  Tarif heures de pointe
+                  Tarif soir & week-end / jour férié
                 </div>
               )}
             </>
