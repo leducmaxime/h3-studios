@@ -10,29 +10,21 @@ interface WeekCalendarProps {
   studioFilter?: StudioId | null;
 }
 
-const DAYS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const DAYS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 const MONTHS_FR = [
   "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
   "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
 ];
 
-function getWeekDates(startOfWeek: Date): Date[] {
+function getSlidingWeekDates(baseDate: Date, dayOffset: number): Date[] {
   const dates: Date[] = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
+    const d = new Date(baseDate);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(baseDate.getDate() + dayOffset + i);
     dates.push(d);
   }
   return dates;
-}
-
-function getStartOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Monday = start of week
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -64,7 +56,7 @@ function isTooFarInFuture(date: Date): boolean {
 function formatWeekRange(dates: Date[]): string {
   const first = dates[0];
   const last = dates[dates.length - 1];
-  
+
   if (first.getMonth() === last.getMonth()) {
     return `${first.getDate()} - ${last.getDate()} ${MONTHS_FR[first.getMonth()]} ${first.getFullYear()}`;
   }
@@ -72,18 +64,12 @@ function formatWeekRange(dates: Date[]): string {
 }
 
 export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekCalendarProps) {
-  const today = new Date();
-  const [weekOffset, setWeekOffset] = useState(0);
-  
-  const startOfCurrentWeek = useMemo(() => getStartOfWeek(today), []);
-  
-  const weekStart = useMemo(() => {
-    const d = new Date(startOfCurrentWeek);
-    d.setDate(d.getDate() + weekOffset * 7);
-    return d;
-  }, [weekOffset, startOfCurrentWeek]);
-  
-  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
+  const today = useMemo(() => new Date(), []);
+  const [dayOffset, setDayOffset] = useState(0);
+
+  const weekDates = useMemo(() => getSlidingWeekDates(today, dayOffset), [dayOffset, today]);
+
+  const maxDayOffset = 60; // ~2 months
 
   const availabilityMap = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -96,11 +82,11 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
   }, [weekDates, studioFilter]);
 
   const goToPreviousWeek = () => {
-    if (weekOffset > 0) setWeekOffset((w) => w - 1);
+    setDayOffset((d) => Math.max(0, d - 7));
   };
 
   const goToNextWeek = () => {
-    if (weekOffset < 8) setWeekOffset((w) => w + 1); // ~2 months = 8 weeks
+    setDayOffset((d) => Math.min(maxDayOffset, d + 7));
   };
 
   return (
@@ -108,7 +94,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
       <div className="flex items-center justify-between">
         <button
           onClick={goToPreviousWeek}
-          disabled={weekOffset === 0}
+          disabled={dayOffset === 0}
           className="rounded-full p-2 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Semaine précédente"
         >
@@ -121,7 +107,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
         
         <button
           onClick={goToNextWeek}
-          disabled={weekOffset >= 8}
+          disabled={dayOffset >= maxDayOffset}
           className="rounded-full p-2 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Semaine suivante"
         >
@@ -132,8 +118,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
       <div className="grid grid-cols-7 gap-2">
         {weekDates.map((date) => {
           const dateKey = date.toISOString().split("T")[0];
-          const dayOfWeek = date.getDay();
-          const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to Mon=0 index
+          const dayIndex = date.getDay();
           const past = isPast(date);
           const tooFar = isTooFarInFuture(date);
           const todayDate = isToday(date);
