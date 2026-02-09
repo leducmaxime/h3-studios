@@ -278,7 +278,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       onChange={(e) => setNewEndTime(e.target.value)}
                       className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 focus:border-primary focus:outline-none"
                     >
-                      {[...TIME_SLOTS.slice(1), "22:00"].map((t) => (
+                      {[...TIME_SLOTS.slice(1), "00:00"].map((t) => (
                         <option key={t} value={t}>{t}</option>
                       ))}
                     </select>

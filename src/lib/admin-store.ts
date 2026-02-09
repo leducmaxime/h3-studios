@@ -156,7 +156,7 @@ function generateMockBookings(users: AdminUser[], daysBack: number, daysForward:
       const duration = randomElement(durations);
       const startIndex = randomInt(0, TIME_SLOTS.length - duration - 1);
       const startTime = TIME_SLOTS[startIndex];
-      const endTime = TIME_SLOTS[startIndex + duration] || "22:00";
+      const endTime = TIME_SLOTS[startIndex + duration] || "00:00";
       
       const studioSlots = usedSlots.get(studioId)!;
       let hasConflict = false;

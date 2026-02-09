@@ -110,15 +110,75 @@ export const PRICING: Record<StudioId, Record<GroupType, { offPeak: number; peak
   },
 };
 
-export const TIME_SLOTS = [
+// All possible 30-min slots across all studios (superset)
+export const ALL_TIME_SLOTS = [
   "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
   "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
   "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
   "18:00", "18:30", "19:00", "19:30", "20:00", "20:30",
-  "21:00", "21:30",
+  "21:00", "21:30", "22:00", "22:30", "23:00", "23:30",
 ];
 
-export const CLOSING_TIME = "22:00";
+// Per-studio, per-day opening hours
+// Day index: 0 = Sunday, 1 = Monday, ... 6 = Saturday
+interface StudioHours {
+  open: string;
+  close: string; // "00:00" means midnight (end of day)
+}
+
+export const STUDIO_HOURS: Record<StudioId, Record<number, StudioHours>> = {
+  "le-podium": {
+    0: { open: "10:00", close: "22:30" }, // Dimanche
+    1: { open: "18:00", close: "22:30" }, // Lundi
+    2: { open: "10:00", close: "22:30" }, // Mardi
+    3: { open: "10:00", close: "22:30" }, // Mercredi
+    4: { open: "10:00", close: "22:30" }, // Jeudi
+    5: { open: "10:00", close: "22:30" }, // Vendredi
+    6: { open: "10:00", close: "22:30" }, // Samedi
+  },
+  "la-scene": {
+    0: { open: "10:00", close: "00:00" }, // Dimanche
+    1: { open: "18:00", close: "00:00" }, // Lundi
+    2: { open: "10:00", close: "00:00" }, // Mardi
+    3: { open: "10:00", close: "00:00" }, // Mercredi
+    4: { open: "10:00", close: "00:00" }, // Jeudi
+    5: { open: "10:00", close: "00:00" }, // Vendredi
+    6: { open: "10:00", close: "00:00" }, // Samedi
+  },
+};
+
+/** Get the closing time for a studio on a given date */
+export function getStudioClosingTime(studioId: StudioId, date: Date): string {
+  const dayOfWeek = date.getDay();
+  return STUDIO_HOURS[studioId][dayOfWeek].close;
+}
+
+/** Get bookable time slots for a specific studio on a given date */
+export function getStudioTimeSlots(studioId: StudioId, date: Date): string[] {
+  const dayOfWeek = date.getDay();
+  const hours = STUDIO_HOURS[studioId][dayOfWeek];
+  const openIdx = ALL_TIME_SLOTS.indexOf(hours.open);
+  // "00:00" means end of day → include all slots up to 23:30
+  const closeIdx = hours.close === "00:00"
+    ? ALL_TIME_SLOTS.length
+    : ALL_TIME_SLOTS.indexOf(hours.close);
+  if (openIdx === -1 || closeIdx === -1) return [];
+  return ALL_TIME_SLOTS.slice(openIdx, closeIdx);
+}
+
+/** Get the union of time slots across all studios for a given date (used when no studio is selected yet) */
+export function getUnionTimeSlots(date: Date): string[] {
+  const slotsScene = getStudioTimeSlots("la-scene", date);
+  const slotsPodium = getStudioTimeSlots("le-podium", date);
+  const allSlots = new Set([...slotsScene, ...slotsPodium]);
+  return ALL_TIME_SLOTS.filter((s) => allSlots.has(s));
+}
+
+// Legacy alias — kept for backward compatibility in admin pages
+export const TIME_SLOTS = ALL_TIME_SLOTS;
+
+// Legacy alias — max possible closing time
+export const CLOSING_TIME = "00:00";
 
 export const SLOT_DURATION_MINUTES = 30;
 export const MIN_BOOKING_SLOTS = 2;
@@ -147,9 +207,9 @@ export function calculatePrice(
   startTime: string,
   endTime: string
 ): { total: number; breakdown: PriceSlot[] } {
-  const startIndex = TIME_SLOTS.indexOf(startTime);
-  let endIndex = TIME_SLOTS.indexOf(endTime);
-  if (endIndex === -1 && endTime === CLOSING_TIME) endIndex = TIME_SLOTS.length;
+  const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
+  let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
+  if (endIndex === -1 && endTime === "00:00") endIndex = ALL_TIME_SLOTS.length;
   
   if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
     return { total: 0, breakdown: [] };
@@ -158,7 +218,7 @@ export function calculatePrice(
   const breakdown: PriceSlot[] = [];
   
   for (let i = startIndex; i < endIndex; i++) {
-    const time = TIME_SLOTS[i];
+    const time = ALL_TIME_SLOTS[i];
     const isPeak = isPeakTime(date, time);
     const rate = PRICING[studioId][groupType][isPeak ? "peak" : "offPeak"];
     breakdown.push({ time, isPeak, rate });
@@ -173,9 +233,9 @@ export function calculatePrice(
 }
 
 export function formatDuration(startTime: string, endTime: string): string {
-  const startIndex = TIME_SLOTS.indexOf(startTime);
-  let endIndex = TIME_SLOTS.indexOf(endTime);
-  if (endIndex === -1 && endTime === CLOSING_TIME) endIndex = TIME_SLOTS.length;
+  const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
+  let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
+  if (endIndex === -1 && endTime === "00:00") endIndex = ALL_TIME_SLOTS.length;
   
   if (startIndex === -1 || endIndex === -1) return "";
   
@@ -216,6 +276,11 @@ export function getAvailableRanges(
   const ranges: string[] = [];
   let rangeStart: string | null = null;
 
+  // Use studio-specific slots if filtering by studio, otherwise union
+  const slots = studioFilter
+    ? getStudioTimeSlots(studioFilter, date)
+    : getUnionTimeSlots(date);
+
   const isSlotAvailable = (time: string) => {
     if (studioFilter) {
       return !availability.has(`${studioFilter}-${time}`);
@@ -226,21 +291,26 @@ export function getAvailableRanges(
     );
   };
 
-  for (let i = 0; i < TIME_SLOTS.length; i++) {
-    const time = TIME_SLOTS[i];
+  for (let i = 0; i < slots.length; i++) {
+    const time = slots[i];
     const available = isSlotAvailable(time);
 
     if (available && rangeStart === null) {
       rangeStart = time;
     } else if (!available && rangeStart !== null) {
-      const endTime = TIME_SLOTS[i];
-      ranges.push(formatTimeRange(rangeStart, endTime));
+      ranges.push(formatTimeRange(rangeStart, slots[i]));
       rangeStart = null;
     }
   }
 
   if (rangeStart !== null) {
-    ranges.push(formatTimeRange(rangeStart, "22:30"));
+    // Close range at studio closing time
+    const lastSlot = slots[slots.length - 1];
+    const lastSlotIdx = ALL_TIME_SLOTS.indexOf(lastSlot);
+    const closingSlot = lastSlotIdx + 1 < ALL_TIME_SLOTS.length
+      ? ALL_TIME_SLOTS[lastSlotIdx + 1]
+      : "00:00";
+    ranges.push(formatTimeRange(rangeStart, closingSlot));
   }
 
   return ranges;
@@ -260,17 +330,20 @@ export function generateMockAvailability(date: Date): Set<string> {
   const random = (n: number) => ((seed * 9301 + 49297) % 233280) / 233280 * n;
   
   const numBooked = Math.floor(random(8)) + 2;
+  const sceneSlots = getStudioTimeSlots("la-scene", date);
+  const podiumSlots = getStudioTimeSlots("le-podium", date);
   
   for (let i = 0; i < numBooked; i++) {
-    const startIdx = Math.floor(random(TIME_SLOTS.length - 4));
+    const useScene = random(1) > 0.5;
+    const studioSlots = useScene ? sceneSlots : podiumSlots;
+    const studioId = useScene ? "la-scene" : "le-podium";
+    if (studioSlots.length < 4) continue;
+    
+    const startIdx = Math.floor(random(studioSlots.length - 4));
     const duration = Math.floor(random(4)) + 2;
     
-    for (let j = 0; j < duration && startIdx + j < TIME_SLOTS.length; j++) {
-      if (random(1) > 0.5) {
-        booked.add(`la-scene-${TIME_SLOTS[startIdx + j]}`);
-      } else {
-        booked.add(`le-podium-${TIME_SLOTS[startIdx + j]}`);
-      }
+    for (let j = 0; j < duration && startIdx + j < studioSlots.length; j++) {
+      booked.add(`${studioId}-${studioSlots[startIdx + j]}`);
     }
   }
   
@@ -386,15 +459,18 @@ export function findAlternativeSlots(
   availability: Set<string>
 ): AlternativeSlot[] {
   const alternatives: AlternativeSlot[] = [];
-  const startIdx = TIME_SLOTS.indexOf(requestedStart);
-  const endIdx = TIME_SLOTS.indexOf(requestedEnd);
+  const allSlots = getUnionTimeSlots(requestedDate);
+  const startIdx = allSlots.indexOf(requestedStart);
+  const endIdx = allSlots.indexOf(requestedEnd);
   const duration = endIdx - startIdx;
 
   // 1. Try other studio same time
   const otherStudio: StudioId = unavailableStudio === "la-scene" ? "le-podium" : "la-scene";
+  const otherStudioSlots = getStudioTimeSlots(otherStudio, requestedDate);
   let otherStudioAvailable = true;
   for (let i = startIdx; i < endIdx; i++) {
-    if (availability.has(`${otherStudio}-${TIME_SLOTS[i]}`)) {
+    const time = allSlots[i];
+    if (!otherStudioSlots.includes(time) || availability.has(`${otherStudio}-${time}`)) {
       otherStudioAvailable = false;
       break;
     }
@@ -412,15 +488,17 @@ export function findAlternativeSlots(
   // 2. Try nearby times same day (2h before/after)
   const studios: StudioId[] = ["la-scene", "le-podium"];
   for (const studio of studios) {
+    const studioSlots = getStudioTimeSlots(studio, requestedDate);
     for (let offset = -4; offset <= 4; offset++) {
       if (offset === 0) continue;
       const newStartIdx = startIdx + offset;
       const newEndIdx = newStartIdx + duration;
-      if (newStartIdx < 0 || newEndIdx > TIME_SLOTS.length) continue;
+      if (newStartIdx < 0 || newEndIdx > allSlots.length) continue;
 
       let slotAvailable = true;
       for (let i = newStartIdx; i < newEndIdx; i++) {
-        if (availability.has(`${studio}-${TIME_SLOTS[i]}`)) {
+        const time = allSlots[i];
+        if (!studioSlots.includes(time) || availability.has(`${studio}-${time}`)) {
           slotAvailable = false;
           break;
         }
@@ -428,8 +506,8 @@ export function findAlternativeSlots(
       if (slotAvailable) {
         alternatives.push({
           date: requestedDate,
-          startTime: TIME_SLOTS[newStartIdx],
-          endTime: TIME_SLOTS[newEndIdx],
+          startTime: allSlots[newStartIdx],
+          endTime: allSlots[newEndIdx],
           studioId: studio,
           reason: "same-day",
         });

@@ -31,7 +31,7 @@ export function AdminStudios() {
     studioId: "" as StudioId | "",
     date: new Date().toISOString().slice(0, 10),
     startTime: "10:00",
-    endTime: "22:00",
+    endTime: "00:00",
     reason: "",
   });
 
@@ -58,7 +58,7 @@ export function AdminStudios() {
         studioId: "",
         date: new Date().toISOString().slice(0, 10),
         startTime: "10:00",
-        endTime: "22:00",
+        endTime: "00:00",
         reason: "",
       });
     }
@@ -268,7 +268,7 @@ export function AdminStudios() {
                     onChange={(e) => setBlockForm({ ...blockForm, endTime: e.target.value })}
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
                   >
-                    {[...TIME_SLOTS.slice(1), "22:00"].map((time) => (
+                    {[...TIME_SLOTS.slice(1), "00:00"].map((time) => (
                       <option key={time} value={time}>{time}</option>
                     ))}
                   </select>

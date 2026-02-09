@@ -168,7 +168,8 @@ export function useBooking() {
       const bookingRef = generateBookingRef();
       
       const startIdx = TIME_SLOTS.indexOf(s.startTime);
-      const endIdx = TIME_SLOTS.indexOf(s.endTime);
+      let endIdx = TIME_SLOTS.indexOf(s.endTime);
+      if (endIdx === -1 && s.endTime === "00:00") endIdx = TIME_SLOTS.length;
       const durationHours = (endIdx - startIdx) * 0.5;
       const equipmentPrice = calculateEquipmentPrice(s.equipment, durationHours);
 
@@ -273,7 +274,8 @@ export function useBooking() {
     );
     
     const startIdx = TIME_SLOTS.indexOf(state.startTime);
-    const endIdx = TIME_SLOTS.indexOf(state.endTime);
+    let endIdx = TIME_SLOTS.indexOf(state.endTime);
+    if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
     const durationHours = (endIdx - startIdx) * 0.5;
     const equipmentPrice = calculateEquipmentPrice(state.equipment, durationHours);
     

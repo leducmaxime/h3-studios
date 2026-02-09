@@ -3,8 +3,10 @@
 import { useState, useCallback, useMemo } from "react";
 import { ChevronLeft } from "lucide-react";
 import {
-  TIME_SLOTS,
-  CLOSING_TIME,
+  ALL_TIME_SLOTS,
+  getStudioTimeSlots,
+  getUnionTimeSlots,
+  getStudioClosingTime,
   isPeakTime,
   formatDate,
   PRICING,
@@ -57,6 +59,27 @@ export function TimeSlotPicker({
   // Solo/duo have flat pricing (no peak/off-peak distinction)
   const hasPeakPricing = groupType === "group";
 
+  // Per-studio time slots based on studio + day
+  const visibleSlots = useMemo(() => {
+    if (studioFilter) {
+      return getStudioTimeSlots(studioFilter, date);
+    }
+    return getUnionTimeSlots(date);
+  }, [studioFilter, date]);
+
+  // Closing time for end-time computation
+  const closingTime = useMemo(() => {
+    if (studioFilter) {
+      return getStudioClosingTime(studioFilter, date);
+    }
+    // When no studio selected, use the latest closing time across all studios
+    const sceneClose = getStudioClosingTime("la-scene", date);
+    const podiumClose = getStudioClosingTime("le-podium", date);
+    // "00:00" is midnight = latest
+    if (sceneClose === "00:00" || podiumClose === "00:00") return "00:00";
+    return sceneClose > podiumClose ? sceneClose : podiumClose;
+  }, [studioFilter, date]);
+
   const isSlotBooked = useCallback(
     (time: string) => {
       if (studioFilter) {
@@ -74,43 +97,43 @@ export function TimeSlotPicker({
     (startIdx: number): boolean => {
       if (selectedDuration === null) return false;
       const endIdx = startIdx + selectedDuration;
-      if (endIdx > TIME_SLOTS.length) return false;
+      if (endIdx > visibleSlots.length) return false;
       
       for (let i = startIdx; i < endIdx; i++) {
-        if (isSlotBooked(TIME_SLOTS[i])) return false;
+        if (isSlotBooked(visibleSlots[i])) return false;
       }
       return true;
     },
-    [selectedDuration, isSlotBooked]
+    [selectedDuration, isSlotBooked, visibleSlots]
   );
 
   const getEndTime = (startIdx: number): string => {
-    if (selectedDuration === null) return CLOSING_TIME;
+    if (selectedDuration === null) return closingTime;
     const endIdx = startIdx + selectedDuration;
-    if (endIdx >= TIME_SLOTS.length) return CLOSING_TIME;
-    return TIME_SLOTS[endIdx];
+    if (endIdx >= visibleSlots.length) return closingTime;
+    return visibleSlots[endIdx];
   };
 
   const handleSlotClick = useCallback(
     (time: string) => {
-      const startIdx = TIME_SLOTS.indexOf(time);
+      const startIdx = visibleSlots.indexOf(time);
       if (!canStartAt(startIdx)) return;
       
       const endTimeSlot = getEndTime(startIdx);
       onSelectRange(time, endTimeSlot);
     },
-    [selectedDuration, onSelectRange, canStartAt, getEndTime]
+    [selectedDuration, onSelectRange, canStartAt, getEndTime, visibleSlots]
   );
 
   const isWithinCurrentSelection = useCallback(
     (index: number): boolean => {
       if (!startTime || !endTime) return false;
-      const selectedStartIdx = TIME_SLOTS.indexOf(startTime);
-      let selectedEndIdx = TIME_SLOTS.indexOf(endTime);
-      if (selectedEndIdx === -1) selectedEndIdx = TIME_SLOTS.length;
+      const selectedStartIdx = visibleSlots.indexOf(startTime);
+      let selectedEndIdx = visibleSlots.indexOf(endTime);
+      if (selectedEndIdx === -1) selectedEndIdx = visibleSlots.length;
       return index >= selectedStartIdx && index < selectedEndIdx;
     },
-    [startTime, endTime]
+    [startTime, endTime, visibleSlots]
   );
 
   const handleClear = useCallback(() => {
@@ -126,9 +149,9 @@ export function TimeSlotPicker({
       const peak = hasPeakPricing && isPeakTime(date, time);
       
       if (startTime && endTime) {
-        const selectedStartIdx = TIME_SLOTS.indexOf(startTime);
-        let selectedEndIdx = TIME_SLOTS.indexOf(endTime);
-        if (selectedEndIdx === -1) selectedEndIdx = TIME_SLOTS.length;
+        const selectedStartIdx = visibleSlots.indexOf(startTime);
+        let selectedEndIdx = visibleSlots.indexOf(endTime);
+        if (selectedEndIdx === -1) selectedEndIdx = visibleSlots.length;
         if (index >= selectedStartIdx && index < selectedEndIdx) {
           return peak ? "selected-peak" : "selected";
         }
@@ -137,11 +160,11 @@ export function TimeSlotPicker({
       if (!canStart) return "unavailable-duration";
       return peak ? "available-peak" : "available";
     },
-    [date, startTime, endTime, isSlotBooked, canStartAt, hasPeakPricing]
+    [date, startTime, endTime, isSlotBooked, canStartAt, hasPeakPricing, visibleSlots]
   );
 
   const formatEndTime = (start: string): string => {
-    const startIdx = TIME_SLOTS.indexOf(start);
+    const startIdx = visibleSlots.indexOf(start);
     return getEndTime(startIdx);
   };
 
@@ -277,7 +300,7 @@ export function TimeSlotPicker({
           {durationLabel ? `Heure de début (pour ${durationLabel})` : "Choisissez d'abord une durée"}
         </span>
         <div className="flex flex-wrap gap-2">
-          {TIME_SLOTS.map((time, index) => {
+          {visibleSlots.map((time: string, index: number) => {
             const state = getSlotState(time, index);
             const canStart = canStartAt(index);
             const withinSelection = isWithinCurrentSelection(index);

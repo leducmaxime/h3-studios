@@ -69,7 +69,11 @@ export function Reservation({ step }: ReservationProps) {
   } = useBookingWithRouter(step);
 
   const durationHours = state.startTime && state.endTime
-    ? (TIME_SLOTS.indexOf(state.endTime) - TIME_SLOTS.indexOf(state.startTime)) * 0.5
+    ? ((() => {
+        let endIdx = TIME_SLOTS.indexOf(state.endTime);
+        if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
+        return (endIdx - TIME_SLOTS.indexOf(state.startTime)) * 0.5;
+      })())
     : 0;
 
   return (
@@ -330,7 +334,8 @@ export function Reservation({ step }: ReservationProps) {
                 const { total } = calculatePrice(state.studioId as StudioId, gt, state.selectedDate!, state.startTime!, state.endTime!);
                 const duration = formatDuration(state.startTime!, state.endTime!);
                 const startIdx = TIME_SLOTS.indexOf(state.startTime!);
-                const endIdx = TIME_SLOTS.indexOf(state.endTime!);
+                let endIdx = TIME_SLOTS.indexOf(state.endTime!);
+                if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
                 const durationH = (endIdx - startIdx) * 0.5;
                 const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
                 const grandTotal = total + equipmentPrice;
