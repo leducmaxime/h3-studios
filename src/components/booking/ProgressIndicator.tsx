@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, ClipboardList, Clock, IdCard, Music, Users } from "lucide-react";
+import { Calendar, ClipboardList, CreditCard, IdCard, Music, ShoppingCart, Users } from "lucide-react";
 
 interface ProgressIndicatorProps {
   currentStep: number;
@@ -19,31 +19,35 @@ function getStepDefs(
 ): StepDef[] {
   if (flow === "time-first") {
     if (skipStudio) {
+      // Solo/duo: no studio step
       return [
-        [Users, 0],
-        [Calendar, 1],
-        [Clock, 2],
-        [IdCard, 4],
-        [ClipboardList, 5],
+        [Users, 0],          // Group choice
+        [Calendar, 1],       // Date + time (merged)
+        [IdCard, 3],         // Coordonnées
+        [ClipboardList, 4],  // Récap
+        [ShoppingCart, 6],   // Panier
+        [CreditCard, 7],    // Paiement
       ];
     }
     return [
-      [Users, 0],
-      [Calendar, 1],
-      [Clock, 2],
-      [Music, 3],
-      [IdCard, 4],
-      [ClipboardList, 5],
+      [Users, 0],            // Group choice
+      [Calendar, 1],         // Date + time (merged)
+      [Music, 2],            // Studio
+      [IdCard, 3],           // Coordonnées
+      [ClipboardList, 4],    // Récap
+      [ShoppingCart, 6],     // Panier
+      [CreditCard, 7],      // Paiement
     ];
   }
   // studio-first
   return [
-    [Users, 0],
-    [Music, 1],
-    [Calendar, 2],
-    [Clock, 3],
-    [IdCard, 4],
-    [ClipboardList, 5],
+    [Users, 0],              // Group choice
+    [Music, 1],              // Studio
+    [Calendar, 2],           // Date + time (merged)
+    [IdCard, 3],             // Coordonnées
+    [ClipboardList, 4],      // Récap
+    [ShoppingCart, 6],       // Panier
+    [CreditCard, 7],        // Paiement
   ];
 }
 

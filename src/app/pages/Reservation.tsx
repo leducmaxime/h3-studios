@@ -88,11 +88,11 @@ export function Reservation({ step }: ReservationProps) {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
           <div className="relative p-4 sm:p-6 md:p-8">
-            {state.step < 6 && (
+            {state.step <= 8 && (
               <div className="mb-4">
                 <ProgressIndicator
                   currentStep={state.step}
-                  totalSteps={6}
+                  totalSteps={8}
                   flow={state.flow || "time-first"}
                   skipStudio={state.flow === "time-first" && (state.groupType === "solo" || state.groupType === "duo")}
                   onStepClick={navigateToStep}
@@ -107,13 +107,13 @@ export function Reservation({ step }: ReservationProps) {
                   {state.studioId && state.groupType === "group" && (
                     state.flow === "studio-first"
                       ? state.step > 1
-                      : state.step > 3
+                      : state.step > 2
                   ) && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
-                  {/* Date pill: show after the step where date is chosen */}
+                  {/* Date + time pills: show after the merged date+time step */}
                   {state.selectedDate && (
                     state.flow === "studio-first"
                       ? state.step > 2
@@ -123,11 +123,10 @@ export function Reservation({ step }: ReservationProps) {
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {/* Time pill: show after the step where time is chosen */}
                   {state.startTime && state.endTime && (
                     state.flow === "studio-first"
-                      ? state.step > 3
-                      : state.step > 2
+                      ? state.step > 2
+                      : state.step > 1
                   ) && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
@@ -159,32 +158,36 @@ export function Reservation({ step }: ReservationProps) {
                       >
                         <ChevronLeft className="h-5 w-5" />
                       </button>
-                      <p className="text-white/70">Choisissez une date pour votre répétition</p>
+                      <p className="text-white/70">
+                        {!state.selectedDate
+                          ? "Choisissez une date pour votre répétition"
+                          : "Choisissez votre créneau"}
+                      </p>
                     </div>
                     <WeekCalendar
                       selectedDate={state.selectedDate}
                       onSelectDate={selectDate}
                       studioFilter={null}
                     />
+                    {state.selectedDate && (
+                      <TimeSlotPicker
+                        date={state.selectedDate}
+                        availability={availability}
+                        startTime={state.startTime}
+                        endTime={state.endTime}
+                        onSelectRange={selectTimeRange}
+                        onClear={clearTimeRange}
+                        onConfirm={confirmTimeSelection}
+                        onBack={goBack}
+                        canConfirm={canProceedToStudio}
+                        hideHeader
+                        groupType={state.groupType || "group"}
+                      />
+                    )}
                   </div>
                 )}
 
-                {state.step === 2 && state.selectedDate && (
-                  <TimeSlotPicker
-                    date={state.selectedDate}
-                    availability={availability}
-                    startTime={state.startTime}
-                    endTime={state.endTime}
-                    onSelectRange={selectTimeRange}
-                    onClear={clearTimeRange}
-                    onConfirm={confirmTimeSelection}
-                    onBack={goBack}
-                    canConfirm={canProceedToStudio}
-                    groupType={state.groupType || "group"}
-                  />
-                )}
-
-                {state.step === 3 && state.selectedDate && state.startTime && state.endTime && (
+                {state.step === 2 && state.selectedDate && state.startTime && state.endTime && (
                   <div className="flex flex-col gap-6">
                     <div className="flex items-center gap-4">
                       <button
@@ -251,54 +254,40 @@ export function Reservation({ step }: ReservationProps) {
                              Studio: {STUDIOS[state.studioId as StudioId].name}
                            </p>
                          )}
+                         <p className="text-white/70">
+                           {!state.selectedDate
+                             ? "Choisissez une date pour votre répétition"
+                             : "Choisissez votre créneau"}
+                         </p>
                       </div>
                     </div>
-                    <p className="text-white/70">Choisissez une date</p>
                     <WeekCalendar
                       selectedDate={state.selectedDate}
                       onSelectDate={selectDate}
                       studioFilter={state.studioId}
                     />
-                  </div>
-                )}
-
-                {state.step === 3 && state.selectedDate && state.studioId && (
-                  <div className="flex flex-col gap-6">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={goBack}
-                        className="rounded-full p-2 transition-colors hover:bg-white/10"
-                        aria-label="Retour"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                      <div>
-                         <p className="text-sm text-white/60">
-                          {state.groupType === "group" ? `${STUDIOS[state.studioId as StudioId].name} • ` : ""}{formatDate(state.selectedDate, "short")}
-                         </p>
-                      </div>
-                    </div>
-
-                    <TimeSlotPicker
-                      date={state.selectedDate}
-                      availability={availability}
-                      startTime={state.startTime}
-                      endTime={state.endTime}
-                      onSelectRange={selectTimeRange}
-                      onClear={clearTimeRange}
-                      onConfirm={confirmTimeSelection}
-                      onBack={() => {}}
-                      canConfirm={canProceedToStudio}
-                      studioFilter={state.studioId}
-                      hideHeader
-                      groupType={state.groupType || "group"}
-                    />
+                    {state.selectedDate && (
+                      <TimeSlotPicker
+                        date={state.selectedDate}
+                        availability={availability}
+                        startTime={state.startTime}
+                        endTime={state.endTime}
+                        onSelectRange={selectTimeRange}
+                        onClear={clearTimeRange}
+                        onConfirm={confirmTimeSelection}
+                        onBack={goBack}
+                        canConfirm={canProceedToStudio}
+                        studioFilter={state.studioId}
+                        hideHeader
+                        groupType={state.groupType || "group"}
+                      />
+                    )}
                   </div>
                 )}
               </>
             )}
 
-            {state.step === 4 &&
+            {state.step === 3 &&
               state.selectedDate &&
               state.startTime &&
               state.endTime &&
@@ -324,7 +313,7 @@ export function Reservation({ step }: ReservationProps) {
                 />
               )}
 
-            {state.step === 5 &&
+            {state.step === 4 &&
               state.selectedDate &&
               state.startTime &&
               state.endTime &&
@@ -430,7 +419,7 @@ export function Reservation({ step }: ReservationProps) {
                 );
               })()}
 
-            {state.step === 6 &&
+            {state.step === 5 &&
               state.selectedDate &&
               state.startTime &&
               state.endTime &&
@@ -452,7 +441,7 @@ export function Reservation({ step }: ReservationProps) {
                 />
               )}
 
-            {state.step === 7 && state.cart.length > 0 && (
+            {state.step === 6 && state.cart.length > 0 && (
               <FinalCheckout
                 cart={state.cart}
                 total={cartTotal}
@@ -463,7 +452,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step === 8 && state.cart.length > 0 && (
+            {state.step === 7 && state.cart.length > 0 && (
               <PaymentChoice
                 cart={state.cart}
                 total={cartTotal}
@@ -472,7 +461,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step === 9 && (
+            {state.step === 8 && (
               <StripeRedirect
                 cart={state.cart}
                 total={cartTotal}
@@ -482,7 +471,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step === 10 && (
+            {state.step === 9 && (
               <FinalCheckout
                 cart={state.cart}
                 total={cartTotal}
@@ -491,7 +480,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step > 0 && state.step < 6 && state.cart.length > 0 && (
+            {state.step > 0 && state.step < 5 && state.cart.length > 0 && (
               <CartSummary
                 cart={state.cart}
                 total={cartTotal}
@@ -503,7 +492,7 @@ export function Reservation({ step }: ReservationProps) {
         </div>
       </div>
 
-      {(state.step === 1 || state.step === 2) && state.groupType === "group" && (
+      {((state.flow === "time-first" && state.step === 1) || (state.flow === "studio-first" && state.step === 2)) && state.groupType === "group" && (
         <p className="mt-4 text-center text-sm font-medium text-primary/80">
           Les tarifs varient selon l'heure (après 18h) et le jour (weekend &
           jour férié). Économisez jusqu'à 20% en réservant avant 18h en semaine
@@ -511,7 +500,7 @@ export function Reservation({ step }: ReservationProps) {
         </p>
       )}
 
-      {state.step > 0 && state.step < 10 && (
+      {state.step > 0 && state.step < 9 && (
         <button
           onClick={resetBooking}
           className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"

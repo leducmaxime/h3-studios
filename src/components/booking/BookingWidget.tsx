@@ -59,20 +59,24 @@ export function BookingWidget() {
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
         <div className="relative p-4 sm:p-6 md:p-8">
-          {state.step < 6 && (
+          {state.step <= 6 && (
             <div className="mb-2">
               <ProgressIndicator
                 currentStep={state.step}
                 totalSteps={6}
                 flow={state.flow || "time-first"}
-                onStepClick={(step) => setStep(step as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10)}
+                onStepClick={(step) => setStep(step as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9)}
               />
             </div>
           )}
 
           {state.step === 0 && (
             <div className="flex flex-col gap-6">
-              <FlowChoice onSelect={selectFlow} />
+              <GroupTypeToggle
+                value={state.groupType}
+                onChange={setGroupType}
+              />
+              <FlowChoice onSelect={selectFlow} disabled={!state.groupType} groupType={state.groupType} />
             </div>
           )}
 
@@ -88,31 +92,36 @@ export function BookingWidget() {
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </button>
-                    <p className="text-white/70">Choisissez une date pour votre répétition</p>
+                    <p className="text-white/70">
+                      {!state.selectedDate
+                        ? "Choisissez une date pour votre répétition"
+                        : "Choisissez votre créneau"}
+                    </p>
                   </div>
                   <WeekCalendar
                     selectedDate={state.selectedDate}
                     onSelectDate={selectDate}
                     studioFilter={null}
                   />
+                  {state.selectedDate && (
+                    <TimeSlotPicker
+                      date={state.selectedDate}
+                      availability={availability}
+                      startTime={state.startTime}
+                      endTime={state.endTime}
+                      onSelectRange={selectTimeRange}
+                      onClear={clearTimeRange}
+                      onConfirm={confirmTimeSelection}
+                      onBack={goBack}
+                      canConfirm={canProceedToStudio}
+                      hideHeader
+                      groupType={state.groupType || "group"}
+                    />
+                  )}
                 </div>
               )}
 
-              {state.step === 2 && state.selectedDate && (
-                <TimeSlotPicker
-                  date={state.selectedDate}
-                  availability={availability}
-                  startTime={state.startTime}
-                  endTime={state.endTime}
-                  onSelectRange={selectTimeRange}
-                  onClear={clearTimeRange}
-                  onConfirm={confirmTimeSelection}
-                  onBack={goBack}
-                  canConfirm={canProceedToStudio}
-                />
-              )}
-
-              {state.step === 3 && state.selectedDate && state.startTime && state.endTime && (
+              {state.step === 2 && state.selectedDate && state.startTime && state.endTime && (
                 <div className="flex flex-col gap-6">
                   <div className="flex items-center gap-4">
                     <button
@@ -129,39 +138,25 @@ export function BookingWidget() {
                     </div>
                   </div>
 
-                  <GroupTypeToggle
-                    value={state.groupType}
-                    onChange={setGroupType}
-                  />
-
-                  {(state.groupType === "solo" || state.groupType === "duo") ? (
-                    <button
-                      onClick={() => selectStudio("la-scene")}
-                      className="w-full rounded-lg bg-primary py-3 font-semibold text-black transition-all hover:bg-primary/90"
-                    >
-                      Continuer
-                    </button>
-                  ) : (
-                    <div>
-                      <span className="mb-3 block text-sm font-medium text-white/70">
-                        Choisissez votre studio
-                      </span>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {(["la-scene", "le-podium"] as StudioId[]).map((studioId) => (
-                          <StudioCard
-                            key={studioId}
-                            studioId={studioId}
-                            date={state.selectedDate!}
-                            startTime={state.startTime!}
-                            endTime={state.endTime!}
-                            groupType={state.groupType || "group"}
-                            availability={availability}
-                            onSelect={() => selectStudio(studioId)}
-                          />
-                        ))}
-                      </div>
+                  <div>
+                    <span className="mb-3 block text-sm font-medium text-white/70">
+                      Choisissez votre studio
+                    </span>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {(["la-scene", "le-podium"] as StudioId[]).map((studioId) => (
+                        <StudioCard
+                          key={studioId}
+                          studioId={studioId}
+                          date={state.selectedDate!}
+                          startTime={state.startTime!}
+                          endTime={state.endTime!}
+                          groupType={state.groupType || "group"}
+                          availability={availability}
+                          onSelect={() => selectStudio(studioId)}
+                        />
+                      ))}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </>
@@ -193,58 +188,40 @@ export function BookingWidget() {
                           Studio: {STUDIOS[state.studioId].name}
                         </p>
                       )}
+                      <p className="text-white/70">
+                        {!state.selectedDate
+                          ? "Choisissez une date pour votre répétition"
+                          : "Choisissez votre créneau"}
+                      </p>
                     </div>
                   </div>
-                  <p className="text-white/70">Choisissez une date</p>
                   <WeekCalendar
                     selectedDate={state.selectedDate}
                     onSelectDate={selectDate}
                     studioFilter={state.studioId}
                   />
-                </div>
-              )}
-
-              {state.step === 3 && state.selectedDate && state.studioId && (
-                <div className="flex flex-col gap-6">
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={goBack}
-                      className="rounded-full p-2 transition-colors hover:bg-white/10"
-                      aria-label="Retour"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <div>
-                      <p className="text-sm text-white/60">
-                        {state.groupType === "group" ? `${STUDIOS[state.studioId].name} • ` : ""}{formatDate(state.selectedDate, "short")}
-                      </p>
-                    </div>
-                  </div>
-
-                  <GroupTypeToggle
-                    value={state.groupType}
-                    onChange={setGroupType}
-                  />
-
-                  <TimeSlotPicker
-                    date={state.selectedDate}
-                    availability={availability}
-                    startTime={state.startTime}
-                    endTime={state.endTime}
-                    onSelectRange={selectTimeRange}
-                    onClear={clearTimeRange}
-                    onConfirm={confirmTimeSelection}
-                    onBack={() => {}}
-                    canConfirm={canProceedToStudio}
-                    studioFilter={state.studioId}
-                    hideHeader
-                  />
+                  {state.selectedDate && (
+                    <TimeSlotPicker
+                      date={state.selectedDate}
+                      availability={availability}
+                      startTime={state.startTime}
+                      endTime={state.endTime}
+                      onSelectRange={selectTimeRange}
+                      onClear={clearTimeRange}
+                      onConfirm={confirmTimeSelection}
+                      onBack={goBack}
+                      canConfirm={canProceedToStudio}
+                      studioFilter={state.studioId}
+                      hideHeader
+                      groupType={state.groupType || "group"}
+                    />
+                  )}
                 </div>
               )}
             </>
           )}
 
-          {state.step === 4 &&
+          {state.step === 3 &&
             state.selectedDate &&
             state.startTime &&
             state.endTime &&
@@ -270,7 +247,7 @@ export function BookingWidget() {
               />
             )}
 
-          {state.step === 5 &&
+          {state.step === 4 &&
             state.selectedDate &&
             state.startTime &&
             state.endTime &&
@@ -368,7 +345,7 @@ export function BookingWidget() {
               );
             })()}
 
-          {state.step === 6 &&
+          {state.step === 5 &&
             state.selectedDate &&
             state.startTime &&
             state.endTime &&
@@ -390,7 +367,7 @@ export function BookingWidget() {
               />
             )}
 
-          {state.step === 7 && (
+          {state.step === 6 && (
             <FinalCheckout
               cart={state.cart}
               total={cartTotal}
@@ -399,7 +376,7 @@ export function BookingWidget() {
             />
           )}
 
-          {state.step > 0 && state.step < 6 && state.cart.length > 0 && (
+          {state.step > 0 && state.step < 5 && state.cart.length > 0 && (
             <CartSummary
               cart={state.cart}
               total={cartTotal}
@@ -410,7 +387,7 @@ export function BookingWidget() {
         </div>
       </div>
 
-      {(state.step === 1 || state.step === 2) && state.groupType === "group" && (
+      {((state.flow === "time-first" && state.step === 1) || (state.flow === "studio-first" && state.step === 2)) && state.groupType === "group" && (
         <p className="mt-4 text-center text-sm font-medium text-primary/80">
           Les tarifs varient selon l'heure (après 18h) et le jour (weekend &
           jour férié). Économisez jusqu'à 20% en réservant avant 18h en semaine

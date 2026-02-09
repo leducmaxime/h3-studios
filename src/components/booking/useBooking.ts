@@ -83,24 +83,12 @@ export function useBooking() {
   }, []);
 
   const selectDate = useCallback((date: Date) => {
-    setState((s) => {
-      if (s.flow === "time-first") {
-        return {
-          ...s,
-          selectedDate: date,
-          startTime: null,
-          endTime: null,
-          step: 2,
-        };
-      }
-      return {
-        ...s,
-        selectedDate: date,
-        startTime: null,
-        endTime: null,
-        step: 3,
-      };
-    });
+    setState((s) => ({
+      ...s,
+      selectedDate: date,
+      startTime: null,
+      endTime: null,
+    }));
   }, []);
 
   const selectStudioFirst = useCallback((studioId: StudioId) => {
@@ -127,11 +115,11 @@ export function useBooking() {
           if (s.groupType === "solo" || s.groupType === "duo") {
             const avail = s.selectedDate ? generateMockAvailability(s.selectedDate) : new Set<string>();
             const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, avail);
-            return { ...s, studioId: studio, step: 4 };
+            return { ...s, studioId: studio, step: 3 };
           }
-          return { ...s, step: 3 };
+          return { ...s, step: 2 };
         }
-        return { ...s, step: 4 };
+        return { ...s, step: 3 };
       }
       return s;
     });
@@ -142,7 +130,7 @@ export function useBooking() {
   }, []);
 
   const selectStudio = useCallback((studioId: StudioId) => {
-    setState((s) => ({ ...s, studioId, step: 4 }));
+    setState((s) => ({ ...s, studioId, step: 3 }));
   }, []);
 
   const updateUserInfo = useCallback(
@@ -160,7 +148,7 @@ export function useBooking() {
   }, []);
 
   const goToRecap = useCallback(() => {
-    setState((s) => ({ ...s, step: 5 }));
+    setState((s) => ({ ...s, step: 4 }));
   }, []);
 
   const confirmBooking = useCallback(() => {
@@ -199,7 +187,7 @@ export function useBooking() {
         ...s,
         bookingRef,
         cart: [...s.cart, newBooking],
-        step: 6,
+        step: 5,
         equipment: [],
       };
     });
@@ -219,7 +207,7 @@ export function useBooking() {
   }, []);
 
   const goToCheckout = useCallback(() => {
-    setState((s) => ({ ...s, step: 7 }));
+    setState((s) => ({ ...s, step: 6 }));
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
@@ -236,25 +224,34 @@ export function useBooking() {
   const goBack = useCallback(() => {
     setState((s) => {
       if (s.step === 0) return s;
-      if (s.step === 1) return { ...s, step: 0, flow: null };
-
-      if (s.flow === "time-first") {
-        if (s.step === 2) return { ...s, step: 1, selectedDate: null, startTime: null, endTime: null };
-        if (s.step === 3) return { ...s, step: 2, studioId: null };
-        // Solo/duo skip step 3, go back to step 2
-        if (s.step === 4 && (s.groupType === "solo" || s.groupType === "duo")) {
-          return { ...s, step: 2, studioId: null };
+      if (s.step === 1) {
+        // If we have a date selected (in merged date+time step), clear it first
+        if (s.flow === "time-first" && s.selectedDate) {
+          return { ...s, selectedDate: null, startTime: null, endTime: null };
         }
-        if (s.step === 4) return { ...s, step: 3 };
-      } else {
-        if (s.step === 2) return { ...s, step: 1, studioId: null, selectedDate: null };
-        if (s.step === 3) return { ...s, step: 2, startTime: null, endTime: null };
-        if (s.step === 4) return { ...s, step: 3 };
+        return { ...s, step: 0, flow: null };
       }
 
+      if (s.flow === "time-first") {
+        if (s.step === 2) return { ...s, step: 1, studioId: null };
+        if (s.step === 3 && (s.groupType === "solo" || s.groupType === "duo")) {
+          return { ...s, step: 1, studioId: null };
+        }
+        if (s.step === 3) return { ...s, step: 2 };
+      } else { // studio-first
+        if (s.step === 2) {
+          // If we have a date selected (in merged date+time step), clear it first
+          if (s.selectedDate) {
+            return { ...s, selectedDate: null, startTime: null, endTime: null };
+          }
+          return { ...s, step: 1, studioId: null, selectedDate: null };
+        }
+        if (s.step === 3) return { ...s, step: 2, startTime: null, endTime: null };
+      }
+
+      if (s.step === 4) return { ...s, step: 3 };
       if (s.step === 5) return { ...s, step: 4 };
       if (s.step === 6) return { ...s, step: 5 };
-      if (s.step === 7) return { ...s, step: 6 };
       return s;
     });
   }, []);

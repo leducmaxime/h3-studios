@@ -25,30 +25,28 @@ interface ExtendedBookingState extends BookingState {
 
 const STEP_URL_MAP: Record<number, string> = {
   0: "",
-  1: "date",
-  2: "creneau",
-  3: "studio",
-  4: "coordonnees",
-  5: "recapitulatif",
-  6: "confirmation",
-  7: "panier",
-  8: "paiement-choix",
-  9: "paiement",
-  10: "termine",
+  1: "creneau",
+  2: "studio",
+  3: "coordonnees",
+  4: "recapitulatif",
+  5: "confirmation",
+  6: "panier",
+  7: "paiement-choix",
+  8: "paiement",
+  9: "termine",
 };
 
 const URL_STEP_MAP: Record<string, number> = {
   "": 0,
-  "date": 1,
-  "creneau": 2,
-  "studio": 3,
-  "coordonnees": 4,
-  "recapitulatif": 5,
-  "confirmation": 6,
-  "panier": 7,
-  "paiement-choix": 8,
-  "paiement": 9,
-  "termine": 10,
+  "creneau": 1,
+  "studio": 2,
+  "coordonnees": 3,
+  "recapitulatif": 4,
+  "confirmation": 5,
+  "panier": 6,
+  "paiement-choix": 7,
+  "paiement": 8,
+  "termine": 9,
 };
 
 const BOOKING_STORAGE_KEY = "h3-studios-booking-state";
@@ -246,24 +244,12 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const selectDate = useCallback((date: Date) => {
-    setState((s) => {
-      if (s.flow === "time-first") {
-        return {
-          ...s,
-          selectedDate: date,
-          startTime: null,
-          endTime: null,
-          step: 2,
-        };
-      }
-      return {
-        ...s,
-        selectedDate: date,
-        startTime: null,
-        endTime: null,
-        step: 3,
-      };
-    });
+    setState((s) => ({
+      ...s,
+      selectedDate: date,
+      startTime: null,
+      endTime: null,
+    }));
   }, []);
 
   const selectStudioFirst = useCallback((studioId: StudioId) => {
@@ -290,11 +276,11 @@ export function useBookingWithRouter(urlStep?: string) {
           if (s.groupType === "solo" || s.groupType === "duo") {
             const avail = s.selectedDate ? generateMockAvailability(s.selectedDate) : new Set<string>();
             const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, avail);
-            return { ...s, studioId: studio, step: 4 };
+            return { ...s, studioId: studio, step: 3 };
           }
-          return { ...s, step: 3 };
+          return { ...s, step: 2 };
         }
-        return { ...s, step: 4 };
+        return { ...s, step: 3 };
       }
       return s;
     });
@@ -305,7 +291,7 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const selectStudio = useCallback((studioId: StudioId) => {
-    setState((s) => ({ ...s, studioId, step: 4 }));
+    setState((s) => ({ ...s, studioId, step: 3 }));
   }, []);
 
   const updateUserInfo = useCallback(
@@ -323,7 +309,7 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const goToRecap = useCallback(() => {
-    setState((s) => ({ ...s, step: 5 }));
+    setState((s) => ({ ...s, step: 4 }));
   }, []);
 
   const confirmBooking = useCallback(() => {
@@ -362,7 +348,7 @@ export function useBookingWithRouter(urlStep?: string) {
         ...s,
         bookingRef,
         cart: [...s.cart, newBooking],
-        step: 6,
+        step: 5,
         equipment: [],
       };
     });
@@ -371,14 +357,14 @@ export function useBookingWithRouter(urlStep?: string) {
   const selectPaymentMethod = useCallback((method: PaymentMethod) => {
     setState((s) => {
       if (method === "card") {
-        return { ...s, paymentMethod: method, step: 9 };
+        return { ...s, paymentMethod: method, step: 8 };
       }
       const updatedCart = s.cart.map((booking) => ({
         ...booking,
         paymentMethod: "cash" as PaymentMethod,
         paymentStatus: "pay-on-site" as const,
       }));
-      return { ...s, paymentMethod: method, cart: updatedCart, step: 10 };
+      return { ...s, paymentMethod: method, cart: updatedCart, step: 9 };
     });
   }, []);
 
@@ -389,7 +375,7 @@ export function useBookingWithRouter(urlStep?: string) {
         paymentMethod: "card" as PaymentMethod,
         paymentStatus: "paid" as const,
       }));
-      return { ...s, cart: updatedCart, step: 10 };
+      return { ...s, cart: updatedCart, step: 9 };
     });
   }, []);
 
@@ -407,11 +393,11 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const goToCheckout = useCallback(() => {
-    setState((s) => ({ ...s, step: 7 }));
+    setState((s) => ({ ...s, step: 6 }));
   }, []);
 
   const goToPayment = useCallback(() => {
-    setState((s) => ({ ...s, step: 8 }));
+    setState((s) => ({ ...s, step: 7 }));
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
@@ -429,28 +415,37 @@ export function useBookingWithRouter(urlStep?: string) {
   const goBack = useCallback(() => {
     setState((s) => {
       if (s.step === 0) return s;
-      if (s.step === 1) return { ...s, step: 0, flow: null };
-
-      if (s.flow === "time-first") {
-        if (s.step === 2) return { ...s, step: 1, selectedDate: null, startTime: null, endTime: null };
-        if (s.step === 3) return { ...s, step: 2, studioId: null };
-        // Solo/duo skip step 3, go back to step 2
-        if (s.step === 4 && (s.groupType === "solo" || s.groupType === "duo")) {
-          return { ...s, step: 2, studioId: null };
+      if (s.step === 1) {
+        // If we have a date selected (in merged date+time step), clear it first
+        if (s.flow === "time-first" && s.selectedDate) {
+          return { ...s, selectedDate: null, startTime: null, endTime: null };
         }
-        if (s.step === 4) return { ...s, step: 3 };
-      } else {
-        if (s.step === 2) return { ...s, step: 1, studioId: null, selectedDate: null };
-        if (s.step === 3) return { ...s, step: 2, startTime: null, endTime: null };
-        if (s.step === 4) return { ...s, step: 3 };
+        return { ...s, step: 0, flow: null };
       }
 
+      if (s.flow === "time-first") {
+        if (s.step === 2) return { ...s, step: 1, studioId: null };
+        if (s.step === 3 && (s.groupType === "solo" || s.groupType === "duo")) {
+          return { ...s, step: 1, studioId: null };
+        }
+        if (s.step === 3) return { ...s, step: 2 };
+      } else { // studio-first
+        if (s.step === 2) {
+          // If we have a date selected (in merged date+time step), clear it first
+          if (s.selectedDate) {
+            return { ...s, selectedDate: null, startTime: null, endTime: null };
+          }
+          return { ...s, step: 1, studioId: null, selectedDate: null };
+        }
+        if (s.step === 3) return { ...s, step: 2, startTime: null, endTime: null };
+      }
+
+      if (s.step === 4) return { ...s, step: 3 };
       if (s.step === 5) return { ...s, step: 4 };
       if (s.step === 6) return { ...s, step: 5 };
-      if (s.step === 7) return { ...s, step: 6 };
+      if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
       if (s.step === 8) return { ...s, step: 7, paymentMethod: null };
-      if (s.step === 9) return { ...s, step: 8, paymentMethod: null };
-      if (s.step === 10) return { ...s, step: 8 };
+      if (s.step === 9) return { ...s, step: 7 };
       return s;
     });
   }, []);
