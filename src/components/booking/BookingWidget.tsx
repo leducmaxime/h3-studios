@@ -69,12 +69,12 @@ export function BookingWidget() {
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
         <div className="relative p-4 sm:p-6 md:p-8">
-          {state.step !== 0 && state.step !== 5 && state.step !== 6 && state.flow && (
+          {state.step < 5 && (
             <div className="mb-2">
               <ProgressIndicator
                 currentStep={state.step}
-                totalSteps={4}
-                flow={state.flow}
+                totalSteps={5}
+                flow={state.flow || "time-first"}
                 onStepClick={(step) => setStep(step as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9)}
               />
             </div>

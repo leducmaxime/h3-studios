@@ -81,12 +81,12 @@ export function Reservation({ step }: ReservationProps) {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
           <div className="relative p-4 sm:p-6 md:p-8">
-            {state.step !== 0 && state.step < 5 && state.flow && (
+            {state.step < 5 && (
               <div className="mb-4">
                 <ProgressIndicator
                   currentStep={state.step}
-                  totalSteps={4}
-                  flow={state.flow}
+                  totalSteps={5}
+                  flow={state.flow || "time-first"}
                   skipStudio={state.flow === "time-first" && (state.groupType === "solo" || state.groupType === "duo")}
                   onStepClick={navigateToStep}
                 />

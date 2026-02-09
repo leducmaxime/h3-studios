@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, Clock, Music, User } from "lucide-react";
+import { Calendar, Clock, Music, User, Users } from "lucide-react";
 
 interface ProgressIndicatorProps {
   currentStep: number;
@@ -10,55 +10,66 @@ interface ProgressIndicatorProps {
   onStepClick?: (step: number) => void;
 }
 
-const TimeFirstIcons = [Calendar, Clock, Music, User];
-const TimeFirstNoStudioIcons = [Calendar, Clock, User];
-const StudioFirstIcons = [Music, Calendar, Clock, User];
+// Each entry: [Icon, actualStep]
+type StepDef = [typeof Users, number];
 
-// Maps visual position (1-based) back to actual state step
-function getActualStep(
-  visualStep: number,
+function getStepDefs(
+  flow: "time-first" | "studio-first",
   skipStudio: boolean
-): number {
-  if (skipStudio && visualStep >= 3) {
-    // visual 3 → actual 4 (coordonnees)
-    return visualStep + 1;
+): StepDef[] {
+  if (flow === "time-first") {
+    if (skipStudio) {
+      return [
+        [Users, 0],
+        [Calendar, 1],
+        [Clock, 2],
+        [User, 4],
+      ];
+    }
+    return [
+      [Users, 0],
+      [Calendar, 1],
+      [Clock, 2],
+      [Music, 3],
+      [User, 4],
+    ];
   }
-  return visualStep;
+  // studio-first
+  return [
+    [Users, 0],
+    [Music, 1],
+    [Calendar, 2],
+    [Clock, 3],
+    [User, 4],
+  ];
 }
 
 export function ProgressIndicator({
   currentStep,
-  totalSteps,
+  totalSteps: _totalSteps,
   flow,
   skipStudio,
   onStepClick,
 }: ProgressIndicatorProps) {
-  const effectiveTotal = skipStudio ? totalSteps - 1 : totalSteps;
-  const icons = flow === "time-first"
-    ? (skipStudio ? TimeFirstNoStudioIcons : TimeFirstIcons)
-    : StudioFirstIcons;
-  // For solo/duo time-first: step 1→pos 1, step 2→pos 2, step 4→pos 3
-  const effectiveStep = skipStudio && currentStep >= 4 ? currentStep - 1 : currentStep;
-  const steps = Array.from({ length: effectiveTotal }, (_, i) => i + 1);
+  const stepDefs = getStepDefs(flow, !!skipStudio);
 
   return (
     <div className="mb-6">
       <div className="flex items-center justify-center gap-0">
-        {steps.map((step, index) => {
-          const Icon = icons[index];
-          const isCompleted = effectiveStep > step;
-          const isCurrent = effectiveStep === step;
+        {stepDefs.map(([Icon, actualStep], index) => {
+          const isCompleted = currentStep > actualStep;
+          const isCurrent = currentStep === actualStep;
           const isClickable = isCompleted && !!onStepClick;
 
           return (
-            <div key={step} className="flex items-center">
+            <div key={actualStep} className="flex items-center">
               <div className="flex flex-col items-center">
                 <button
                   type="button"
                   disabled={!isClickable}
                   onClick={() => {
                     if (isClickable) {
-                      onStepClick(getActualStep(step, !!skipStudio));
+                      onStepClick(actualStep);
                     }
                   }}
                   className={`
@@ -90,15 +101,15 @@ export function ProgressIndicator({
                     ${isCompleted || isCurrent ? "text-primary" : "text-white/40"}
                   `}
                 >
-                  {step}
+                  {index + 1}
                 </span>
               </div>
 
-              {index < steps.length - 1 && (
+              {index < stepDefs.length - 1 && (
                 <div
                   className={`
                     mx-2 h-0.5 w-6 sm:w-10 transition-colors duration-300
-                    ${effectiveStep > step ? "bg-primary" : "bg-white/20"}
+                    ${currentStep > actualStep ? "bg-primary" : "bg-white/20"}
                   `}
                 />
               )}
@@ -108,11 +119,11 @@ export function ProgressIndicator({
       </div>
 
       <div className="mt-4 flex gap-1">
-        {steps.map((step) => (
+        {stepDefs.map(([, actualStep]) => (
           <div
-            key={step}
+            key={actualStep}
             className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-              effectiveStep >= step ? "bg-primary" : "bg-white/20"
+              currentStep >= actualStep ? "bg-primary" : "bg-white/20"
             }`}
           />
         ))}
