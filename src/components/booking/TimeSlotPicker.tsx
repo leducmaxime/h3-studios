@@ -241,6 +241,11 @@ export function TimeSlotPicker({
     return { offPeakMin, offPeakMax, peakMin, peakMax };
   }, [groupType, studioFilter]);
 
+  // Check if any visible slot is off-peak (to decide whether to show the off-peak legend)
+  const hasAnyOffPeakSlot = useMemo(() => {
+    return visibleSlots.some((time) => !isPeakTime(date, time));
+  }, [visibleSlots, date]);
+
   const durationLabel = selectedDuration !== null
     ? DURATION_OPTIONS.find(d => d.slots === selectedDuration)?.label || "2h"
     : null;
@@ -358,7 +363,7 @@ export function TimeSlotPicker({
       <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-white/60">
         {hasPeakPricing ? (
           <>
-            {!(date.getDay() === 0 || date.getDay() === 6) && (
+            {hasAnyOffPeakSlot && (
               <div className="flex items-center gap-1.5">
                 <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
                 <span>
@@ -371,7 +376,7 @@ export function TimeSlotPicker({
             <div className="flex items-center gap-1.5">
               <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
               <span className="text-primary/70">
-                {(date.getDay() === 0 || date.getDay() === 6) ? "Weekend & jour férié " : "Soir, week-end & jour férié "}
+                {!hasAnyOffPeakSlot ? "Soir, week-end & jour férié " : (date.getDay() === 0 || date.getDay() === 6) ? "Weekend & jour férié " : "Soir, week-end & jour férié "}
                 {hourlyRates.peakMin === hourlyRates.peakMax
                   ? `${hourlyRates.peakMin}€/h`
                   : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
