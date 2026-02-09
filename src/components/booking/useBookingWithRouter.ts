@@ -28,11 +28,12 @@ const STEP_URL_MAP: Record<number, string> = {
   2: "creneau",
   3: "studio",
   4: "coordonnees",
-  5: "confirmation",
-  6: "recapitulatif",
-  7: "paiement-choix",
-  8: "paiement",
-  9: "termine",
+  5: "recapitulatif",
+  6: "confirmation",
+  7: "panier",
+  8: "paiement-choix",
+  9: "paiement",
+  10: "termine",
 };
 
 const URL_STEP_MAP: Record<string, number> = {
@@ -41,11 +42,12 @@ const URL_STEP_MAP: Record<string, number> = {
   "creneau": 2,
   "studio": 3,
   "coordonnees": 4,
-  "confirmation": 5,
-  "recapitulatif": 6,
-  "paiement-choix": 7,
-  "paiement": 8,
-  "termine": 9,
+  "recapitulatif": 5,
+  "confirmation": 6,
+  "panier": 7,
+  "paiement-choix": 8,
+  "paiement": 9,
+  "termine": 10,
 };
 
 const BOOKING_STORAGE_KEY = "h3-studios-booking-state";
@@ -311,6 +313,10 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, equipment }));
   }, []);
 
+  const goToRecap = useCallback(() => {
+    setState((s) => ({ ...s, step: 5 }));
+  }, []);
+
   const confirmBooking = useCallback(() => {
     setState((s) => {
       if (!s.selectedDate || !s.startTime || !s.endTime || !s.studioId || !s.groupType) return s;
@@ -346,7 +352,7 @@ export function useBookingWithRouter(urlStep?: string) {
         ...s,
         bookingRef,
         cart: [...s.cart, newBooking],
-        step: 5,
+        step: 6,
         equipment: [],
       };
     });
@@ -355,14 +361,14 @@ export function useBookingWithRouter(urlStep?: string) {
   const selectPaymentMethod = useCallback((method: PaymentMethod) => {
     setState((s) => {
       if (method === "card") {
-        return { ...s, paymentMethod: method, step: 8 };
+        return { ...s, paymentMethod: method, step: 9 };
       }
       const updatedCart = s.cart.map((booking) => ({
         ...booking,
         paymentMethod: "cash" as PaymentMethod,
         paymentStatus: "pay-on-site" as const,
       }));
-      return { ...s, paymentMethod: method, cart: updatedCart, step: 9 };
+      return { ...s, paymentMethod: method, cart: updatedCart, step: 10 };
     });
   }, []);
 
@@ -373,7 +379,7 @@ export function useBookingWithRouter(urlStep?: string) {
         paymentMethod: "card" as PaymentMethod,
         paymentStatus: "paid" as const,
       }));
-      return { ...s, cart: updatedCart, step: 9 };
+      return { ...s, cart: updatedCart, step: 10 };
     });
   }, []);
 
@@ -391,11 +397,11 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const goToCheckout = useCallback(() => {
-    setState((s) => ({ ...s, step: 6 }));
+    setState((s) => ({ ...s, step: 7 }));
   }, []);
 
   const goToPayment = useCallback(() => {
-    setState((s) => ({ ...s, step: 7 }));
+    setState((s) => ({ ...s, step: 8 }));
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
@@ -431,9 +437,10 @@ export function useBookingWithRouter(urlStep?: string) {
 
       if (s.step === 5) return { ...s, step: 4 };
       if (s.step === 6) return { ...s, step: 5 };
-      if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
+      if (s.step === 7) return { ...s, step: 6 };
       if (s.step === 8) return { ...s, step: 7, paymentMethod: null };
-      if (s.step === 9) return { ...s, step: 7 };
+      if (s.step === 9) return { ...s, step: 8, paymentMethod: null };
+      if (s.step === 10) return { ...s, step: 8 };
       return s;
     });
   }, []);
@@ -499,6 +506,7 @@ export function useBookingWithRouter(urlStep?: string) {
     selectStudio,
     updateUserInfo,
     updateEquipment,
+    goToRecap,
     confirmBooking,
     addAnotherBooking,
     goToCheckout,

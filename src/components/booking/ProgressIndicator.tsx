@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, Clock, IdCard, Music, Users } from "lucide-react";
+import { Calendar, ClipboardList, Clock, IdCard, Music, Users } from "lucide-react";
 
 interface ProgressIndicatorProps {
   currentStep: number;
@@ -24,6 +24,7 @@ function getStepDefs(
         [Calendar, 1],
         [Clock, 2],
         [IdCard, 4],
+        [ClipboardList, 5],
       ];
     }
     return [
@@ -32,6 +33,7 @@ function getStepDefs(
       [Clock, 2],
       [Music, 3],
       [IdCard, 4],
+      [ClipboardList, 5],
     ];
   }
   // studio-first
@@ -41,6 +43,7 @@ function getStepDefs(
     [Calendar, 2],
     [Clock, 3],
     [IdCard, 4],
+    [ClipboardList, 5],
   ];
 }
 

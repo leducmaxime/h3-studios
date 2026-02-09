@@ -13,7 +13,9 @@ import { BookingConfirmation } from "./BookingConfirmation";
 import { FinalCheckout } from "./FinalCheckout";
 import { CartSummary } from "./CartSummary";
 import { ProgressIndicator } from "./ProgressIndicator";
-import { formatDate, formatDuration, STUDIOS, TIME_SLOTS, type StudioId } from "@/lib/booking";
+import { EquipmentSelector } from "./EquipmentSelector";
+import { StickyBookingCTA } from "./StickyBookingCTA";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
 
 export function BookingWidget() {
   const {
@@ -33,6 +35,7 @@ export function BookingWidget() {
     selectStudio,
     updateUserInfo,
     updateEquipment,
+    goToRecap,
     confirmBooking,
     addAnotherBooking,
     goToCheckout,
@@ -46,36 +49,19 @@ export function BookingWidget() {
     ? (TIME_SLOTS.indexOf(state.endTime) - TIME_SLOTS.indexOf(state.startTime)) * 0.5
     : 0;
 
-  const getStepInfo = () => {
-    if (state.flow === "time-first") {
-      return {
-        current: state.step,
-        total: 4,
-        labels: ["Date", "Créneau", "Studio", "Coordonnées"],
-      };
-    }
-    return {
-      current: state.step,
-      total: 4,
-      labels: ["Studio", "Date", "Créneau", "Coordonnées"],
-    };
-  };
-
-  const stepInfo = getStepInfo();
-
   return (
     <div className="w-full">
       <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
         <div className="relative p-4 sm:p-6 md:p-8">
-          {state.step < 5 && (
+          {state.step < 6 && (
             <div className="mb-2">
               <ProgressIndicator
                 currentStep={state.step}
-                totalSteps={5}
+                totalSteps={6}
                 flow={state.flow || "time-first"}
-                onStepClick={(step) => setStep(step as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9)}
+                onStepClick={(step) => setStep(step as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10)}
               />
             </div>
           )}
@@ -273,16 +259,111 @@ export function BookingWidget() {
                 billingPostalCode={state.billingPostalCode}
                 billingCity={state.billingCity}
                 additionalInfo={state.additionalInfo}
-                equipment={state.equipment}
                 onUpdateField={updateUserInfo}
-                onUpdateEquipment={updateEquipment}
-                onConfirm={confirmBooking}
+                onContinue={goToRecap}
                 onBack={goBack}
-                canConfirm={canConfirmBooking}
+                canContinue={canConfirmBooking}
               />
             )}
 
           {state.step === 5 &&
+            state.selectedDate &&
+            state.startTime &&
+            state.endTime &&
+            state.studioId && (() => {
+              const studio = STUDIOS[state.studioId as StudioId];
+              const gt = (state.groupType || "group") as GroupType;
+              const { total } = calculatePrice(state.studioId as StudioId, gt, state.selectedDate!, state.startTime!, state.endTime!);
+              const duration = formatDuration(state.startTime!, state.endTime!);
+              const startIdx = TIME_SLOTS.indexOf(state.startTime!);
+              const endIdx = TIME_SLOTS.indexOf(state.endTime!);
+              const durationH = (endIdx - startIdx) * 0.5;
+              const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
+              const grandTotal = total + equipmentPrice;
+              const groupLabels: Record<GroupType, string> = {
+                solo: "Solo / Prof particulier",
+                duo: "Duo",
+                group: "Groupe (3+)",
+              };
+              return (
+                <div className="flex flex-col gap-6">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={goBack}
+                      className="rounded-full p-2 transition-colors hover:bg-white/10"
+                      aria-label="Retour"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <h3 className="text-lg font-semibold">Récapitulatif & options</h3>
+                  </div>
+
+                  <EquipmentSelector
+                    equipment={state.equipment}
+                    onChange={updateEquipment}
+                    durationHours={durationH}
+                  />
+
+                  <div className="rounded-xl border border-primary/50 bg-primary/10 p-4">
+                    <div className="mb-3 text-sm font-semibold text-primary">Récapitulatif</div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Date</span>
+                        <span className="font-medium capitalize">{formatDate(state.selectedDate!, "short")}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Horaire</span>
+                        <span className="font-medium">
+                          {state.startTime} - {state.endTime} ({duration})
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Studio</span>
+                        <span className="font-medium">
+                          {gt === "group" ? studio.name : "Selon disponibilité"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Formule</span>
+                        <span className="font-medium">{groupLabels[gt]}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">{gt === "group" ? "Studio" : "Répétition"}</span>
+                        <span className="font-medium">{formatPrice(total)}</span>
+                      </div>
+                      {equipmentPrice > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-white/70">Équipements</span>
+                          <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+                        </div>
+                      )}
+                      <div className="mt-3 flex justify-between border-t border-primary/30 pt-3">
+                        <span className="font-semibold">Total</span>
+                        <span className="text-xl font-bold text-primary">{formatPrice(grandTotal)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
+                    <p className="font-medium text-white/80">Conditions</p>
+                    <ul className="mt-1 space-y-0.5">
+                      <li>• Paiement sur place (CB, espèces)</li>
+                      <li>• Annulation gratuite jusqu&apos;à 24h avant</li>
+                      <li>• Retard de plus de 15min = créneau annulé</li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={confirmBooking}
+                    className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90"
+                  >
+                    Confirmer - {formatPrice(grandTotal)}
+                  </button>
+                </div>
+              );
+            })()}
+
+          {state.step === 6 &&
             state.selectedDate &&
             state.startTime &&
             state.endTime &&
@@ -304,7 +385,7 @@ export function BookingWidget() {
               />
             )}
 
-          {state.step === 6 && (
+          {state.step === 7 && (
             <FinalCheckout
               cart={state.cart}
               total={cartTotal}
@@ -313,7 +394,7 @@ export function BookingWidget() {
             />
           )}
 
-          {state.step > 0 && state.step < 5 && state.cart.length > 0 && (
+          {state.step > 0 && state.step < 6 && state.cart.length > 0 && (
             <CartSummary
               cart={state.cart}
               total={cartTotal}

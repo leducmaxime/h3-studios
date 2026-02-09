@@ -16,7 +16,9 @@ import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
 import { ChevronLeft, RotateCcw } from "lucide-react";
-import { formatDate, formatDuration, STUDIOS, TIME_SLOTS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
+import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
+import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, STUDIOS, TIME_SLOTS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
 
 const GROUP_LABELS: Record<GroupType, string> = {
   solo: "Solo/Prof particulier",
@@ -25,10 +27,10 @@ const GROUP_LABELS: Record<GroupType, string> = {
 };
 
 function formatShortDate(date: Date): string {
-  const day = date.toLocaleDateString("fr-FR", { weekday: "long" });
   const dayNum = date.getDate().toString().padStart(2, "0");
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
-  return `${day} ${dayNum}/${month}`;
+  const year = (date.getFullYear() % 100).toString().padStart(2, "0");
+  return `${dayNum}/${month}/${year}`;
 }
 
 interface ReservationProps {
@@ -53,6 +55,7 @@ export function Reservation({ step }: ReservationProps) {
     selectStudio,
     updateUserInfo,
     updateEquipment,
+    goToRecap,
     confirmBooking,
     addAnotherBooking,
     goToCheckout,
@@ -81,11 +84,11 @@ export function Reservation({ step }: ReservationProps) {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
           <div className="relative p-4 sm:p-6 md:p-8">
-            {state.step < 5 && (
+            {state.step < 6 && (
               <div className="mb-4">
                 <ProgressIndicator
                   currentStep={state.step}
-                  totalSteps={5}
+                  totalSteps={6}
                   flow={state.flow || "time-first"}
                   skipStudio={state.flow === "time-first" && (state.groupType === "solo" || state.groupType === "duo")}
                   onStepClick={navigateToStep}
@@ -310,16 +313,119 @@ export function Reservation({ step }: ReservationProps) {
                   billingPostalCode={state.billingPostalCode}
                   billingCity={state.billingCity}
                   additionalInfo={state.additionalInfo}
-                  equipment={state.equipment}
                   onUpdateField={updateUserInfo}
-                  onUpdateEquipment={updateEquipment}
-                  onConfirm={confirmBooking}
+                  onContinue={goToRecap}
                   onBack={goBack}
-                  canConfirm={canConfirmBooking}
+                  canContinue={canConfirmBooking}
                 />
               )}
 
             {state.step === 5 &&
+              state.selectedDate &&
+              state.startTime &&
+              state.endTime &&
+              state.studioId && (() => {
+                const studio = STUDIOS[state.studioId as StudioId];
+                const gt = (state.groupType || "group") as GroupType;
+                const { total } = calculatePrice(state.studioId as StudioId, gt, state.selectedDate!, state.startTime!, state.endTime!);
+                const duration = formatDuration(state.startTime!, state.endTime!);
+                const startIdx = TIME_SLOTS.indexOf(state.startTime!);
+                const endIdx = TIME_SLOTS.indexOf(state.endTime!);
+                const durationH = (endIdx - startIdx) * 0.5;
+                const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
+                const grandTotal = total + equipmentPrice;
+                const groupLabels: Record<GroupType, string> = {
+                  solo: "Solo / Prof particulier",
+                  duo: "Duo",
+                  group: "Groupe (3+)",
+                };
+                return (
+                  <div className="flex flex-col gap-6 pb-24 md:pb-0">
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={goBack}
+                        className="rounded-full p-2 transition-colors hover:bg-white/10"
+                        aria-label="Retour"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <h3 className="text-lg font-semibold">Récapitulatif & options</h3>
+                    </div>
+
+                    <EquipmentSelector
+                      equipment={state.equipment}
+                      onChange={updateEquipment}
+                      durationHours={durationH}
+                    />
+
+                    <div className="rounded-xl border border-primary/50 bg-primary/10 p-4">
+                      <div className="mb-3 text-sm font-semibold text-primary">Récapitulatif</div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-white/70">Date</span>
+                          <span className="font-medium capitalize">{formatDate(state.selectedDate!, "short")}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-white/70">Horaire</span>
+                          <span className="font-medium">
+                            {state.startTime} - {state.endTime} ({duration})
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-white/70">Studio</span>
+                          <span className="font-medium">
+                            {gt === "group" ? studio.name : "Selon disponibilité"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-white/70">Formule</span>
+                          <span className="font-medium">{groupLabels[gt]}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-white/70">{gt === "group" ? "Studio" : "Répétition"}</span>
+                          <span className="font-medium">{formatPrice(total)}</span>
+                        </div>
+                        {equipmentPrice > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Équipements</span>
+                            <span className="font-medium">{formatPrice(equipmentPrice)}</span>
+                          </div>
+                        )}
+                        <div className="mt-3 flex justify-between border-t border-primary/30 pt-3">
+                          <span className="font-semibold">Total</span>
+                          <span className="text-xl font-bold text-primary">{formatPrice(grandTotal)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
+                      <p className="font-medium text-white/80">Conditions</p>
+                      <ul className="mt-1 space-y-0.5">
+                        <li>• Paiement sur place (CB, espèces)</li>
+                        <li>• Annulation gratuite jusqu&apos;à 24h avant</li>
+                        <li>• Retard de plus de 15min = créneau annulé</li>
+                      </ul>
+                    </div>
+
+                    <button
+                      onClick={confirmBooking}
+                      className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 md:block"
+                    >
+                      Confirmer - {formatPrice(grandTotal)}
+                    </button>
+
+                    <StickyBookingCTA
+                      studioPrice={total}
+                      equipmentPrice={equipmentPrice}
+                      onConfirm={confirmBooking}
+                      disabled={false}
+                      buttonText="Confirmer"
+                    />
+                  </div>
+                );
+              })()}
+
+            {state.step === 6 &&
               state.selectedDate &&
               state.startTime &&
               state.endTime &&
@@ -341,7 +447,7 @@ export function Reservation({ step }: ReservationProps) {
                 />
               )}
 
-            {state.step === 6 && state.cart.length > 0 && (
+            {state.step === 7 && state.cart.length > 0 && (
               <FinalCheckout
                 cart={state.cart}
                 total={cartTotal}
@@ -352,7 +458,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step === 7 && state.cart.length > 0 && (
+            {state.step === 8 && state.cart.length > 0 && (
               <PaymentChoice
                 cart={state.cart}
                 total={cartTotal}
@@ -361,7 +467,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step === 8 && (
+            {state.step === 9 && (
               <StripeRedirect
                 cart={state.cart}
                 total={cartTotal}
@@ -371,7 +477,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step === 9 && (
+            {state.step === 10 && (
               <FinalCheckout
                 cart={state.cart}
                 total={cartTotal}
@@ -380,7 +486,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step > 0 && state.step < 5 && state.cart.length > 0 && (
+            {state.step > 0 && state.step < 6 && state.cart.length > 0 && (
               <CartSummary
                 cart={state.cart}
                 total={cartTotal}
@@ -400,7 +506,7 @@ export function Reservation({ step }: ReservationProps) {
         </p>
       )}
 
-      {state.step > 0 && state.step < 9 && (
+      {state.step > 0 && state.step < 10 && (
         <button
           onClick={resetBooking}
           className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"

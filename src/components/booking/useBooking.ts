@@ -150,6 +150,10 @@ export function useBooking() {
     setState((s) => ({ ...s, equipment }));
   }, []);
 
+  const goToRecap = useCallback(() => {
+    setState((s) => ({ ...s, step: 5 }));
+  }, []);
+
   const confirmBooking = useCallback(() => {
     setState((s) => {
       if (!s.selectedDate || !s.startTime || !s.endTime || !s.studioId || !s.groupType) return s;
@@ -185,7 +189,7 @@ export function useBooking() {
         ...s,
         bookingRef,
         cart: [...s.cart, newBooking],
-        step: 5,
+        step: 6,
         equipment: [],
       };
     });
@@ -205,7 +209,7 @@ export function useBooking() {
   }, []);
 
   const goToCheckout = useCallback(() => {
-    setState((s) => ({ ...s, step: 6 }));
+    setState((s) => ({ ...s, step: 7 }));
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
@@ -238,7 +242,9 @@ export function useBooking() {
         if (s.step === 4) return { ...s, step: 3 };
       }
 
+      if (s.step === 5) return { ...s, step: 4 };
       if (s.step === 6) return { ...s, step: 5 };
+      if (s.step === 7) return { ...s, step: 6 };
       return s;
     });
   }, []);
@@ -303,6 +309,7 @@ export function useBooking() {
     selectStudio,
     updateUserInfo,
     updateEquipment,
+    goToRecap,
     confirmBooking,
     addAnotherBooking,
     goToCheckout,
