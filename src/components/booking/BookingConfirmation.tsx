@@ -102,17 +102,19 @@ export function BookingConfirmation({
               {startTime} - {endTime} ({duration})
             </span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-white/70">Studio</span>
-            <span className="font-medium">{studio.name}</span>
-          </div>
+          {groupType === "group" && (
+            <div className="flex justify-between">
+              <span className="text-white/70">Studio</span>
+              <span className="font-medium">{studio.name}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-white/70">Nom</span>
             <span className="font-medium">{userName}</span>
           </div>
           <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4">
             <div className="flex justify-between text-sm">
-              <span className="text-white/70">Studio</span>
+              <span className="text-white/70">{groupType === "group" ? "Studio" : "Répétition"}</span>
               <span className="font-medium">{formatPrice(studioPrice)}</span>
             </div>
             {equipment.length > 0 && equipmentPrice > 0 && (

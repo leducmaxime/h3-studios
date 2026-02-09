@@ -154,7 +154,9 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
               {cart.map((booking) => (
                 <div key={booking.id} className="flex justify-between text-sm">
                   <div>
-                    <p className="font-medium">{STUDIOS[booking.studioId].name}</p>
+                    <p className="font-medium">
+                      {booking.groupType === "group" ? STUDIOS[booking.studioId].name : "Répétition"}
+                    </p>
                     <p className="text-white/50">
                       {formatDate(booking.date, "short")} - {booking.startTime}-{booking.endTime}
                     </p>

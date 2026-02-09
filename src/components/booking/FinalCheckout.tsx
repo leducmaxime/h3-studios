@@ -82,7 +82,9 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
           >
             <div className="mb-3 flex items-start justify-between">
               <div>
-                <h4 className="font-semibold">{STUDIOS[booking.studioId].name}</h4>
+                <h4 className="font-semibold">
+                  {booking.groupType === "group" ? STUDIOS[booking.studioId].name : "Répétition"}
+                </h4>
                 <p className="text-sm text-primary">Réf: {booking.bookingRef}</p>
               </div>
               <div className="flex flex-col items-end gap-1">

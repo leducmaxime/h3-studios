@@ -94,7 +94,7 @@ export function Reservation({ step }: ReservationProps) {
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
-                  {state.studioId && (
+                  {state.studioId && state.groupType === "group" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
@@ -236,9 +236,11 @@ export function Reservation({ step }: ReservationProps) {
                         <ChevronLeft className="h-5 w-5" />
                       </button>
                       <div>
-                        <p className="text-sm text-white/60">
-                          Studio: {STUDIOS[state.studioId as StudioId].name}
-                        </p>
+                         {state.groupType === "group" && (
+                           <p className="text-sm text-white/60">
+                             Studio: {STUDIOS[state.studioId as StudioId].name}
+                           </p>
+                         )}
                       </div>
                     </div>
                     <p className="text-white/70">Choisissez une date</p>
@@ -261,9 +263,9 @@ export function Reservation({ step }: ReservationProps) {
                         <ChevronLeft className="h-5 w-5" />
                       </button>
                       <div>
-                        <p className="text-sm text-white/60">
-                          {STUDIOS[state.studioId as StudioId].name} • {formatDate(state.selectedDate, "short")}
-                        </p>
+                         <p className="text-sm text-white/60">
+                          {state.groupType === "group" ? `${STUDIOS[state.studioId as StudioId].name} • ` : ""}{formatDate(state.selectedDate, "short")}
+                         </p>
                       </div>
                     </div>
 

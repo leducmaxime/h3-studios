@@ -187,9 +187,11 @@ export function BookingWidget() {
                       <ChevronLeft className="h-5 w-5" />
                     </button>
                     <div>
-                      <p className="text-sm text-white/60">
-                        Studio: {STUDIOS[state.studioId].name}
-                      </p>
+                      {state.groupType === "group" && (
+                        <p className="text-sm text-white/60">
+                          Studio: {STUDIOS[state.studioId].name}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <p className="text-white/70">Choisissez une date</p>
@@ -213,7 +215,7 @@ export function BookingWidget() {
                     </button>
                     <div>
                       <p className="text-sm text-white/60">
-                        {STUDIOS[state.studioId].name} • {formatDate(state.selectedDate, "short")}
+                        {state.groupType === "group" ? `${STUDIOS[state.studioId].name} • ` : ""}{formatDate(state.selectedDate, "short")}
                       </p>
                     </div>
                   </div>

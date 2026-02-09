@@ -27,7 +27,9 @@ export function CartSummary({ cart, total, onRemove, onCheckout }: CartSummaryPr
             className="flex items-center justify-between rounded-lg bg-black/30 p-3"
           >
             <div className="flex-1">
-              <div className="font-medium">{STUDIOS[booking.studioId].name}</div>
+              <div className="font-medium">
+                {booking.groupType === "group" ? STUDIOS[booking.studioId].name : "Répétition"}
+              </div>
               <div className="text-sm text-white/60">
                 {formatDate(booking.date, "short")} • {booking.startTime} - {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
               </div>

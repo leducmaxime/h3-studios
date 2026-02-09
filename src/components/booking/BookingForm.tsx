@@ -224,16 +224,18 @@ export function BookingForm({
               {startTime} - {endTime} ({duration})
             </span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-white/70">Studio</span>
-            <span className="font-medium">{studio.name}</span>
-          </div>
+          {groupType === "group" && (
+            <div className="flex justify-between">
+              <span className="text-white/70">Studio</span>
+              <span className="font-medium">{studio.name}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-white/70">Formule</span>
             <span className="font-medium">{groupLabels[groupType]}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-white/70">Studio</span>
+            <span className="text-white/70">{groupType === "group" ? "Studio" : "Répétition"}</span>
             <span className="font-medium">{formatPrice(total)}</span>
           </div>
           {equipmentPrice > 0 && (
