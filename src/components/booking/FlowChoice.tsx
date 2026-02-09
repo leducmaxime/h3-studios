@@ -24,7 +24,7 @@ export function FlowChoice({ onSelect, disabled = false, groupType }: FlowChoice
           }
         </p>
         {isSoloDuo && !disabled && (
-          <p className="mt-1 text-xs text-white/50">
+          <p className="mt-1 text-xs text-primary">
             Le choix du studio se fera selon la disponibilité, priorité aux groupes.
           </p>
         )}
