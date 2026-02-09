@@ -29,8 +29,9 @@ interface BookingFormProps {
   billingAddress: string;
   billingPostalCode: string;
   billingCity: string;
+  additionalInfo: string;
   equipment: EquipmentSelection[];
-  onUpdateField: (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity", value: string) => void;
+  onUpdateField: (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity" | "additionalInfo", value: string) => void;
   onUpdateEquipment: (equipment: EquipmentSelection[]) => void;
   onConfirm: () => void;
   onBack: () => void;
@@ -50,6 +51,7 @@ export function BookingForm({
   billingAddress,
   billingPostalCode,
   billingCity,
+  additionalInfo,
   equipment,
   onUpdateField,
   onUpdateEquipment,
@@ -187,6 +189,20 @@ export function BookingForm({
             />
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="additionalInfo" className="text-sm font-medium text-white/70">
+          Informations supplémentaires
+        </label>
+        <textarea
+          id="additionalInfo"
+          value={additionalInfo}
+          onChange={(e) => onUpdateField("additionalInfo", e.target.value)}
+          placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
+          rows={3}
+          className="rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+        />
       </div>
 
       <EquipmentSelector

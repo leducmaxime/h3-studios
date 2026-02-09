@@ -37,6 +37,7 @@ const initialState: ExtendedBookingState = {
   billingAddress: "",
   billingPostalCode: "",
   billingCity: "",
+  additionalInfo: "",
   bookingRef: null,
   cart: [],
   equipment: [],
@@ -132,7 +133,7 @@ export function useBooking() {
   }, []);
 
   const updateUserInfo = useCallback(
-    (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity", value: string) => {
+    (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity" | "additionalInfo", value: string) => {
       setState((s) => ({ ...s, [field]: value }));
       if (field === "userName" || field === "userEmail" || field === "userPhone" || field === "bandName") {
         saveUserPreferences({ [field]: value });

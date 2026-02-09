@@ -304,6 +304,7 @@ export function Reservation({ step }: ReservationProps) {
                   billingAddress={state.billingAddress}
                   billingPostalCode={state.billingPostalCode}
                   billingCity={state.billingCity}
+                  additionalInfo={state.additionalInfo}
                   equipment={state.equipment}
                   onUpdateField={updateUserInfo}
                   onUpdateEquipment={updateEquipment}

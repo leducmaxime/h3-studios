@@ -72,6 +72,7 @@ export interface BookingState {
   billingAddress: string;
   billingPostalCode: string;
   billingCity: string;
+  additionalInfo: string;
   bookingRef: string | null;
   cart: CompletedBooking[];
   paymentMethod: PaymentMethod | null;
