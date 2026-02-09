@@ -322,10 +322,13 @@ export function BookingWidget() {
         </div>
       </div>
 
-      <p className="mt-4 text-center text-sm font-medium text-primary/80">
-        Les tarifs varient selon l'heure (après 18h) et le jour (weekend & jour férié).
-        Économisez jusqu'à 20% en réservant avant 18h en semaine !
-      </p>
+      {(state.step === 1 || state.step === 2) && (
+        <p className="mt-4 text-center text-sm font-medium text-primary/80">
+          Les tarifs varient selon l'heure (après 18h) et le jour (weekend &
+          jour férié). Économisez jusqu'à 20% en réservant avant 18h en semaine
+          !
+        </p>
+      )}
     </div>
   );
 }
