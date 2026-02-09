@@ -316,7 +316,7 @@ export function BookingWidget() {
 
       {state.step === 1 && state.flow && (
         <p className="mt-4 text-center text-sm text-white/50">
-          Les créneaux en jaune sont en tarif soir & week-end / jour férié
+          Les créneaux en jaune sont en tarif soir, week-end & jour férié
         </p>
       )}
     </div>

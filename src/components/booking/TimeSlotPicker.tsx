@@ -325,7 +325,7 @@ export function TimeSlotPicker({
         <div className="flex items-center gap-1.5">
           <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
           <span className="text-primary/70">
-            Soir & week-end {hourlyRates.peakMin === hourlyRates.peakMax
+            Soir, week-end & jour férié {hourlyRates.peakMin === hourlyRates.peakMax
               ? `${hourlyRates.peakMin}€/h`
               : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
           </span>
@@ -382,7 +382,7 @@ export function TimeSlotPicker({
                   {priceBreakdown.peakHours! > 0 && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-primary/80">
-                        {priceBreakdown.peakHours}h × {priceBreakdown.peakRate}€/h (soir & week-end)
+                        {priceBreakdown.peakHours}h × {priceBreakdown.peakRate}€/h (soir, week-end & jour férié)
                       </span>
                       <span className="text-primary">{formatPrice(priceBreakdown.peakSubtotal!)}</span>
                     </div>
