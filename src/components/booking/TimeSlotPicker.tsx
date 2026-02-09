@@ -54,6 +54,9 @@ export function TimeSlotPicker({
 }: TimeSlotPickerProps) {
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
 
+  // Solo/duo have flat pricing (no peak/off-peak distinction)
+  const hasPeakPricing = groupType === "group";
+
   const isSlotBooked = useCallback(
     (time: string) => {
       if (studioFilter) {
@@ -120,7 +123,7 @@ export function TimeSlotPicker({
       if (booked) return "booked";
 
       const canStart = canStartAt(index);
-      const peak = isPeakTime(date, time);
+      const peak = hasPeakPricing && isPeakTime(date, time);
       
       if (startTime && endTime) {
         const selectedStartIdx = TIME_SLOTS.indexOf(startTime);
@@ -134,7 +137,7 @@ export function TimeSlotPicker({
       if (!canStart) return "unavailable-duration";
       return peak ? "available-peak" : "available";
     },
-    [date, startTime, endTime, isSlotBooked, canStartAt]
+    [date, startTime, endTime, isSlotBooked, canStartAt, hasPeakPricing]
   );
 
   const formatEndTime = (start: string): string => {
@@ -147,10 +150,26 @@ export function TimeSlotPicker({
     
     if (studioFilter) {
       const price = calculatePrice(studioFilter, groupType, date, startTime, endTime);
-      const offPeakSlots = price.breakdown.filter((s) => !s.isPeak).length;
-      const peakSlots = price.breakdown.filter((s) => s.isPeak).length;
+      const totalSlots = price.breakdown.length;
       const offPeakRate = PRICING[studioFilter][groupType].offPeak;
       const peakRate = PRICING[studioFilter][groupType].peak;
+
+      if (!hasPeakPricing) {
+        // Solo/duo: flat rate, show all hours as one line
+        return {
+          total: price.total,
+          offPeakHours: totalSlots * 0.5,
+          peakHours: 0,
+          offPeakRate,
+          peakRate,
+          offPeakSubtotal: price.total,
+          peakSubtotal: 0,
+          isRange: false,
+        };
+      }
+
+      const offPeakSlots = price.breakdown.filter((s) => !s.isPeak).length;
+      const peakSlots = price.breakdown.filter((s) => s.isPeak).length;
       
       return {
         total: price.total,
@@ -171,7 +190,7 @@ export function TimeSlotPicker({
       totalMax: Math.max(scenePrice.total, podiumPrice.total),
       isRange: true,
     };
-  }, [startTime, endTime, groupType, date, studioFilter]);
+  }, [startTime, endTime, groupType, date, studioFilter, hasPeakPricing]);
 
   const hourlyRates = useMemo(() => {
     if (studioFilter) {
@@ -266,7 +285,7 @@ export function TimeSlotPicker({
             const isSelected = state === "selected" || state === "selected-peak";
             const isBooked = state === "booked";
             const isUnavailableDuration = state === "unavailable-duration";
-            const peak = isPeakTime(date, time);
+            const peak = hasPeakPricing && isPeakTime(date, time);
             
             return (
               <button
@@ -314,7 +333,29 @@ export function TimeSlotPicker({
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-white/60">
-        {!(date.getDay() === 0 || date.getDay() === 6) && (
+        {hasPeakPricing ? (
+          <>
+            {!(date.getDay() === 0 || date.getDay() === 6) && (
+              <div className="flex items-center gap-1.5">
+                <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
+                <span>
+                  {hourlyRates.offPeakMin === hourlyRates.offPeakMax
+                    ? `${hourlyRates.offPeakMin}€/h`
+                    : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
+              <span className="text-primary/70">
+                {(date.getDay() === 0 || date.getDay() === 6) ? "Weekend & jour férié " : "Soir, week-end & jour férié "}
+                {hourlyRates.peakMin === hourlyRates.peakMax
+                  ? `${hourlyRates.peakMin}€/h`
+                  : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
+              </span>
+            </div>
+          </>
+        ) : (
           <div className="flex items-center gap-1.5">
             <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
             <span>
@@ -324,15 +365,6 @@ export function TimeSlotPicker({
             </span>
           </div>
         )}
-        <div className="flex items-center gap-1.5">
-          <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
-          <span className="text-primary/70">
-            {(date.getDay() === 0 || date.getDay() === 6) ? "Weekend & jour férié " : "Soir, week-end & jour férié "}
-            {hourlyRates.peakMin === hourlyRates.peakMax
-              ? `${hourlyRates.peakMin}€/h`
-              : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
-          </span>
-        </div>
         <div className="flex items-center gap-1.5">
           <div className="h-4 w-4 rounded border border-red-500/20 bg-red-500/10 line-through text-[8px] text-red-400/50 flex items-center justify-center">×</div>
           <span>Réservé</span>
