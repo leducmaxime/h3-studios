@@ -83,9 +83,6 @@ export function Reservation({ step }: ReservationProps) {
           <div className="relative p-4 sm:p-6 md:p-8">
             {state.step !== 0 && state.step < 5 && state.flow && (
               <div className="mb-4">
-                <h2 className="mb-4 text-center font-blanka text-xl sm:text-2xl">
-                  RÉSERVATION EN LIGNE
-                </h2>
                 <ProgressIndicator
                   currentStep={state.step}
                   totalSteps={4}
@@ -118,9 +115,6 @@ export function Reservation({ step }: ReservationProps) {
 
             {state.step === 0 && (
               <div className="flex flex-col gap-6">
-                <h2 className="text-center font-blanka text-xl sm:text-2xl">
-                  RÉSERVATION EN LIGNE
-                </h2>
                 <GroupTypeToggle
                   value={state.groupType}
                   onChange={setGroupType}

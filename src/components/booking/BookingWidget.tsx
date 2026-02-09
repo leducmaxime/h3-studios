@@ -70,9 +70,6 @@ export function BookingWidget() {
         <div className="relative p-4 sm:p-6 md:p-8">
           {state.step !== 0 && state.step !== 5 && state.step !== 6 && state.flow && (
             <div className="mb-2">
-              <h2 className="mb-4 text-center font-blanka text-xl sm:text-2xl">
-                RÉSERVATION EN LIGNE
-              </h2>
               <ProgressIndicator
                 currentStep={state.step}
                 totalSteps={4}
@@ -83,9 +80,6 @@ export function BookingWidget() {
 
           {state.step === 0 && (
             <div className="flex flex-col gap-6">
-              <h2 className="text-center font-blanka text-xl sm:text-2xl">
-                RÉSERVATION EN LIGNE
-              </h2>
               <FlowChoice onSelect={selectFlow} />
             </div>
           )}
