@@ -244,28 +244,24 @@ export function Reservation({ step }: ReservationProps) {
                   onStepClick={navigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {state.step > 0 && state.groupType && (
+                  {state.step > 0 && state.step < 3 && state.groupType && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
                   {/* Studio pill: show on coordonnées+ steps for group */}
-                  {state.studioId && state.groupType === "group" && (
-                    state.flow === "studio-first"
-                      ? state.step > 2
-                      : state.step > 2
-                  ) && (
+                  {state.studioId && state.step < 3 && state.groupType === "group" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
                   {/* Date + time pills: show on coordonnées+ steps */}
-                  {state.selectedDate && state.step > 2 && (
+                  {state.selectedDate && state.step < 3 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && state.step > 2 && (
+                  {state.startTime && state.endTime && state.step < 3 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
                     </span>
@@ -558,23 +554,6 @@ export function Reservation({ step }: ReservationProps) {
                       </span>
                     </div>
                   </div>
-                </div>
-
-                <button
-                  onClick={addAnotherBooking}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/5"
-                >
-                  <Plus className="h-4 w-4" />
-                  Ajouter un autre créneau
-                </button>
-
-                <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
-                  <p className="font-medium text-white/80">Conditions</p>
-                  <ul className="mt-1 space-y-0.5">
-                    <li>• Paiement en ligne ou sur place (CB ou espèces)</li>
-                    <li>• Annulation gratuite jusqu&apos;à 48h avant</li>
-                    <li>• En cas de besoin : 06 13 44 08 75 ou contact@h3-studios.fr</li>
-                  </ul>
                 </div>
 
                 <PaymentChoice

@@ -50,7 +50,13 @@ export function BookingConfirmation({
   onCheckout,
 }: BookingConfirmationProps) {
   const studio = STUDIOS[studioId];
-  const duration = formatDuration(startTime, endTime);
+  const durationStr = formatDuration(startTime, endTime);
+  
+  const startIdx = TIME_SLOTS.indexOf(startTime);
+  let endIdx = TIME_SLOTS.indexOf(endTime);
+  if (endIdx === -1 && endTime === "00:00") endIdx = TIME_SLOTS.length;
+  const durationH = (endIdx - startIdx) * 0.5;
+  const duration = durationH;
   
   const latestBooking = cart[cart.length - 1];
   const equipment = latestBooking?.equipment || [];
@@ -80,12 +86,7 @@ export function BookingConfirmation({
         <ShoppingCart className="h-10 w-10 text-primary" />
       </div>
 
-      <div>
-        <h2 className="text-2xl font-bold">Créneau ajouté au panier</h2>
-        <p className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-4 py-2 text-amber-400 text-sm">
-          ⚠️ Finalisez votre réservation pour la confirmer
-        </p>
-      </div>
+
 
       <div className="w-full max-w-md rounded-xl border border-white/20 bg-black p-6 text-left">
         <div className="mb-4 text-center">
@@ -119,17 +120,34 @@ export function BookingConfirmation({
               <span className="font-medium">{formatPrice(studioPrice)}</span>
             </div>
             {equipment.length > 0 && equipmentPrice > 0 && (
-              <div className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-white/70">Options suppl.</span>
-                  <span className="font-medium">{formatPrice(equipmentPrice)}</span>
-                </div>
-                <div className="space-y-0.5 pl-2 text-xs text-white/50">
-                  {equipment.filter(e => e.quantity > 0).map(e => (
-                    <div key={e.id} className="flex justify-between">
-                      <span>{EQUIPMENT[e.id]?.name || e.id} ×{e.quantity}</span>
+              <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                <div className="text-xs font-medium text-white/70 mb-2">OPTIONS SUPPLÉMENTAIRES</div>
+                {equipment.filter(e => e.quantity > 0).map(e => {
+                  const equip = EQUIPMENT[e.id];
+                  if (!equip) return null;
+                  const equipPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], duration);
+                  return (
+                    <div key={e.id} className="rounded-lg bg-white/5 p-3 text-sm">
+                      <div className="flex justify-between mb-1">
+                        <span className="font-medium">{equip.name}</span>
+                        <span className="font-semibold text-primary">{formatPrice(equipPrice)}</span>
+                      </div>
+                      <div className="text-xs text-white/50">
+                        {equip.pricingType === "session"
+                          ? `${equip.pricePerHour}€ par séance`
+                          : `${equip.pricePerHour}€/h`
+                        }
+                        {equip.pricingType === "session" && equip.sessionPricing && equip.sessionPricing[e.quantity - 1] !== undefined
+                          ? ` • ${e.quantity} unité${e.quantity > 1 ? "s" : ""}`
+                          : ` • ${e.quantity} unité${e.quantity > 1 ? "s" : ""}`
+                        }
+                      </div>
                     </div>
-                  ))}
+                  );
+                })}
+                <div className="mt-2 flex justify-between border-t border-white/10 pt-2 text-sm">
+                  <span className="font-medium">Total options</span>
+                  <span className="font-semibold">{formatPrice(equipmentPrice)}</span>
                 </div>
               </div>
             )}
