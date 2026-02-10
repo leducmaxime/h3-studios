@@ -370,55 +370,28 @@ export function Reservation({ step }: ReservationProps) {
                       durationHours={durationH}
                     />
 
-                    <div className="rounded-xl border border-primary/50 bg-primary/10 p-4">
-                      <div className="mb-3 text-sm font-semibold text-primary">Récapitulatif</div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-white/70">Date</span>
-                          <span className="font-medium capitalize">{formatDate(state.selectedDate!, "short")}</span>
+                    <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/80">
+                          <span className="capitalize">{formatDate(state.selectedDate!, "short")}</span>
+                          <span className="text-white/30">|</span>
+                          <span>{state.startTime} - {state.endTime} ({duration})</span>
+                          <span className="text-white/30">|</span>
+                          <span>{gt === "group" ? studio.name : "Selon dispo."}</span>
+                          <span className="text-white/30">|</span>
+                          <span>{groupLabels[gt]}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-white/70">Horaire</span>
-                          <span className="font-medium">
-                            {state.startTime} - {state.endTime} ({duration})
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-white/70">Studio</span>
-                          <span className="font-medium">
-                            {gt === "group" ? studio.name : "Selon disponibilité"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-white/70">Formule</span>
-                          <span className="font-medium">{groupLabels[gt]}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-white/70">{gt === "group" ? "Studio" : "Répétition"}</span>
-                          <span className="font-medium">{formatPrice(total)}</span>
-                        </div>
-                        {equipmentPrice > 0 && (
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-white/70">Options suppl.</span>
-                              <span className="font-medium">{formatPrice(equipmentPrice)}</span>
-                            </div>
-                            <div className="space-y-0.5 pl-2 text-xs text-white/50">
-                              {state.equipment.filter(e => e.quantity > 0).map(e => (
-                                <div key={e.id} className="flex justify-between">
-                                  <span>{EQUIPMENT[e.id]?.name || e.id} ×{e.quantity}</span>
-                                  <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="mt-3 flex justify-between border-t border-primary/30 pt-3">
-                          <span className="font-semibold">Total</span>
-                          <span className="text-xl font-bold text-primary">{formatPrice(grandTotal)}</span>
-                        </div>
+                        <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
                       </div>
+                      {equipmentPrice > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-white/50">
+                          {state.equipment.filter(e => e.quantity > 0).map(e => (
+                            <span key={e.id}>
+                              {EQUIPMENT[e.id]?.name || e.id} x{e.quantity} ({formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))})
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
 
