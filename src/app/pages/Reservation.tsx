@@ -9,7 +9,6 @@ import { StudioPicker } from "@/components/booking/StudioPicker";
 import { GroupTypeToggle } from "@/components/booking/GroupTypeToggle";
 import { StudioCard } from "@/components/booking/StudioCard";
 import { BookingForm } from "@/components/booking/BookingForm";
-import { BookingConfirmation } from "@/components/booking/BookingConfirmation";
 import { FinalCheckout } from "@/components/booking/FinalCheckout";
 
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
@@ -19,12 +18,18 @@ import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, EQUIPMENT, STUDIOS, TIME_SLOTS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, EQUIPMENT, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
 
 const GROUP_LABELS: Record<GroupType, string> = {
   solo: "Solo/Prof particulier",
   duo: "Duo",
   group: "Groupe",
+};
+
+const RECAP_GROUP_LABELS: Record<GroupType, string> = {
+  solo: "Solo / Prof particulier",
+  duo: "Duo",
+  group: "Groupe (3+)",
 };
 
 function formatShortDate(date: Date): string {
@@ -79,6 +84,104 @@ export function Reservation({ step }: ReservationProps) {
       })())
     : 0;
 
+  // Inline recap + options block, shown after studio is selected (within the same step)
+  const renderRecapSection = () => {
+    if (!state.selectedDate || !state.startTime || !state.endTime || !state.studioId) return null;
+
+    const studio = STUDIOS[state.studioId as StudioId];
+    const gt = (state.groupType || "group") as GroupType;
+    const { total } = calculatePrice(state.studioId as StudioId, gt, state.selectedDate, state.startTime, state.endTime);
+    const duration = formatDuration(state.startTime, state.endTime);
+    const startIdx = TIME_SLOTS.indexOf(state.startTime);
+    let endIdx = TIME_SLOTS.indexOf(state.endTime);
+    if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
+    const durationH = (endIdx - startIdx) * 0.5;
+    const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
+    const grandTotal = total + equipmentPrice;
+
+    const handleConfirmRecap = () => {
+      if (canConfirmBooking) {
+        confirmBooking();
+      } else {
+        goToCoordonnees();
+      }
+    };
+
+    return (
+      <div className="flex flex-col gap-5 pb-24 md:pb-0">
+        <div className="mt-2 border-t border-white/10 pt-5">
+          <h4 className="mb-3 text-sm font-semibold text-white/80">Options supplémentaires</h4>
+          <EquipmentSelector
+            equipment={state.equipment}
+            onChange={updateEquipment}
+            durationHours={durationH}
+          />
+        </div>
+
+        <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/80">
+              <span className="capitalize">{formatDate(state.selectedDate!, "short")}</span>
+              <span className="text-white/30">|</span>
+              <span>{state.startTime} - {state.endTime} ({duration})</span>
+              <span className="text-white/30">|</span>
+              <span>{gt === "group" ? studio.name : "Selon dispo."}</span>
+              <span className="text-white/30">|</span>
+              <span>{RECAP_GROUP_LABELS[gt]}</span>
+            </div>
+            <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
+          </div>
+          {equipmentPrice > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-white/50">
+              {state.equipment.filter(e => e.quantity > 0).map(e => (
+                <span key={e.id}>
+                  {EQUIPMENT[e.id]?.name || e.id} x{e.quantity} ({formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))})
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
+          <p className="font-medium text-white/80">Conditions</p>
+          <ul className="mt-1 space-y-0.5">
+            <li>• Paiement en ligne ou sur place (CB ou espèces)</li>
+            <li>• Annulation gratuite jusqu&apos;à 48h avant</li>
+            <li>• En cas de besoin : 06 13 44 08 75 ou contact@h3-studios.fr</li>
+          </ul>
+        </div>
+
+        {state.cart.length > 0 && (
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="mb-2 flex items-center gap-2 text-sm">
+              <ShoppingCart className="h-4 w-4 text-primary" />
+              <span className="font-medium text-white/80">
+                {state.cart.length} créneau{state.cart.length > 1 ? "x" : ""} déjà dans le panier ({formatPrice(cartTotal)})
+              </span>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleConfirmRecap}
+          className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 md:block"
+        >
+          {state.cart.length > 0
+            ? `Ajouter au panier - ${formatPrice(grandTotal)}`
+            : `Continuer - ${formatPrice(grandTotal)}`}
+        </button>
+
+        <StickyBookingCTA
+          studioPrice={total}
+          equipmentPrice={equipmentPrice}
+          onConfirm={handleConfirmRecap}
+          disabled={false}
+          buttonText={state.cart.length > 0 ? "Ajouter au panier" : "Continuer"}
+        />
+      </div>
+    );
+  };
+
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
       <ScrollUp />
@@ -95,7 +198,7 @@ export function Reservation({ step }: ReservationProps) {
               <div className="mb-4">
                 <ProgressIndicator
                   currentStep={state.step}
-                  totalSteps={8}
+                  totalSteps={5}
                   flow={state.flow || "time-first"}
                   skipStudio={state.flow === "time-first" && (state.groupType === "solo" || state.groupType === "duo")}
                   onStepClick={navigateToStep}
@@ -106,31 +209,23 @@ export function Reservation({ step }: ReservationProps) {
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
-                  {/* Studio pill: show after the step where studio is chosen */}
+                  {/* Studio pill: show on coordonnées+ steps for group */}
                   {state.studioId && state.groupType === "group" && (
                     state.flow === "studio-first"
-                      ? state.step > 1
+                      ? state.step > 2
                       : state.step > 2
                   ) && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
-                  {/* Date + time pills: show after the merged date+time step */}
-                  {state.selectedDate && (
-                    state.flow === "studio-first"
-                      ? state.step > 2
-                      : state.step > 1
-                  ) && (
+                  {/* Date + time pills: show on coordonnées+ steps */}
+                  {state.selectedDate && state.step > 2 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && (
-                    state.flow === "studio-first"
-                      ? state.step > 2
-                      : state.step > 1
-                  ) && (
+                  {state.startTime && state.endTime && state.step > 2 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
                     </span>
@@ -187,6 +282,10 @@ export function Reservation({ step }: ReservationProps) {
                         groupType={state.groupType || "group"}
                       />
                     )}
+                    {/* Solo/duo: show recap inline after studio auto-assigned */}
+                    {state.studioId && state.startTime && state.endTime && (
+                      renderRecapSection()
+                    )}
                   </div>
                 )}
 
@@ -212,16 +311,16 @@ export function Reservation({ step }: ReservationProps) {
                         Choisissez votre studio
                       </span>
                       <div className="grid gap-4 md:grid-cols-2">
-                        {(["la-scene", "le-podium"] as StudioId[]).map((studioId) => (
+                        {(["la-scene", "le-podium"] as StudioId[]).map((sid) => (
                           <StudioCard
-                            key={studioId}
-                            studioId={studioId}
+                            key={sid}
+                            studioId={sid}
                             date={state.selectedDate!}
                             startTime={state.startTime!}
                             endTime={state.endTime!}
                             groupType={state.groupType || "group"}
                             availability={availability}
-                            onSelect={() => selectStudio(studioId)}
+                            onSelect={() => selectStudio(sid)}
                           />
                         ))}
                       </div>
@@ -241,6 +340,9 @@ export function Reservation({ step }: ReservationProps) {
                         </span>
                       </div>
                     </div>
+
+                    {/* Show recap inline after studio is selected */}
+                    {state.studioId && renderRecapSection()}
                   </div>
                 )}
               </>
@@ -300,122 +402,15 @@ export function Reservation({ step }: ReservationProps) {
                         groupType={state.groupType || "group"}
                       />
                     )}
+                    {/* Show recap inline after time is confirmed */}
+                    {state.startTime && state.endTime && renderRecapSection()}
                   </div>
                 )}
               </>
             )}
 
+            {/* Step 3: Coordonnées */}
             {state.step === 3 &&
-              state.selectedDate &&
-              state.startTime &&
-              state.endTime &&
-              state.studioId && (() => {
-                const studio = STUDIOS[state.studioId as StudioId];
-                const gt = (state.groupType || "group") as GroupType;
-                const { total } = calculatePrice(state.studioId as StudioId, gt, state.selectedDate!, state.startTime!, state.endTime!);
-                const duration = formatDuration(state.startTime!, state.endTime!);
-                const startIdx = TIME_SLOTS.indexOf(state.startTime!);
-                let endIdx = TIME_SLOTS.indexOf(state.endTime!);
-                if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
-                const durationH = (endIdx - startIdx) * 0.5;
-                const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
-                const grandTotal = total + equipmentPrice;
-                const groupLabels: Record<GroupType, string> = {
-                  solo: "Solo / Prof particulier",
-                  duo: "Duo",
-                  group: "Groupe (3+)",
-                };
-                const handleConfirmRecap = () => {
-                  if (canConfirmBooking) {
-                    confirmBooking();
-                  } else {
-                    goToCoordonnees();
-                  }
-                };
-                return (
-                  <div className="flex flex-col gap-6 pb-24 md:pb-0">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={goBack}
-                        className="rounded-full p-2 transition-colors hover:bg-white/10"
-                        aria-label="Retour"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                      <h3 className="text-lg font-semibold">Récapitulatif & options</h3>
-                    </div>
-
-                    <EquipmentSelector
-                      equipment={state.equipment}
-                      onChange={updateEquipment}
-                      durationHours={durationH}
-                    />
-
-                    <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/80">
-                          <span className="capitalize">{formatDate(state.selectedDate!, "short")}</span>
-                          <span className="text-white/30">|</span>
-                          <span>{state.startTime} - {state.endTime} ({duration})</span>
-                          <span className="text-white/30">|</span>
-                          <span>{gt === "group" ? studio.name : "Selon dispo."}</span>
-                          <span className="text-white/30">|</span>
-                          <span>{groupLabels[gt]}</span>
-                        </div>
-                        <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
-                      </div>
-                      {equipmentPrice > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-white/50">
-                          {state.equipment.filter(e => e.quantity > 0).map(e => (
-                            <span key={e.id}>
-                              {EQUIPMENT[e.id]?.name || e.id} x{e.quantity} ({formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))})
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
-                      <p className="font-medium text-white/80">Conditions</p>
-                      <ul className="mt-1 space-y-0.5">
-                        <li>• Paiement en ligne ou sur place (CB ou espèces)</li>
-                        <li>• Annulation gratuite jusqu&apos;à 48h avant</li>
-                        <li>• En cas de besoin : 06 13 44 08 75 ou contact@h3-studios.fr</li>
-                      </ul>
-                    </div>
-
-                    {state.cart.length > 0 && (
-                      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <div className="mb-2 flex items-center gap-2 text-sm">
-                          <ShoppingCart className="h-4 w-4 text-primary" />
-                          <span className="font-medium text-white/80">
-                            {state.cart.length} créneau{state.cart.length > 1 ? "x" : ""} déjà dans le panier ({formatPrice(cartTotal)})
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={handleConfirmRecap}
-                      className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 md:block"
-                    >
-                      {state.cart.length > 0
-                        ? `Ajouter au panier - ${formatPrice(grandTotal)}`
-                        : `Continuer - ${formatPrice(grandTotal)}`}
-                    </button>
-
-                    <StickyBookingCTA
-                      studioPrice={total}
-                      equipmentPrice={equipmentPrice}
-                      onConfirm={handleConfirmRecap}
-                      disabled={false}
-                      buttonText={state.cart.length > 0 ? "Ajouter au panier" : "Continuer"}
-                    />
-                  </div>
-                );
-              })()}
-
-            {state.step === 4 &&
               state.selectedDate &&
               state.startTime &&
               state.endTime &&
@@ -440,8 +435,6 @@ export function Reservation({ step }: ReservationProps) {
                   canContinue={canConfirmBooking}
                 />
               )}
-
-
 
             {state.step === 6 && state.cart.length > 0 && (
               <FinalCheckout
@@ -563,12 +556,11 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-
           </div>
         </div>
       </div>
 
-      {((state.flow === "time-first" && state.step === 1) || (state.flow === "studio-first" && state.step === 2)) && state.groupType === "group" && (
+      {((state.flow === "time-first" && state.step === 1) || (state.flow === "studio-first" && state.step === 2)) && state.groupType === "group" && !state.studioId && (
         <p className="mt-4 text-center text-sm font-medium text-primary/80">
           Les tarifs varient selon l'heure (après 18h) et le jour (weekend &
           jour férié). Économisez jusqu'à 20% en réservant avant 18h en semaine
