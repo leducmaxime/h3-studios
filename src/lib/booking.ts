@@ -19,12 +19,14 @@ export interface Equipment {
   name: string;
   pricePerHour: number;
   maxPerSession: number;
+  pricingType: "hourly" | "session";
+  sessionPricing?: number[]; // Tarifs par quantité pour tarifs par séance
 }
 
 export const EQUIPMENT: Record<EquipmentId, Equipment> = {
-  cymbal: { id: "cymbal", name: "Cymbale crash", pricePerHour: 2, maxPerSession: 3 },
-  mic: { id: "mic", name: "Micro supplémentaire", pricePerHour: 2, maxPerSession: 3 },
-  instrument: { id: "instrument", name: "Instrument (guitare, basse...)", pricePerHour: 3, maxPerSession: 5 },
+  cymbal: { id: "cymbal", name: "Cymbale crash", pricePerHour: 2, maxPerSession: 3, pricingType: "hourly" },
+  mic: { id: "mic", name: "Micro supplémentaire", pricePerHour: 2, maxPerSession: 4, pricingType: "session", sessionPricing: [3, 5, 6, 0] }, // 4ème offert
+  instrument: { id: "instrument", name: "Instrument (guitare, basse...)", pricePerHour: 3, maxPerSession: 5, pricingType: "hourly" },
 };
 
 export interface PriceSlot {
@@ -601,7 +603,14 @@ export function calculateEquipmentPrice(
 ): number {
   return equipment.reduce((total, item) => {
     const eq = EQUIPMENT[item.id];
-    return total + eq.pricePerHour * item.quantity * durationHours;
+    if (eq.pricingType === "session" && eq.sessionPricing) {
+      // Tarif par séance : utiliser le tableau de tarifs
+      const price = eq.sessionPricing[item.quantity - 1] || 0;
+      return total + price;
+    } else {
+      // Tarif horaire standard
+      return total + eq.pricePerHour * item.quantity * durationHours;
+    }
   }, 0);
 }
 

@@ -389,7 +389,7 @@ export function Reservation({ step }: ReservationProps) {
                               {state.equipment.filter(e => e.quantity > 0).map(e => (
                                 <div key={e.id} className="flex justify-between">
                                   <span>{EQUIPMENT[e.id]?.name || e.id} ×{e.quantity}</span>
-                                  <span>{formatPrice((EQUIPMENT[e.id]?.pricePerHour || 0) * e.quantity * durationH)}</span>
+                                  <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))}</span>
                                 </div>
                               ))}
                             </div>

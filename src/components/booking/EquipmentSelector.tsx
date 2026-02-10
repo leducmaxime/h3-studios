@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Gift } from "lucide-react";
 import {
   EQUIPMENT,
   type EquipmentSelection,
@@ -54,7 +54,12 @@ export function EquipmentSelector({
 
   const totalCost = equipment.reduce((sum, item) => {
     const eq = EQUIPMENT[item.id];
-    return sum + eq.pricePerHour * item.quantity * durationHours;
+    if (eq.pricingType === "session" && eq.sessionPricing) {
+      const price = eq.sessionPricing[item.quantity - 1] || 0;
+      return sum + price;
+    } else {
+      return sum + eq.pricePerHour * item.quantity * durationHours;
+    }
   }, 0);
 
   return (
@@ -70,7 +75,29 @@ export function EquipmentSelector({
       <div className="flex flex-col gap-3">
         {EQUIPMENT_LIST.map((eq) => {
           const quantity = getQuantity(equipment, eq.id);
-          const subtotal = eq.pricePerHour * quantity * durationHours;
+          let subtotal = 0;
+          let priceDisplay = "";
+
+          if (eq.pricingType === "session" && eq.sessionPricing) {
+            subtotal = eq.sessionPricing[quantity - 1] || 0;
+            // Affichage spécial pour les micros
+            if (eq.id === "mic") {
+              if (quantity === 0) {
+                priceDisplay = "1er: 3€, 2ème: 5€, 3ème: 6€, 4ème: offert!";
+              } else if (quantity === 4) {
+                priceDisplay = "14€ (4ème offert!)";
+              } else {
+                priceDisplay = `${subtotal}€/séance`;
+              }
+            } else {
+              priceDisplay = `${subtotal}€/séance`;
+            }
+          } else {
+            subtotal = eq.pricePerHour * quantity * durationHours;
+            priceDisplay = `+${eq.pricePerHour}€/h`;
+          }
+
+          const isFourthMicFree = eq.id === "mic" && quantity === 4;
 
           return (
             <div
@@ -82,8 +109,14 @@ export function EquipmentSelector({
                   {eq.name}
                 </span>
                 <span className="text-xs text-white/50">
-                  +{eq.pricePerHour}€/h
+                  {priceDisplay}
                 </span>
+                {isFourthMicFree && (
+                  <span className="flex items-center gap-1 text-xs text-green-400">
+                    <Gift className="h-3 w-3" />
+                    Cadeau ! Le 4ème micro est offert
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
