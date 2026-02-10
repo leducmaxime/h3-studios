@@ -339,7 +339,7 @@ export function BookingWidget() {
                   <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
                     <p className="font-medium text-white/80">Conditions</p>
                     <ul className="mt-1 space-y-0.5">
-                      <li>• Paiement en ligne ou sur place</li>
+                      <li>• Paiement en ligne ou sur place (CB ou espèces)</li>
                       <li>• Annulation gratuite jusqu&apos;à 48h avant</li>
                       <li>• En cas de besoin : 06 13 44 08 75 ou contact@h3-studios.fr</li>
                     </ul>
