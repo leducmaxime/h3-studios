@@ -58,7 +58,7 @@ export function Reservation({ step }: ReservationProps) {
     updateEquipment,
     applyPromo,
     removePromo,
-    goToRecap,
+    goToCoordonnees,
     confirmBooking,
     addAnotherBooking,
     goToCheckout,
@@ -309,32 +309,6 @@ export function Reservation({ step }: ReservationProps) {
               state.selectedDate &&
               state.startTime &&
               state.endTime &&
-              state.studioId && (
-                <BookingForm
-                  date={state.selectedDate}
-                  startTime={state.startTime}
-                  endTime={state.endTime}
-                  studioId={state.studioId}
-                  groupType={state.groupType || "group"}
-                  userName={state.userName}
-                  userEmail={state.userEmail}
-                  userPhone={state.userPhone}
-                  bandName={state.bandName}
-                  billingAddress={state.billingAddress}
-                  billingPostalCode={state.billingPostalCode}
-                  billingCity={state.billingCity}
-                  additionalInfo={state.additionalInfo}
-                  onUpdateField={updateUserInfo}
-                  onContinue={goToRecap}
-                  onBack={goBack}
-                  canContinue={canConfirmBooking}
-                />
-              )}
-
-            {state.step === 4 &&
-              state.selectedDate &&
-              state.startTime &&
-              state.endTime &&
               state.studioId && (() => {
                 const studio = STUDIOS[state.studioId as StudioId];
                 const gt = (state.groupType || "group") as GroupType;
@@ -350,6 +324,13 @@ export function Reservation({ step }: ReservationProps) {
                   solo: "Solo / Prof particulier",
                   duo: "Duo",
                   group: "Groupe (3+)",
+                };
+                const handleConfirmRecap = () => {
+                  if (canConfirmBooking) {
+                    confirmBooking();
+                  } else {
+                    goToCoordonnees();
+                  }
                 };
                 return (
                   <div className="flex flex-col gap-6 pb-24 md:pb-0">
@@ -394,8 +375,6 @@ export function Reservation({ step }: ReservationProps) {
                       )}
                     </div>
 
-
-
                     <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
                       <p className="font-medium text-white/80">Conditions</p>
                       <ul className="mt-1 space-y-0.5">
@@ -417,24 +396,50 @@ export function Reservation({ step }: ReservationProps) {
                     )}
 
                     <button
-                      onClick={confirmBooking}
+                      onClick={handleConfirmRecap}
                       className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 md:block"
                     >
                       {state.cart.length > 0
                         ? `Ajouter au panier - ${formatPrice(grandTotal)}`
-                        : `Confirmer - ${formatPrice(grandTotal)}`}
+                        : `Continuer - ${formatPrice(grandTotal)}`}
                     </button>
 
                     <StickyBookingCTA
                       studioPrice={total}
                       equipmentPrice={equipmentPrice}
-                      onConfirm={confirmBooking}
+                      onConfirm={handleConfirmRecap}
                       disabled={false}
-                      buttonText={state.cart.length > 0 ? "Ajouter au panier" : "Confirmer"}
+                      buttonText={state.cart.length > 0 ? "Ajouter au panier" : "Continuer"}
                     />
                   </div>
                 );
               })()}
+
+            {state.step === 4 &&
+              state.selectedDate &&
+              state.startTime &&
+              state.endTime &&
+              state.studioId && (
+                <BookingForm
+                  date={state.selectedDate}
+                  startTime={state.startTime}
+                  endTime={state.endTime}
+                  studioId={state.studioId}
+                  groupType={state.groupType || "group"}
+                  userName={state.userName}
+                  userEmail={state.userEmail}
+                  userPhone={state.userPhone}
+                  bandName={state.bandName}
+                  billingAddress={state.billingAddress}
+                  billingPostalCode={state.billingPostalCode}
+                  billingCity={state.billingCity}
+                  additionalInfo={state.additionalInfo}
+                  onUpdateField={updateUserInfo}
+                  onContinue={confirmBooking}
+                  onBack={goBack}
+                  canContinue={canConfirmBooking}
+                />
+              )}
 
 
 

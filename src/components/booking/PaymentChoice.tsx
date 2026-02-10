@@ -100,7 +100,7 @@ export function PaymentChoice({ cart, total, onSelectMethod, onBack }: PaymentCh
         onClick={onBack}
         className="mx-auto text-sm text-white/50 hover:text-white"
       >
-        ← Retour au récapitulatif
+        ← Retour
       </button>
     </div>
   );

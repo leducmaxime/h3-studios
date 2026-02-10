@@ -30,8 +30,8 @@ const STEP_URL_MAP: Record<number, string> = {
   0: "",
   1: "creneau",
   2: "studio",
-  3: "coordonnees",
-  4: "recapitulatif",
+  3: "recapitulatif",
+  4: "coordonnees",
   5: "confirmation",
   6: "panier",
   7: "paiement-choix",
@@ -43,8 +43,8 @@ const URL_STEP_MAP: Record<string, number> = {
   "": 0,
   "creneau": 1,
   "studio": 2,
-  "coordonnees": 3,
-  "recapitulatif": 4,
+  "recapitulatif": 3,
+  "coordonnees": 4,
   "confirmation": 5,
   "panier": 6,
   "paiement-choix": 7,
@@ -292,13 +292,11 @@ export function useBookingWithRouter(urlStep?: string) {
           if (s.groupType === "solo" || s.groupType === "duo") {
             const avail = s.selectedDate ? generateMockAvailability(s.selectedDate) : new Set<string>();
             const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, avail);
-            const nextStep = isUserInfoComplete(s) ? 4 : 3;
-            return { ...s, studioId: studio, step: nextStep };
+            return { ...s, studioId: studio, step: 3 };
           }
           return { ...s, step: 2 };
         }
-        const nextStep = isUserInfoComplete(s) ? 4 : 3;
-        return { ...s, step: nextStep };
+        return { ...s, step: 3 };
       }
       return s;
     });
@@ -309,10 +307,7 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const selectStudio = useCallback((studioId: StudioId) => {
-    setState((s) => {
-      const nextStep = isUserInfoComplete(s) ? 4 : 3;
-      return { ...s, studioId, step: nextStep };
-    });
+    setState((s) => ({ ...s, studioId, step: 3 }));
   }, []);
 
   const updateUserInfo = useCallback(
@@ -337,7 +332,7 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, appliedPromo: null, promoDiscount: 0 }));
   }, []);
 
-  const goToRecap = useCallback(() => {
+  const goToCoordonnees = useCallback(() => {
     setState((s) => ({ ...s, step: 4 }));
   }, []);
 
@@ -460,6 +455,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
       if (s.flow === "time-first") {
         if (s.step === 2) return { ...s, step: 1, studioId: null };
+        // Step 3 is now recap: go back to step before it
         if (s.step === 3 && (s.groupType === "solo" || s.groupType === "duo")) {
           return { ...s, step: 1, studioId: null };
         }
@@ -475,23 +471,11 @@ export function useBookingWithRouter(urlStep?: string) {
         if (s.step === 3) return { ...s, step: 2, startTime: null, endTime: null };
       }
 
-      if (s.step === 4) {
-        // If user info is complete (step 3 was skipped), go back to step before step 3
-        if (isUserInfoComplete(s)) {
-          if (s.flow === "time-first") {
-            if (s.groupType === "solo" || s.groupType === "duo") {
-              return { ...s, step: 1, studioId: null };
-            }
-            return { ...s, step: 2 };
-          }
-          // studio-first: go back to time selection (step 2)
-          return { ...s, step: 2, startTime: null, endTime: null };
-        }
-        return { ...s, step: 3 };
-      }
+      // Step 4 is now coordonnees: go back to recap (step 3)
+      if (s.step === 4) return { ...s, step: 3 };
       if (s.step === 6) return { ...s, step: 4 };
       if (s.step === 7) {
-        // Remove the last booking from cart (undo confirmBooking) and go back to recap
+        // Remove the last booking from cart (undo confirmBooking) and go back to coordonnees
         const updatedCart = s.cart.slice(0, -1);
         return { ...s, step: 4, cart: updatedCart, paymentMethod: null };
       }
@@ -565,7 +549,7 @@ export function useBookingWithRouter(urlStep?: string) {
     updateEquipment,
     applyPromo,
     removePromo,
-    goToRecap,
+    goToCoordonnees,
     confirmBooking,
     addAnotherBooking,
     goToCheckout,
