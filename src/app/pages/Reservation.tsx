@@ -17,6 +17,7 @@ import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
 import { ChevronLeft, RotateCcw } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
+import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
 import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, EQUIPMENT, STUDIOS, TIME_SLOTS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
 
@@ -55,6 +56,8 @@ export function Reservation({ step }: ReservationProps) {
     selectStudio,
     updateUserInfo,
     updateEquipment,
+    applyPromo,
+    removePromo,
     goToRecap,
     confirmBooking,
     addAnotherBooking,
@@ -327,7 +330,9 @@ export function Reservation({ step }: ReservationProps) {
                 if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
                 const durationH = (endIdx - startIdx) * 0.5;
                 const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
-                const grandTotal = total + equipmentPrice;
+                const subtotal = total + equipmentPrice;
+                const promoDiscount = state.appliedPromo ? state.promoDiscount : 0;
+                const grandTotal = Math.max(0, subtotal - promoDiscount);
                 const groupLabels: Record<GroupType, string> = {
                   solo: "Solo / Prof particulier",
                   duo: "Duo",
@@ -395,12 +400,25 @@ export function Reservation({ step }: ReservationProps) {
                             </div>
                           </div>
                         )}
+                        {promoDiscount > 0 && (
+                          <div className="flex justify-between text-green-400">
+                            <span>Réduction ({state.appliedPromo?.code})</span>
+                            <span className="font-medium">-{formatPrice(promoDiscount)}</span>
+                          </div>
+                        )}
                         <div className="mt-3 flex justify-between border-t border-primary/30 pt-3">
                           <span className="font-semibold">Total</span>
                           <span className="text-xl font-bold text-primary">{formatPrice(grandTotal)}</span>
                         </div>
                       </div>
                     </div>
+
+                    <PromoCodeInput
+                      total={subtotal}
+                      appliedPromo={state.appliedPromo}
+                      onApply={applyPromo}
+                      onRemove={removePromo}
+                    />
 
                     <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
                       <p className="font-medium text-white/80">Conditions</p>

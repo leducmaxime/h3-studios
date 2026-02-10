@@ -9,6 +9,7 @@ import {
   type CompletedBooking,
   type EquipmentSelection,
   type PaymentMethod,
+  type PromoCode,
   calculatePrice,
   calculateEquipmentPrice,
   generateBookingRef,
@@ -21,6 +22,8 @@ import {
 
 interface ExtendedBookingState extends BookingState {
   equipment: EquipmentSelection[];
+  appliedPromo: PromoCode | null;
+  promoDiscount: number;
 }
 
 const STEP_URL_MAP: Record<number, string> = {
@@ -146,6 +149,8 @@ const initialState: ExtendedBookingState = {
   cart: [],
   equipment: [],
   paymentMethod: null,
+  appliedPromo: null,
+  promoDiscount: 0,
 };
 
 export function useBookingWithRouter(urlStep?: string) {
@@ -308,6 +313,14 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, equipment }));
   }, []);
 
+  const applyPromo = useCallback((promo: PromoCode, discount: number) => {
+    setState((s) => ({ ...s, appliedPromo: promo, promoDiscount: discount }));
+  }, []);
+
+  const removePromo = useCallback(() => {
+    setState((s) => ({ ...s, appliedPromo: null, promoDiscount: 0 }));
+  }, []);
+
   const goToRecap = useCallback(() => {
     setState((s) => ({ ...s, step: 4 }));
   }, []);
@@ -325,6 +338,10 @@ export function useBookingWithRouter(urlStep?: string) {
       const durationHours = (endIdx - startIdx) * 0.5;
       const equipmentPrice = calculateEquipmentPrice(s.equipment, durationHours);
 
+      const subtotal = pricing.total + equipmentPrice;
+      const discount = s.promoDiscount;
+      const finalPrice = Math.max(0, subtotal - discount);
+
       const newBooking: CompletedBooking = {
         id: crypto.randomUUID(),
         date: s.selectedDate,
@@ -337,9 +354,11 @@ export function useBookingWithRouter(urlStep?: string) {
         userPhone: s.userPhone,
         bandName: s.bandName,
         bookingRef,
-        price: pricing.total + equipmentPrice,
+        price: finalPrice,
         equipment: s.equipment,
         equipmentPrice,
+        promoCode: s.appliedPromo?.code || null,
+        promoDiscount: discount,
         paymentMethod: "cash",
         paymentStatus: "pending",
       };
@@ -350,6 +369,8 @@ export function useBookingWithRouter(urlStep?: string) {
         cart: [...s.cart, newBooking],
         step: 5,
         equipment: [],
+        appliedPromo: null,
+        promoDiscount: 0,
       };
     });
   }, []);
@@ -512,6 +533,8 @@ export function useBookingWithRouter(urlStep?: string) {
     selectStudio,
     updateUserInfo,
     updateEquipment,
+    applyPromo,
+    removePromo,
     goToRecap,
     confirmBooking,
     addAnotherBooking,

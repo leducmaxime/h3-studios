@@ -112,6 +112,11 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
                 ).join(", ")} ({formatPrice(booking.equipmentPrice)})
               </div>
             )}
+            {booking.promoDiscount > 0 && (
+              <div className="mb-3 text-xs text-green-400">
+                Code promo {booking.promoCode} : -{formatPrice(booking.promoDiscount)}
+              </div>
+            )}
 
             <div className="mb-3 flex items-center gap-2 text-sm text-white/70">
               <Calendar className="h-4 w-4" />

@@ -55,8 +55,9 @@ export function BookingConfirmation({
   const latestBooking = cart[cart.length - 1];
   const equipment = latestBooking?.equipment || [];
   const equipmentPrice = latestBooking?.equipmentPrice || 0;
+  const promoDiscount = latestBooking?.promoDiscount || 0;
   const slotTotal = latestBooking?.price || 0;
-  const studioPrice = slotTotal - equipmentPrice;
+  const studioPrice = slotTotal + promoDiscount - equipmentPrice;
 
   const handleDownloadICS = () => {
     const ics = generateICS(date, startTime, endTime, studio.name, bookingRef);
@@ -130,6 +131,12 @@ export function BookingConfirmation({
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+            {promoDiscount > 0 && (
+              <div className="flex justify-between text-sm text-green-400">
+                <span>Réduction ({latestBooking?.promoCode})</span>
+                <span className="font-medium">-{formatPrice(promoDiscount)}</span>
               </div>
             )}
             <div className="flex justify-between border-t border-white/10 pt-2">

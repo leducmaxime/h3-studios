@@ -179,6 +179,8 @@ export function useBooking() {
         price: pricing.total + equipmentPrice,
         equipment: s.equipment,
         equipmentPrice,
+        promoCode: null,
+        promoDiscount: 0,
         paymentMethod: "cash",
         paymentStatus: "pending",
       };

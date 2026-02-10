@@ -55,8 +55,43 @@ export interface CompletedBooking {
   price: number;
   equipment: EquipmentSelection[];
   equipmentPrice: number;
+  promoCode: string | null;
+  promoDiscount: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+}
+
+// --- Promo codes ---
+
+export interface PromoCode {
+  code: string;
+  type: "percentage" | "fixed";
+  value: number; // % or EUR
+  description: string;
+  minTotal?: number; // Montant minimum pour appliquer
+}
+
+const PROMO_CODES: PromoCode[] = [
+  { code: "BIENVENUE", type: "percentage", value: 10, description: "10% de réduction" },
+  { code: "H3AMIS", type: "fixed", value: 5, description: "5€ de réduction", minTotal: 15 },
+  { code: "ROCK2026", type: "percentage", value: 15, description: "15% de réduction" },
+];
+
+export function validatePromoCode(code: string, total: number): { valid: boolean; promo?: PromoCode; error?: string } {
+  const normalized = code.trim().toUpperCase();
+  const promo = PROMO_CODES.find((p) => p.code === normalized);
+  if (!promo) return { valid: false, error: "Code promo invalide" };
+  if (promo.minTotal && total < promo.minTotal) {
+    return { valid: false, error: `Montant minimum de ${promo.minTotal}€ requis` };
+  }
+  return { valid: true, promo };
+}
+
+export function calculatePromoDiscount(promo: PromoCode, total: number): number {
+  if (promo.type === "percentage") {
+    return Math.round(total * promo.value / 100);
+  }
+  return Math.min(promo.value, total);
 }
 
 export interface BookingState {
