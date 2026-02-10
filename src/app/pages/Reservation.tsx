@@ -345,9 +345,7 @@ export function Reservation({ step }: ReservationProps) {
                 if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
                 const durationH = (endIdx - startIdx) * 0.5;
                 const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
-                const subtotal = total + equipmentPrice;
-                const promoDiscount = state.appliedPromo ? state.promoDiscount : 0;
-                const grandTotal = Math.max(0, subtotal - promoDiscount);
+                const grandTotal = total + equipmentPrice;
                 const groupLabels: Record<GroupType, string> = {
                   solo: "Solo / Prof particulier",
                   duo: "Duo",
@@ -415,12 +413,7 @@ export function Reservation({ step }: ReservationProps) {
                             </div>
                           </div>
                         )}
-                        {promoDiscount > 0 && (
-                          <div className="flex justify-between text-green-400">
-                            <span>Réduction ({state.appliedPromo?.code})</span>
-                            <span className="font-medium">-{formatPrice(promoDiscount)}</span>
-                          </div>
-                        )}
+
                         <div className="mt-3 flex justify-between border-t border-primary/30 pt-3">
                           <span className="font-semibold">Total</span>
                           <span className="text-xl font-bold text-primary">{formatPrice(grandTotal)}</span>
@@ -428,12 +421,7 @@ export function Reservation({ step }: ReservationProps) {
                       </div>
                     </div>
 
-                    <PromoCodeInput
-                      total={subtotal}
-                      appliedPromo={state.appliedPromo}
-                      onApply={applyPromo}
-                      onRemove={removePromo}
-                    />
+
 
                     <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
                       <p className="font-medium text-white/80">Conditions</p>
@@ -534,10 +522,35 @@ export function Reservation({ step }: ReservationProps) {
                   ))}
                 </div>
 
+                <div className="w-full">
+                  <PromoCodeInput
+                    total={cartTotal}
+                    appliedPromo={state.appliedPromo}
+                    onApply={applyPromo}
+                    onRemove={removePromo}
+                  />
+                </div>
+
                 <div className="w-full rounded-xl bg-primary/10 p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-semibold">Total</span>
-                    <span className="text-2xl font-bold text-primary">{formatPrice(cartTotal)}</span>
+                  <div className="space-y-2">
+                    {state.promoDiscount > 0 && (
+                      <>
+                        <div className="flex items-center justify-between text-sm text-white/70">
+                          <span>Sous-total</span>
+                          <span>{formatPrice(cartTotal)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-green-400">
+                          <span>Réduction ({state.appliedPromo?.code})</span>
+                          <span>-{formatPrice(state.promoDiscount)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-semibold">Total</span>
+                      <span className="text-2xl font-bold text-primary">
+                        {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -550,7 +563,7 @@ export function Reservation({ step }: ReservationProps) {
                     onClick={goToPayment}
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
                   >
-                    Procéder au paiement
+                    Procéder au paiement — {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
                     <ChevronRight className="h-5 w-5" />
                   </button>
                   <button
@@ -578,7 +591,7 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === 7 && state.cart.length > 0 && (
               <PaymentChoice
                 cart={state.cart}
-                total={cartTotal}
+                total={Math.max(0, cartTotal - state.promoDiscount)}
                 onSelectMethod={selectPaymentMethod}
                 onBack={goBack}
               />
@@ -587,7 +600,7 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === 8 && (
               <StripeRedirect
                 cart={state.cart}
-                total={cartTotal}
+                total={Math.max(0, cartTotal - state.promoDiscount)}
                 userName={state.userName}
                 userEmail={state.userEmail}
                 onBack={goBack}
@@ -597,7 +610,7 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === 9 && (
               <FinalCheckout
                 cart={state.cart}
-                total={cartTotal}
+                total={Math.max(0, cartTotal - state.promoDiscount)}
                 onNewBooking={resetBooking}
                 onBack={goBack}
               />

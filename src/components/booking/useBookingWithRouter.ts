@@ -338,9 +338,7 @@ export function useBookingWithRouter(urlStep?: string) {
       const durationHours = (endIdx - startIdx) * 0.5;
       const equipmentPrice = calculateEquipmentPrice(s.equipment, durationHours);
 
-      const subtotal = pricing.total + equipmentPrice;
-      const discount = s.promoDiscount;
-      const finalPrice = Math.max(0, subtotal - discount);
+      const finalPrice = pricing.total + equipmentPrice;
 
       const newBooking: CompletedBooking = {
         id: crypto.randomUUID(),
@@ -357,8 +355,8 @@ export function useBookingWithRouter(urlStep?: string) {
         price: finalPrice,
         equipment: s.equipment,
         equipmentPrice,
-        promoCode: s.appliedPromo?.code || null,
-        promoDiscount: discount,
+        promoCode: null,
+        promoDiscount: 0,
         paymentMethod: "cash",
         paymentStatus: "pending",
       };
