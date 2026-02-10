@@ -129,6 +129,17 @@ function navigateToUrl(step: number, flow: BookingFlow | null) {
   }
 }
 
+function isUserInfoComplete(s: ExtendedBookingState): boolean {
+  return (
+    s.userName.trim() !== "" &&
+    s.userEmail.trim() !== "" &&
+    s.userPhone.trim() !== "" &&
+    s.billingAddress.trim() !== "" &&
+    s.billingPostalCode.trim() !== "" &&
+    s.billingCity.trim() !== ""
+  );
+}
+
 const initialState: ExtendedBookingState = {
   flow: null,
   step: 0,
@@ -281,11 +292,13 @@ export function useBookingWithRouter(urlStep?: string) {
           if (s.groupType === "solo" || s.groupType === "duo") {
             const avail = s.selectedDate ? generateMockAvailability(s.selectedDate) : new Set<string>();
             const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, avail);
-            return { ...s, studioId: studio, step: 3 };
+            const nextStep = isUserInfoComplete(s) ? 4 : 3;
+            return { ...s, studioId: studio, step: nextStep };
           }
           return { ...s, step: 2 };
         }
-        return { ...s, step: 3 };
+        const nextStep = isUserInfoComplete(s) ? 4 : 3;
+        return { ...s, step: nextStep };
       }
       return s;
     });
@@ -296,7 +309,10 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const selectStudio = useCallback((studioId: StudioId) => {
-    setState((s) => ({ ...s, studioId, step: 3 }));
+    setState((s) => {
+      const nextStep = isUserInfoComplete(s) ? 4 : 3;
+      return { ...s, studioId, step: nextStep };
+    });
   }, []);
 
   const updateUserInfo = useCallback(
@@ -466,6 +482,17 @@ export function useBookingWithRouter(urlStep?: string) {
       if (s.step === 4) {
         // If no active selection (cart-only view after confirmation), go back to step 0
         if (!s.selectedDate) return { ...initialState, cart: s.cart };
+        // If user info is complete (step 3 was skipped), go back to step before step 3
+        if (isUserInfoComplete(s)) {
+          if (s.flow === "time-first") {
+            if (s.groupType === "solo" || s.groupType === "duo") {
+              return { ...s, step: 1, studioId: null };
+            }
+            return { ...s, step: 2 };
+          }
+          // studio-first: go back to time selection (step 2)
+          return { ...s, step: 2, startTime: null, endTime: null };
+        }
         return { ...s, step: 3 };
       }
       if (s.step === 6) return { ...s, step: 4 };
