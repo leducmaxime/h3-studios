@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Calendar, Download, Plus, ShoppingCart, Apple } from "lucide-react";
+import { Calendar, Download, Plus, ShoppingCart } from "lucide-react";
 import {
   type StudioId,
   type GroupType,
@@ -56,7 +56,6 @@ export function BookingConfirmation({
   let endIdx = TIME_SLOTS.indexOf(endTime);
   if (endIdx === -1 && endTime === "00:00") endIdx = TIME_SLOTS.length;
   const durationH = (endIdx - startIdx) * 0.5;
-  const duration = durationH;
   
   const latestBooking = cart[cart.length - 1];
   const equipment = latestBooking?.equipment || [];
@@ -101,7 +100,7 @@ export function BookingConfirmation({
           <div className="flex justify-between">
             <span className="text-white/70">Horaire</span>
             <span className="font-medium">
-              {startTime} - {endTime} ({duration})
+              {startTime} - {endTime} ({durationStr})
             </span>
           </div>
           <div className="flex justify-between">
@@ -125,7 +124,7 @@ export function BookingConfirmation({
                 {equipment.filter(e => e.quantity > 0).map(e => {
                   const equip = EQUIPMENT[e.id];
                   if (!equip) return null;
-                  const equipPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], duration);
+                  const equipPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH);
                   return (
                     <div key={e.id} className="rounded-lg bg-white/5 p-3 text-sm">
                       <div className="flex justify-between mb-1">

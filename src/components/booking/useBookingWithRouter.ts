@@ -31,8 +31,6 @@ const STEP_URL_MAP: Record<number, string> = {
   1: "creneau",
   2: "studio",
   3: "coordonnees",
-  5: "confirmation",
-  6: "panier",
   7: "paiement-choix",
   8: "paiement",
   9: "termine",
@@ -43,8 +41,6 @@ const URL_STEP_MAP: Record<string, number> = {
   "creneau": 1,
   "studio": 2,
   "coordonnees": 3,
-  "confirmation": 5,
-  "panier": 6,
   "paiement-choix": 7,
   "paiement": 8,
   "termine": 9,
@@ -415,19 +411,12 @@ export function useBookingWithRouter(urlStep?: string) {
       startTime: null,
       endTime: null,
       studioId: null,
-      groupType: "group",
+      groupType: null,
+      flow: null,
       bookingRef: null,
       equipment: [],
-      step: 1,
+      step: 0,
     }));
-  }, []);
-
-  const goToCheckout = useCallback(() => {
-    setState((s) => ({ ...s, step: 6 }));
-  }, []);
-
-  const goToPayment = useCallback(() => {
-    setState((s) => ({ ...s, step: 7 }));
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
@@ -471,7 +460,6 @@ export function useBookingWithRouter(urlStep?: string) {
         if (s.step === 3) return { ...s, step: 2 };
       }
 
-      if (s.step === 6) return { ...s, step: 3 };
       if (s.step === 7) {
         // Remove the last booking from cart (undo confirmBooking) and go back to coordonnées
         const updatedCart = s.cart.slice(0, -1);
@@ -550,8 +538,6 @@ export function useBookingWithRouter(urlStep?: string) {
     goToCoordonnees,
     confirmBooking,
     addAnotherBooking,
-    goToCheckout,
-    goToPayment,
     removeFromCart,
     resetBooking,
     goBack,

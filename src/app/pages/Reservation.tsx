@@ -14,7 +14,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin } from "lucide-react";
+import { ChevronLeft, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -66,8 +66,6 @@ export function Reservation({ step }: ReservationProps) {
     goToCoordonnees,
     confirmBooking,
     addAnotherBooking,
-    goToCheckout,
-    goToPayment,
     removeFromCart,
     resetBooking,
     goBack,
@@ -198,7 +196,7 @@ export function Reservation({ step }: ReservationProps) {
             <div className="mb-2 flex items-center gap-2 text-sm">
               <ShoppingCart className="h-4 w-4 text-primary" />
               <span className="font-medium text-white/80">
-                {state.cart.length} créneau{state.cart.length > 1 ? "x" : ""} déjà dans le panier ({formatPrice(cartTotal)})
+                {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""} déjà dans le panier ({formatPrice(cartTotal)})
               </span>
             </div>
           </div>
@@ -471,17 +469,6 @@ export function Reservation({ step }: ReservationProps) {
                   canContinue={canConfirmBooking}
                 />
               )}
-
-            {state.step === 6 && state.cart.length > 0 && (
-              <FinalCheckout
-                cart={state.cart}
-                total={cartTotal}
-                onNewBooking={resetBooking}
-                onBack={goBack}
-                onProceedToPayment={goToPayment}
-                showPaymentButton
-              />
-            )}
 
             {state.step === 7 && state.cart.length > 0 && (
               <div className="flex flex-col gap-6">

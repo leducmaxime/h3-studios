@@ -161,7 +161,7 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
                       {formatDate(booking.date, "short")} - {booking.startTime}-{booking.endTime}
                     </p>
                   </div>
-                  <span className="font-medium">{formatPrice(booking.price + booking.equipmentPrice)}</span>
+                  <span className="font-medium">{formatPrice(booking.price)}</span>
                 </div>
               ))}
             </div>

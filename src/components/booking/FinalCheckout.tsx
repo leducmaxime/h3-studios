@@ -190,10 +190,10 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
           </button>
         ) : (
           <button
-            onClick={onCheckout}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
+            onClick={onNewBooking}
+            className="flex-1 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
           >
-            Finaliser les réservations → {formatPrice(cartTotal)}
+            Nouvelle réservation
           </button>
         )}
       </div>
