@@ -83,7 +83,7 @@ export function EquipmentSelector({
             // Affichage spécial pour les micros
             if (eq.id === "mic") {
               if (quantity === 0) {
-                priceDisplay = "1er: 3€, 2ème: 5€, 3ème: 6€, 4ème: offert! (tarif dégressif)";
+                priceDisplay = "à partir de 3€ par séance (tarif dégressif)";
               } else if (quantity === 4) {
                 priceDisplay = "14€ (4ème offert!) (tarif dégressif)";
               } else {
