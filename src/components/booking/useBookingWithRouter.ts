@@ -471,7 +471,7 @@ export function useBookingWithRouter(urlStep?: string) {
         return { ...s, step: 3 };
       }
       if (s.step === 6) return { ...s, step: 4 };
-      if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
+      if (s.step === 7) return { ...s, step: 4, paymentMethod: null };
       if (s.step === 8) return { ...s, step: 7, paymentMethod: null };
       if (s.step === 9) return { ...s, step: 7 };
       return s;

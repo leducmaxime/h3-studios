@@ -482,49 +482,29 @@ export function Reservation({ step }: ReservationProps) {
                 </div>
 
                 <div className="text-center">
-                  <h3 className="text-xl font-bold">Créneau ajouté au panier</h3>
+                  <h3 className="text-xl font-bold">Récapitulatif de votre commande</h3>
                   <p className="mt-1 text-sm text-white/60">
-                    Finalisez votre réservation ou ajoutez un autre créneau
+                    {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""}
                   </p>
                 </div>
 
-                <div className="w-full rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <ShoppingCart className="h-5 w-5 text-primary" />
-                    <span className="font-medium">
-                      Panier ({state.cart.length} créneau{state.cart.length > 1 ? "x" : ""})
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {state.cart.map((booking) => (
-                      <div
-                        key={booking.id}
-                        className="flex items-center justify-between rounded-lg bg-black/30 p-3"
-                      >
-                        <div className="flex-1">
-                          <div className="font-medium">
+                <div className="w-full space-y-3">
+                  {state.cart.map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="rounded-xl border border-white/20 bg-black/30 p-4"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold">
                             {booking.groupType === "group"
                               ? STUDIOS[booking.studioId].name
                               : "Répétition"}
-                          </div>
-                          <div className="text-sm text-white/60">
-                            {formatDate(booking.date, "short")} • {booking.startTime} -{" "}
-                            {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
-                          </div>
-                          {booking.equipmentPrice > 0 && (
-                            <div className="text-xs text-white/40">
-                              + options : {formatPrice(booking.equipmentPrice)}
-                            </div>
-                          )}
-                          {booking.promoDiscount > 0 && (
-                            <div className="text-xs text-green-400">
-                              Réduction ({booking.promoCode}) : -{formatPrice(booking.promoDiscount)}
-                            </div>
-                          )}
+                          </h4>
+                          <p className="text-xs text-primary">Réf: {booking.bookingRef}</p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-semibold text-primary">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-primary">
                             {formatPrice(booking.price)}
                           </span>
                           <button
@@ -536,22 +516,41 @@ export function Reservation({ step }: ReservationProps) {
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      <p className="mt-2 text-sm text-white/60">
+                        {formatDate(booking.date, "long")} • {booking.startTime} -{" "}
+                        {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
+                      </p>
+                      {booking.equipmentPrice > 0 && (
+                        <p className="mt-1 text-xs text-white/40">
+                          + options : {formatPrice(booking.equipmentPrice)}
+                        </p>
+                      )}
+                      {booking.promoDiscount > 0 && (
+                        <p className="mt-1 text-xs text-green-400">
+                          Réduction ({booking.promoCode}) : -{formatPrice(booking.promoDiscount)}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
-                    <span className="text-lg font-semibold">
-                      Total : {formatPrice(cartTotal)}
-                    </span>
+                <div className="w-full rounded-xl bg-primary/10 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-semibold">Total</span>
+                    <span className="text-2xl font-bold text-primary">{formatPrice(cartTotal)}</span>
                   </div>
                 </div>
 
+                <p className="text-center text-xs text-white/50">
+                  Vous pourrez choisir de payer en ligne ou sur place à l&apos;étape suivante
+                </p>
+
                 <div className="flex w-full flex-col gap-3">
                   <button
-                    onClick={goToCheckout}
+                    onClick={goToPayment}
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
                   >
-                    Finaliser la réservation
+                    Procéder au paiement
                     <ChevronRight className="h-5 w-5" />
                   </button>
                   <button
@@ -604,14 +603,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step > 0 && state.step < 4 && state.cart.length > 0 && (
-              <CartSummary
-                cart={state.cart}
-                total={cartTotal}
-                onRemove={removeFromCart}
-                onCheckout={goToCheckout}
-              />
-            )}
+
           </div>
         </div>
       </div>
