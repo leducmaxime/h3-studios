@@ -11,11 +11,11 @@ import { StudioCard } from "@/components/booking/StudioCard";
 import { BookingForm } from "@/components/booking/BookingForm";
 import { BookingConfirmation } from "@/components/booking/BookingConfirmation";
 import { FinalCheckout } from "@/components/booking/FinalCheckout";
-import { CartSummary } from "@/components/booking/CartSummary";
+
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, ChevronRight, Plus, RotateCcw, ShoppingCart, X, Check, Wifi, TrainFront, MapPin } from "lucide-react";
+import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -463,19 +463,21 @@ export function Reservation({ step }: ReservationProps) {
                 );
               })()}
 
-            {state.step === 4 && !state.selectedDate && state.cart.length > 0 && (
-              <div className="flex flex-col items-center gap-6">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-                  <Check className="h-8 w-8 text-green-400" />
-                </div>
 
-                <div className="text-center">
-                  <h3 className="text-xl font-bold">Récapitulatif de votre commande</h3>
-                  <p className="mt-1 text-sm text-white/60">
-                    {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""}
-                  </p>
-                </div>
 
+            {state.step === 6 && state.cart.length > 0 && (
+              <FinalCheckout
+                cart={state.cart}
+                total={cartTotal}
+                onNewBooking={resetBooking}
+                onBack={goBack}
+                onProceedToPayment={goToPayment}
+                showPaymentButton
+              />
+            )}
+
+            {state.step === 7 && state.cart.length > 0 && (
+              <div className="flex flex-col gap-6">
                 <div className="w-full space-y-3">
                   {state.cart.map((booking) => (
                     <div
@@ -513,23 +515,16 @@ export function Reservation({ step }: ReservationProps) {
                           + options : {formatPrice(booking.equipmentPrice)}
                         </p>
                       )}
-                      {booking.promoDiscount > 0 && (
-                        <p className="mt-1 text-xs text-green-400">
-                          Réduction ({booking.promoCode}) : -{formatPrice(booking.promoDiscount)}
-                        </p>
-                      )}
                     </div>
                   ))}
                 </div>
 
-                <div className="w-full">
-                  <PromoCodeInput
-                    total={cartTotal}
-                    appliedPromo={state.appliedPromo}
-                    onApply={applyPromo}
-                    onRemove={removePromo}
-                  />
-                </div>
+                <PromoCodeInput
+                  total={cartTotal}
+                  appliedPromo={state.appliedPromo}
+                  onApply={applyPromo}
+                  onRemove={removePromo}
+                />
 
                 <div className="w-full rounded-xl bg-primary/10 p-4">
                   <div className="space-y-2">
@@ -554,47 +549,21 @@ export function Reservation({ step }: ReservationProps) {
                   </div>
                 </div>
 
-                <p className="text-center text-xs text-white/50">
-                  Vous pourrez choisir de payer en ligne ou sur place à l&apos;étape suivante
-                </p>
+                <button
+                  onClick={addAnotherBooking}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Ajouter un autre créneau
+                </button>
 
-                <div className="flex w-full flex-col gap-3">
-                  <button
-                    onClick={goToPayment}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
-                  >
-                    Procéder au paiement — {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={addAnotherBooking}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/5"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Ajouter un autre créneau
-                  </button>
-                </div>
+                <PaymentChoice
+                  cart={state.cart}
+                  total={Math.max(0, cartTotal - state.promoDiscount)}
+                  onSelectMethod={selectPaymentMethod}
+                  onBack={goBack}
+                />
               </div>
-            )}
-
-            {state.step === 6 && state.cart.length > 0 && (
-              <FinalCheckout
-                cart={state.cart}
-                total={cartTotal}
-                onNewBooking={resetBooking}
-                onBack={goBack}
-                onProceedToPayment={goToPayment}
-                showPaymentButton
-              />
-            )}
-
-            {state.step === 7 && state.cart.length > 0 && (
-              <PaymentChoice
-                cart={state.cart}
-                total={Math.max(0, cartTotal - state.promoDiscount)}
-                onSelectMethod={selectPaymentMethod}
-                onBack={goBack}
-              />
             )}
 
             {state.step === 8 && (

@@ -381,7 +381,7 @@ export function useBookingWithRouter(urlStep?: string) {
         ...s,
         bookingRef,
         cart: [...s.cart, newBooking],
-        step: 4,
+        step: 7,
         selectedDate: null,
         startTime: null,
         endTime: null,
@@ -480,8 +480,6 @@ export function useBookingWithRouter(urlStep?: string) {
       }
 
       if (s.step === 4) {
-        // If no active selection (cart-only view after confirmation), go back to step 0
-        if (!s.selectedDate) return { ...initialState, cart: s.cart };
         // If user info is complete (step 3 was skipped), go back to step before step 3
         if (isUserInfoComplete(s)) {
           if (s.flow === "time-first") {
@@ -496,7 +494,11 @@ export function useBookingWithRouter(urlStep?: string) {
         return { ...s, step: 3 };
       }
       if (s.step === 6) return { ...s, step: 4 };
-      if (s.step === 7) return { ...s, step: 4, paymentMethod: null };
+      if (s.step === 7) {
+        // No active selection: go back to initial state, preserving cart
+        if (!s.selectedDate) return { ...initialState, cart: s.cart, paymentMethod: null };
+        return { ...s, step: 4, paymentMethod: null };
+      }
       if (s.step === 8) return { ...s, step: 7, paymentMethod: null };
       if (s.step === 9) return { ...s, step: 7 };
       return s;
