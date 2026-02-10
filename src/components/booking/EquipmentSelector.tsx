@@ -90,7 +90,9 @@ export function EquipmentSelector({
                 priceDisplay = `${subtotal}€/séance (tarif dégressif)`;
               }
             } else {
-              priceDisplay = `${subtotal}€/séance`;
+              priceDisplay = quantity === 0
+                ? `${eq.sessionPricing[0]}€/séance`
+                : `${subtotal}€/séance`;
             }
           } else {
             subtotal = eq.pricePerHour * quantity * durationHours;
