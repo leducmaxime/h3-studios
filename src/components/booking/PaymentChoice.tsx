@@ -40,26 +40,26 @@ export function PaymentChoice({ cart, total, onSelectMethod, onBack }: PaymentCh
           </div>
         </button>
 
-        <button
-          onClick={() => onSelectMethod("cash")}
-          className="group flex flex-col gap-4 rounded-xl border-2 border-white/20 bg-white/5 p-6 text-left transition-all hover:border-white/40 hover:bg-white/10"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10">
-              <Banknote className="h-6 w-6 text-white/70" />
-            </div>
-            <div>
-              <h4 className="text-lg font-semibold">Payer sur place</h4>
-              <p className="text-sm text-white/50">Espèces ou CB</p>
-            </div>
-          </div>
-
-          <div className="mt-auto pt-4">
-            <span className="rounded-lg border border-white/30 px-4 py-2 font-medium text-white/70 transition-all group-hover:border-white/50 group-hover:text-white">
-              Réserver sans payer
-            </span>
-          </div>
-        </button>
+         <button
+           onClick={() => onSelectMethod("cash")}
+           className="group flex flex-col gap-4 rounded-xl border-2 border-white/20 bg-white/5 p-6 text-left transition-all hover:border-white/40 hover:bg-white/10"
+         >
+           <div className="flex items-center gap-3">
+             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10">
+               <Banknote className="h-6 w-6 text-white/70" />
+             </div>
+             <div>
+               <h4 className="text-lg font-semibold">Payer sur place</h4>
+               <p className="text-sm text-white/50">Espèces ou CB</p>
+             </div>
+           </div>
+ 
+           <div className="mt-auto pt-4">
+             <span className="rounded-lg border border-white/30 px-4 py-2 font-medium text-white/70 transition-all group-hover:border-white/50 group-hover:text-white">
+               Réserver sans payer
+             </span>
+           </div>
+         </button>
         </div>
       </div>
   );

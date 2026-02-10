@@ -90,7 +90,7 @@ export function BookingConfirmation({
 
       <div className="w-full max-w-md rounded-xl border border-white/20 bg-black p-6 text-left">
         <div className="mb-4 text-center">
-          <span className="text-sm text-white/60">Récapitulatif du créneau</span>
+          <span className="text-sm text-white/60">Récapitulatif de la réservation</span>
         </div>
 
         <div className="space-y-3 text-sm">
