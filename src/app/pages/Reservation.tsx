@@ -90,7 +90,8 @@ export function Reservation({ step }: ReservationProps) {
 
     const studio = STUDIOS[state.studioId as StudioId];
     const gt = (state.groupType || "group") as GroupType;
-    const { total } = calculatePrice(state.studioId as StudioId, gt, state.selectedDate, state.startTime, state.endTime);
+    const priceResult = calculatePrice(state.studioId as StudioId, gt, state.selectedDate, state.startTime, state.endTime);
+    const total = priceResult.total;
     const duration = formatDuration(state.startTime, state.endTime);
     const startIdx = TIME_SLOTS.indexOf(state.startTime);
     let endIdx = TIME_SLOTS.indexOf(state.endTime);
@@ -98,6 +99,17 @@ export function Reservation({ step }: ReservationProps) {
     const durationH = (endIdx - startIdx) * 0.5;
     const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
     const grandTotal = total + equipmentPrice;
+
+    // Price breakdown: off-peak vs peak hours
+    const offPeakSlots = priceResult.breakdown.filter((s) => !s.isPeak);
+    const peakSlots = priceResult.breakdown.filter((s) => s.isPeak);
+    const offPeakHours = offPeakSlots.length * 0.5;
+    const peakHours = peakSlots.length * 0.5;
+    const offPeakRate = offPeakSlots.length > 0 ? offPeakSlots[0].rate : 0;
+    const peakRate = peakSlots.length > 0 ? peakSlots[0].rate : 0;
+    const offPeakSubtotal = offPeakHours * offPeakRate;
+    const peakSubtotal = peakHours * peakRate;
+    const hasPeakPricing = gt === "group";
 
     const handleConfirmRecap = () => {
       if (canConfirmBooking) {
@@ -118,37 +130,67 @@ export function Reservation({ step }: ReservationProps) {
           />
         </div>
 
-        <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/80">
-              <span className="capitalize">{formatDate(state.selectedDate!, "short")}</span>
-              <span className="text-white/30">|</span>
-              <span>{state.startTime} - {state.endTime} ({duration})</span>
-              <span className="text-white/30">|</span>
-              <span>{gt === "group" ? studio.name : "Selon dispo."}</span>
-              <span className="text-white/30">|</span>
-              <span>{RECAP_GROUP_LABELS[gt]}</span>
-            </div>
-            <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
-          </div>
-          {equipmentPrice > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-white/50">
-              {state.equipment.filter(e => e.quantity > 0).map(e => (
-                <span key={e.id}>
-                  {EQUIPMENT[e.id]?.name || e.id} x{e.quantity} ({formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))})
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-4">
+          <h4 className="mb-3 text-sm font-semibold text-white/80">Récapitulatif</h4>
 
-        <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
-          <p className="font-medium text-white/80">Conditions</p>
-          <ul className="mt-1 space-y-0.5">
-            <li>• Paiement en ligne ou sur place (CB ou espèces)</li>
-            <li>• Annulation gratuite jusqu&apos;à 48h avant</li>
-            <li>• En cas de besoin : 06 13 44 08 75 ou contact@h3-studios.fr</li>
-          </ul>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-white/60">{gt === "group" ? "Studio" : "Formule"}</span>
+              <span className="font-medium">{gt === "group" ? studio.name : RECAP_GROUP_LABELS[gt]}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/60">Date</span>
+              <span className="font-medium capitalize">{formatDate(state.selectedDate!, "short")}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/60">Horaire</span>
+              <span className="font-medium">{state.startTime} - {state.endTime} ({duration})</span>
+            </div>
+            {gt === "group" && (
+              <div className="flex items-center justify-between">
+                <span className="text-white/60">Formule</span>
+                <span className="font-medium">{RECAP_GROUP_LABELS[gt]}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 border-t border-white/10 pt-3 space-y-1.5 text-sm">
+            {hasPeakPricing ? (
+              <>
+                {offPeakHours > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">{offPeakHours}h x {offPeakRate}€/h</span>
+                    <span>{formatPrice(offPeakSubtotal)}</span>
+                  </div>
+                )}
+                {peakHours > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-primary/70">{peakHours}h x {peakRate}€/h <span className="text-xs">(soir/WE)</span></span>
+                    <span className="text-primary">{formatPrice(peakSubtotal)}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-white/60">{durationH}h x {offPeakRate}€/h</span>
+                <span>{formatPrice(total)}</span>
+              </div>
+            )}
+
+            {state.equipment.filter(e => e.quantity > 0).map(e => (
+              <div key={e.id} className="flex items-center justify-between">
+                <span className="text-white/60">
+                  {EQUIPMENT[e.id]?.name || e.id} x{e.quantity}
+                </span>
+                <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))}</span>
+              </div>
+            ))}
+
+            <div className="flex items-center justify-between border-t border-white/10 pt-2 mt-1">
+              <span className="font-semibold">Total</span>
+              <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
+            </div>
+          </div>
         </div>
 
         {state.cart.length > 0 && (
@@ -166,9 +208,7 @@ export function Reservation({ step }: ReservationProps) {
           onClick={handleConfirmRecap}
           className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 md:block"
         >
-          {state.cart.length > 0
-            ? `Ajouter au panier - ${formatPrice(grandTotal)}`
-            : `Continuer - ${formatPrice(grandTotal)}`}
+          Ajouter au panier - {formatPrice(grandTotal)}
         </button>
 
         <StickyBookingCTA
@@ -176,7 +216,7 @@ export function Reservation({ step }: ReservationProps) {
           equipmentPrice={equipmentPrice}
           onConfirm={handleConfirmRecap}
           disabled={false}
-          buttonText={state.cart.length > 0 ? "Ajouter au panier" : "Continuer"}
+          buttonText="Ajouter au panier"
         />
       </div>
     );
@@ -527,6 +567,15 @@ export function Reservation({ step }: ReservationProps) {
                   <Plus className="h-4 w-4" />
                   Ajouter un autre créneau
                 </button>
+
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
+                  <p className="font-medium text-white/80">Conditions</p>
+                  <ul className="mt-1 space-y-0.5">
+                    <li>• Paiement en ligne ou sur place (CB ou espèces)</li>
+                    <li>• Annulation gratuite jusqu&apos;à 48h avant</li>
+                    <li>• En cas de besoin : 06 13 44 08 75 ou contact@h3-studios.fr</li>
+                  </ul>
+                </div>
 
                 <PaymentChoice
                   cart={state.cart}

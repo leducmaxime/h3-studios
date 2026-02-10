@@ -3,15 +3,12 @@
 import { useState, useCallback, useMemo } from "react";
 import { ChevronDown, ChevronLeft } from "lucide-react";
 import {
-  ALL_TIME_SLOTS,
   getStudioTimeSlots,
   getUnionTimeSlots,
   getStudioClosingTime,
   isPeakTime,
   formatDate,
   PRICING,
-  formatPrice,
-  calculatePrice,
   type GroupType,
   type StudioId,
 } from "@/lib/booking";
@@ -148,8 +145,10 @@ export function TimeSlotPicker({
       
       const endTimeSlot = getEndTime(startIdx);
       onSelectRange(time, endTimeSlot);
+      // Auto-confirm immediately after selecting a time slot
+      onConfirm();
     },
-    [selectedDuration, onSelectRange, canStartAt, getEndTime, visibleSlots]
+    [selectedDuration, onSelectRange, onConfirm, canStartAt, getEndTime, visibleSlots]
   );
 
   const isWithinCurrentSelection = useCallback(
@@ -162,10 +161,6 @@ export function TimeSlotPicker({
     },
     [startTime, endTime, visibleSlots]
   );
-
-  const handleClear = useCallback(() => {
-    onClear();
-  }, [onClear]);
 
   const getSlotState = useCallback(
     (time: string, index: number) => {
@@ -194,53 +189,6 @@ export function TimeSlotPicker({
     const startIdx = visibleSlots.indexOf(start);
     return getEndTime(startIdx);
   };
-
-  const priceBreakdown = useMemo(() => {
-    if (!startTime || !endTime) return null;
-    
-    if (studioFilter) {
-      const price = calculatePrice(studioFilter, groupType, date, startTime, endTime);
-      const totalSlots = price.breakdown.length;
-      const offPeakRate = PRICING[studioFilter][groupType].offPeak;
-      const peakRate = PRICING[studioFilter][groupType].peak;
-
-      if (!hasPeakPricing) {
-        // Solo/duo: flat rate, show all hours as one line
-        return {
-          total: price.total,
-          offPeakHours: totalSlots * 0.5,
-          peakHours: 0,
-          offPeakRate,
-          peakRate,
-          offPeakSubtotal: price.total,
-          peakSubtotal: 0,
-          isRange: false,
-        };
-      }
-
-      const offPeakSlots = price.breakdown.filter((s) => !s.isPeak).length;
-      const peakSlots = price.breakdown.filter((s) => s.isPeak).length;
-      
-      return {
-        total: price.total,
-        offPeakHours: offPeakSlots * 0.5,
-        peakHours: peakSlots * 0.5,
-        offPeakRate,
-        peakRate,
-        offPeakSubtotal: offPeakSlots * 0.5 * offPeakRate,
-        peakSubtotal: peakSlots * 0.5 * peakRate,
-        isRange: false,
-      };
-    }
-    
-    const scenePrice = calculatePrice("la-scene", groupType, date, startTime, endTime);
-    const podiumPrice = calculatePrice("le-podium", groupType, date, startTime, endTime);
-    return {
-      total: Math.min(scenePrice.total, podiumPrice.total),
-      totalMax: Math.max(scenePrice.total, podiumPrice.total),
-      isRange: true,
-    };
-  }, [startTime, endTime, groupType, date, studioFilter, hasPeakPricing]);
 
   const hourlyRates = useMemo(() => {
     if (studioFilter) {
@@ -452,77 +400,7 @@ export function TimeSlotPicker({
         </div>
       )}
 
-      {startTime && endTime && (
-        <div className="flex flex-col gap-3 rounded-lg border border-primary/50 bg-primary/10 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-sm text-white/70">Votre sélection</span>
-              <div className="text-lg font-semibold">
-                {startTime} - {endTime}
-                {durationLabel && <span className="ml-2 text-primary">({durationLabel})</span>}
-              </div>
-            </div>
-            <button
-              onClick={handleClear}
-              className="rounded px-3 py-1 text-sm text-white/70 hover:bg-white/10 hover:text-white"
-            >
-              Effacer
-            </button>
-          </div>
 
-          {priceBreakdown && (
-            <div className="flex flex-col gap-2 rounded-md bg-black/30 px-3 py-2">
-              {priceBreakdown.isRange ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/70">Estimation</span>
-                  <span className="text-lg font-bold text-primary">
-                    {priceBreakdown.total === priceBreakdown.totalMax
-                      ? formatPrice(priceBreakdown.total)
-                      : `${formatPrice(priceBreakdown.total)} - ${formatPrice(priceBreakdown.totalMax!)}`}
-                  </span>
-                </div>
-              ) : (
-                <>
-                  {priceBreakdown.offPeakHours! > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-white/70">
-                        {priceBreakdown.offPeakHours}h × {priceBreakdown.offPeakRate}€/h
-                      </span>
-                      <span className="text-white">{formatPrice(priceBreakdown.offPeakSubtotal!)}</span>
-                    </div>
-                  )}
-                  {priceBreakdown.peakHours! > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-primary/80">
-                        {priceBreakdown.peakHours}h × {priceBreakdown.peakRate}€/h (soir, week-end & jour férié)
-                      </span>
-                      <span className="text-primary">{formatPrice(priceBreakdown.peakSubtotal!)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between border-t border-white/10 pt-2">
-                    <span className="font-medium">Total</span>
-                    <span className="text-lg font-bold text-primary">{formatPrice(priceBreakdown.total)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-          
-          <button
-            onClick={onConfirm}
-            disabled={!canConfirm}
-            className={`
-              w-full rounded-lg py-3 font-semibold transition-all
-              ${canConfirm
-                ? "bg-primary text-black hover:bg-primary/90"
-                : "bg-white/10 text-white/50 cursor-not-allowed"
-              }
-            `}
-          >
-            Choisir ce créneau →
-          </button>
-        </div>
-      )}
     </div>
   );
 }
