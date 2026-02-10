@@ -15,7 +15,7 @@ import { CartSummary } from "@/components/booking/CartSummary";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, ChevronRight, Plus, RotateCcw, ShoppingCart, X, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, RotateCcw, ShoppingCart, X, Check, Wifi, TrainFront, MapPin } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -224,6 +224,21 @@ export function Reservation({ step }: ReservationProps) {
                             onSelect={() => selectStudio(studioId)}
                           />
                         ))}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-white/50">
+                        <span className="flex items-center gap-1.5">
+                          <Wifi className="h-3.5 w-3.5 text-primary/70" />
+                          Wifi gratuit
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <TrainFront className="h-3.5 w-3.5 text-primary/70" />
+                          A deux pas du RER A
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5 text-primary/70" />
+                          20 min de Paris
+                        </span>
                       </div>
                     </div>
                   </div>

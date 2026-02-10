@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Wifi, TrainFront, MapPin } from "lucide-react";
 import { STUDIOS, PRICING, type StudioId, type GroupType } from "@/lib/booking";
 
 interface StudioPickerProps {
@@ -92,6 +92,21 @@ export function StudioPicker({ onSelect, onBack, groupType }: StudioPickerProps)
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-white/50">
+        <span className="flex items-center gap-1.5">
+          <Wifi className="h-3.5 w-3.5 text-primary/70" />
+          Wifi gratuit
+        </span>
+        <span className="flex items-center gap-1.5">
+          <TrainFront className="h-3.5 w-3.5 text-primary/70" />
+          A deux pas du RER A
+        </span>
+        <span className="flex items-center gap-1.5">
+          <MapPin className="h-3.5 w-3.5 text-primary/70" />
+          20 min de Paris
+        </span>
       </div>
     </div>
   );
