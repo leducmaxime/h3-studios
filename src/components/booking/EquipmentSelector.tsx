@@ -79,13 +79,13 @@ export function EquipmentSelector({
           let priceDisplay = "";
 
           if (eq.pricingType === "session" && eq.sessionPricing) {
-            subtotal = eq.sessionPricing[quantity - 1] || 0;
+            subtotal = quantity > 0 ? eq.sessionPricing[quantity - 1] : 0;
             // Affichage spécial pour les micros
             if (eq.id === "mic") {
               if (quantity === 0) {
                 priceDisplay = "à partir de 3€ par séance (tarif dégressif)";
               } else if (quantity === 4) {
-                priceDisplay = "14€ (4ème offert!) (tarif dégressif)";
+                priceDisplay = `${subtotal}€/séance (4ème offert !)`;
               } else {
                 priceDisplay = `${subtotal}€/séance (tarif dégressif)`;
               }
