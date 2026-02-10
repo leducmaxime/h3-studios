@@ -382,11 +382,6 @@ export function useBookingWithRouter(urlStep?: string) {
         bookingRef,
         cart: [...s.cart, newBooking],
         step: 7,
-        selectedDate: null,
-        startTime: null,
-        endTime: null,
-        studioId: null,
-        equipment: [],
         appliedPromo: null,
         promoDiscount: 0,
       };
@@ -427,6 +422,7 @@ export function useBookingWithRouter(urlStep?: string) {
       studioId: null,
       groupType: "group",
       bookingRef: null,
+      equipment: [],
       step: 1,
     }));
   }, []);
@@ -495,9 +491,9 @@ export function useBookingWithRouter(urlStep?: string) {
       }
       if (s.step === 6) return { ...s, step: 4 };
       if (s.step === 7) {
-        // No active selection: go back to initial state, preserving cart
-        if (!s.selectedDate) return { ...initialState, cart: s.cart, paymentMethod: null };
-        return { ...s, step: 4, paymentMethod: null };
+        // Remove the last booking from cart (undo confirmBooking) and go back to recap
+        const updatedCart = s.cart.slice(0, -1);
+        return { ...s, step: 4, cart: updatedCart, paymentMethod: null };
       }
       if (s.step === 8) return { ...s, step: 7, paymentMethod: null };
       if (s.step === 9) return { ...s, step: 7 };
