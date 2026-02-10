@@ -367,7 +367,11 @@ export function useBookingWithRouter(urlStep?: string) {
         ...s,
         bookingRef,
         cart: [...s.cart, newBooking],
-        step: 5,
+        step: 4,
+        selectedDate: null,
+        startTime: null,
+        endTime: null,
+        studioId: null,
         equipment: [],
         appliedPromo: null,
         promoDiscount: 0,
@@ -461,9 +465,12 @@ export function useBookingWithRouter(urlStep?: string) {
         if (s.step === 3) return { ...s, step: 2, startTime: null, endTime: null };
       }
 
-      if (s.step === 4) return { ...s, step: 3 };
-      if (s.step === 5) return { ...s, step: 4 };
-      if (s.step === 6) return { ...s, step: 5 };
+      if (s.step === 4) {
+        // If no active selection (cart-only view after confirmation), go back to step 0
+        if (!s.selectedDate) return { ...initialState, cart: s.cart };
+        return { ...s, step: 3 };
+      }
+      if (s.step === 6) return { ...s, step: 4 };
       if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
       if (s.step === 8) return { ...s, step: 7, paymentMethod: null };
       if (s.step === 9) return { ...s, step: 7 };

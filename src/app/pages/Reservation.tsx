@@ -15,7 +15,7 @@ import { CartSummary } from "@/components/booking/CartSummary";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, RotateCcw, ShoppingCart, X, Check } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -429,11 +429,24 @@ export function Reservation({ step }: ReservationProps) {
                       </ul>
                     </div>
 
+                    {state.cart.length > 0 && (
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                        <div className="mb-2 flex items-center gap-2 text-sm">
+                          <ShoppingCart className="h-4 w-4 text-primary" />
+                          <span className="font-medium text-white/80">
+                            {state.cart.length} créneau{state.cart.length > 1 ? "x" : ""} déjà dans le panier ({formatPrice(cartTotal)})
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       onClick={confirmBooking}
                       className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 md:block"
                     >
-                      Confirmer - {formatPrice(grandTotal)}
+                      {state.cart.length > 0
+                        ? `Ajouter au panier - ${formatPrice(grandTotal)}`
+                        : `Confirmer - ${formatPrice(grandTotal)}`}
                     </button>
 
                     <StickyBookingCTA
@@ -441,33 +454,101 @@ export function Reservation({ step }: ReservationProps) {
                       equipmentPrice={equipmentPrice}
                       onConfirm={confirmBooking}
                       disabled={false}
-                      buttonText="Confirmer"
+                      buttonText={state.cart.length > 0 ? "Ajouter au panier" : "Confirmer"}
                     />
                   </div>
                 );
               })()}
 
-            {state.step === 5 &&
-              state.selectedDate &&
-              state.startTime &&
-              state.endTime &&
-              state.studioId &&
-              state.bookingRef && (
-                <BookingConfirmation
-                  date={state.selectedDate}
-                  startTime={state.startTime}
-                  endTime={state.endTime}
-                  studioId={state.studioId}
-                  groupType={state.groupType || "group"}
-                  userName={state.userName}
-                  userEmail={state.userEmail}
-                  bookingRef={state.bookingRef}
-                  cart={state.cart}
-                  cartTotal={cartTotal}
-                  onAddAnother={addAnotherBooking}
-                  onCheckout={goToCheckout}
-                />
-              )}
+            {state.step === 4 && !state.selectedDate && state.cart.length > 0 && (
+              <div className="flex flex-col items-center gap-6">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+                  <Check className="h-8 w-8 text-green-400" />
+                </div>
+
+                <div className="text-center">
+                  <h3 className="text-xl font-bold">Créneau ajouté au panier</h3>
+                  <p className="mt-1 text-sm text-white/60">
+                    Finalisez votre réservation ou ajoutez un autre créneau
+                  </p>
+                </div>
+
+                <div className="w-full rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5 text-primary" />
+                    <span className="font-medium">
+                      Panier ({state.cart.length} créneau{state.cart.length > 1 ? "x" : ""})
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {state.cart.map((booking) => (
+                      <div
+                        key={booking.id}
+                        className="flex items-center justify-between rounded-lg bg-black/30 p-3"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {booking.groupType === "group"
+                              ? STUDIOS[booking.studioId].name
+                              : "Répétition"}
+                          </div>
+                          <div className="text-sm text-white/60">
+                            {formatDate(booking.date, "short")} • {booking.startTime} -{" "}
+                            {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
+                          </div>
+                          {booking.equipmentPrice > 0 && (
+                            <div className="text-xs text-white/40">
+                              + options : {formatPrice(booking.equipmentPrice)}
+                            </div>
+                          )}
+                          {booking.promoDiscount > 0 && (
+                            <div className="text-xs text-green-400">
+                              Réduction ({booking.promoCode}) : -{formatPrice(booking.promoDiscount)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-primary">
+                            {formatPrice(booking.price)}
+                          </span>
+                          <button
+                            onClick={() => removeFromCart(booking.id)}
+                            className="rounded-full p-1 transition-colors hover:bg-white/10"
+                            aria-label="Supprimer"
+                          >
+                            <X className="h-4 w-4 text-white/60" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
+                    <span className="text-lg font-semibold">
+                      Total : {formatPrice(cartTotal)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex w-full flex-col gap-3">
+                  <button
+                    onClick={goToCheckout}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
+                  >
+                    Finaliser la réservation
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={addAnotherBooking}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Ajouter un autre créneau
+                  </button>
+                </div>
+              </div>
+            )}
 
             {state.step === 6 && state.cart.length > 0 && (
               <FinalCheckout
@@ -508,7 +589,7 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step > 0 && state.step < 5 && state.cart.length > 0 && (
+            {state.step > 0 && state.step < 4 && state.cart.length > 0 && (
               <CartSummary
                 cart={state.cart}
                 total={cartTotal}
