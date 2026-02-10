@@ -90,8 +90,10 @@ export function EquipmentSelector({
                 priceDisplay = `${subtotal}€/séance (tarif dégressif)`;
               }
             } else {
+              const unitPrice = eq.sessionPricing[0];
+              const isLinear = eq.maxPerSession > 1;
               priceDisplay = quantity === 0
-                ? `${eq.sessionPricing[0]}€/séance`
+                ? `${unitPrice}€/séance${isLinear ? " par unité" : ""}`
                 : `${subtotal}€/séance`;
             }
           } else {
