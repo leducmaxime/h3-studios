@@ -8,19 +8,21 @@ interface ProgressIndicatorProps {
   flow: "time-first" | "studio-first";
   skipStudio?: boolean;
   onStepClick?: (step: number) => void;
+  /** When true, booking steps (0-2) are not clickable even if completed */
+  cartLocked?: boolean;
 }
 
 // Each entry: [Icon, actualStep]
 type StepDef = [typeof Users, number];
 
 /**
- * Step flow (new):
+ * Step flow:
  * 0: GroupType + FlowChoice
  * 1: Date or Studio
- * 2: Time+Studio or Date+Time
- * 3: Coordonnées
- * 4: Récap & options (not shown in progress — merged with step 3 visually)
+ * 2: Time+Studio or Date+Time (inline recap + "Ajouter au panier")
  * 5: Panier
+ * 3: Coordonnées (after cart, before payment)
+ * 6+: Payment steps (not shown in progress)
  */
 function getStepDefs(
   flow: "time-first" | "studio-first",
@@ -32,16 +34,16 @@ function getStepDefs(
       return [
         [Users, 0],          // Group choice
         [Calendar, 1],       // Date + time
-        [IdCard, 3],         // Coordonnées
         [ShoppingCart, 5],   // Panier
+        [IdCard, 3],         // Coordonnées
       ];
     }
     return [
       [Users, 0],            // Group choice
       [Calendar, 1],         // Date + time
       [Music, 2],            // Studio
-      [IdCard, 3],           // Coordonnées
       [ShoppingCart, 5],     // Panier
+      [IdCard, 3],           // Coordonnées
     ];
   }
   // studio-first
@@ -49,8 +51,8 @@ function getStepDefs(
     [Users, 0],              // Group choice
     [Music, 1],              // Studio
     [Calendar, 2],           // Date + time
-    [IdCard, 3],             // Coordonnées
     [ShoppingCart, 5],       // Panier
+    [IdCard, 3],             // Coordonnées
   ];
 }
 
@@ -60,18 +62,24 @@ export function ProgressIndicator({
   flow,
   skipStudio,
   onStepClick,
+  cartLocked,
 }: ProgressIndicatorProps) {
   const stepDefs = getStepDefs(flow, !!skipStudio);
+
+  // Map each step to its visual position index for progress comparison
+  const stepOrder = stepDefs.map(([, s]) => s);
 
   return (
     <div className="mb-6">
       <div className="flex items-center justify-center gap-0">
         {stepDefs.map(([Icon, actualStep], index) => {
-          const isCompleted = currentStep > actualStep;
-          const isCurrent = currentStep === actualStep ||
-            // Step 4 (recap) is visually part of step 3 progress
-            (actualStep === 3 && currentStep === 4);
-          const isClickable = isCompleted && !!onStepClick;
+          const currentIdx = stepOrder.indexOf(currentStep);
+          const thisIdx = index;
+          const isCompleted = currentIdx > thisIdx;
+          const isCurrent = currentIdx === thisIdx;
+          // Cart locked: booking steps (0-2) are not clickable
+          const isBookingStep = actualStep <= 2;
+          const isClickable = isCompleted && !!onStepClick && !(cartLocked && isBookingStep);
 
           return (
             <div key={actualStep} className="flex items-center">
@@ -121,7 +129,7 @@ export function ProgressIndicator({
                 <div
                   className={`
                     mx-2 h-0.5 w-6 sm:w-10 transition-colors duration-300
-                    ${currentStep > actualStep ? "bg-primary" : "bg-white/20"}
+                    ${currentIdx > thisIdx ? "bg-primary" : "bg-white/20"}
                   `}
                 />
               )}
@@ -131,14 +139,18 @@ export function ProgressIndicator({
       </div>
 
       <div className="mt-4 flex gap-1">
-        {stepDefs.map(([, actualStep]) => (
-          <div
-            key={actualStep}
-            className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-              currentStep >= actualStep ? "bg-primary" : "bg-white/20"
-            }`}
-          />
-        ))}
+        {stepDefs.map(([, actualStep], index) => {
+          const currentIdx = stepOrder.indexOf(currentStep);
+          const filled = currentIdx >= index;
+          return (
+            <div
+              key={actualStep}
+              className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                filled ? "bg-primary" : "bg-white/20"
+              }`}
+            />
+          );
+        })}
       </div>
     </div>
   );

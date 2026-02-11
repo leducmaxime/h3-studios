@@ -262,6 +262,7 @@ export function Reservation({ step }: ReservationProps) {
                   flow={state.flow || "time-first"}
                   skipStudio={state.flow === "time-first" && (state.groupType === "solo" || state.groupType === "duo")}
                   onStepClick={navigateToStep}
+                  cartLocked={state.cart.length > 0 && !state.isAddingNew}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
                   {state.step > 0 && state.step <= 2 && state.groupType && (
