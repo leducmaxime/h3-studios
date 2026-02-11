@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, CreditCard, IdCard, Music, ShoppingCart, Users } from "lucide-react";
+import { Calendar, CircleCheckBig, CreditCard, IdCard, Music, ShoppingCart, Users } from "lucide-react";
 
 interface ProgressIndicatorProps {
   currentStep: number;
@@ -22,7 +22,8 @@ type StepDef = [typeof Users, number];
  * 2: Time+Studio or Date+Time (inline recap + "Ajouter au panier")
  * 5: Panier
  * 3: Coordonnées (after cart, before payment)
- * 6+: Payment steps (not shown in progress)
+ * 6: Choix de paiement (7: Stripe redirect — grouped with 6 visually)
+ * 8: Confirmation
  */
 function getStepDefs(
   flow: "time-first" | "studio-first",
@@ -32,27 +33,33 @@ function getStepDefs(
     if (skipStudio) {
       // Solo/duo: no studio step
       return [
-        [Users, 0],          // Group choice
-        [Calendar, 1],       // Date + time
-        [ShoppingCart, 5],   // Panier
-        [IdCard, 3],         // Coordonnées
+        [Users, 0],              // Group choice
+        [Calendar, 1],           // Date + time
+        [ShoppingCart, 5],       // Panier
+        [IdCard, 3],             // Coordonnées
+        [CreditCard, 6],         // Paiement
+        [CircleCheckBig, 8],     // Confirmation
       ];
     }
     return [
-      [Users, 0],            // Group choice
-      [Calendar, 1],         // Date + time
-      [Music, 2],            // Studio
-      [ShoppingCart, 5],     // Panier
-      [IdCard, 3],           // Coordonnées
+      [Users, 0],                // Group choice
+      [Calendar, 1],             // Date + time
+      [Music, 2],                // Studio
+      [ShoppingCart, 5],         // Panier
+      [IdCard, 3],               // Coordonnées
+      [CreditCard, 6],           // Paiement
+      [CircleCheckBig, 8],       // Confirmation
     ];
   }
   // studio-first
   return [
-    [Users, 0],              // Group choice
-    [Music, 1],              // Studio
-    [Calendar, 2],           // Date + time
-    [ShoppingCart, 5],       // Panier
-    [IdCard, 3],             // Coordonnées
+    [Users, 0],                  // Group choice
+    [Music, 1],                  // Studio
+    [Calendar, 2],               // Date + time
+    [ShoppingCart, 5],           // Panier
+    [IdCard, 3],                 // Coordonnées
+    [CreditCard, 6],             // Paiement
+    [CircleCheckBig, 8],         // Confirmation
   ];
 }
 
@@ -69,17 +76,22 @@ export function ProgressIndicator({
   // Map each step to its visual position index for progress comparison
   const stepOrder = stepDefs.map(([, s]) => s);
 
+  // Step 7 (Stripe redirect) is visually grouped with step 6 (payment choice)
+  const resolvedStep = currentStep === 7 ? 6 : currentStep;
+  const currentIdx = stepOrder.indexOf(resolvedStep);
+
   return (
     <div className="mb-6">
       <div className="flex items-center justify-center gap-0">
         {stepDefs.map(([Icon, actualStep], index) => {
-          const currentIdx = stepOrder.indexOf(currentStep);
           const thisIdx = index;
           const isCompleted = currentIdx > thisIdx;
           const isCurrent = currentIdx === thisIdx;
           // Cart locked: booking steps (0-2) are not clickable
+          // Payment/confirmation steps (6-8) are never clickable
           const isBookingStep = actualStep <= 2;
-          const isClickable = isCompleted && !!onStepClick && !(cartLocked && isBookingStep);
+          const isPaymentStep = actualStep >= 6;
+          const isClickable = isCompleted && !!onStepClick && !(cartLocked && isBookingStep) && !isPaymentStep;
 
           return (
             <div key={actualStep} className="flex items-center">
@@ -139,18 +151,14 @@ export function ProgressIndicator({
       </div>
 
       <div className="mt-4 flex gap-1">
-        {stepDefs.map(([, actualStep], index) => {
-          const currentIdx = stepOrder.indexOf(currentStep);
-          const filled = currentIdx >= index;
-          return (
-            <div
-              key={actualStep}
-              className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-                filled ? "bg-primary" : "bg-white/20"
-              }`}
-            />
-          );
-        })}
+        {stepDefs.map(([, actualStep], index) => (
+          <div
+            key={actualStep}
+            className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+              currentIdx >= index ? "bg-primary" : "bg-white/20"
+            }`}
+          />
+        ))}
       </div>
     </div>
   );
