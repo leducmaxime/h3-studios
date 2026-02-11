@@ -63,10 +63,10 @@ export function Reservation({ step }: ReservationProps) {
     updateEquipment,
     applyPromo,
     removePromo,
-    goToCoordonnees,
     confirmBooking,
     addAnotherBooking,
     goToPaymentChoice,
+    goToPaymentFromCoordonnees,
     goToCart,
     removeFromCart,
     resetBooking,
@@ -84,8 +84,8 @@ export function Reservation({ step }: ReservationProps) {
       })())
     : 0;
 
-  // Show cart banner when adding a new booking and cart has items
-  const showCartBanner = state.isAddingNew && state.cart.length > 0 && state.step <= 4;
+  // Show cart banner when adding a new booking and cart has items (only on booking steps 0-2)
+  const showCartBanner = state.isAddingNew && state.cart.length > 0 && state.step <= 2;
 
   // Inline recap + options block, shown after studio is selected (within the same step)
   const renderRecapSection = () => {
@@ -115,11 +115,7 @@ export function Reservation({ step }: ReservationProps) {
     const hasPeakPricing = gt === "group";
 
     const handleConfirmRecap = () => {
-      if (canConfirmBooking) {
-        confirmBooking();
-      } else {
-        goToCoordonnees();
-      }
+      confirmBooking();
     };
 
     return (
@@ -268,24 +264,24 @@ export function Reservation({ step }: ReservationProps) {
                   onStepClick={navigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {state.step > 0 && state.step < 5 && state.groupType && (
+                  {state.step > 0 && state.step <= 2 && state.groupType && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
-                  {/* Studio pill: show on steps before cart */}
-                  {state.studioId && state.step < 5 && state.groupType === "group" && (
+                  {/* Studio pill: show on booking steps only */}
+                  {state.studioId && state.step <= 2 && state.groupType === "group" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
                   {/* Date + time pills */}
-                  {state.selectedDate && state.step < 5 && (
+                  {state.selectedDate && state.step <= 2 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && state.step < 5 && (
+                  {state.startTime && state.endTime && state.step <= 2 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
                     </span>
@@ -472,18 +468,14 @@ export function Reservation({ step }: ReservationProps) {
               </>
             )}
 
-            {/* Step 3: Coordonnées */}
-            {state.step === 3 &&
-              state.selectedDate &&
-              state.startTime &&
-              state.endTime &&
-              state.studioId && (
+            {/* Step 3: Coordonnées (after cart, before payment) */}
+            {state.step === 3 && (
                 <BookingForm
-                  date={state.selectedDate}
-                  startTime={state.startTime}
-                  endTime={state.endTime}
-                  studioId={state.studioId}
-                  groupType={state.groupType || "group"}
+                  date={state.cart[0]?.date || new Date()}
+                  startTime={state.cart[0]?.startTime || ""}
+                  endTime={state.cart[0]?.endTime || ""}
+                  studioId={state.cart[0]?.studioId || "la-scene"}
+                  groupType={state.cart[0]?.groupType || "group"}
                   userName={state.userName}
                   userEmail={state.userEmail}
                   userPhone={state.userPhone}
@@ -493,7 +485,7 @@ export function Reservation({ step }: ReservationProps) {
                   billingCity={state.billingCity}
                   additionalInfo={state.additionalInfo}
                   onUpdateField={updateUserInfo}
-                  onContinue={confirmBooking}
+                  onContinue={goToPaymentFromCoordonnees}
                   onBack={goBack}
                   canContinue={canConfirmBooking}
                 />

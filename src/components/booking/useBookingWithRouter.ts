@@ -29,16 +29,17 @@ interface ExtendedBookingState extends BookingState {
 }
 
 /**
- * Step flow (new):
+ * Step flow:
  * 0: GroupType + FlowChoice
  * 1: Date or Studio (depending on flow)
- * 2: Time+Studio or Date+Time
- * 3: Coordonnées
- * 4: Récap & options → confirmBooking → cart
- * 5: Panier (CartPage)
+ * 2: Time+Studio or Date+Time (inline recap + "Ajouter au panier")
+ * 5: Panier (CartPage) — "Valider et payer" goes to coordonnées
+ * 3: Coordonnées (BookingForm) — after cart validation
  * 6: Choix de paiement (PaymentChoice)
  * 7: Paiement (Stripe/Mock)
  * 8: Terminé (FinalCheckout)
+ *
+ * Cart lock: steps 0-2 are blocked when cart has items (unless isAddingNew).
  */
 const STEP_URL_MAP: Record<number, string> = {
   0: "",
@@ -204,8 +205,8 @@ export function useBookingWithRouter(urlStep?: string) {
         restoredState.bandName = prefs.bandName || restoredState.bandName;
       }
 
-      // Cart lock: if cart has items and not adding new, force cart page
-      if (restoredState.cart.length > 0 && !restoredState.isAddingNew && restoredState.step < 5) {
+      // Cart lock: if cart has items and not adding new, block booking steps (0-2)
+      if (restoredState.cart.length > 0 && !restoredState.isAddingNew && restoredState.step <= 2) {
         restoredState.step = 5 as BookingState["step"];
       }
       
@@ -234,8 +235,8 @@ export function useBookingWithRouter(urlStep?: string) {
 
   useEffect(() => {
     if (!isHydrated) return;
-    // Cart lock: enforce cart URL if cart has items and not adding new
-    if (state.cart.length > 0 && !state.isAddingNew && state.step < 5) {
+    // Cart lock: enforce cart URL if cart has items and not adding new (block booking steps 0-2)
+    if (state.cart.length > 0 && !state.isAddingNew && state.step <= 2) {
       setState((s) => ({ ...s, step: 5 as BookingState["step"] }));
       return;
     }
@@ -258,8 +259,8 @@ export function useBookingWithRouter(urlStep?: string) {
       const newStep = getStepFromUrl(urlStepStr || undefined);
       
       setState((s) => {
-        // Cart lock: if cart has items and not adding new, force cart page
-        if (s.cart.length > 0 && !s.isAddingNew && newStep < 5) {
+        // Cart lock: if cart has items and not adding new, block booking steps (0-2)
+        if (s.cart.length > 0 && !s.isAddingNew && newStep <= 2) {
           // Replace URL to cart without adding history entry
           window.history.replaceState({}, "", "/reservation/panier");
           return { ...s, step: 5 as BookingState["step"] };
@@ -278,8 +279,8 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const navigateToStep = useCallback((step: number) => {
     setState((s) => {
-      // Cart lock: if cart has items and not adding new, block navigation to pre-cart steps
-      if (s.cart.length > 0 && !s.isAddingNew && step < 5) {
+      // Cart lock: if cart has items and not adding new, block booking steps (0-2)
+      if (s.cart.length > 0 && !s.isAddingNew && step <= 2) {
         return { ...s, step: 5 as BookingState["step"] };
       }
       return { ...s, step: step as BookingState["step"] };
@@ -369,6 +370,7 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, appliedPromo: null, promoDiscount: 0 }));
   }, []);
 
+  /** From cart page: go to coordonnées (step 3) before payment */
   const goToCoordonnees = useCallback(() => {
     setState((s) => ({ ...s, step: 3 }));
   }, []);
@@ -439,8 +441,13 @@ export function useBookingWithRouter(urlStep?: string) {
     }));
   }, []);
 
-  /** From cart page: proceed to payment choice (step 6) */
+  /** From cart page: proceed to coordonnées (step 3) before payment */
   const goToPaymentChoice = useCallback(() => {
+    setState((s) => ({ ...s, step: 3 }));
+  }, []);
+
+  /** From coordonnées: proceed to payment choice (step 6) */
+  const goToPaymentFromCoordonnees = useCallback(() => {
     setState((s) => ({ ...s, step: 6 }));
   }, []);
 
@@ -529,11 +536,6 @@ export function useBookingWithRouter(urlStep?: string) {
 
       if (s.flow === "time-first") {
         if (s.step === 2) return { ...s, step: 1, studioId: null };
-        // Step 3 (coordonnées): go back to step 2 (or step 1 for solo/duo)
-        if (s.step === 3 && (s.groupType === "solo" || s.groupType === "duo")) {
-          return { ...s, step: 1 };
-        }
-        if (s.step === 3) return { ...s, step: 2 };
       } else { // studio-first
         if (s.step === 2) {
           // If we have a date selected (in merged date+time step), clear it first
@@ -542,15 +544,14 @@ export function useBookingWithRouter(urlStep?: string) {
           }
           return { ...s, step: 1, studioId: null, selectedDate: null };
         }
-        if (s.step === 3) return { ...s, step: 2 };
       }
 
-      // Step 4 (recap): go back to coordonnées
-      if (s.step === 4) return { ...s, step: 3 };
+      // Step 3 (coordonnées, now after cart): go back to cart
+      if (s.step === 3) return { ...s, step: 5 };
       // Step 5 (cart): locked — cannot go back from cart (use "Ajouter une autre réservation" instead)
       if (s.step === 5) return s;
-      // Step 6 (payment choice): go back to cart
-      if (s.step === 6) return { ...s, step: 5, paymentMethod: null };
+      // Step 6 (payment choice): go back to coordonnées
+      if (s.step === 6) return { ...s, step: 3, paymentMethod: null };
       // Step 7 (payment): go back to payment choice
       if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
       // Step 8 (done): go back to payment choice
@@ -627,6 +628,7 @@ export function useBookingWithRouter(urlStep?: string) {
     confirmBooking,
     addAnotherBooking,
     goToPaymentChoice,
+    goToPaymentFromCoordonnees,
     goToCart,
     removeFromCart,
     resetBooking,

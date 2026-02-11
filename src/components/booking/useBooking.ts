@@ -229,8 +229,13 @@ export function useBooking() {
     }));
   }, []);
 
-  /** From cart page: proceed to payment choice (step 6) */
+  /** From cart page: proceed to coordonnées (step 3) before payment */
   const goToPaymentChoice = useCallback(() => {
+    setState((s) => ({ ...s, step: 3 }));
+  }, []);
+
+  /** From coordonnées: proceed to payment choice (step 6) */
+  const goToPaymentFromCoordonnees = useCallback(() => {
     setState((s) => ({ ...s, step: 6 }));
   }, []);
 
@@ -318,10 +323,6 @@ export function useBooking() {
 
       if (s.flow === "time-first") {
         if (s.step === 2) return { ...s, step: 1, studioId: null };
-        if (s.step === 3 && (s.groupType === "solo" || s.groupType === "duo")) {
-          return { ...s, step: 1, studioId: null };
-        }
-        if (s.step === 3) return { ...s, step: 2 };
       } else { // studio-first
         if (s.step === 2) {
           // If we have a date selected (in merged date+time step), clear it first
@@ -330,14 +331,14 @@ export function useBooking() {
           }
           return { ...s, step: 1, studioId: null, selectedDate: null };
         }
-        if (s.step === 3) return { ...s, step: 2, startTime: null, endTime: null };
       }
 
-      if (s.step === 4) return { ...s, step: 3 };
+      // Step 3 (coordonnées, now after cart): go back to cart
+      if (s.step === 3) return { ...s, step: 5 };
       // Step 5 (cart): locked — cannot go back from cart (use "Ajouter une autre réservation" instead)
       if (s.step === 5) return s;
-      // Step 6 (payment choice): go back to cart
-      if (s.step === 6) return { ...s, step: 5, paymentMethod: null };
+      // Step 6 (payment choice): go back to coordonnées
+      if (s.step === 6) return { ...s, step: 3, paymentMethod: null };
       // Step 7 (payment): go back to payment choice
       if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
       // Step 8 (done): go back to payment choice
@@ -411,6 +412,7 @@ export function useBooking() {
     confirmBooking,
     addAnotherBooking,
     goToPaymentChoice,
+    goToPaymentFromCoordonnees,
     goToCart,
     selectPaymentMethod,
     processPayment,
