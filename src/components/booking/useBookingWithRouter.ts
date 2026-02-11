@@ -31,20 +31,18 @@ interface ExtendedBookingState extends BookingState {
 /**
  * Step flow:
  * 0: GroupType + FlowChoice
- * 1: Date or Studio (depending on flow)
- * 2: Time+Studio or Date+Time (inline recap + "Ajouter au panier")
+ * 1: Booking (Date+Time+Studio unified — all on one page)
  * 5: Panier (CartPage) — "Valider et payer" goes to coordonnées
  * 3: Coordonnées (BookingForm) — after cart validation
  * 6: Choix de paiement (PaymentChoice)
  * 7: Paiement (Stripe/Mock)
  * 8: Terminé (FinalCheckout)
  *
- * Cart lock: steps 0-2 are blocked when cart has items (unless isAddingNew).
+ * Cart lock: steps 0-1 are blocked when cart has items (unless isAddingNew).
  */
 const STEP_URL_MAP: Record<number, string> = {
   0: "",
-  1: "creneau",
-  2: "studio",
+  1: "reservation",
   3: "coordonnees",
   5: "panier",
   6: "paiement-choix",
@@ -54,8 +52,9 @@ const STEP_URL_MAP: Record<number, string> = {
 
 const URL_STEP_MAP: Record<string, number> = {
   "": 0,
-  "creneau": 1,
-  "studio": 2,
+  "reservation": 1,
+  "creneau": 1,   // legacy URL compat
+  "studio": 1,    // legacy URL compat
   "coordonnees": 3,
   "panier": 5,
   "paiement-choix": 6,
@@ -205,8 +204,8 @@ export function useBookingWithRouter(urlStep?: string) {
         restoredState.bandName = prefs.bandName || restoredState.bandName;
       }
 
-      // Cart lock: if cart has items and not adding new, block booking steps (0-2)
-      if (restoredState.cart.length > 0 && !restoredState.isAddingNew && restoredState.step <= 2) {
+      // Cart lock: if cart has items and not adding new, block booking steps (0-1)
+      if (restoredState.cart.length > 0 && !restoredState.isAddingNew && restoredState.step <= 1) {
         restoredState.step = 5 as BookingState["step"];
       }
       
@@ -235,8 +234,8 @@ export function useBookingWithRouter(urlStep?: string) {
 
   useEffect(() => {
     if (!isHydrated) return;
-    // Cart lock: enforce cart URL if cart has items and not adding new (block booking steps 0-2)
-    if (state.cart.length > 0 && !state.isAddingNew && state.step <= 2) {
+    // Cart lock: enforce cart URL if cart has items and not adding new (block booking steps 0-1)
+    if (state.cart.length > 0 && !state.isAddingNew && state.step <= 1) {
       setState((s) => ({ ...s, step: 5 as BookingState["step"] }));
       return;
     }
@@ -259,8 +258,8 @@ export function useBookingWithRouter(urlStep?: string) {
       const newStep = getStepFromUrl(urlStepStr || undefined);
       
       setState((s) => {
-        // Cart lock: if cart has items and not adding new, block booking steps (0-2)
-        if (s.cart.length > 0 && !s.isAddingNew && newStep <= 2) {
+        // Cart lock: if cart has items and not adding new, block booking steps (0-1)
+        if (s.cart.length > 0 && !s.isAddingNew && newStep <= 1) {
           // Replace URL to cart without adding history entry
           window.history.replaceState({}, "", "/reservation/panier");
           return { ...s, step: 5 as BookingState["step"] };
@@ -279,8 +278,8 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const navigateToStep = useCallback((step: number) => {
     setState((s) => {
-      // Cart lock: if cart has items and not adding new, block booking steps (0-2)
-      if (s.cart.length > 0 && !s.isAddingNew && step <= 2) {
+      // Cart lock: if cart has items and not adding new, block booking steps (0-1)
+      if (s.cart.length > 0 && !s.isAddingNew && step <= 1) {
         return { ...s, step: 5 as BookingState["step"] };
       }
       return { ...s, step: step as BookingState["step"] };
@@ -308,7 +307,6 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({
       ...s,
       studioId,
-      step: 2,
     }));
   }, []);
 
@@ -325,15 +323,15 @@ export function useBookingWithRouter(urlStep?: string) {
       if (s.startTime && s.endTime) {
         if (s.flow === "time-first") {
           // Solo/duo skip studio selection — auto-assign based on availability
-          // Stay on step 1 — recap/options are shown inline
           if (s.groupType === "solo" || s.groupType === "duo") {
             const avail = s.selectedDate ? generateMockAvailability(s.selectedDate) : new Set<string>();
             const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, avail);
             return { ...s, studioId: studio };
           }
-          return { ...s, step: 2 };
+          // Group: stay on step 1 — studio selection shown inline
+          return s;
         }
-        // studio-first: stay on step 2 — recap/options shown inline after time selection
+        // studio-first: stay on step 1 — recap/options shown inline after time selection
         return s;
       }
       return s;
@@ -527,28 +525,25 @@ export function useBookingWithRouter(urlStep?: string) {
         return s;
       }
       if (s.step === 1) {
-        // If we have a date selected (in merged date+time step), clear it first
+        // Progressive back within the unified booking step:
+        // studio-first: if date selected, clear date first
+        if (s.flow === "studio-first" && s.selectedDate) {
+          return { ...s, selectedDate: null, startTime: null, endTime: null };
+        }
+        // studio-first: if studio selected but no date, clear studio
+        if (s.flow === "studio-first" && s.studioId) {
+          return { ...s, studioId: null, selectedDate: null, startTime: null, endTime: null };
+        }
+        // time-first: if date selected, clear date first
         if (s.flow === "time-first" && s.selectedDate) {
           return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null };
         }
         return { ...s, step: 0, flow: null };
       }
 
-      if (s.flow === "time-first") {
-        if (s.step === 2) return { ...s, step: 1, studioId: null };
-      } else { // studio-first
-        if (s.step === 2) {
-          // If we have a date selected (in merged date+time step), clear it first
-          if (s.selectedDate) {
-            return { ...s, selectedDate: null, startTime: null, endTime: null };
-          }
-          return { ...s, step: 1, studioId: null, selectedDate: null };
-        }
-      }
-
       // Step 3 (coordonnées, now after cart): go back to cart
       if (s.step === 3) return { ...s, step: 5 };
-      // Step 5 (cart): locked — cannot go back from cart (use "Ajouter une autre réservation" instead)
+      // Step 5 (cart): locked — cannot go back from cart
       if (s.step === 5) return s;
       // Step 6 (payment choice): go back to coordonnées
       if (s.step === 6) return { ...s, step: 3, paymentMethod: null };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter";
@@ -83,6 +83,46 @@ export function Reservation({ step }: ReservationProps) {
     document.getElementById("root")?.scrollTo({ top: 0, behavior: "smooth" });
   }, [state.step]);
 
+  // Refs for auto-scroll within unified booking step
+  const timeSlotRef = useRef<HTMLDivElement>(null);
+  const studioRef = useRef<HTMLDivElement>(null);
+  const recapRef = useRef<HTMLDivElement>(null);
+  const dateRef = useRef<HTMLDivElement>(null);
+
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
+    setTimeout(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
+  // Auto-scroll when date is selected (time slots appear)
+  useEffect(() => {
+    if (state.step === 1 && state.selectedDate && !state.startTime) {
+      scrollToRef(timeSlotRef);
+    }
+  }, [state.step, state.selectedDate, state.startTime]);
+
+  // Auto-scroll when time is confirmed (studio picker appears for group time-first)
+  useEffect(() => {
+    if (state.step === 1 && state.startTime && state.endTime && !state.studioId && state.flow === "time-first" && state.groupType === "group") {
+      scrollToRef(studioRef);
+    }
+  }, [state.step, state.startTime, state.endTime, state.studioId, state.flow, state.groupType]);
+
+  // Auto-scroll when studio is selected (recap appears) — time-first group
+  useEffect(() => {
+    if (state.step === 1 && state.studioId && state.startTime && state.endTime) {
+      scrollToRef(recapRef);
+    }
+  }, [state.step, state.studioId, state.startTime, state.endTime]);
+
+  // Auto-scroll for studio-first: when studio selected, scroll to date picker
+  useEffect(() => {
+    if (state.step === 1 && state.flow === "studio-first" && state.studioId && !state.selectedDate) {
+      scrollToRef(dateRef);
+    }
+  }, [state.step, state.flow, state.studioId, state.selectedDate]);
+
   const durationHours = state.startTime && state.endTime
     ? ((() => {
         let endIdx = TIME_SLOTS.indexOf(state.endTime);
@@ -91,8 +131,8 @@ export function Reservation({ step }: ReservationProps) {
       })())
     : 0;
 
-  // Show cart banner when adding a new booking and cart has items (only on booking steps 0-2)
-  const showCartBanner = state.isAddingNew && state.cart.length > 0 && state.step <= 2;
+  // Show cart banner when adding a new booking and cart has items (only on booking steps 0-1)
+  const showCartBanner = state.isAddingNew && state.cart.length > 0 && state.step <= 1;
 
   // Inline recap + options block, shown after studio is selected (within the same step)
   const renderRecapSection = () => {
@@ -272,24 +312,24 @@ export function Reservation({ step }: ReservationProps) {
                   cartLocked={state.cart.length > 0 && !state.isAddingNew}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {state.step > 0 && state.step <= 2 && state.groupType && (
+                  {state.step === 1 && state.groupType && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
-                  {/* Studio pill: show on booking steps only */}
-                  {state.studioId && state.step <= 2 && state.groupType === "group" && (
+                  {/* Studio pill: show on booking step only */}
+                  {state.studioId && state.step === 1 && state.groupType === "group" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
                   {/* Date + time pills */}
-                  {state.selectedDate && state.step <= 2 && (
+                  {state.selectedDate && state.step === 1 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && state.step <= 2 && (
+                  {state.startTime && state.endTime && state.step === 1 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
                     </span>
@@ -309,115 +349,125 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
-            {/* Steps 1-2: Time-first flow */}
-            {state.flow === "time-first" && (
-              <>
-                {state.step === 1 && (
-                  <div className="flex flex-col gap-6">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={goBack}
-                        className="rounded-full p-2 transition-colors hover:bg-white/10"
-                        aria-label="Retour"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                      <p className="text-white/70">
-                        {!state.selectedDate
-                          ? "Choisissez une date pour votre répétition"
-                          : "Choisissez votre créneau"}
-                      </p>
-                    </div>
-                    <WeekCalendar
-                      selectedDate={state.selectedDate}
-                      onSelectDate={selectDate}
-                      studioFilter={null}
+            {/* Step 1: Unified booking step — Time-first flow */}
+            {state.step === 1 && state.flow === "time-first" && (
+              <div className="flex flex-col gap-6">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={goBack}
+                    className="rounded-full p-2 transition-colors hover:bg-white/10"
+                    aria-label="Retour"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <p className="text-white/70">
+                    {!state.selectedDate
+                      ? "Choisissez une date pour votre répétition"
+                      : !state.startTime
+                        ? "Choisissez votre créneau"
+                        : state.groupType === "group" && !state.studioId
+                          ? "Choisissez votre studio"
+                          : "Récapitulatif de votre réservation"}
+                  </p>
+                </div>
+
+                {/* Date picker */}
+                <WeekCalendar
+                  selectedDate={state.selectedDate}
+                  onSelectDate={selectDate}
+                  studioFilter={null}
+                />
+
+                {/* Time slot picker — appears after date selection */}
+                {state.selectedDate && (
+                  <div ref={timeSlotRef}>
+                    <TimeSlotPicker
+                      date={state.selectedDate}
+                      availability={availability}
+                      startTime={state.startTime}
+                      endTime={state.endTime}
+                      onSelectRange={selectTimeRange}
+                      onClear={clearTimeRange}
+                      onConfirm={confirmTimeSelection}
+                      onBack={goBack}
+                      canConfirm={canProceedToStudio}
+                      hideHeader
+                      groupType={state.groupType || "group"}
                     />
-                    {state.selectedDate && (
-                      <TimeSlotPicker
-                        date={state.selectedDate}
-                        availability={availability}
-                        startTime={state.startTime}
-                        endTime={state.endTime}
-                        onSelectRange={selectTimeRange}
-                        onClear={clearTimeRange}
-                        onConfirm={confirmTimeSelection}
-                        onBack={goBack}
-                        canConfirm={canProceedToStudio}
-                        hideHeader
-                        groupType={state.groupType || "group"}
-                      />
-                    )}
-                    {/* Solo/duo: show recap inline after studio auto-assigned */}
-                    {state.studioId && state.startTime && state.endTime && (
-                      renderRecapSection()
-                    )}
                   </div>
                 )}
 
-                {state.step === 2 && state.selectedDate && state.startTime && state.endTime && (
-                  <div className="flex flex-col gap-6">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={goBack}
-                        className="rounded-full p-2 transition-colors hover:bg-white/10"
-                        aria-label="Retour"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                      <div>
-                        <p className="text-sm text-white/60">
-                          {formatDate(state.selectedDate, "short")} • {state.startTime} - {state.endTime} ({formatDuration(state.startTime, state.endTime)})
-                        </p>
-                      </div>
+                {/* Studio picker — appears after time selection (group only) */}
+                {state.startTime && state.endTime && state.groupType === "group" && (
+                  <div ref={studioRef}>
+                    <span className="mb-3 block text-sm font-medium text-white/70">
+                      Choisissez votre studio
+                    </span>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {(["la-scene", "le-podium"] as StudioId[]).map((sid) => (
+                        <StudioCard
+                          key={sid}
+                          studioId={sid}
+                          date={state.selectedDate!}
+                          startTime={state.startTime!}
+                          endTime={state.endTime!}
+                          groupType={state.groupType || "group"}
+                          availability={availability}
+                          onSelect={() => selectStudio(sid)}
+                        />
+                      ))}
                     </div>
 
-                    <div>
-                      <span className="mb-3 block text-sm font-medium text-white/70">
-                        Choisissez votre studio
+                    <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-white/50">
+                      <span className="flex items-center gap-1.5">
+                        <Wifi className="h-3.5 w-3.5 text-primary/70" />
+                        Wifi gratuit
                       </span>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {(["la-scene", "le-podium"] as StudioId[]).map((sid) => (
-                          <StudioCard
-                            key={sid}
-                            studioId={sid}
-                            date={state.selectedDate!}
-                            startTime={state.startTime!}
-                            endTime={state.endTime!}
-                            groupType={state.groupType || "group"}
-                            availability={availability}
-                            onSelect={() => selectStudio(sid)}
-                          />
-                        ))}
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-white/50">
-                        <span className="flex items-center gap-1.5">
-                          <Wifi className="h-3.5 w-3.5 text-primary/70" />
-                          Wifi gratuit
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <TrainFront className="h-3.5 w-3.5 text-primary/70" />
-                          A deux pas du RER A
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5 text-primary/70" />
-                          20 min de Paris
-                        </span>
-                      </div>
+                      <span className="flex items-center gap-1.5">
+                        <TrainFront className="h-3.5 w-3.5 text-primary/70" />
+                        A deux pas du RER A
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-primary/70" />
+                        20 min de Paris
+                      </span>
                     </div>
-
-                    {/* Show recap inline after studio is selected */}
-                    {state.studioId && renderRecapSection()}
                   </div>
                 )}
-              </>
+
+                {/* Recap — appears after studio selection (or auto-assign for solo/duo) */}
+                {state.studioId && state.startTime && state.endTime && (
+                  <div ref={recapRef}>
+                    {renderRecapSection()}
+                  </div>
+                )}
+              </div>
             )}
 
-            {/* Steps 1-2: Studio-first flow */}
-            {state.flow === "studio-first" && (
-              <>
-                {state.step === 1 && (
+            {/* Step 1: Unified booking step — Studio-first flow */}
+            {state.step === 1 && state.flow === "studio-first" && (
+              <div className="flex flex-col gap-6">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={goBack}
+                    className="rounded-full p-2 transition-colors hover:bg-white/10"
+                    aria-label="Retour"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <p className="text-white/70">
+                    {!state.studioId
+                      ? "Choisissez votre studio"
+                      : !state.selectedDate
+                        ? "Choisissez une date pour votre répétition"
+                        : !state.startTime
+                          ? "Choisissez votre créneau"
+                          : "Récapitulatif de votre réservation"}
+                  </p>
+                </div>
+
+                {/* Studio picker — first for studio-first flow */}
+                {!state.studioId && (
                   <StudioPicker
                     onSelect={selectStudioFirst}
                     onBack={goBack}
@@ -425,55 +475,47 @@ export function Reservation({ step }: ReservationProps) {
                   />
                 )}
 
-                {state.step === 2 && state.studioId && (
-                  <div className="flex flex-col gap-6">
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={goBack}
-                        className="rounded-full p-2 transition-colors hover:bg-white/10"
-                        aria-label="Retour"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                      <div>
-                         {state.groupType === "group" && (
-                           <p className="text-sm text-white/60">
-                             Studio: {STUDIOS[state.studioId as StudioId].name}
-                           </p>
-                         )}
-                         <p className="text-white/70">
-                           {!state.selectedDate
-                             ? "Choisissez une date pour votre répétition"
-                             : "Choisissez votre créneau"}
-                         </p>
-                      </div>
-                    </div>
+                {/* Date + time picker — appears after studio selection */}
+                {state.studioId && (
+                  <div ref={dateRef}>
+                    {state.groupType === "group" && (
+                      <p className="mb-4 text-sm text-white/60">
+                        Studio : {STUDIOS[state.studioId as StudioId].name}
+                      </p>
+                    )}
                     <WeekCalendar
                       selectedDate={state.selectedDate}
                       onSelectDate={selectDate}
                       studioFilter={state.studioId}
                     />
                     {state.selectedDate && (
-                      <TimeSlotPicker
-                        date={state.selectedDate}
-                        availability={availability}
-                        startTime={state.startTime}
-                        endTime={state.endTime}
-                        onSelectRange={selectTimeRange}
-                        onClear={clearTimeRange}
-                        onConfirm={confirmTimeSelection}
-                        onBack={goBack}
-                        canConfirm={canProceedToStudio}
-                        studioFilter={state.studioId}
-                        hideHeader
-                        groupType={state.groupType || "group"}
-                      />
+                      <div ref={timeSlotRef} className="mt-6">
+                        <TimeSlotPicker
+                          date={state.selectedDate}
+                          availability={availability}
+                          startTime={state.startTime}
+                          endTime={state.endTime}
+                          onSelectRange={selectTimeRange}
+                          onClear={clearTimeRange}
+                          onConfirm={confirmTimeSelection}
+                          onBack={goBack}
+                          canConfirm={canProceedToStudio}
+                          studioFilter={state.studioId}
+                          hideHeader
+                          groupType={state.groupType || "group"}
+                        />
+                      </div>
                     )}
-                    {/* Show recap inline after time is confirmed */}
-                    {state.startTime && state.endTime && renderRecapSection()}
                   </div>
                 )}
-              </>
+
+                {/* Recap — appears after time selection */}
+                {state.studioId && state.startTime && state.endTime && (
+                  <div ref={recapRef}>
+                    {renderRecapSection()}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Step 3: Coordonnées (after cart, before payment) */}
@@ -646,7 +688,7 @@ export function Reservation({ step }: ReservationProps) {
         </div>
       </div>
 
-      {((state.flow === "time-first" && state.step === 1) || (state.flow === "studio-first" && state.step === 2)) && state.groupType === "group" && !state.studioId && (
+      {state.step === 1 && state.groupType === "group" && !state.studioId && (
         <p className="mt-4 text-center text-sm font-medium text-primary/80">
           Les tarifs varient selon l'heure (après 18h) et le jour (weekend &
           jour férié). Économisez jusqu'à 20% en réservant avant 18h en semaine

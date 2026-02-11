@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, CircleCheckBig, CreditCard, IdCard, Music, ShoppingCart, Users } from "lucide-react";
+import { Calendar, CircleCheckBig, CreditCard, IdCard, ShoppingCart, Users } from "lucide-react";
 
 interface ProgressIndicatorProps {
   currentStep: number;
@@ -8,7 +8,7 @@ interface ProgressIndicatorProps {
   flow: "time-first" | "studio-first";
   skipStudio?: boolean;
   onStepClick?: (step: number) => void;
-  /** When true, booking steps (0-2) are not clickable even if completed */
+  /** When true, booking steps (0-1) are not clickable even if completed */
   cartLocked?: boolean;
 }
 
@@ -18,60 +18,33 @@ type StepDef = [typeof Users, number];
 /**
  * Step flow:
  * 0: GroupType + FlowChoice
- * 1: Date or Studio
- * 2: Time+Studio or Date+Time (inline recap + "Ajouter au panier")
+ * 1: Unified booking (Date+Time+Studio all on one page)
  * 5: Panier
  * 3: Coordonnées (after cart, before payment)
  * 6: Choix de paiement (7: Stripe redirect — grouped with 6 visually)
  * 8: Confirmation
  */
-function getStepDefs(
-  flow: "time-first" | "studio-first",
-  skipStudio: boolean
-): StepDef[] {
-  if (flow === "time-first") {
-    if (skipStudio) {
-      // Solo/duo: no studio step
-      return [
-        [Users, 0],              // Group choice
-        [Calendar, 1],           // Date + time
-        [ShoppingCart, 5],       // Panier
-        [IdCard, 3],             // Coordonnées
-        [CreditCard, 6],         // Paiement
-        [CircleCheckBig, 8],     // Confirmation
-      ];
-    }
-    return [
-      [Users, 0],                // Group choice
-      [Calendar, 1],             // Date + time
-      [Music, 2],                // Studio
-      [ShoppingCart, 5],         // Panier
-      [IdCard, 3],               // Coordonnées
-      [CreditCard, 6],           // Paiement
-      [CircleCheckBig, 8],       // Confirmation
-    ];
-  }
-  // studio-first
+function getStepDefs(): StepDef[] {
+  // All flows now share the same step structure (step 2 merged into step 1)
   return [
-    [Users, 0],                  // Group choice
-    [Music, 1],                  // Studio
-    [Calendar, 2],               // Date + time
-    [ShoppingCart, 5],           // Panier
-    [IdCard, 3],                 // Coordonnées
-    [CreditCard, 6],             // Paiement
-    [CircleCheckBig, 8],         // Confirmation
+    [Users, 0],              // Group choice
+    [Calendar, 1],           // Unified booking (date + time + studio)
+    [ShoppingCart, 5],       // Panier
+    [IdCard, 3],             // Coordonnées
+    [CreditCard, 6],         // Paiement
+    [CircleCheckBig, 8],     // Confirmation
   ];
 }
 
 export function ProgressIndicator({
   currentStep,
   totalSteps: _totalSteps,
-  flow,
-  skipStudio,
+  flow: _flow,
+  skipStudio: _skipStudio,
   onStepClick,
   cartLocked,
 }: ProgressIndicatorProps) {
-  const stepDefs = getStepDefs(flow, !!skipStudio);
+  const stepDefs = getStepDefs();
 
   // Map each step to its visual position index for progress comparison
   const stepOrder = stepDefs.map(([, s]) => s);
@@ -87,9 +60,9 @@ export function ProgressIndicator({
           const thisIdx = index;
           const isCompleted = currentIdx > thisIdx;
           const isCurrent = currentIdx === thisIdx;
-          // Cart locked: booking steps (0-2) are not clickable
+          // Cart locked: booking steps (0-1) are not clickable
           // Payment/confirmation steps (6-8) are never clickable
-          const isBookingStep = actualStep <= 2;
+          const isBookingStep = actualStep <= 1;
           const isPaymentStep = actualStep >= 6;
           const isClickable = isCompleted && !!onStepClick && !(cartLocked && isBookingStep) && !isPaymentStep;
 
