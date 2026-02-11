@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter";
 import { FlowChoice } from "@/components/booking/FlowChoice";
@@ -75,6 +77,11 @@ export function Reservation({ step }: ReservationProps) {
     selectPaymentMethod,
     processPayment,
   } = useBookingWithRouter(step);
+
+  // Scroll to top on every step change (scroll container is #root, not document)
+  useEffect(() => {
+    document.getElementById("root")?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [state.step]);
 
   const durationHours = state.startTime && state.endTime
     ? ((() => {
