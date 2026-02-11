@@ -139,7 +139,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
                   : "hover:bg-primary/20 cursor-pointer bg-white/10"
                 }
                 ${selected 
-                  ? "bg-primary text-black ring-2 ring-primary ring-offset-2 ring-offset-black" 
+                  ? "ring-2 ring-primary ring-offset-2 ring-offset-black bg-primary/20 text-primary" 
                   : ""
                 }
                 ${todayDate && !selected 
@@ -148,17 +148,17 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
                 }
               `}
             >
-              <span className={`text-xs font-medium mb-1 ${selected ? "text-black/60" : "text-white/50"}`}>
+              <span className={`text-xs font-medium mb-1 ${selected ? "text-primary/70" : "text-white/50"}`}>
                 {DAYS_FR[dayIndex]}
               </span>
-              <span className={`text-2xl font-bold ${selected ? "text-black" : ""}`}>
+              <span className={`text-2xl font-bold ${selected ? "text-primary" : ""}`}>
                 {date.getDate()}
               </span>
               <span className={`text-xs mt-1 ${
                 disabled
                   ? "text-white/30"
                   : selected
-                    ? "text-black/60"
+                    ? "text-primary/70"
                     : "text-emerald-400/80"
               }`}>
                 {disabled ? "Complet" : "Disponible"}

@@ -21,6 +21,8 @@ import {
 
 interface ExtendedBookingState extends BookingState {
   equipment: EquipmentSelection[];
+  /** Tracks whether we're adding a new booking (vs reviewing cart) */
+  isAddingNew: boolean;
 }
 
 const initialState: ExtendedBookingState = {
@@ -43,8 +45,21 @@ const initialState: ExtendedBookingState = {
   cart: [],
   equipment: [],
   paymentMethod: null,
+  isAddingNew: false,
 };
 
+/**
+ * Step flow:
+ * 0: GroupType + FlowChoice
+ * 1: Date (WeekCalendar) or Studio (studio-first)
+ * 2: Time+Studio or Date+Time (depending on flow)
+ * 3: Coordonnées (BookingForm)
+ * 4: Récap & options (Equipment + summary) → confirmBooking → cart
+ * 5: Panier (CartPage) — add another or proceed
+ * 6: Choix de paiement (PaymentChoice)
+ * 7: Paiement (Stripe/Mock)
+ * 8: Terminé (FinalCheckout)
+ */
 export function useBooking() {
   const [state, setState] = useState<ExtendedBookingState>(initialState);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -151,6 +166,7 @@ export function useBooking() {
     setState((s) => ({ ...s, step: 4 }));
   }, []);
 
+  /** Adds current booking to cart and goes to cart page (step 5) */
   const confirmBooking = useCallback(() => {
     setState((s) => {
       if (!s.selectedDate || !s.startTime || !s.endTime || !s.studioId || !s.groupType) return s;
@@ -191,10 +207,12 @@ export function useBooking() {
         cart: [...s.cart, newBooking],
         step: 5,
         equipment: [],
+        isAddingNew: false,
       };
     });
   }, []);
 
+  /** From cart page: start adding a new booking (reset booking fields, keep cart + user info) */
   const addAnotherBooking = useCallback(() => {
     setState((s) => ({
       ...s,
@@ -202,14 +220,60 @@ export function useBooking() {
       startTime: null,
       endTime: null,
       studioId: null,
-      groupType: "group",
+      groupType: null,
+      flow: null,
       bookingRef: null,
-      step: 1,
+      equipment: [],
+      step: 0,
+      isAddingNew: true,
     }));
   }, []);
 
-  const goToCheckout = useCallback(() => {
+  /** From cart page: proceed to payment choice (step 6) */
+  const goToPaymentChoice = useCallback(() => {
     setState((s) => ({ ...s, step: 6 }));
+  }, []);
+
+  /** Cancel current new booking and go back to cart */
+  const goToCart = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      selectedDate: null,
+      startTime: null,
+      endTime: null,
+      studioId: null,
+      groupType: null,
+      flow: null,
+      bookingRef: null,
+      equipment: [],
+      step: 5,
+      isAddingNew: false,
+    }));
+  }, []);
+
+  const selectPaymentMethod = useCallback((method: PaymentMethod) => {
+    setState((s) => {
+      if (method === "card") {
+        return { ...s, paymentMethod: method, step: 7 };
+      }
+      const updatedCart = s.cart.map((booking) => ({
+        ...booking,
+        paymentMethod: "cash" as PaymentMethod,
+        paymentStatus: "pay-on-site" as const,
+      }));
+      return { ...s, paymentMethod: method, cart: updatedCart, step: 8 };
+    });
+  }, []);
+
+  const processPayment = useCallback(() => {
+    setState((s) => {
+      const updatedCart = s.cart.map((booking) => ({
+        ...booking,
+        paymentMethod: "card" as PaymentMethod,
+        paymentStatus: "paid" as const,
+      }));
+      return { ...s, cart: updatedCart, step: 8 };
+    });
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
@@ -225,7 +289,25 @@ export function useBooking() {
 
   const goBack = useCallback(() => {
     setState((s) => {
-      if (s.step === 0) return s;
+      if (s.step === 0) {
+        // If adding new from cart, go back to cart
+        if (s.isAddingNew && s.cart.length > 0) {
+          return {
+            ...s,
+            selectedDate: null,
+            startTime: null,
+            endTime: null,
+            studioId: null,
+            groupType: null,
+            flow: null,
+            bookingRef: null,
+            equipment: [],
+            step: 5,
+            isAddingNew: false,
+          };
+        }
+        return s;
+      }
       if (s.step === 1) {
         // If we have a date selected (in merged date+time step), clear it first
         if (s.flow === "time-first" && s.selectedDate) {
@@ -252,8 +334,14 @@ export function useBooking() {
       }
 
       if (s.step === 4) return { ...s, step: 3 };
-      if (s.step === 5) return { ...s, step: 4 };
-      if (s.step === 6) return { ...s, step: 5 };
+      // Step 5 (cart): locked — cannot go back from cart (use "Ajouter une autre réservation" instead)
+      if (s.step === 5) return s;
+      // Step 6 (payment choice): go back to cart
+      if (s.step === 6) return { ...s, step: 5, paymentMethod: null };
+      // Step 7 (payment): go back to payment choice
+      if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
+      // Step 8 (done): go back to payment choice
+      if (s.step === 8) return { ...s, step: 6 };
       return s;
     });
   }, []);
@@ -322,7 +410,10 @@ export function useBooking() {
     goToRecap,
     confirmBooking,
     addAnotherBooking,
-    goToCheckout,
+    goToPaymentChoice,
+    goToCart,
+    selectPaymentMethod,
+    processPayment,
     removeFromCart,
     resetBooking,
     goBack,

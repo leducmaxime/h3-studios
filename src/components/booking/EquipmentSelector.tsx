@@ -64,10 +64,6 @@ export function EquipmentSelector({
 
   return (
     <div className="rounded-xl border border-white/20 bg-white/5 p-4">
-      <span className="mb-3 block text-sm font-medium text-white/70">
-        Options supplémentaires
-      </span>
-
       <p className="mb-4 text-xs font-medium text-primary">
         Compris dans votre réservation : Batterie (sans crash), sono, amplis guitare, amplis basse, 4 micros, pupitres, pied synthé
       </p>

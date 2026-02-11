@@ -14,7 +14,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin } from "lucide-react";
+import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -66,6 +66,8 @@ export function Reservation({ step }: ReservationProps) {
     goToCoordonnees,
     confirmBooking,
     addAnotherBooking,
+    goToPaymentChoice,
+    goToCart,
     removeFromCart,
     resetBooking,
     goBack,
@@ -81,6 +83,9 @@ export function Reservation({ step }: ReservationProps) {
         return (endIdx - TIME_SLOTS.indexOf(state.startTime)) * 0.5;
       })())
     : 0;
+
+  // Show cart banner when adding a new booking and cart has items
+  const showCartBanner = state.isAddingNew && state.cart.length > 0 && state.step <= 4;
 
   // Inline recap + options block, shown after studio is selected (within the same step)
   const renderRecapSection = () => {
@@ -228,6 +233,27 @@ export function Reservation({ step }: ReservationProps) {
       </div>
       
       <div className="w-full max-w-[900px] px-4">
+        {/* Cart banner — shown when adding a new booking with items already in cart */}
+        {showCartBanner && (
+          <div className="mb-4 flex items-center justify-between rounded-xl border-2 border-primary/30 bg-primary/10 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <ShoppingCart className="h-5 w-5 text-primary" />
+              <div>
+                <span className="font-medium">
+                  {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""} dans le panier
+                </span>
+                <span className="ml-2 text-lg font-bold text-primary">{formatPrice(cartTotal)}</span>
+              </div>
+            </div>
+            <button
+              onClick={goToCart}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-primary/90"
+            >
+              Aller au panier
+            </button>
+          </div>
+        )}
+
         <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
@@ -242,24 +268,24 @@ export function Reservation({ step }: ReservationProps) {
                   onStepClick={navigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {state.step > 0 && state.step < 3 && state.groupType && (
+                  {state.step > 0 && state.step < 5 && state.groupType && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
-                  {/* Studio pill: show on coordonnées+ steps for group */}
-                  {state.studioId && state.step < 3 && state.groupType === "group" && (
+                  {/* Studio pill: show on steps before cart */}
+                  {state.studioId && state.step < 5 && state.groupType === "group" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
-                  {/* Date + time pills: show on coordonnées+ steps */}
-                  {state.selectedDate && state.step < 3 && (
+                  {/* Date + time pills */}
+                  {state.selectedDate && state.step < 5 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && state.step < 3 && (
+                  {state.startTime && state.endTime && state.step < 5 && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
                     </span>
@@ -268,6 +294,7 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
+            {/* Step 0: Group type + Flow choice */}
             {state.step === 0 && (
               <div className="flex flex-col gap-6">
                 <GroupTypeToggle
@@ -278,6 +305,7 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
+            {/* Steps 1-2: Time-first flow */}
             {state.flow === "time-first" && (
               <>
                 {state.step === 1 && (
@@ -382,6 +410,7 @@ export function Reservation({ step }: ReservationProps) {
               </>
             )}
 
+            {/* Steps 1-2: Studio-first flow */}
             {state.flow === "studio-first" && (
               <>
                 {state.step === 1 && (
@@ -470,89 +499,130 @@ export function Reservation({ step }: ReservationProps) {
                 />
               )}
 
-            {state.step === 7 && state.cart.length > 0 && (
+            {/* Step 5: Cart page */}
+            {state.step === 5 && (
               <div className="flex flex-col gap-6">
-                <div className="w-full space-y-3">
-                  {state.cart.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="rounded-xl border border-white/20 bg-black/30 p-4"
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Votre panier</h3>
+                </div>
+
+                {state.cart.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <ShoppingCart className="mx-auto mb-4 h-12 w-12 text-white/20" />
+                    <p className="text-white/60">Votre panier est vide</p>
+                    <button
+                      onClick={addAnotherBooking}
+                      className="mt-4 rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary/90"
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-semibold">
-                            {booking.groupType === "group"
-                              ? STUDIOS[booking.studioId].name
-                              : "Répétition"}
-                          </h4>
-                          <p className="text-xs text-primary">Réf: {booking.bookingRef}</p>
+                      Ajouter une réservation
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      {state.cart.map((booking) => (
+                        <div
+                          key={booking.id}
+                          className="rounded-xl border border-white/20 bg-black/30 p-4"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h4 className="font-semibold">
+                                {booking.groupType === "group"
+                                  ? STUDIOS[booking.studioId].name
+                                  : "Répétition"}
+                              </h4>
+                              <p className="text-xs text-primary">Réf: {booking.bookingRef}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-primary">
+                                {formatPrice(booking.price)}
+                              </span>
+                              <button
+                                onClick={() => removeFromCart(booking.id)}
+                                className="rounded-full p-1 transition-colors hover:bg-white/10"
+                                aria-label="Supprimer"
+                              >
+                                <X className="h-4 w-4 text-white/60" />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="mt-2 text-sm text-white/60">
+                            {formatDate(booking.date, "long")} • {booking.startTime} -{" "}
+                            {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
+                          </p>
+                          {booking.equipmentPrice > 0 && (
+                            <p className="mt-1 text-xs text-white/40">
+                              + options : {formatPrice(booking.equipmentPrice)}
+                            </p>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold text-primary">
-                            {formatPrice(booking.price)}
+                      ))}
+                    </div>
+
+                    <PromoCodeInput
+                      total={cartTotal}
+                      appliedPromo={state.appliedPromo}
+                      onApply={applyPromo}
+                      onRemove={removePromo}
+                    />
+
+                    <div className="rounded-xl bg-primary/10 p-4">
+                      <div className="space-y-2">
+                        {state.promoDiscount > 0 && (
+                          <>
+                            <div className="flex items-center justify-between text-sm text-white/70">
+                              <span>Sous-total</span>
+                              <span>{formatPrice(cartTotal)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm text-green-400">
+                              <span>Réduction ({state.appliedPromo?.code})</span>
+                              <span>-{formatPrice(state.promoDiscount)}</span>
+                            </div>
+                          </>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <span className="text-lg font-semibold">Total</span>
+                          <span className="text-2xl font-bold text-primary">
+                            {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
                           </span>
-                          <button
-                            onClick={() => removeFromCart(booking.id)}
-                            className="rounded-full p-1 transition-colors hover:bg-white/10"
-                            aria-label="Supprimer"
-                          >
-                            <X className="h-4 w-4 text-white/60" />
-                          </button>
                         </div>
                       </div>
-                      <p className="mt-2 text-sm text-white/60">
-                        {formatDate(booking.date, "long")} • {booking.startTime} -{" "}
-                        {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
-                      </p>
-                      {booking.equipmentPrice > 0 && (
-                        <p className="mt-1 text-xs text-white/40">
-                          + options : {formatPrice(booking.equipmentPrice)}
-                        </p>
-                      )}
                     </div>
-                  ))}
-                </div>
 
-                <PromoCodeInput
-                  total={cartTotal}
-                  appliedPromo={state.appliedPromo}
-                  onApply={applyPromo}
-                  onRemove={removePromo}
-                />
-
-                <div className="w-full rounded-xl bg-primary/10 p-4">
-                  <div className="space-y-2">
-                    {state.promoDiscount > 0 && (
-                      <>
-                        <div className="flex items-center justify-between text-sm text-white/70">
-                          <span>Sous-total</span>
-                          <span>{formatPrice(cartTotal)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm text-green-400">
-                          <span>Réduction ({state.appliedPromo?.code})</span>
-                          <span>-{formatPrice(state.promoDiscount)}</span>
-                        </div>
-                      </>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-semibold">Total</span>
-                      <span className="text-2xl font-bold text-primary">
-                        {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
-                      </span>
+                    <div className="flex flex-col gap-3">
+                      <button
+                        onClick={goToPaymentChoice}
+                        className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
+                      >
+                        Valider et payer - {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
+                      </button>
+                      <button
+                        onClick={addAnotherBooking}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/5"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Ajouter une autre réservation
+                      </button>
                     </div>
-                  </div>
-                </div>
-
-                <PaymentChoice
-                  cart={state.cart}
-                  total={Math.max(0, cartTotal - state.promoDiscount)}
-                  onSelectMethod={selectPaymentMethod}
-                  onBack={goBack}
-                />
+                  </>
+                )}
               </div>
             )}
 
-            {state.step === 8 && (
+            {/* Step 6: Payment choice */}
+            {state.step === 6 && (
+              <PaymentChoice
+                cart={state.cart}
+                total={Math.max(0, cartTotal - state.promoDiscount)}
+                onSelectMethod={selectPaymentMethod}
+                onBack={goBack}
+              />
+            )}
+
+            {/* Step 7: Stripe payment */}
+            {state.step === 7 && (
               <StripeRedirect
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -562,7 +632,8 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {state.step === 9 && (
+            {/* Step 8: Done */}
+            {state.step === 8 && (
               <FinalCheckout
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -583,7 +654,7 @@ export function Reservation({ step }: ReservationProps) {
         </p>
       )}
 
-      {state.step > 0 && state.step < 9 && (
+      {state.step > 0 && state.step < 8 && (
         <button
           onClick={resetBooking}
           className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"

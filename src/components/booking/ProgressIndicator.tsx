@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, CreditCard, IdCard, Music, Users } from "lucide-react";
+import { Calendar, CreditCard, IdCard, Music, ShoppingCart, Users } from "lucide-react";
 
 interface ProgressIndicatorProps {
   currentStep: number;
@@ -13,35 +13,44 @@ interface ProgressIndicatorProps {
 // Each entry: [Icon, actualStep]
 type StepDef = [typeof Users, number];
 
+/**
+ * Step flow (new):
+ * 0: GroupType + FlowChoice
+ * 1: Date or Studio
+ * 2: Time+Studio or Date+Time
+ * 3: Coordonnées
+ * 4: Récap & options (not shown in progress — merged with step 3 visually)
+ * 5: Panier
+ */
 function getStepDefs(
   flow: "time-first" | "studio-first",
   skipStudio: boolean
 ): StepDef[] {
   if (flow === "time-first") {
     if (skipStudio) {
-      // Solo/duo: no studio step — recap/options merged into step 1
+      // Solo/duo: no studio step
       return [
         [Users, 0],          // Group choice
-        [Calendar, 1],       // Date + time + recap/options
+        [Calendar, 1],       // Date + time
         [IdCard, 3],         // Coordonnées
-        [CreditCard, 7],    // Paiement
+        [ShoppingCart, 5],   // Panier
       ];
     }
     return [
       [Users, 0],            // Group choice
       [Calendar, 1],         // Date + time
-      [Music, 2],            // Studio + recap/options
+      [Music, 2],            // Studio
       [IdCard, 3],           // Coordonnées
-      [CreditCard, 7],      // Paiement
+      [ShoppingCart, 5],     // Panier
     ];
   }
   // studio-first
   return [
     [Users, 0],              // Group choice
     [Music, 1],              // Studio
-    [Calendar, 2],           // Date + time + recap/options
+    [Calendar, 2],           // Date + time
     [IdCard, 3],             // Coordonnées
-    [CreditCard, 7],        // Paiement
+    [ShoppingCart, 5],       // Panier
   ];
 }
 
@@ -59,7 +68,9 @@ export function ProgressIndicator({
       <div className="flex items-center justify-center gap-0">
         {stepDefs.map(([Icon, actualStep], index) => {
           const isCompleted = currentStep > actualStep;
-          const isCurrent = currentStep === actualStep;
+          const isCurrent = currentStep === actualStep ||
+            // Step 4 (recap) is visually part of step 3 progress
+            (actualStep === 3 && currentStep === 4);
           const isClickable = isCompleted && !!onStepClick;
 
           return (
@@ -83,7 +94,7 @@ export function ProgressIndicator({
                           ? "bg-primary/30 ring-2 ring-primary"
                           : "bg-white/5 ring-1 ring-white/20"
                     }
-                    ${isClickable ? "cursor-pointer hover:bg-primary/40 hover:scale-110" : ""}
+                    ${isClickable ? "hover:bg-primary/40 hover:scale-110" : ""}
                   `}
                 >
                   {isCurrent && (

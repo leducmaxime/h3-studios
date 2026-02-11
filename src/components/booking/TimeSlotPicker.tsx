@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { ChevronDown, ChevronLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import {
   getStudioTimeSlots,
   getUnionTimeSlots,
@@ -245,7 +245,7 @@ export function TimeSlotPicker({
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium text-white/70">Durée de la répétition</span>
         <div className="flex flex-wrap gap-2">
-          {DURATION_OPTIONS_MAIN.map(({ label, slots }) => (
+          {(showMoreDurations ? ALL_DURATION_OPTIONS : DURATION_OPTIONS_MAIN).map(({ label, slots }) => (
             <button
               key={slots}
               onClick={() => {
@@ -263,36 +263,13 @@ export function TimeSlotPicker({
               {label}
             </button>
           ))}
+          <button
+            onClick={() => setShowMoreDurations(!showMoreDurations)}
+            className="flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all text-sm bg-white/10 hover:bg-white/20"
+          >
+            <span className="text-lg font-bold text-primary">{showMoreDurations ? "−" : "+"}</span>
+          </button>
         </div>
-        {showMoreDurations && (
-          <div className="flex flex-wrap gap-2">
-            {DURATION_OPTIONS_EXTRA.map(({ label, slots }) => (
-              <button
-                key={slots}
-                onClick={() => {
-                  setSelectedDuration(slots);
-                  onClear();
-                }}
-                className={`
-                  px-4 py-2 rounded-lg font-medium transition-all text-sm
-                  ${selectedDuration === slots
-                    ? "bg-primary text-black"
-                    : "bg-white/10 text-white hover:bg-white/20"
-                  }
-                `}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-        <button
-          onClick={() => setShowMoreDurations(!showMoreDurations)}
-          className="flex items-center gap-1 self-start text-xs text-white/50 transition-colors hover:text-white/80"
-        >
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showMoreDurations ? "rotate-180" : ""}`} />
-          {showMoreDurations ? "Moins de choix" : "Plus de choix (jusqu'à 14h)"}
-        </button>
       </div>
 
       {selectedDuration !== null && (

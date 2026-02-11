@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ShoppingCart, Plus, X } from "lucide-react";
 import { useBooking } from "./useBooking";
 import { FlowChoice } from "./FlowChoice";
 import { WeekCalendar } from "./WeekCalendar";
@@ -9,12 +9,11 @@ import { StudioPicker } from "./StudioPicker";
 import { GroupTypeToggle } from "./GroupTypeToggle";
 import { StudioCard } from "./StudioCard";
 import { BookingForm } from "./BookingForm";
-import { BookingConfirmation } from "./BookingConfirmation";
 import { FinalCheckout } from "./FinalCheckout";
-import { CartSummary } from "./CartSummary";
+import { PaymentChoice } from "./PaymentChoice";
+import { StripeRedirect } from "./StripeRedirect";
 import { ProgressIndicator } from "./ProgressIndicator";
 import { EquipmentSelector } from "./EquipmentSelector";
-import { StickyBookingCTA } from "./StickyBookingCTA";
 import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, EQUIPMENT, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
 
 export function BookingWidget() {
@@ -38,7 +37,10 @@ export function BookingWidget() {
     goToRecap,
     confirmBooking,
     addAnotherBooking,
-    goToCheckout,
+    goToPaymentChoice,
+    goToCart,
+    selectPaymentMethod,
+    processPayment,
     removeFromCart,
     resetBooking,
     goBack,
@@ -53,23 +55,48 @@ export function BookingWidget() {
       })())
     : 0;
 
+  // Show cart banner when adding a new booking and cart has items
+  const showCartBanner = state.isAddingNew && state.cart.length > 0 && state.step <= 4;
+
   return (
     <div className="w-full">
+      {/* Cart banner — shown when adding a new booking with items already in cart */}
+      {showCartBanner && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border-2 border-primary/30 bg-primary/10 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <ShoppingCart className="h-5 w-5 text-primary" />
+            <div>
+              <span className="font-medium">
+                {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""} dans le panier
+              </span>
+              <span className="ml-2 text-lg font-bold text-primary">{formatPrice(cartTotal)}</span>
+            </div>
+          </div>
+          <button
+            onClick={goToCart}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-primary/90"
+          >
+            Aller au panier
+          </button>
+        </div>
+      )}
+
       <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
         <div className="relative p-4 sm:p-6 md:p-8">
-          {state.step <= 6 && (
+          {state.step <= 5 && (
             <div className="mb-2">
               <ProgressIndicator
                 currentStep={state.step}
-                totalSteps={6}
+                totalSteps={5}
                 flow={state.flow || "time-first"}
                 onStepClick={(step) => setStep(step as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9)}
               />
             </div>
           )}
 
+          {/* Step 0: Group type + Flow choice */}
           {state.step === 0 && (
             <div className="flex flex-col gap-6">
               <GroupTypeToggle
@@ -80,6 +107,7 @@ export function BookingWidget() {
             </div>
           )}
 
+          {/* Steps 1-2: Time-first flow */}
           {state.flow === "time-first" && (
             <>
               {state.step === 1 && (
@@ -162,6 +190,7 @@ export function BookingWidget() {
             </>
           )}
 
+          {/* Steps 1-2: Studio-first flow */}
           {state.flow === "studio-first" && (
             <>
               {state.step === 1 && (
@@ -221,6 +250,7 @@ export function BookingWidget() {
             </>
           )}
 
+          {/* Step 3: Coordonnées */}
           {state.step === 3 &&
             state.selectedDate &&
             state.startTime &&
@@ -247,6 +277,7 @@ export function BookingWidget() {
               />
             )}
 
+          {/* Step 4: Récap & options */}
           {state.step === 4 &&
             state.selectedDate &&
             state.startTime &&
@@ -322,7 +353,7 @@ export function BookingWidget() {
                           <div className="space-y-0.5 pl-2 text-xs text-white/50">
                             {state.equipment.filter(e => e.quantity > 0).map(e => (
                               <div key={e.id} className="flex justify-between">
-                                <span>{EQUIPMENT[e.id]?.name || e.id} ×{e.quantity}</span>
+                                <span>{EQUIPMENT[e.id]?.name || e.id} x{e.quantity}</span>
                                 <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))}</span>
                               </div>
                             ))}
@@ -349,49 +380,132 @@ export function BookingWidget() {
                     onClick={confirmBooking}
                     className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90"
                   >
-                    Confirmer - {formatPrice(grandTotal)}
+                    Ajouter au panier - {formatPrice(grandTotal)}
                   </button>
                 </div>
               );
             })()}
 
-          {state.step === 5 &&
-            state.selectedDate &&
-            state.startTime &&
-            state.endTime &&
-            state.studioId &&
-            state.bookingRef && (
-              <BookingConfirmation
-                date={state.selectedDate}
-                startTime={state.startTime}
-                endTime={state.endTime}
-                studioId={state.studioId}
-                groupType={state.groupType || "group"}
-                userName={state.userName}
-                userEmail={state.userEmail}
-                bookingRef={state.bookingRef}
-                cart={state.cart}
-                cartTotal={cartTotal}
-                onAddAnother={addAnotherBooking}
-                onCheckout={goToCheckout}
-              />
-            )}
+          {/* Step 5: Cart page */}
+          {state.step === 5 && (
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={goBack}
+                  className="rounded-full p-2 transition-colors hover:bg-white/10"
+                  aria-label="Retour"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Votre panier</h3>
+                </div>
+              </div>
 
+              {state.cart.length === 0 ? (
+                <div className="py-8 text-center">
+                  <ShoppingCart className="mx-auto mb-4 h-12 w-12 text-white/20" />
+                  <p className="text-white/60">Votre panier est vide</p>
+                  <button
+                    onClick={addAnotherBooking}
+                    className="mt-4 rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+                  >
+                    Ajouter une réservation
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {state.cart.map((booking) => (
+                      <div
+                        key={booking.id}
+                        className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {booking.groupType === "group" ? STUDIOS[booking.studioId].name : "Répétition"}
+                          </div>
+                          <div className="text-sm text-white/60">
+                            {formatDate(booking.date, "short")} • {booking.startTime} - {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
+                          </div>
+                          {booking.equipmentPrice > 0 && (
+                            <div className="mt-1 text-xs text-white/40">
+                              Options : {booking.equipment.filter(e => e.quantity > 0).map(e =>
+                                `${EQUIPMENT[e.id]?.name || e.id} x${e.quantity}`
+                              ).join(", ")}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-semibold text-primary">{formatPrice(booking.price)}</span>
+                          <button
+                            onClick={() => removeFromCart(booking.id)}
+                            className="rounded-full p-1.5 transition-colors hover:bg-white/10"
+                            aria-label="Supprimer"
+                          >
+                            <X className="h-4 w-4 text-white/60" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl bg-primary/10 p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-semibold">Total</span>
+                      <span className="text-2xl font-bold text-primary">{formatPrice(cartTotal)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={goToPaymentChoice}
+                      className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
+                    >
+                      Valider et payer - {formatPrice(cartTotal)}
+                    </button>
+                    <button
+                      onClick={addAnotherBooking}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Ajouter une autre réservation
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Step 6: Payment choice */}
           {state.step === 6 && (
+            <PaymentChoice
+              cart={state.cart}
+              total={cartTotal}
+              onSelectMethod={selectPaymentMethod}
+              onBack={goBack}
+            />
+          )}
+
+          {/* Step 7: Payment (Stripe) */}
+          {state.step === 7 && (
+            <StripeRedirect
+              cart={state.cart}
+              total={cartTotal}
+              userName={state.userName}
+              userEmail={state.userEmail}
+              onBack={goBack}
+            />
+          )}
+
+          {/* Step 8: Done */}
+          {state.step === 8 && (
             <FinalCheckout
               cart={state.cart}
               total={cartTotal}
               onNewBooking={resetBooking}
               onBack={goBack}
-            />
-          )}
-
-          {state.step > 0 && state.step < 5 && state.cart.length > 0 && (
-            <CartSummary
-              cart={state.cart}
-              total={cartTotal}
-              onRemove={removeFromCart}
-              onCheckout={goToCheckout}
             />
           )}
         </div>
