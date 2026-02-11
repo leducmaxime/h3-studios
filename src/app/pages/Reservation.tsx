@@ -16,7 +16,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin } from "lucide-react";
+import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -61,6 +61,7 @@ export function Reservation({ step }: ReservationProps) {
     confirmTimeSelection,
     setGroupType,
     selectStudio,
+    clearStudioSelection,
     updateUserInfo,
     updateEquipment,
     applyPromo,
@@ -466,8 +467,28 @@ export function Reservation({ step }: ReservationProps) {
                   </p>
                 </div>
 
-                {/* Studio picker — first for studio-first flow */}
-                {!state.studioId && (
+                {/* Studio section — picker OR selected studio card */}
+                {state.studioId ? (
+                  <div className="rounded-xl border-2 border-primary bg-primary/10 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary">
+                          <Check className="h-5 w-5 text-black" />
+                        </div>
+                        <div>
+                          <p className="text-sm text-white/60">Studio sélectionné</p>
+                          <p className="text-lg font-semibold">{STUDIOS[state.studioId as StudioId].name}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={clearStudioSelection}
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+                      >
+                        Changer
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <StudioPicker
                     onSelect={selectStudioFirst}
                     onBack={goBack}
@@ -475,42 +496,42 @@ export function Reservation({ step }: ReservationProps) {
                   />
                 )}
 
-                {/* Date + time picker — appears after studio selection */}
+                {/* Date picker — appears after studio selection */}
                 {state.studioId && (
                   <div ref={dateRef}>
-                    {state.groupType === "group" && (
-                      <p className="mb-4 text-sm text-white/60">
-                        Studio : {STUDIOS[state.studioId as StudioId].name}
-                      </p>
-                    )}
+                    <span className="mb-3 block text-sm font-medium text-white/70">
+                      Choisissez une date
+                    </span>
                     <WeekCalendar
                       selectedDate={state.selectedDate}
                       onSelectDate={selectDate}
                       studioFilter={state.studioId}
                     />
-                    {state.selectedDate && (
-                      <div ref={timeSlotRef} className="mt-6">
-                        <TimeSlotPicker
-                          date={state.selectedDate}
-                          availability={availability}
-                          startTime={state.startTime}
-                          endTime={state.endTime}
-                          onSelectRange={selectTimeRange}
-                          onClear={clearTimeRange}
-                          onConfirm={confirmTimeSelection}
-                          onBack={goBack}
-                          canConfirm={canProceedToStudio}
-                          studioFilter={state.studioId}
-                          hideHeader
-                          groupType={state.groupType || "group"}
-                        />
-                      </div>
-                    )}
+                  </div>
+                )}
+
+                {/* Time slot picker — appears after date selection */}
+                {state.studioId && state.selectedDate && (
+                  <div ref={timeSlotRef}>
+                    <TimeSlotPicker
+                      date={state.selectedDate}
+                      availability={availability}
+                      startTime={state.startTime}
+                      endTime={state.endTime}
+                      onSelectRange={selectTimeRange}
+                      onClear={clearTimeRange}
+                      onConfirm={confirmTimeSelection}
+                      onBack={goBack}
+                      canConfirm={canProceedToStudio}
+                      studioFilter={state.studioId}
+                      hideHeader
+                      groupType={state.groupType || "group"}
+                    />
                   </div>
                 )}
 
                 {/* Recap — appears after time selection */}
-                {state.studioId && state.startTime && state.endTime && (
+                {state.studioId && state.selectedDate && state.startTime && state.endTime && (
                   <div ref={recapRef}>
                     {renderRecapSection()}
                   </div>

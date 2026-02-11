@@ -346,6 +346,11 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, studioId }));
   }, []);
 
+  /** Clear studio selection and dependent fields (for studio-first flow) */
+  const clearStudioSelection = useCallback(() => {
+    setState((s) => ({ ...s, studioId: null, selectedDate: null, startTime: null, endTime: null }));
+  }, []);
+
   const updateUserInfo = useCallback(
     (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity" | "additionalInfo", value: string) => {
       setState((s) => ({ ...s, [field]: value }));
@@ -615,6 +620,7 @@ export function useBookingWithRouter(urlStep?: string) {
     confirmTimeSelection,
     setGroupType,
     selectStudio,
+    clearStudioSelection,
     updateUserInfo,
     updateEquipment,
     applyPromo,
