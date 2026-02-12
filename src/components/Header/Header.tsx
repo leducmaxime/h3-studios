@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useSyncExternalStore } from "react";
+import { navigate } from "rwsdk/client";
 
 const menuData = [
   { id: 1, title: "Les Studios", path: "/les-studios" },
@@ -81,7 +82,11 @@ export function Header() {
           <div className="max-w-full px-4 xl:mr-6">
             <a
               href="/"
-              onClick={onLogoClick}
+              onClick={(e) => {
+                e.preventDefault();
+                onLogoClick();
+                navigate("/");
+              }}
               className={`block w-full ${sticky ? "py-5 lg:py-2" : "py-4"}`}
             >
               <img
@@ -135,7 +140,11 @@ export function Header() {
                     >
                       <a
                         href={menuItem.path}
-                        onClick={() => setNavbarOpen(false)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setNavbarOpen(false);
+                          navigate(menuItem.path);
+                        }}
                         className={`flex py-2 text-lg font-bold lg:mr-0 lg:inline-flex lg:px-0 lg:py-6 ${
                           currentPath === menuItem.path
                             ? "underline decoration-primary decoration-2 underline-offset-8"
