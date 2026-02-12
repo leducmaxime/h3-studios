@@ -294,9 +294,9 @@ export function TimeSlotPicker({
                   onClick={() => isClickable && handleSlotClick(time)}
                   disabled={!isClickable}
                   className={`
-                    relative rounded-lg px-3 py-2.5 text-sm font-medium transition-all min-w-[70px]
+                    relative rounded-lg px-3 py-2 text-sm font-medium transition-all min-w-[70px]
                     ${isBooked
-                      ? "bg-red-500/10 text-red-400/50 cursor-not-allowed line-through border border-red-500/20" 
+                      ? "bg-red-500/10 text-red-400/50 cursor-not-allowed border border-red-500/20" 
                       : ""
                     }
                     ${isUnavailableDuration
@@ -308,7 +308,7 @@ export function TimeSlotPicker({
                       : ""
                     }
                     ${canStart && !isSelected && peak
-                      ? "bg-primary/10 hover:bg-primary/20 text-primary/70 border border-primary/20 cursor-pointer" 
+                      ? "bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 cursor-pointer" 
                       : ""
                     }
                     ${isSelected && !peak
@@ -321,11 +321,24 @@ export function TimeSlotPicker({
                     }
                   `}
                 >
-                  <span className="block">{time}</span>
-                  {canStart && !isSelected && (
-                    <span className={`block text-[10px] mt-0.5 ${peak ? "text-primary/50" : "text-white/40"}`}>
-                      → {formatEndTime(time)}
+                  {isBooked ? (
+                    <span className="flex items-center justify-center gap-1">
+                      <span className="text-red-400 text-xs">×</span>
+                      <span className="line-through">{time}</span>
                     </span>
+                  ) : (
+                    <>
+                      <span className="block">{time}</span>
+                      {canStart && !isSelected && (
+                        <span className={`block text-[10px] mt-0.5 ${peak ? "text-primary/60" : "text-white/40"}`}>
+                          {peak && <span className="font-semibold">⚡ </span>}
+                          {hourlyRates.peakMin}€/h → {formatEndTime(time)}
+                        </span>
+                      )}
+                      {!canStart && isUnavailableDuration && (
+                        <span className="block text-[9px] mt-0.5 text-white/20">durée insuff.</span>
+                      )}
+                    </>
                   )}
                 </button>
               );
@@ -337,7 +350,7 @@ export function TimeSlotPicker({
               <>
                 {hasAnyOffPeakSlot && (
                   <div className="flex items-center gap-1.5">
-                    <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
+                    <div className="h-5 w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[9px] text-white/50">18</div>
                     <span>
                       {hourlyRates.offPeakMin === hourlyRates.offPeakMax
                         ? `${hourlyRates.offPeakMin}€/h`
@@ -346,9 +359,10 @@ export function TimeSlotPicker({
                   </div>
                 )}
                 <div className="flex items-center gap-1.5">
-                  <div className="h-4 w-4 rounded border border-primary/20 bg-primary/10" />
-                  <span className="text-primary/70">
-                    {!hasAnyOffPeakSlot ? "Soir, week-end & jour férié " : (date.getDay() === 0 || date.getDay() === 6) ? "Weekend & jour férié " : "Soir, week-end & jour férié "}
+                  <div className="h-5 w-5 rounded border border-primary/20 bg-primary/10 flex items-center justify-center">
+                    <span className="text-[10px] text-primary">⚡</span>
+                  </div>
+                  <span className="text-primary">
                     {hourlyRates.peakMin === hourlyRates.peakMax
                       ? `${hourlyRates.peakMin}€/h`
                       : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
@@ -357,7 +371,7 @@ export function TimeSlotPicker({
               </>
             ) : (
               <div className="flex items-center gap-1.5">
-                <div className="h-4 w-4 rounded border border-white/10 bg-white/10" />
+                <div className="h-5 w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[9px] text-white/50">18</div>
                 <span>
                   {hourlyRates.offPeakMin === hourlyRates.offPeakMax
                     ? `${hourlyRates.offPeakMin}€/h`
@@ -366,11 +380,17 @@ export function TimeSlotPicker({
               </div>
             )}
             <div className="flex items-center gap-1.5">
-              <div className="h-4 w-4 rounded border border-red-500/20 bg-red-500/10 line-through text-[8px] text-red-400/50 flex items-center justify-center">×</div>
+              <div className="h-5 w-5 rounded border border-red-500/20 bg-red-500/10 flex items-center justify-center gap-0.5 text-[8px] text-red-400/50">
+                <span>×</span>
+                <span className="line-through">18</span>
+              </div>
               <span>Réservé</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-4 w-4 rounded border border-dashed border-white/10 bg-white/5" />
+              <div className="h-5 w-5 rounded border border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center">
+                <span className="text-[8px] text-white/30">18</span>
+                <span className="text-[6px] text-white/20 leading-none">insuff.</span>
+              </div>
               <span>Durée insuffisante</span>
             </div>
           </div>
