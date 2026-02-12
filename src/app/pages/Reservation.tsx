@@ -493,6 +493,7 @@ export function Reservation({ step }: ReservationProps) {
                     onSelect={selectStudioFirst}
                     onBack={goBack}
                     groupType={state.groupType || "group"}
+                    hideHeader
                   />
                 )}
 

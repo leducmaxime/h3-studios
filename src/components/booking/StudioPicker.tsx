@@ -7,24 +7,27 @@ interface StudioPickerProps {
   onSelect: (studioId: StudioId) => void;
   onBack: () => void;
   groupType: GroupType;
+  hideHeader?: boolean;
 }
 
-export function StudioPicker({ onSelect, onBack, groupType }: StudioPickerProps) {
+export function StudioPicker({ onSelect, onBack, groupType, hideHeader = false }: StudioPickerProps) {
   if (groupType === "solo" || groupType === "duo") {
     return (
       <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onBack}
-            className="rounded-full p-2 transition-colors hover:bg-white/10"
-            aria-label="Retour"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <p className="text-white/60">Studio</p>
+        {!hideHeader && (
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="rounded-full p-2 transition-colors hover:bg-white/10"
+              aria-label="Retour"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <p className="text-white/60">Studio</p>
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex flex-col items-center gap-4 rounded-xl border border-white/20 bg-white/5 p-6 text-center">
           <p className="text-white/70">
             Le choix du studio se fera selon la disponibilité, priorité aux groupes.
@@ -42,18 +45,20 @@ export function StudioPicker({ onSelect, onBack, groupType }: StudioPickerProps)
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onBack}
-          className="rounded-full p-2 transition-colors hover:bg-white/10"
-          aria-label="Retour"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <div>
-          <p className="text-white/60">Choisissez votre studio</p>
+      {!hideHeader && (
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="rounded-full p-2 transition-colors hover:bg-white/10"
+            aria-label="Retour"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <p className="text-white/60">Choisissez votre studio</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         {(Object.keys(STUDIOS) as StudioId[]).map((studioId) => {
