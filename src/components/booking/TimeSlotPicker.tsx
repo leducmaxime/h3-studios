@@ -351,7 +351,7 @@ export function TimeSlotPicker({
                       {canStart && !isSelected && (
                         <span className={`block text-[10px] mt-0.5 ${peak ? "text-primary/60" : "text-white/40"}`}>
                           {peak && <span className="font-semibold">⚡ </span>}
-                          {hourlyRates.peakMin}€/h → {formatEndTime(time)}
+                          → {formatEndTime(time)}
                         </span>
                       )}
                       {!canStart && isUnavailableDuration && (
