@@ -227,6 +227,7 @@ export function AdminStudios() {
               <div>
                 <label className="mb-1 block text-sm text-zinc-400">Studio</label>
                 <select
+                  id="block-studio"
                   value={blockForm.studioId}
                   onChange={(e) => setBlockForm({ ...blockForm, studioId: e.target.value as StudioId | "" })}
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
@@ -241,6 +242,7 @@ export function AdminStudios() {
               <div>
                 <label className="mb-1 block text-sm text-zinc-400">Date</label>
                 <input
+                  id="block-date"
                   type="date"
                   value={blockForm.date}
                   onChange={(e) => setBlockForm({ ...blockForm, date: e.target.value })}
@@ -252,6 +254,7 @@ export function AdminStudios() {
                 <div>
                   <label className="mb-1 block text-sm text-zinc-400">Début</label>
                   <select
+                    id="block-start"
                     value={blockForm.startTime}
                     onChange={(e) => setBlockForm({ ...blockForm, startTime: e.target.value })}
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
@@ -264,6 +267,7 @@ export function AdminStudios() {
                 <div>
                   <label className="mb-1 block text-sm text-zinc-400">Fin</label>
                   <select
+                    id="block-end"
                     value={blockForm.endTime}
                     onChange={(e) => setBlockForm({ ...blockForm, endTime: e.target.value })}
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
@@ -278,6 +282,7 @@ export function AdminStudios() {
               <div>
                 <label className="mb-1 block text-sm text-zinc-400">Raison (optionnel)</label>
                 <input
+                  id="block-reason"
                   type="text"
                   value={blockForm.reason}
                   onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })}

@@ -1,7 +1,7 @@
 export type StudioId = "la-scene" | "le-podium";
 export type GroupType = "solo" | "duo" | "group";
 export type BookingFlow = "time-first" | "studio-first";
-export type EquipmentId = "cymbal" | "mic" | "instrument";
+export type EquipmentId = "cymbal" | "mic" | "guitar" | "bass" | "piano";
 export type PaymentMethod = "card" | "cash";
 export type PaymentStatus = "pending" | "paid" | "pay-on-site";
 
@@ -26,7 +26,9 @@ export interface Equipment {
 export const EQUIPMENT: Record<EquipmentId, Equipment> = {
   cymbal: { id: "cymbal", name: "2 Cymbales Crash", pricePerHour: 0, maxPerSession: 1, pricingType: "session", sessionPricing: [3] },
   mic: { id: "mic", name: "Micro supplémentaire", pricePerHour: 2, maxPerSession: 4, pricingType: "session", sessionPricing: [3, 5, 6, 6] }, // 4ème offert (même prix que 3)
-  instrument: { id: "instrument", name: "Instrument (guitare, basse, piano numérique...)", pricePerHour: 0, maxPerSession: 5, pricingType: "session", sessionPricing: [3, 6, 9, 12, 15] },
+  guitar: { id: "guitar", name: "Guitare électrique", pricePerHour: 0, maxPerSession: 3, pricingType: "session", sessionPricing: [3, 6, 9] },
+  bass: { id: "bass", name: "Basse", pricePerHour: 0, maxPerSession: 1, pricingType: "session", sessionPricing: [3] },
+  piano: { id: "piano", name: "Piano numérique", pricePerHour: 0, maxPerSession: 2, pricingType: "session", sessionPricing: [3, 6] },
 };
 
 export interface PriceSlot {

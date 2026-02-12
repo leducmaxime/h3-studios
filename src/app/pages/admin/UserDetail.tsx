@@ -151,6 +151,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <div>
                     <label className="mb-1 block text-sm text-zinc-400">Nom</label>
                     <input
+                      id="edit-name"
                       type="text"
                       value={editForm.name}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
@@ -160,6 +161,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <div>
                     <label className="mb-1 block text-sm text-zinc-400">Email</label>
                     <input
+                      id="edit-email"
                       type="email"
                       value={editForm.email}
                       onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
@@ -169,6 +171,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <div>
                     <label className="mb-1 block text-sm text-zinc-400">Téléphone</label>
                     <input
+                      id="edit-phone"
                       type="tel"
                       value={editForm.phone}
                       onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
@@ -178,6 +181,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <div>
                     <label className="mb-1 block text-sm text-zinc-400">Groupe / Artiste</label>
                     <input
+                      id="edit-band-name"
                       type="text"
                       value={editForm.bandName}
                       onChange={(e) => setEditForm({ ...editForm, bandName: e.target.value })}
@@ -187,6 +191,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <div className="sm:col-span-2">
                     <label className="mb-1 block text-sm text-zinc-400">Notes internes</label>
                     <textarea
+                      id="edit-notes"
                       value={editForm.notes}
                       onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                       rows={3}

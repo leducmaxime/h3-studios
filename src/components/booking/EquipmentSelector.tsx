@@ -107,6 +107,11 @@ export function EquipmentSelector({
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-white">
                   {eq.name}
+                  {(["guitar", "bass", "piano"] as EquipmentId[]).includes(eq.id) && (
+                    <span className="ml-2 text-xs text-white/50">
+                      ({eq.maxPerSession} {eq.maxPerSession > 1 ? "disponibles" : "disponible"})
+                    </span>
+                  )}
                 </span>
                 <span className="text-xs text-white/50">
                   {priceDisplay}

@@ -184,6 +184,7 @@ export function AdminBookings() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
             <input
+              id="booking-search"
               type="text"
               placeholder="Rechercher par nom, email, téléphone ou référence..."
               value={search}
@@ -193,6 +194,7 @@ export function AdminBookings() {
           </div>
           <div className="flex flex-wrap gap-2">
             <select
+              id="filter-status"
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all"); setPage(1); }}
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
@@ -204,6 +206,7 @@ export function AdminBookings() {
               <option value="no-show">No-show</option>
             </select>
             <select
+              id="filter-studio"
               value={studioFilter}
               onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
@@ -213,6 +216,7 @@ export function AdminBookings() {
               <option value="le-podium">Le Podium</option>
             </select>
             <select
+              id="filter-date"
               value={dateFilter}
               onChange={(e) => { setDateFilter(e.target.value as "all" | "today" | "week" | "month"); setPage(1); }}
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
@@ -250,6 +254,7 @@ export function AdminBookings() {
                 <tr>
                   <th className="w-10 px-4 py-3">
                     <input
+                      id="select-all-bookings"
                       type="checkbox"
                       checked={selectedIds.size === paginatedBookings.length && paginatedBookings.length > 0}
                       onChange={toggleSelectAll}

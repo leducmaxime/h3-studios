@@ -251,13 +251,40 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 <h3 className="mb-4 font-semibold">Déplacer la réservation</h3>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="mb-1 block text-sm text-zinc-400">Nouvelle date</label>
+                    <label className="mb-1 block text-sm text-zinc-400">Date</label>
                     <input
+                      id="reschedule-date"
                       type="date"
                       value={newDate}
                       onChange={(e) => setNewDate(e.target.value)}
                       className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 focus:border-primary focus:outline-none"
                     />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm text-zinc-400">Début</label>
+                    <select
+                      id="reschedule-start"
+                      value={newStartTime}
+                      onChange={(e) => setNewStartTime(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 focus:border-primary focus:outline-none"
+                    >
+                      {TIME_SLOTS.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm text-zinc-400">Fin</label>
+                    <select
+                      id="reschedule-end"
+                      value={newEndTime}
+                      onChange={(e) => setNewEndTime(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 focus:border-primary focus:outline-none"
+                    >
+                      {[...TIME_SLOTS.slice(1), "00:00"].map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm text-zinc-400">Début</label>

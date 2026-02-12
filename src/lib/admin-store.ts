@@ -177,7 +177,7 @@ function generateMockBookings(users: AdminUser[], daysBack: number, daysForward:
       
       const equipment: EquipmentSelection[] = [];
       if (Math.random() < 0.3) {
-        const eqTypes: Array<"cymbal" | "mic" | "instrument"> = ["cymbal", "mic", "instrument"];
+        const eqTypes: Array<"cymbal" | "mic" | "guitar" | "bass" | "piano"> = ["cymbal", "mic", "guitar", "bass", "piano"];
         const numEquipment = randomInt(1, 2);
         for (let e = 0; e < numEquipment; e++) {
           const eqId = randomElement(eqTypes);

@@ -132,6 +132,7 @@ export function AdminPayments() {
         <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center">
           <div className="flex flex-wrap gap-2">
             <select
+              id="payment-status-filter"
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
@@ -142,6 +143,7 @@ export function AdminPayments() {
               <option value="refunded">Remboursé</option>
             </select>
             <select
+              id="payment-method-filter"
               value={methodFilter}
               onChange={(e) => { setMethodFilter(e.target.value as typeof methodFilter); setPage(1); }}
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"

@@ -101,6 +101,7 @@ export function AdminSettings() {
                 <label className="mb-2 block text-sm font-medium">Lundi - Vendredi</label>
                 <div className="flex items-center gap-3">
                   <input
+                    id="weekday-open"
                     type="time"
                     value={settings.businessHours.weekday.open}
                     onChange={(e) =>
@@ -116,6 +117,7 @@ export function AdminSettings() {
                   />
                   <span className="text-zinc-400">à</span>
                   <input
+                    id="weekday-close"
                     type="time"
                     value={settings.businessHours.weekday.close}
                     onChange={(e) =>
@@ -136,6 +138,7 @@ export function AdminSettings() {
                 <label className="mb-2 block text-sm font-medium">Samedi - Dimanche</label>
                 <div className="flex items-center gap-3">
                   <input
+                    id="weekend-open"
                     type="time"
                     value={settings.businessHours.weekend.open}
                     onChange={(e) =>
@@ -151,6 +154,7 @@ export function AdminSettings() {
                   />
                   <span className="text-zinc-400">à</span>
                   <input
+                    id="weekend-close"
                     type="time"
                     value={settings.businessHours.weekend.close}
                     onChange={(e) =>
@@ -187,6 +191,7 @@ export function AdminSettings() {
                   <span>Nouvelle réservation</span>
                 </div>
                 <input
+                  id="notify-booking"
                   type="checkbox"
                   checked={settings.notifications.emailOnBooking}
                   onChange={(e) =>
@@ -198,13 +203,14 @@ export function AdminSettings() {
                   className="h-5 w-5 rounded border-zinc-600 bg-zinc-700 text-primary focus:ring-primary"
                 />
               </label>
-              
+
               <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
                 <div className="flex items-center gap-3">
                   <Mail className="h-5 w-5 text-zinc-400" />
                   <span>Annulation</span>
                 </div>
                 <input
+                  id="notify-cancellation"
                   type="checkbox"
                   checked={settings.notifications.emailOnCancellation}
                   onChange={(e) =>
@@ -216,13 +222,14 @@ export function AdminSettings() {
                   className="h-5 w-5 rounded border-zinc-600 bg-zinc-700 text-primary focus:ring-primary"
                 />
               </label>
-              
+
               <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
                 <div className="flex items-center gap-3">
                   <Mail className="h-5 w-5 text-zinc-400" />
                   <span>Paiement reçu</span>
                 </div>
                 <input
+                  id="notify-payment"
                   type="checkbox"
                   checked={settings.notifications.emailOnPayment}
                   onChange={(e) =>
@@ -252,6 +259,7 @@ export function AdminSettings() {
               <div>
                 <label className="mb-2 block text-sm font-medium">Délai minimum (heures)</label>
                 <input
+                  id="min-advance-hours"
                   type="number"
                   min="0"
                   max="72"
@@ -270,6 +278,7 @@ export function AdminSettings() {
               <div>
                 <label className="mb-2 block text-sm font-medium">Réservation max (jours)</label>
                 <input
+                  id="max-advance-days"
                   type="number"
                   min="1"
                   max="365"
@@ -288,6 +297,7 @@ export function AdminSettings() {
               <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
                 <span>Téléphone obligatoire</span>
                 <input
+                  id="require-phone"
                   type="checkbox"
                   checked={settings.booking.requirePhone}
                   onChange={(e) =>
@@ -299,10 +309,11 @@ export function AdminSettings() {
                   className="h-5 w-5 rounded border-zinc-600 bg-zinc-700 text-primary focus:ring-primary"
                 />
               </label>
-              
+
               <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
                 <span>Autoriser paiement espèces</span>
                 <input
+                  id="allow-cash"
                   type="checkbox"
                   checked={settings.booking.allowCashPayment}
                   onChange={(e) =>
