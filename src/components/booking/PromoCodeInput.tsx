@@ -78,6 +78,7 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
         <div className="relative flex-1">
           <Tag className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
           <input
+            id="promo-code"
             type="text"
             value={code}
             onChange={(e) => {
@@ -86,6 +87,7 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
             }}
             onKeyDown={handleKeyDown}
             placeholder="Code promo"
+            aria-describedby={error ? "promo-code-error" : undefined}
             className="w-full rounded-lg border border-white/20 bg-white/5 py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:border-primary/50 focus:outline-none"
           />
         </div>
@@ -103,7 +105,9 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
         </button>
       </div>
       {error && (
-        <p className="text-xs text-red-400">{error}</p>
+        <p id="promo-code-error" role="alert" className="text-sm text-red-400">
+          {error}
+        </p>
       )}
     </div>
   );
