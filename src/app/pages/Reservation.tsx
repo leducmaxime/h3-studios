@@ -616,10 +616,18 @@ export function Reservation({ step }: ReservationProps) {
                             {formatDate(booking.date, "long")} • {booking.startTime} -{" "}
                             {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
                           </p>
-                          {booking.equipmentPrice > 0 && (
-                            <p className="mt-1 text-xs text-white/40">
-                              + options : {formatPrice(booking.equipmentPrice)}
-                            </p>
+                          {booking.equipmentPrice > 0 && booking.equipment.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {booking.equipment.filter(e => e.quantity > 0).map(e => {
+                                const durationH = (parseInt(booking.endTime) - parseInt(booking.startTime)) / 100;
+                                const eqPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH);
+                                return (
+                                  <p key={e.id} className="text-xs text-white/40">
+                                    + {EQUIPMENT[e.id]?.name || e.id} ×{e.quantity} : {formatPrice(eqPrice)}
+                                  </p>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                       ))}
