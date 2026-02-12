@@ -190,6 +190,21 @@ export function useBookingWithRouter(urlStep?: string) {
     const savedState = loadBookingState();
     const prefs = loadUserPreferences();
     
+    if (savedState && savedState.step === 8) {
+      clearBookingState();
+      if (prefs) {
+        setState((s) => ({
+          ...s,
+          userName: prefs.userName || "",
+          userEmail: prefs.userEmail || "",
+          userPhone: prefs.userPhone || "",
+          bandName: prefs.bandName || "",
+        }));
+      }
+      setIsHydrated(true);
+      return;
+    }
+    
     if (savedState) {
       const urlStepNum = getStepFromUrl(urlStep);
       const restoredState = {
