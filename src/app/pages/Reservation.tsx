@@ -276,7 +276,7 @@ export function Reservation({ step }: ReservationProps) {
         RESERVATION
       </div>
       
-      <div className="w-full max-w-[900px] px-0 sm:px-4">
+      <div className="w-full max-w-none sm:max-w-[900px] -mx-4 sm:mx-0 px-2 sm:px-4">
         {/* Cart banner — shown when adding a new booking with items already in cart */}
         {showCartBanner && (
           <div className="mb-4 flex items-center justify-between rounded-xl border-2 border-primary/30 bg-primary/10 px-4 py-3">

@@ -17,7 +17,7 @@ export function TarifsReservation() {
         TARIFS ET RESERVATION
       </div>
       
-      <div className="w-full max-w-[900px] px-0 sm:px-4">
+      <div className="w-full max-w-none sm:max-w-[900px] -mx-4 sm:mx-0 px-2 sm:px-4">
         <BookingWidget />
       </div>
 
