@@ -157,7 +157,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
       <div className="rounded-xl bg-primary/10 p-4">
         <div className="flex items-center justify-between">
           <span className="text-lg">
-            {showPaymentButton ? "Total" : (isPaid ? "Total payé" : "Total à régler sur place")}
+            {showPaymentButton ? "Total" : (isPaid ? "Total payé" : "Total à régler sur place (CB ou espèces)")}
           </span>
           <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
         </div>
@@ -173,37 +173,40 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
         </button>
       )}
 
-      <div className="flex gap-3">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 rounded-lg border border-white/20 px-4 py-3 transition-colors hover:bg-white/5"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Retour
-        </button>
-        {showPaymentButton && onProceedToPayment ? (
+      {showPaymentButton && (
+        <div className="flex gap-3">
           <button
-            onClick={onProceedToPayment}
-            className="flex-1 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+            onClick={onBack}
+            className="flex items-center gap-2 rounded-lg border border-white/20 px-4 py-3 transition-colors hover:bg-white/5"
           >
-            Procéder au paiement
+            <ChevronLeft className="h-4 w-4" />
+            Retour
           </button>
-        ) : (
-          <button
-            onClick={onNewBooking}
-            className="flex-1 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
-          >
-            Nouvelle réservation
-          </button>
-        )}
-      </div>
+          {onProceedToPayment && (
+            <button
+              onClick={onProceedToPayment}
+              className="flex-1 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+            >
+              Procéder au paiement
+            </button>
+          )}
+        </div>
+      )}
 
-      <p className="text-center text-sm text-white/50">
-        {showPaymentButton 
-          ? "Vous pourrez choisir de payer en ligne ou sur place à l'étape suivante"
-          : `Un email de confirmation vous sera envoyé à ${cart[0]?.userEmail}`
-        }
-      </p>
+      {!showPaymentButton && (
+        <button
+          onClick={onNewBooking}
+          className="w-full rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+        >
+          Nouvelle réservation
+        </button>
+      )}
+
+      {showPaymentButton && (
+        <p className="text-center text-sm text-white/50">
+          Vous pourrez choisir de payer en ligne ou sur place à l'étape suivante
+        </p>
+      )}
     </div>
   );
 }
