@@ -244,7 +244,7 @@ export function TimeSlotPicker({
 
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium text-white/70">Durée de la répétition</span>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 lg:gap-2">
           {(showMoreDurations ? ALL_DURATION_OPTIONS : DURATION_OPTIONS_MAIN).map(({ label, slots }) => (
             <button
               key={slots}
@@ -253,7 +253,7 @@ export function TimeSlotPicker({
                 onClear();
               }}
               className={`
-                px-4 py-2 rounded-lg font-medium transition-all text-sm
+                px-3 py-1.5 lg:px-4 lg:py-2 rounded-lg font-medium transition-all text-xs lg:text-sm
                 ${selectedDuration === slots
                   ? "bg-primary text-black"
                   : "bg-white/10 text-white hover:bg-white/20"
@@ -265,9 +265,9 @@ export function TimeSlotPicker({
           ))}
           <button
             onClick={() => setShowMoreDurations(!showMoreDurations)}
-            className="flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all text-sm bg-white/10 hover:bg-white/20"
+            className="flex items-center justify-center px-3 py-1.5 lg:px-4 lg:py-2 rounded-lg font-medium transition-all text-xs lg:text-sm bg-white/10 hover:bg-white/20"
           >
-            <span className="text-lg font-bold text-primary">{showMoreDurations ? "−" : "+"}</span>
+            <span className="text-base lg:text-lg font-bold text-primary">{showMoreDurations ? "−" : "+"}</span>
           </button>
         </div>
       </div>
@@ -277,7 +277,7 @@ export function TimeSlotPicker({
           <span className="text-sm font-medium text-white/70">
             Heure de début (pour {durationLabel})
           </span>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 lg:gap-2">
             {visibleSlots.map((time: string, index: number) => {
               const state = getSlotState(time, index);
               const canStart = canStartAt(index);
@@ -313,7 +313,7 @@ export function TimeSlotPicker({
                   title={disabledReason || undefined}
                   aria-label={disabledReason ? `${time} — ${disabledReason}` : undefined}
                   className={`
-                    relative rounded-lg px-3 py-2 text-sm font-medium transition-all min-w-[70px]
+                    relative rounded-lg px-2 py-1.5 lg:px-3 lg:py-2 text-xs lg:text-sm font-medium transition-all min-w-[60px] lg:min-w-[70px]
                     ${isBooked
                       ? "bg-red-500/10 text-red-400/50 cursor-not-allowed border border-red-500/20" 
                       : ""
@@ -349,7 +349,7 @@ export function TimeSlotPicker({
                     <>
                       <span className="block">{time}</span>
                       {canStart && !isSelected && (
-                        <span className={`block text-[10px] mt-0.5 ${peak ? "text-primary/60" : "text-white/40"}`}>
+                        <span className={`block text-[9px] lg:text-[10px] mt-0.5 ${peak ? "text-primary/60" : "text-white/40"}`}>
                           {peak && <span className="font-semibold">⚡ </span>}
                           → {formatEndTime(time)}
                         </span>
@@ -364,12 +364,12 @@ export function TimeSlotPicker({
             })}
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs text-white/60">
+          <div className="flex flex-wrap items-center justify-center gap-2 lg:gap-3 xl:gap-4 text-[10px] lg:text-xs text-white/60">
             {hasPeakPricing ? (
               <>
                 {hasAnyOffPeakSlot && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-5 w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[9px] text-white/50">18</div>
+                  <div className="flex items-center gap-1 lg:gap-1.5">
+                    <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[8px] lg:text-[9px] text-white/50">18</div>
                     <span>
                       {hourlyRates.offPeakMin === hourlyRates.offPeakMax
                         ? `${hourlyRates.offPeakMin}€/h`
@@ -377,9 +377,9 @@ export function TimeSlotPicker({
                     </span>
                   </div>
                 )}
-                <div className="flex items-center gap-1.5">
-                  <div className="h-5 w-5 rounded border border-primary/20 bg-primary/10 flex items-center justify-center">
-                    <span className="text-[10px] text-primary">⚡</span>
+                <div className="flex items-center gap-1 lg:gap-1.5">
+                  <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-primary/20 bg-primary/10 flex items-center justify-center">
+                    <span className="text-[9px] lg:text-[10px] text-primary">⚡</span>
                   </div>
                   <span className="text-primary">
                     {hourlyRates.peakMin === hourlyRates.peakMax
@@ -389,8 +389,8 @@ export function TimeSlotPicker({
                 </div>
               </>
             ) : (
-              <div className="flex items-center gap-1.5">
-                <div className="h-5 w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[9px] text-white/50">18</div>
+              <div className="flex items-center gap-1 lg:gap-1.5">
+                <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[8px] lg:text-[9px] text-white/50">18</div>
                 <span>
                   {hourlyRates.offPeakMin === hourlyRates.offPeakMax
                     ? `${hourlyRates.offPeakMin}€/h`
@@ -398,17 +398,17 @@ export function TimeSlotPicker({
                 </span>
               </div>
             )}
-            <div className="flex items-center gap-1.5">
-              <div className="h-5 w-5 rounded border border-red-500/20 bg-red-500/10 flex items-center justify-center gap-0.5 text-[8px] text-red-400/50">
+            <div className="flex items-center gap-1 lg:gap-1.5">
+              <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-red-500/20 bg-red-500/10 flex items-center justify-center gap-0.5 text-[7px] lg:text-[8px] text-red-400/50">
                 <span>×</span>
                 <span className="line-through">18</span>
               </div>
               <span>Réservé</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-5 w-5 rounded border border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center">
-                <span className="text-[8px] text-white/30">18</span>
-                <span className="text-[6px] text-white/20 leading-none">insuff.</span>
+            <div className="flex items-center gap-1 lg:gap-1.5">
+              <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center">
+                <span className="text-[7px] lg:text-[8px] text-white/30">18</span>
+                <span className="text-[5px] lg:text-[6px] text-white/20 leading-none">insuff.</span>
               </div>
               <span>Durée insuffisante</span>
             </div>
