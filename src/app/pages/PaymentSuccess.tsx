@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, Calendar, Download, Mail, Home, Loader2 } from "lucide-react";
+import { CheckCircle, Calendar, Download, Home, Loader2 } from "lucide-react";
 import { formatPrice } from "@/lib/booking";
 
 interface PaymentSuccessProps {
@@ -81,16 +81,6 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                 </div>
               </div>
             )}
-
-            <div className="mb-6 rounded-lg bg-primary/10 border border-primary/30 p-4">
-              <div className="flex items-start gap-3">
-                <Mail className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-left text-white/80">
-                  Un email de confirmation avec tous les détails de votre réservation 
-                  vous a été envoyé. Pensez à vérifier vos spams.
-                </p>
-              </div>
-            </div>
 
             <div className="flex flex-col gap-3">
               <a
