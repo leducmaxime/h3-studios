@@ -42,7 +42,7 @@ interface ExtendedBookingState extends BookingState {
  */
 const STEP_URL_MAP: Record<number, string> = {
   0: "",
-  1: "reservation",
+  1: "",
   3: "coordonnees",
   5: "panier",
   6: "paiement-choix",
