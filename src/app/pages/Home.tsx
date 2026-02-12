@@ -36,7 +36,7 @@ export function Home() {
             </span>
           ))}
         </div>
-        <a href="/tarifs-et-reservation">
+        <a href="/reservation">
           <button className="rounded-[3rem] bg-primary px-12 py-4 text-xl font-bold text-black md:text-2xl">
             Réservation
           </button>

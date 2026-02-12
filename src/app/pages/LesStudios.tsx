@@ -48,7 +48,7 @@ export function LesStudios() {
             </div>
             <div className="px-0 text-center lg:px-4">{studio.description}</div>
             <div className="mt-auto">
-              <a href="/tarifs-et-reservation">
+              <a href="/reservation">
                 <button className="rounded-[3rem] bg-primary px-8 py-2 text-lg font-semibold text-black">
                   Réservation
                 </button>
