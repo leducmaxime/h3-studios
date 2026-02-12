@@ -288,11 +288,30 @@ export function TimeSlotPicker({
               const isUnavailableDuration = state === "unavailable-duration";
               const peak = hasPeakPricing && isPeakTime(date, time);
               
+              const getDisabledReason = (): string | null => {
+                if (isBooked) return "Ce créneau est déjà réservé";
+                if (isUnavailableDuration && selectedDuration !== null) {
+                  const endIdx = index + selectedDuration;
+                  if (endIdx > visibleSlots.length) {
+                    return `Ce créneau dépasse l'heure de fermeture (${closingTime})`;
+                  }
+                  for (let i = index; i < endIdx; i++) {
+                    if (isSlotBooked(visibleSlots[i])) {
+                      return "Un créneau dans cette plage est déjà réservé";
+                    }
+                  }
+                }
+                return null;
+              };
+              const disabledReason = getDisabledReason();
+
               return (
                 <button
                   key={time}
                   onClick={() => isClickable && handleSlotClick(time)}
                   disabled={!isClickable}
+                  title={disabledReason || undefined}
+                  aria-label={disabledReason ? `${time} — ${disabledReason}` : undefined}
                   className={`
                     relative rounded-lg px-3 py-2 text-sm font-medium transition-all min-w-[70px]
                     ${isBooked
