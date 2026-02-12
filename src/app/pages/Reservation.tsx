@@ -298,7 +298,7 @@ export function Reservation({ step }: ReservationProps) {
           </div>
         )}
 
-        <div className="relative overflow-hidden rounded-none sm:rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
+        <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
           <div className="relative p-4 sm:p-6 md:p-8">
