@@ -87,9 +87,8 @@ export function EquipmentSelector({
               }
             } else {
               const unitPrice = eq.sessionPricing[0];
-              const isLinear = eq.maxPerSession > 1;
               priceDisplay = quantity === 0
-                ? `${unitPrice}€/séance${isLinear ? " par unité" : ""}`
+                ? `${unitPrice}€/séance`
                 : `${subtotal}€/séance`;
             }
           } else {
