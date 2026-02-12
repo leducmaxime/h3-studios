@@ -68,7 +68,7 @@ export function GroupTypeToggle({ value, onChange }: GroupTypeToggleProps) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-sm font-medium text-white/70">Combien êtes-vous ?</span>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1 lg:gap-2">
         {OPTIONS.map(({ type, label, sublabel, icon: Icon }) => {
           const selected = value === type;
           const priceRange = getPriceRange(type);
@@ -77,19 +77,19 @@ export function GroupTypeToggle({ value, onChange }: GroupTypeToggleProps) {
               key={type}
               onClick={() => handleClick(type)}
               className={`
-                flex flex-col items-center gap-1 rounded-lg p-3 transition-all
+                flex flex-col items-center gap-0.5 lg:gap-1 rounded-lg p-2 lg:p-3 transition-all
                 ${selected
-                  ? "bg-primary text-black ring-2 ring-primary ring-offset-2 ring-offset-black"
+                  ? "bg-primary text-black ring-2 ring-primary ring-offset-1 lg:ring-offset-2 ring-offset-black"
                   : "bg-white/10 hover:bg-white/20"
                 }
               `}
             >
-              <Icon className={`h-5 w-5 ${type === "group" ? "scale-110" : ""}`} />
-              <span className="font-semibold">{label}</span>
-              <span className={`text-xs ${selected ? "text-black/70" : "text-white/60"}`}>
+              <Icon className={`h-4 w-4 lg:h-5 lg:w-5 ${type === "group" ? "scale-110" : ""}`} />
+              <span className="text-sm lg:text-base font-semibold">{label}</span>
+              <span className={`text-[10px] lg:text-xs ${selected ? "text-black/70" : "text-white/60"}`}>
                 {sublabel}
               </span>
-              <span className={`mt-1 text-xs font-medium ${selected ? "text-black/80" : "text-primary"}`}>
+              <span className={`mt-0.5 lg:mt-1 text-[10px] lg:text-xs font-medium ${selected ? "text-black/80" : "text-primary"}`}>
                 {priceRange}
               </span>
             </button>
