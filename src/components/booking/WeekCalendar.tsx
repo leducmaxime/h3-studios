@@ -115,7 +115,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-1 lg:gap-2">
         {weekDates.map((date) => {
           const dateKey = date.toISOString().split("T")[0];
           const dayIndex = date.getDay();
@@ -126,42 +126,43 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
           const ranges = availabilityMap.get(dateKey) || [];
           const hasAvailability = ranges.length > 0;
           const disabled = past || tooFar || !hasAvailability;
-          
+
           return (
             <button
               key={date.toISOString()}
               onClick={() => !disabled && onSelectDate(date)}
               disabled={disabled}
               className={`
-                relative flex flex-col items-center justify-center rounded-xl p-3 min-h-[100px] transition-all
+                relative flex flex-col items-center justify-center rounded-lg lg:rounded-xl p-1.5 lg:p-3 min-h-[72px] lg:min-h-[100px] transition-all
                 ${disabled
-                  ? "opacity-30 cursor-not-allowed bg-white/5" 
+                  ? "opacity-30 cursor-not-allowed bg-white/5"
                   : "hover:bg-primary/20 cursor-pointer bg-white/10"
                 }
-                ${selected 
-                  ? "ring-2 ring-primary ring-offset-2 ring-offset-black bg-primary/20 text-primary" 
+                ${selected
+                  ? "ring-2 ring-primary ring-offset-1 lg:ring-offset-2 ring-offset-black bg-primary/20 text-primary"
                   : ""
                 }
-                ${todayDate && !selected 
-                  ? "ring-2 ring-white/50" 
+                ${todayDate && !selected
+                  ? "ring-2 ring-white/50"
                   : ""
                 }
               `}
             >
-              <span className={`text-xs font-medium mb-1 ${selected ? "text-primary/70" : "text-white/50"}`}>
+              <span className={`text-[10px] lg:text-xs font-medium mb-0.5 lg:mb-1 ${selected ? "text-primary/70" : "text-white/50"}`}>
                 {DAYS_FR[dayIndex]}
               </span>
-              <span className={`text-2xl font-bold ${selected ? "text-primary" : ""}`}>
+              <span className={`text-lg lg:text-2xl font-bold ${selected ? "text-primary" : ""}`}>
                 {date.getDate()}
               </span>
-              <span className={`text-xs mt-1 ${
+              <span className={`text-[9px] lg:text-xs mt-0.5 lg:mt-1 ${
                 disabled
                   ? "text-white/30"
                   : selected
                     ? "text-primary/70"
                     : "text-emerald-400/80"
               }`}>
-                {disabled ? "Complet" : "Disponible"}
+                <span className="lg:hidden">{disabled ? "Complet" : "Dispo"}</span>
+                <span className="hidden lg:inline">{disabled ? "Complet" : "Disponible"}</span>
               </span>
             </button>
           );
