@@ -66,7 +66,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
           <CheckCircle2 className="h-12 w-12 text-green-500" />
         </div>
         <h3 className="mb-2 text-2xl font-bold">
-          {showPaymentButton ? "Récapitulatif de votre commande" : "Réservations confirmées !"}
+          {showPaymentButton ? "Récapitulatif de votre commande" : (cart.length === 1 ? "Réservation confirmée !" : "Réservations confirmées !")}
         </h3>
         <p className="text-white/60">
           {cart.length} réservation{cart.length > 1 ? "s" : ""}
