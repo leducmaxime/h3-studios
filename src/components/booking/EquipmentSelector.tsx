@@ -81,7 +81,7 @@ export function EquipmentSelector({
               if (quantity === 0) {
                 priceDisplay = "à partir de 3€ par séance (tarif dégressif)";
               } else if (quantity === 4) {
-                priceDisplay = `${subtotal}€/séance (4ème offert !)`;
+                priceDisplay = `${subtotal}€/séance`;
               } else {
                 priceDisplay = `${subtotal}€/séance (tarif dégressif)`;
               }
@@ -159,7 +159,7 @@ export function EquipmentSelector({
 
       {totalCost > 0 && (
         <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
-          <span className="text-sm text-white/70">Total équipement</span>
+          <span className="text-sm text-white/70">Total options supplémentaires</span>
           <span className="font-semibold text-primary">
             {formatPrice(totalCost)}
           </span>
