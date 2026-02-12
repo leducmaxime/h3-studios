@@ -244,6 +244,10 @@ export function useBookingWithRouter(urlStep?: string) {
       isInitialMount.current = false;
       return;
     }
+    if (state.step === 8) {
+      clearBookingState();
+      return;
+    }
     saveBookingState(state);
   }, [state, isHydrated]);
 
