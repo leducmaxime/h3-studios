@@ -11,6 +11,7 @@ import { LeMateriel } from "@/app/pages/LeMateriel";
 import { Tarifs } from "@/app/pages/Tarifs";
 import { Reservation } from "@/app/pages/Reservation";
 import { APropos } from "@/app/pages/APropos";
+import { Avis } from "@/app/pages/Avis";
 import { generateSitemap, generateRobotsTxt } from "@/app/seo";
 import { AdminDashboard } from "@/app/pages/admin/Dashboard";
 import { AdminCalendar } from "@/app/pages/admin/Calendar";
@@ -91,6 +92,12 @@ export default defineApp([
   render(({ children }) => <DocumentWithPath path="/a-propos">{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/a-propos", APropos),
+    ]),
+  ]),
+
+  render(({ children }) => <DocumentWithPath path="/avis">{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/avis", Avis),
     ]),
   ]),
 

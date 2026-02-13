@@ -95,6 +95,19 @@ export const pageSEO: Record<string, PageSEO> = {
     ],
     path: "/a-propos",
   },
+  "/avis": {
+    title: "Avis Clients - Témoignages | H3 STUDIOS Sucy-en-Brie",
+    description:
+      "Découvrez les avis de nos clients sur H3 Studios. Studio de répétition et enregistrement à Sucy-en-Brie. Note moyenne : 4.9/5 sur Google.",
+    keywords: [
+      "avis H3 Studios",
+      "témoignages clients",
+      "avis studio répétition",
+      "Google reviews",
+      "opinions clients",
+    ],
+    path: "/avis",
+  },
 };
 
 export const routes = Object.keys(pageSEO);
