@@ -5,7 +5,7 @@ const studios = [
   {
     name: "LA SCÈNE",
     description:
-      "Avec une hauteur de 3,50m et une superficie de 42m², notre studio propose une scène intimiste avec sa rampe d'éclairage, un écran géant et un vidéoprojecteur. Convenant à tous styles musicaux, ce lieu chaleureux et fonctionnel saura répondre à vos besoins.",
+      "Avec une hauteur de 3,50m et une superficie de 42m², notre studio propose une scène intimiste avec sa rampe d'éclairage. Convenant à tous styles musicaux, ce lieu chaleureux et fonctionnel saura répondre à vos besoins.",
     images: [
       { src: "/images/studios/scene-2.jpg", alt: "La Scène 1" },
       { src: "/images/studios/scene-5.jpg", alt: "La Scène 2" },
