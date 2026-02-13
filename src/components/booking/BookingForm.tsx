@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeft } from "lucide-react";
+import { useState } from "react";
 import {
   type StudioId,
   type GroupType,
@@ -45,6 +46,48 @@ export function BookingForm({
   onBack,
   canContinue,
 }: BookingFormProps) {
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (userEmail && !emailRegex.test(userEmail)) {
+      errors.userEmail = "Format d'email invalide";
+    }
+
+    const phoneDigits = userPhone.replace(/\D/g, "");
+    if (userPhone && phoneDigits.length !== 10) {
+      errors.userPhone = "Le numéro doit contenir exactement 10 chiffres";
+    }
+
+    const postalCodeDigits = billingPostalCode.replace(/\D/g, "");
+    if (billingPostalCode && postalCodeDigits.length !== 5) {
+      errors.billingPostalCode = "Le code postal doit contenir exactement 5 chiffres";
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleContinue = () => {
+    if (!canContinue) return;
+
+    if (validateForm()) {
+      onContinue();
+    }
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+    onUpdateField(field as "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity" | "additionalInfo", value);
+  };
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6">
@@ -68,8 +111,9 @@ export function BookingForm({
             id="userName"
             type="text"
             value={userName}
-            onChange={(e) => onUpdateField("userName", e.target.value)}
+            onChange={(e) => handleFieldChange("userName", e.target.value)}
             placeholder="Jean Dupont"
+            required
             className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
           />
         </div>
@@ -82,11 +126,16 @@ export function BookingForm({
             id="userEmail"
             type="email"
             value={userEmail}
-            onChange={(e) => onUpdateField("userEmail", e.target.value)}
+            onChange={(e) => handleFieldChange("userEmail", e.target.value)}
             placeholder="jean@exemple.fr"
-            pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-            className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
+            required
+            className={`rounded-lg border bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
+              validationErrors.userEmail ? "border-red-500" : "border-white/20"
+            }`}
           />
+          {validationErrors.userEmail && (
+            <span className="text-xs text-red-400">{validationErrors.userEmail}</span>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -97,13 +146,17 @@ export function BookingForm({
             id="userPhone"
             type="tel"
             value={userPhone}
-            onChange={(e) => onUpdateField("userPhone", e.target.value)}
-            placeholder="06 12 34 56 78"
-            pattern="\d{10}"
+            onChange={(e) => handleFieldChange("userPhone", e.target.value.replace(/\D/g, ""))}
+            placeholder="0612345678"
             maxLength={10}
-            minLength={10}
-            className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
+            required
+            className={`rounded-lg border bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
+              validationErrors.userPhone ? "border-red-500" : "border-white/20"
+            }`}
           />
+          {validationErrors.userPhone && (
+            <span className="text-xs text-red-400">{validationErrors.userPhone}</span>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -114,7 +167,7 @@ export function BookingForm({
             id="bandName"
             type="text"
             value={bandName}
-            onChange={(e) => onUpdateField("bandName", e.target.value)}
+            onChange={(e) => handleFieldChange("bandName", e.target.value)}
             placeholder="Les Rockers"
             className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
           />
@@ -131,8 +184,9 @@ export function BookingForm({
             id="billingAddress"
             type="text"
             value={billingAddress}
-            onChange={(e) => onUpdateField("billingAddress", e.target.value)}
+            onChange={(e) => handleFieldChange("billingAddress", e.target.value)}
             placeholder="12 Rue de la Musique"
+            required
             className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
           />
         </div>
@@ -143,16 +197,20 @@ export function BookingForm({
             </label>
             <input
               id="billingPostalCode"
-              type="number"
-              value={billingPostalCode}
-              onChange={(e) => onUpdateField("billingPostalCode", e.target.value)}
-              placeholder="94370"
-              pattern="\d{5}"
-              maxLength={5}
-              minLength={5}
+              type="text"
               inputMode="numeric"
-              className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
+              value={billingPostalCode}
+              onChange={(e) => handleFieldChange("billingPostalCode", e.target.value.replace(/\D/g, ""))}
+              placeholder="94370"
+              maxLength={5}
+              required
+              className={`rounded-lg border bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
+                validationErrors.billingPostalCode ? "border-red-500" : "border-white/20"
+              }`}
             />
+            {validationErrors.billingPostalCode && (
+              <span className="text-xs text-red-400">{validationErrors.billingPostalCode}</span>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="billingCity" className="text-sm font-medium text-white/70">
@@ -162,8 +220,9 @@ export function BookingForm({
               id="billingCity"
               type="text"
               value={billingCity}
-              onChange={(e) => onUpdateField("billingCity", e.target.value)}
+              onChange={(e) => handleFieldChange("billingCity", e.target.value)}
               placeholder="Sucy-en-Brie"
+              required
               className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
             />
           </div>
@@ -177,7 +236,7 @@ export function BookingForm({
         <textarea
           id="additionalInfo"
           value={additionalInfo}
-          onChange={(e) => onUpdateField("additionalInfo", e.target.value)}
+          onChange={(e) => handleFieldChange("additionalInfo", e.target.value)}
           placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
           rows={3}
           className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-y sm:px-4 sm:py-3"
@@ -185,7 +244,7 @@ export function BookingForm({
       </div>
 
       <button
-        onClick={onContinue}
+        onClick={handleContinue}
         disabled={!canContinue}
         className={`
           w-full rounded-lg py-3.5 text-base font-semibold transition-all sm:py-4 sm:text-lg
