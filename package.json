@@ -36,6 +36,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-server-dom-webpack": "19.2.3",
+    "recharts": "^3.7.0",
     "rwsdk": "1.0.0-beta.47",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0"

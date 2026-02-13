@@ -1357,6 +1357,98 @@ export default defineApp([
     }
   }),
 
+  route("/api/admin/stats/charts", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const url = new URL(request.url);
+      const period = url.searchParams.get("period") || "month";
+
+      let days: number;
+      switch (period) {
+        case "week": days = 7; break;
+        case "quarter": days = 90; break;
+        case "year": days = 365; break;
+        default: days = 30; break;
+      }
+
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - days);
+      const fromStr = fromDate.toISOString().slice(0, 10);
+      const toStr = new Date().toISOString().slice(0, 10);
+
+      const [occupancyResult, studioResult, paymentResult, upcomingResult, pendingPayResult] = await env.DB.batch([
+        // Occupation by day of week (0=Sunday..6=Saturday)
+        env.DB.prepare(
+          `SELECT CAST(strftime('%w', date) AS INTEGER) as day_of_week, COUNT(*) as count
+           FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
+           GROUP BY day_of_week ORDER BY day_of_week`,
+        ).bind(fromStr, toStr),
+        // Studio distribution
+        env.DB.prepare(
+          `SELECT studio_id, COUNT(*) as count, SUM(total_price) as revenue
+           FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
+           GROUP BY studio_id`,
+        ).bind(fromStr, toStr),
+        // Payment method distribution
+        env.DB.prepare(
+          `SELECT payment_method, COUNT(*) as count, SUM(total_price) as revenue
+           FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
+           GROUP BY payment_method`,
+        ).bind(fromStr, toStr),
+        // Upcoming bookings (next 5)
+        env.DB.prepare(
+          `SELECT b.*, u.name as user_name FROM bookings b
+           LEFT JOIN users u ON b.user_id = u.id
+           WHERE b.date >= ? AND b.status != 'cancelled'
+           ORDER BY b.date ASC, b.start_time ASC LIMIT 5`,
+        ).bind(toStr),
+        // Pending payments (next 5)
+        env.DB.prepare(
+          `SELECT p.*, b.date as booking_date, b.start_time, b.studio_id, u.name as user_name
+           FROM payments p
+           LEFT JOIN bookings b ON p.booking_id = b.id
+           LEFT JOIN users u ON b.user_id = u.id
+           WHERE p.status = 'pending'
+           ORDER BY p.created_at DESC LIMIT 5`,
+        ),
+      ]);
+
+      type OccRow = { day_of_week: number; count: number };
+      type StudioRow = { studio_id: string; count: number; revenue: number };
+      type PaymentRow = { payment_method: string; count: number; revenue: number };
+
+      const DAY_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+      const occupancyData = DAY_NAMES.map((name, i) => {
+        const row = (occupancyResult.results as unknown as OccRow[]).find(r => r.day_of_week === i);
+        return { day: name, bookings: row?.count ?? 0 };
+      });
+
+      const studioData = (studioResult.results as unknown as StudioRow[]).map(row => ({
+        studio: row.studio_id === "la-scene" ? "La Scène" : row.studio_id === "le-podium" ? "Le Podium" : row.studio_id,
+        count: row.count,
+        revenue: row.revenue,
+      }));
+
+      const paymentData = (paymentResult.results as unknown as PaymentRow[]).map(row => ({
+        method: row.payment_method === "card" ? "Carte" : row.payment_method === "cash" ? "Espèces" : (row.payment_method || "Non défini"),
+        count: row.count,
+        revenue: row.revenue,
+      }));
+
+      return jsonSuccess({
+        occupancy: occupancyData,
+        studios: studioData,
+        payments: paymentData,
+        upcomingBookings: upcomingResult.results,
+        pendingPayments: pendingPayResult.results,
+      });
+    } catch (error) {
+      console.error("GET /api/admin/stats/charts error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch chart data", 500);
+    }
+  }),
+
   // ─── Payment & Webhook API ─────────────────────────────────────────────────
 
   route("/api/payment/webhook", async (info) => {
