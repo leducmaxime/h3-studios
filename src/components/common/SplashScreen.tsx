@@ -14,12 +14,12 @@ export function SplashScreen() {
       
       const fadeTimer = setTimeout(() => {
         setIsFading(true);
-      }, 2500);
+      }, 1200);
       
       const hideTimer = setTimeout(() => {
         setIsVisible(false);
         sessionStorage.setItem("h3-splash-seen", "true");
-      }, 3000);
+      }, 2000);
 
       return () => {
         clearTimeout(fadeTimer);
@@ -32,16 +32,28 @@ export function SplashScreen() {
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black transition-opacity duration-500 ${
-        isFading ? "opacity-0" : "opacity-100"
+      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black transition-all duration-700 ease-in-out ${
+        isFading ? "opacity-0 scale-150 blur-xl" : "opacity-100 scale-100 blur-0"
       }`}
     >
       <img
         src="/images/logo.png"
         alt="H3 Studios"
-        className="h-24 w-24 animate-spin"
-        style={{ animationDuration: "2s" }}
+        className="h-24 w-24"
+        style={{
+          animation: "spin 1s ease-out forwards",
+        }}
       />
+      <style>{`
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   );
 }
