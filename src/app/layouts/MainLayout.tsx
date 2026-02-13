@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Header } from "@/components/Header/Header";
+import { SplashScreen } from "@/components/common/SplashScreen";
 
 interface MainLayoutProps {
   children?: React.ReactNode;
@@ -53,6 +54,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <>
+      <SplashScreen />
       <Header />
       <div className="container flex h-full flex-col justify-between">
         {children}
