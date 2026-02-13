@@ -23,6 +23,7 @@ import { AdminUsers } from "@/app/pages/admin/Users";
 import { AdminUserDetail } from "@/app/pages/admin/UserDetail";
 import { AdminPayments } from "@/app/pages/admin/Payments";
 import { AdminStudios } from "@/app/pages/admin/Studios";
+import { AdminPricing } from "@/app/pages/admin/Pricing";
 import { AdminSettings } from "@/app/pages/admin/Settings";
 import { AdminBookingNew } from "@/app/pages/admin/BookingNew";
 import { Login } from "@/app/pages/admin/Login";
@@ -105,6 +106,7 @@ const SUPER_ADMIN_ROUTE_PREFIXES = [
   "/api/admin/settings",
   "/api/admin/opening-hours",
   "/admin/studios",
+  "/admin/pricing",
   "/admin/settings",
 ];
 
@@ -283,6 +285,7 @@ export default defineApp([
     route("/admin/users/:id", ({ params }) => <AdminUserDetail userId={params.id} />),
     route("/admin/payments", AdminPayments),
     route("/admin/studios", AdminStudios),
+    route("/admin/pricing", AdminPricing),
     route("/admin/settings", AdminSettings),
   ]),
 

@@ -8,6 +8,7 @@ import {
   Users,
   CreditCard,
   Building2,
+  Euro,
   Settings,
   Menu,
   X,
@@ -55,6 +56,7 @@ const ALL_NAV_ITEMS = [
   { href: "/admin/users", label: "Clients", icon: Users, superAdminOnly: false },
   { href: "/admin/payments", label: "Paiements", icon: CreditCard, superAdminOnly: false },
   { href: "/admin/studios", label: "Studios", icon: Building2, superAdminOnly: true },
+  { href: "/admin/pricing", label: "Tarifs", icon: Euro, superAdminOnly: true },
   { href: "/admin/settings", label: "Paramètres", icon: Settings, superAdminOnly: true },
 ];
 
