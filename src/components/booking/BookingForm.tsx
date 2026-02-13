@@ -53,17 +53,17 @@ export function BookingForm({
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (userEmail && !emailRegex.test(userEmail)) {
-      errors.userEmail = "Format d'email invalide";
+      errors.userEmail = "L'email est invalide";
     }
 
     const phoneDigits = userPhone.replace(/\D/g, "");
     if (userPhone && phoneDigits.length !== 10) {
-      errors.userPhone = "Le numéro doit contenir exactement 10 chiffres";
+      errors.userPhone = "Le numéro de téléphone est invalide";
     }
 
     const postalCodeDigits = billingPostalCode.replace(/\D/g, "");
     if (billingPostalCode && postalCodeDigits.length !== 5) {
-      errors.billingPostalCode = "Le code postal doit contenir exactement 5 chiffres";
+      errors.billingPostalCode = "Le code postal est invalide";
     }
 
     setValidationErrors(errors);
