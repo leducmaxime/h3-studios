@@ -9,7 +9,6 @@ const studios = [
     height: "3,50m",
     description:
       "Avec une hauteur de 3,50m et une superficie de 42m², notre studio propose une scène intimiste avec sa rampe d'éclairage. Convenant à tous styles musicaux, ce lieu chaleureux et fonctionnel saura répondre à vos besoins.",
-    features: ["Scène", "Éclairage", "Écran géant"],
     images: [
       { src: "/images/studios/scene-2.jpg", alt: "La Scène 1" },
       { src: "/images/studios/scene-5.jpg", alt: "La Scène 2" },
@@ -24,7 +23,6 @@ const studios = [
     height: "2,80m",
     description:
       "Conçu pour la répétition, cet espace de 35m² offre un cadre simple et fonctionnel, idéal pour vos sessions musicales, en groupe ou en solo. Cette salle est également adapté aux enseignants souhaitant donner des cours à un ou plusieurs élèves.",
-    features: ["Compact", "Fonctionnel", "Idéal cours"],
     images: [
       { src: "/images/studios/podium-2.jpg", alt: "Le Podium 1" },
       { src: "/images/studios/podium-1.jpg", alt: "Le Podium 2" },
@@ -85,20 +83,9 @@ export function LesStudios() {
                 <p className="mb-4 mt-4 text-white/70 leading-relaxed text-sm">
                   {studio.description}
                 </p>
-
-                <div className="flex flex-wrap gap-2">
-                  {studio.features.map((feature, j) => (
-                    <span
-                      key={j}
-                      className="rounded-full bg-white/10 px-3 py-1 text-sm text-white/80"
-                    >
-                      {feature}
-                    </span>
-                  ))}
-                </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-6 text-center">
                 <a
                   href="/reservation"
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-black transition-all hover:bg-primary/90"
