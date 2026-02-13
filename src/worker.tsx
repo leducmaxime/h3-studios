@@ -24,6 +24,7 @@ import { AdminUserDetail } from "@/app/pages/admin/UserDetail";
 import { AdminPayments } from "@/app/pages/admin/Payments";
 import { AdminStudios } from "@/app/pages/admin/Studios";
 import { AdminSettings } from "@/app/pages/admin/Settings";
+import { Login } from "@/app/pages/admin/Login";
 import { PaymentSuccess } from "@/app/pages/PaymentSuccess";
 import { PaymentCancel } from "@/app/pages/PaymentCancel";
 import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
@@ -265,6 +266,10 @@ export default defineApp([
     layout(MainLayout, [
       route("/equipe", Equipe),
     ]),
+  ]),
+
+  render(({ children }) => <DocumentWithPath path="/admin/login">{children}</DocumentWithPath>, [
+    route("/admin/login", Login),
   ]),
 
   render(({ children }) => <DocumentWithPath path="/admin">{children}</DocumentWithPath>, [

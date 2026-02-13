@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import {
   LayoutDashboard,
   Calendar,
@@ -13,9 +13,10 @@ import {
   X,
   ChevronRight,
   LogOut,
-  RotateCcw,
+  ArrowLeft,
 } from "lucide-react";
-import { resetAdminStore } from "@/lib/admin-store";
+
+import { Toaster } from "@/components/ui/sonner";
 
 function usePathname() {
   return useSyncExternalStore(
@@ -36,28 +37,51 @@ function usePathname() {
   );
 }
 
+interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: "super-admin" | "operator";
+}
+
 interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
-const NAV_ITEMS = [
-  { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard, exact: true },
-  { href: "/admin/calendar", label: "Calendrier", icon: Calendar },
-  { href: "/admin/bookings", label: "Réservations", icon: ClipboardList },
-  { href: "/admin/users", label: "Clients", icon: Users },
-  { href: "/admin/payments", label: "Paiements", icon: CreditCard },
-  { href: "/admin/studios", label: "Studios", icon: Building2 },
-  { href: "/admin/settings", label: "Paramètres", icon: Settings },
+const ALL_NAV_ITEMS = [
+  { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard, exact: true, superAdminOnly: false },
+  { href: "/admin/calendar", label: "Calendrier", icon: Calendar, superAdminOnly: false },
+  { href: "/admin/bookings", label: "Réservations", icon: ClipboardList, superAdminOnly: false },
+  { href: "/admin/users", label: "Clients", icon: Users, superAdminOnly: false },
+  { href: "/admin/payments", label: "Paiements", icon: CreditCard, superAdminOnly: false },
+  { href: "/admin/studios", label: "Studios", icon: Building2, superAdminOnly: true },
+  { href: "/admin/settings", label: "Paramètres", icon: Settings, superAdminOnly: true },
 ];
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [user, setUser] = useState<AdminUser | null>(null);
   const currentPath = usePathname();
 
-  const handleReset = () => {
-    if (confirm("Réinitialiser toutes les données de démonstration ?")) {
-      resetAdminStore();
-      window.location.reload();
+  useEffect(() => {
+    fetch("/api/admin/me")
+      .then((res) => res.json() as Promise<{ success: boolean; data?: AdminUser }>)
+      .then((data) => {
+        if (data.success && data.data) setUser(data.data);
+      })
+      .catch(console.error);
+  }, []);
+
+  const navItems = ALL_NAV_ITEMS.filter(
+    (item) => !item.superAdminOnly || user?.role === "super-admin"
+  );
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+      window.location.href = "/admin/login";
+    } catch (err) {
+      console.error("Logout error:", err);
     }
   };
 
@@ -90,10 +114,28 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </button>
         </div>
 
+        {user && (
+          <div className="border-b border-zinc-800 p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
+                <span className="font-semibold text-primary">
+                  {user.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-zinc-100">{user.name}</p>
+                <p className="text-xs text-zinc-400">
+                  {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <nav className="flex-1 overflow-y-auto p-4">
           <ul className="space-y-1">
-            {NAV_ITEMS.map((item) => {
-              const isActive = item.exact 
+            {navItems.map((item) => {
+              const isActive = item.exact
                 ? currentPath === item.href
                 : currentPath.startsWith(item.href);
               const Icon = item.icon;
@@ -118,19 +160,19 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </ul>
         </nav>
 
-        <div className="border-t border-zinc-800 p-4">
+        <div className="space-y-1 border-t border-zinc-800 p-4">
           <button
-            onClick={handleReset}
+            onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
           >
-            <RotateCcw className="h-5 w-5" />
-            Réinitialiser démo
+            <LogOut className="h-5 w-5" />
+            Déconnexion
           </button>
           <a
             href="/"
-            className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
           >
-            <LogOut className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" />
             Retour au site
           </a>
         </div>
@@ -145,15 +187,19 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
-          <span className="text-sm text-zinc-500">
-            Démo Admin H3 Studios
-          </span>
+          {user && (
+            <span className="text-sm text-zinc-500">
+              {user.name} — {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
+            </span>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {children}
         </main>
       </div>
+
+      <Toaster />
     </div>
   );
 }
