@@ -108,6 +108,19 @@ export const pageSEO: Record<string, PageSEO> = {
     ],
     path: "/avis",
   },
+  "/equipe": {
+    title: "L'Équipe - Les Passionnés de H3 STUDIOS | Sucy-en-Brie",
+    description:
+      "Découvrez l'équipe de H3 Studios : Marcel, gérant et musicien passionné avec 30 ans d'expérience. Professeur de percussions, MAO, et arrangeur.",
+    keywords: [
+      "équipe H3 Studios",
+      "Marcel H3 Studios",
+      "gérant studio répétition",
+      "musiciens Sucy-en-Brie",
+      "professeur percussion",
+    ],
+    path: "/equipe",
+  },
 };
 
 export const routes = Object.keys(pageSEO);

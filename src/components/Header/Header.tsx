@@ -8,7 +8,8 @@ const menuData = [
   { id: 2, title: "Le Matériel", path: "/le-materiel" },
   { id: 3, title: "Réservation", path: "/reservation" },
   { id: 4, title: "Avis", path: "/avis" },
-  { id: 5, title: "À Propos", path: "/a-propos" },
+  { id: 5, title: "L'Équipe", path: "/equipe" },
+  { id: 6, title: "À Propos", path: "/a-propos" },
 ];
 
 function usePathname() {
