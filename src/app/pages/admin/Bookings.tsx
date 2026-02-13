@@ -33,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus } from "@/lib/db-types";
+import { exportBookingsCSV } from "@/lib/export";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -220,7 +221,8 @@ export function AdminBookings() {
   };
 
   const handleExportCSV = () => {
-    toast.info("Export CSV — bientôt disponible");
+    exportBookingsCSV(bookings);
+    toast.success(`${bookings.length} réservation(s) exportée(s)`);
   };
 
   return (

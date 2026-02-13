@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatPrice } from "@/lib/booking";
+import { exportPaymentsCSV } from "@/lib/export";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -348,6 +349,11 @@ export function AdminPayments() {
     setRefundOpen(true);
   }
 
+  function handleExportCSV() {
+    exportPaymentsCSV(payments);
+    toast.success(`${payments.length} paiement(s) exporté(s)`);
+  }
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   if (loading && payments.length === 0) {
@@ -368,6 +374,9 @@ export function AdminPayments() {
             {total} paiement(s) au total
           </p>
         </div>
+        <Button variant="outline" size="sm" onClick={handleExportCSV}>
+          Exporter CSV
+        </Button>
       </div>
 
       {/* Stats cards */}

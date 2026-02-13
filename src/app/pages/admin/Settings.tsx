@@ -1,365 +1,582 @@
 "use client";
 
-import { useState } from "react";
-import { AdminLayout } from "@/app/layouts/AdminLayout";
+import { useState, useEffect, useCallback } from "react";
 import {
   Clock,
-  Bell,
-  Mail,
-  Globe,
-  Lock,
+  Shield,
   Save,
-  Info,
+  UserPlus,
+  UserX,
+  UserCheck,
+  Loader2,
+  Phone,
+  Banknote,
+  CalendarClock,
+  CalendarDays,
 } from "lucide-react";
+import { toast } from "sonner";
 
-interface SettingsState {
-  businessHours: {
-    weekday: { open: string; close: string };
-    weekend: { open: string; close: string };
-  };
-  notifications: {
-    emailOnBooking: boolean;
-    emailOnCancellation: boolean;
-    emailOnPayment: boolean;
-  };
-  booking: {
-    minAdvanceHours: number;
-    maxAdvanceDays: number;
-    requirePhone: boolean;
-    allowCashPayment: boolean;
-  };
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
+interface SettingValue {
+  key: string;
+  value: string;
 }
 
-export function AdminSettings() {
-  const [settings, setSettings] = useState<SettingsState>({
-    businessHours: {
-      weekday: { open: "10:00", close: "22:00" },
-      weekend: { open: "10:00", close: "22:00" },
-    },
-    notifications: {
-      emailOnBooking: true,
-      emailOnCancellation: true,
-      emailOnPayment: false,
-    },
-    booking: {
-      minAdvanceHours: 2,
-      maxAdvanceDays: 30,
-      requirePhone: true,
-      allowCashPayment: true,
-    },
-  });
+interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string;
+  role: "super-admin" | "operator";
+  is_active: number;
+  created_at: string;
+}
 
-  const [saved, setSaved] = useState(false);
+interface CurrentUser {
+  id: string;
+  role: "super-admin" | "operator";
+}
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+function parseSettingsMap(settings: SettingValue[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const s of settings) {
+    map[s.key] = s.value;
+  }
+  return map;
+}
+
+async function saveSetting(key: string, value: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/admin/settings/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    });
+    const json = (await res.json()) as { success: boolean; error?: string };
+    if (!json.success) {
+      toast.error(json.error || "Erreur lors de la sauvegarde");
+      return false;
+    }
+    return true;
+  } catch {
+    toast.error("Erreur réseau");
+    return false;
+  }
+}
+
+function BookingRulesTab({ settings, onUpdate }: {
+  settings: Record<string, string>;
+  onUpdate: (key: string, value: string) => void;
+}) {
+  const [minAdvanceHours, setMinAdvanceHours] = useState(settings["booking.min_advance_hours"] || "2");
+  const [maxAdvanceDays, setMaxAdvanceDays] = useState(settings["booking.max_advance_days"] || "30");
+  const [requirePhone, setRequirePhone] = useState(settings["booking.require_phone"] !== "false");
+  const [allowCash, setAllowCash] = useState(settings["booking.allow_cash"] !== "false");
+  const [saving, setSaving] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMinAdvanceHours(settings["booking.min_advance_hours"] || "2");
+    setMaxAdvanceDays(settings["booking.max_advance_days"] || "30");
+    setRequirePhone(settings["booking.require_phone"] !== "false");
+    setAllowCash(settings["booking.allow_cash"] !== "false");
+  }, [settings]);
+
+  const persistSetting = async (key: string, value: string) => {
+    setSaving(key);
+    const ok = await saveSetting(key, value);
+    if (ok) {
+      onUpdate(key, value);
+      toast.success("Paramètre enregistré");
+    }
+    setSaving(null);
   };
 
   return (
-    <AdminLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Paramètres</h1>
-            <p className="text-zinc-400">Configuration générale du système</p>
+    <div className="space-y-6">
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <CalendarClock className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Délai minimum</h3>
+              <p className="text-xs text-zinc-500">Heures avant le début de session</p>
+            </div>
           </div>
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-black transition-colors hover:bg-primary/90"
-          >
-            <Save className="h-4 w-4" />
-            {saved ? "Enregistré !" : "Enregistrer"}
-          </button>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={0}
+              max={72}
+              value={minAdvanceHours}
+              onChange={(e) => setMinAdvanceHours(e.target.value)}
+              className="w-24 bg-zinc-800 border-zinc-700"
+            />
+            <span className="text-sm text-zinc-400">heures</span>
+            <Button
+              size="sm"
+              onClick={() => persistSetting("booking.min_advance_hours", minAdvanceHours)}
+              disabled={saving === "booking.min_advance_hours"}
+              className="ml-auto"
+            >
+              {saving === "booking.min_advance_hours" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
-          <Info className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium text-blue-400">Mode démonstration</p>
-            <p className="text-sm text-blue-300/70">
-              Cette page de paramètres est une maquette. Dans une version complète, 
-              ces paramètres seraient connectés à une base de données.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Clock className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-semibold">Horaires d'ouverture</h2>
-                <p className="text-sm text-zinc-400">Heures de fonctionnement</p>
-              </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <CalendarDays className="h-4 w-4" />
             </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium">Lundi - Vendredi</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="weekday-open"
-                    type="time"
-                    value={settings.businessHours.weekday.open}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        businessHours: {
-                          ...settings.businessHours,
-                          weekday: { ...settings.businessHours.weekday, open: e.target.value },
-                        },
-                      })
-                    }
-                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
-                  />
-                  <span className="text-zinc-400">à</span>
-                  <input
-                    id="weekday-close"
-                    type="time"
-                    value={settings.businessHours.weekday.close}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        businessHours: {
-                          ...settings.businessHours,
-                          weekday: { ...settings.businessHours.weekday, close: e.target.value },
-                        },
-                      })
-                    }
-                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <label className="mb-2 block text-sm font-medium">Samedi - Dimanche</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="weekend-open"
-                    type="time"
-                    value={settings.businessHours.weekend.open}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        businessHours: {
-                          ...settings.businessHours,
-                          weekend: { ...settings.businessHours.weekend, open: e.target.value },
-                        },
-                      })
-                    }
-                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
-                  />
-                  <span className="text-zinc-400">à</span>
-                  <input
-                    id="weekend-close"
-                    type="time"
-                    value={settings.businessHours.weekend.close}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        businessHours: {
-                          ...settings.businessHours,
-                          weekend: { ...settings.businessHours.weekend, close: e.target.value },
-                        },
-                      })
-                    }
-                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
-                  />
-                </div>
-              </div>
+            <div>
+              <h3 className="text-sm font-semibold">Réservation max à l'avance</h3>
+              <p className="text-xs text-zinc-500">Durée maximum en jours</p>
             </div>
           </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Bell className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-semibold">Notifications</h2>
-                <p className="text-sm text-zinc-400">Alertes par email</p>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-zinc-400" />
-                  <span>Nouvelle réservation</span>
-                </div>
-                <input
-                  id="notify-booking"
-                  type="checkbox"
-                  checked={settings.notifications.emailOnBooking}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      notifications: { ...settings.notifications, emailOnBooking: e.target.checked },
-                    })
-                  }
-                  className="h-5 w-5 rounded border-zinc-600 bg-zinc-700 text-primary focus:ring-primary"
-                />
-              </label>
-
-              <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-zinc-400" />
-                  <span>Annulation</span>
-                </div>
-                <input
-                  id="notify-cancellation"
-                  type="checkbox"
-                  checked={settings.notifications.emailOnCancellation}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      notifications: { ...settings.notifications, emailOnCancellation: e.target.checked },
-                    })
-                  }
-                  className="h-5 w-5 rounded border-zinc-600 bg-zinc-700 text-primary focus:ring-primary"
-                />
-              </label>
-
-              <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-zinc-400" />
-                  <span>Paiement reçu</span>
-                </div>
-                <input
-                  id="notify-payment"
-                  type="checkbox"
-                  checked={settings.notifications.emailOnPayment}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      notifications: { ...settings.notifications, emailOnPayment: e.target.checked },
-                    })
-                  }
-                  className="h-5 w-5 rounded border-zinc-600 bg-zinc-700 text-primary focus:ring-primary"
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Globe className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-semibold">Règles de réservation</h2>
-                <p className="text-sm text-zinc-400">Contraintes de réservation</p>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium">Délai minimum (heures)</label>
-                <input
-                  id="min-advance-hours"
-                  type="number"
-                  min="0"
-                  max="72"
-                  value={settings.booking.minAdvanceHours}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      booking: { ...settings.booking, minAdvanceHours: parseInt(e.target.value) || 0 },
-                    })
-                  }
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
-                />
-                <p className="mt-1 text-xs text-zinc-500">Temps minimum avant le début de la session</p>
-              </div>
-              
-              <div>
-                <label className="mb-2 block text-sm font-medium">Réservation max (jours)</label>
-                <input
-                  id="max-advance-days"
-                  type="number"
-                  min="1"
-                  max="365"
-                  value={settings.booking.maxAdvanceDays}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      booking: { ...settings.booking, maxAdvanceDays: parseInt(e.target.value) || 30 },
-                    })
-                  }
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2"
-                />
-                <p className="mt-1 text-xs text-zinc-500">Nombre de jours à l'avance max</p>
-              </div>
-              
-              <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
-                <span>Téléphone obligatoire</span>
-                <input
-                  id="require-phone"
-                  type="checkbox"
-                  checked={settings.booking.requirePhone}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      booking: { ...settings.booking, requirePhone: e.target.checked },
-                    })
-                  }
-                  className="h-5 w-5 rounded border-zinc-600 bg-zinc-700 text-primary focus:ring-primary"
-                />
-              </label>
-
-              <label className="flex items-center justify-between rounded-lg border border-zinc-700 p-3 cursor-pointer hover:bg-zinc-800/50">
-                <span>Autoriser paiement espèces</span>
-                <input
-                  id="allow-cash"
-                  type="checkbox"
-                  checked={settings.booking.allowCashPayment}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      booking: { ...settings.booking, allowCashPayment: e.target.checked },
-                    })
-                  }
-                  className="h-5 w-5 rounded border-zinc-600 bg-zinc-700 text-primary focus:ring-primary"
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Lock className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-semibold">Sécurité</h2>
-                <p className="text-sm text-zinc-400">Accès et authentification</p>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <div className="rounded-lg border border-zinc-700 p-4 bg-zinc-800/50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Accès admin</span>
-                  <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-400">Actif</span>
-                </div>
-                <p className="text-sm text-zinc-400">
-                  Mode démo - pas d'authentification requise
-                </p>
-              </div>
-              
-              <button
-                disabled
-                className="w-full rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-500 cursor-not-allowed"
-              >
-                Changer le mot de passe (désactivé en démo)
-              </button>
-            </div>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={maxAdvanceDays}
+              onChange={(e) => setMaxAdvanceDays(e.target.value)}
+              className="w-24 bg-zinc-800 border-zinc-700"
+            />
+            <span className="text-sm text-zinc-400">jours</span>
+            <Button
+              size="sm"
+              onClick={() => persistSetting("booking.max_advance_days", maxAdvanceDays)}
+              disabled={saving === "booking.max_advance_days"}
+              className="ml-auto"
+            >
+              {saving === "booking.max_advance_days" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </div>
       </div>
-    </AdminLayout>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <ToggleCard
+          icon={<Phone className="h-4 w-4" />}
+          label="Téléphone obligatoire"
+          description="Exiger le numéro de téléphone lors de la réservation"
+          checked={requirePhone}
+          saving={saving === "booking.require_phone"}
+          onToggle={async () => {
+            const newVal = !requirePhone;
+            setRequirePhone(newVal);
+            setSaving("booking.require_phone");
+            const ok = await saveSetting("booking.require_phone", String(newVal));
+            if (ok) {
+              onUpdate("booking.require_phone", String(newVal));
+              toast.success("Paramètre enregistré");
+            } else {
+              setRequirePhone(!newVal);
+            }
+            setSaving(null);
+          }}
+        />
+
+        <ToggleCard
+          icon={<Banknote className="h-4 w-4" />}
+          label="Paiement espèces"
+          description="Autoriser le paiement en espèces sur place"
+          checked={allowCash}
+          saving={saving === "booking.allow_cash"}
+          onToggle={async () => {
+            const newVal = !allowCash;
+            setAllowCash(newVal);
+            setSaving("booking.allow_cash");
+            const ok = await saveSetting("booking.allow_cash", String(newVal));
+            if (ok) {
+              onUpdate("booking.allow_cash", String(newVal));
+              toast.success("Paramètre enregistré");
+            } else {
+              setAllowCash(!newVal);
+            }
+            setSaving(null);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ToggleCard({ icon, label, description, checked, saving, onToggle }: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  checked: boolean;
+  saving: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={saving}
+      className={`flex items-center gap-4 rounded-xl border p-4 text-left transition-all ${
+        checked
+          ? "border-primary/30 bg-primary/5"
+          : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+      } ${saving ? "opacity-60" : ""}`}
+    >
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+        checked ? "bg-primary/20 text-primary" : "bg-zinc-800 text-zinc-500"
+      }`}>
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs text-zinc-500">{description}</p>
+      </div>
+      <div className={`h-6 w-11 shrink-0 rounded-full transition-colors ${
+        checked ? "bg-primary" : "bg-zinc-700"
+      }`}>
+        <div className={`h-5 w-5 translate-y-0.5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-5.5" : "translate-x-0.5"
+        }`} />
+      </div>
+    </button>
+  );
+}
+
+function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
+  const [adminUsers, setAdminUsers] = useState<AdminUserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const fetchAdminUsers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/admin-users");
+      const json = (await res.json()) as { success: boolean; data?: AdminUserRow[] };
+      if (json.success && json.data) {
+        setAdminUsers(json.data);
+      }
+    } catch {
+      toast.error("Erreur lors du chargement des comptes admin");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAdminUsers();
+  }, [fetchAdminUsers]);
+
+  const handleToggle = async (userId: string) => {
+    if (userId === currentUser?.id) {
+      toast.error("Vous ne pouvez pas désactiver votre propre compte");
+      return;
+    }
+
+    setToggling(userId);
+    try {
+      const res = await fetch(`/api/admin/admin-users/${userId}/toggle`, {
+        method: "PUT",
+      });
+      const json = (await res.json()) as { success: boolean; data?: { id: string; is_active: number } };
+      if (json.success && json.data) {
+        setAdminUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, is_active: json.data!.is_active } : u)),
+        );
+        toast.success(json.data.is_active ? "Compte activé" : "Compte désactivé");
+      } else {
+        toast.error("Erreur lors du changement de statut");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const handleCreated = (newUser: AdminUserRow) => {
+    setAdminUsers((prev) => [...prev, newUser]);
+    setShowCreateDialog(false);
+    toast.success("Opérateur créé avec succès");
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">Comptes administrateurs</h3>
+          <p className="text-xs text-zinc-500">{adminUsers.length} compte(s) au total</p>
+        </div>
+        <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Nouvel opérateur
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        {adminUsers.map((user) => (
+          <div
+            key={user.id}
+            className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4"
+          >
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+              user.is_active ? "bg-primary/20" : "bg-zinc-800"
+            }`}>
+              <span className={`text-sm font-semibold ${
+                user.is_active ? "text-primary" : "text-zinc-600"
+              }`}>
+                {user.name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-medium">{user.name}</p>
+                <Badge variant={user.role === "super-admin" ? "default" : "secondary"}>
+                  {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
+                </Badge>
+                {!user.is_active && (
+                  <Badge variant="destructive">Désactivé</Badge>
+                )}
+              </div>
+              <p className="truncate text-xs text-zinc-500">{user.email}</p>
+            </div>
+
+            {user.id !== currentUser?.id && (
+              <Button
+                size="sm"
+                variant={user.is_active ? "outline" : "default"}
+                onClick={() => handleToggle(user.id)}
+                disabled={toggling === user.id}
+              >
+                {toggling === user.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : user.is_active ? (
+                  <>
+                    <UserX className="mr-1.5 h-3.5 w-3.5" />
+                    Désactiver
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="mr-1.5 h-3.5 w-3.5" />
+                    Activer
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <CreateOperatorDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onCreated={handleCreated}
+      />
+    </div>
+  );
+}
+
+function CreateOperatorDialog({ open, onOpenChange, onCreated }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (user: AdminUserRow) => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setEmail("");
+      setPassword("");
+    }
+  }, [open]);
+
+  const handleSubmit = async () => {
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      toast.error("Tous les champs sont obligatoires");
+      return;
+    }
+
+    if (password.length < 8) {
+      toast.error("Le mot de passe doit faire au moins 8 caractères");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/admin-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, role: "operator" }),
+      });
+      const json = (await res.json()) as { success: boolean; data?: AdminUserRow; error?: string };
+      if (json.success && json.data) {
+        onCreated({
+          ...json.data,
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        toast.error(json.error || "Erreur lors de la création");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-zinc-900 border-zinc-800">
+        <DialogHeader>
+          <DialogTitle>Créer un opérateur</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div>
+            <Label htmlFor="op-name">Nom complet</Label>
+            <Input
+              id="op-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Marie Dupont"
+              className="mt-1.5 bg-zinc-800 border-zinc-700"
+            />
+          </div>
+          <div>
+            <Label htmlFor="op-email">Email</Label>
+            <Input
+              id="op-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="marie@h3studios.fr"
+              className="mt-1.5 bg-zinc-800 border-zinc-700"
+            />
+          </div>
+          <div>
+            <Label htmlFor="op-password">Mot de passe</Label>
+            <Input
+              id="op-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min. 8 caractères"
+              className="mt-1.5 bg-zinc-800 border-zinc-700"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annuler
+          </Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <UserPlus className="mr-2 h-4 w-4" />
+            )}
+            Créer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function AdminSettings() {
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/admin/settings")
+        .then((r) => r.json() as Promise<{ success: boolean; data?: SettingValue[] }>)
+        .then((json) => {
+          if (json.success && json.data) setSettings(parseSettingsMap(json.data));
+        }),
+      fetch("/api/admin/me")
+        .then((r) => r.json() as Promise<{ success: boolean; data?: CurrentUser }>)
+        .then((json) => {
+          if (json.success && json.data) setCurrentUser(json.data);
+        }),
+    ])
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSettingUpdate = (key: string, value: string) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Paramètres</h1>
+        <p className="text-zinc-400">Configuration du système de réservation</p>
+      </div>
+
+      <Tabs defaultValue="booking" className="w-full">
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="booking" className="gap-2">
+            <Clock className="h-4 w-4" />
+            Règles de réservation
+          </TabsTrigger>
+          <TabsTrigger value="security" className="gap-2">
+            <Shield className="h-4 w-4" />
+            Sécurité
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="booking" className="mt-6">
+          <BookingRulesTab settings={settings} onUpdate={handleSettingUpdate} />
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-6">
+          <SecurityTab currentUser={currentUser} />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }

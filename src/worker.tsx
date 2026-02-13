@@ -25,6 +25,7 @@ import { AdminPayments } from "@/app/pages/admin/Payments";
 import { AdminStudios } from "@/app/pages/admin/Studios";
 import { AdminPricing } from "@/app/pages/admin/Pricing";
 import { AdminSettings } from "@/app/pages/admin/Settings";
+import { AdminAuditLog } from "@/app/pages/admin/AuditLog";
 import { AdminBookingNew } from "@/app/pages/admin/BookingNew";
 import { Login } from "@/app/pages/admin/Login";
 import { PaymentSuccess } from "@/app/pages/PaymentSuccess";
@@ -33,6 +34,7 @@ import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@
 import {
   type AdminRole,
   verifyPassword,
+  hashPassword,
   createSession,
   validateSession,
   deleteSession,
@@ -104,10 +106,13 @@ const SUPER_ADMIN_ROUTE_PREFIXES = [
   "/api/admin/equipment",
   "/api/admin/promo-codes",
   "/api/admin/settings",
+  "/api/admin/admin-users",
   "/api/admin/opening-hours",
   "/admin/studios",
   "/admin/pricing",
   "/admin/settings",
+  "/admin/audit-log",
+  "/api/admin/audit",
 ];
 
 const AUTH_EXCLUDED_PATHS = [
@@ -287,6 +292,7 @@ export default defineApp([
     route("/admin/studios", AdminStudios),
     route("/admin/pricing", AdminPricing),
     route("/admin/settings", AdminSettings),
+    route("/admin/audit-log", AdminAuditLog),
   ]),
 
   render(({ children }) => <DocumentWithPath path="/payment">{children}</DocumentWithPath>, [
@@ -983,6 +989,108 @@ export default defineApp([
     } catch (error) {
       console.error("PUT /api/admin/settings/:key error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to update setting", 500);
+    }
+  }),
+
+  // ─── Admin Users (operators) API ───────────────────────────────────────────
+
+  route("/api/admin/admin-users", async ({ request }) => {
+    if (request.method === "GET") {
+      try {
+        const result = await env.DB
+          .prepare("SELECT id, email, name, role, is_active, created_at, updated_at FROM admin_users ORDER BY created_at ASC")
+          .all<{
+            id: string;
+            email: string;
+            name: string;
+            role: AdminRole;
+            is_active: number;
+            created_at: string;
+            updated_at: string;
+          }>();
+        return jsonSuccess(result.results);
+      } catch (error) {
+        console.error("GET /api/admin/admin-users error:", error);
+        return jsonError(error instanceof Error ? error.message : "Failed to fetch admin users", 500);
+      }
+    }
+
+    if (request.method === "POST") {
+      try {
+        const body = await request.json() as {
+          email?: string;
+          name?: string;
+          password?: string;
+          role?: AdminRole;
+        };
+
+        if (!body.email || !body.name || !body.password) {
+          return jsonError("Champs obligatoires manquants: email, name, password", 400);
+        }
+
+        const existing = await env.DB
+          .prepare("SELECT id FROM admin_users WHERE email = ?")
+          .bind(body.email)
+          .first();
+
+        if (existing) {
+          return jsonError("Un compte avec cet email existe déjà", 409);
+        }
+
+        const id = `adm-${crypto.randomUUID().slice(0, 8)}`;
+        const passwordHash = await hashPassword(body.password);
+        const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+        await env.DB.prepare(
+          "INSERT INTO admin_users (id, email, password_hash, name, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+        ).bind(id, body.email, passwordHash, body.name, body.role || "operator", timestamp, timestamp).run();
+
+        await addAuditLog(env.DB, "admin_user", id, "create", {
+          email: body.email,
+          name: body.name,
+          role: body.role || "operator",
+        });
+
+        return jsonSuccess({ id, email: body.email, name: body.name, role: body.role || "operator", is_active: 1 });
+      } catch (error) {
+        console.error("POST /api/admin/admin-users error:", error);
+        return jsonError(error instanceof Error ? error.message : "Failed to create admin user", 500);
+      }
+    }
+
+    return jsonError("Method not allowed", 405);
+  }),
+
+  route("/api/admin/admin-users/:id/toggle", async ({ request, params }) => {
+    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
+
+    try {
+      const user = await env.DB
+        .prepare("SELECT id, is_active FROM admin_users WHERE id = ?")
+        .bind(params.id)
+        .first<{ id: string; is_active: number }>();
+
+      if (!user) return jsonError("Utilisateur admin introuvable", 404);
+
+      const newStatus = user.is_active ? 0 : 1;
+      const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+      await env.DB.prepare(
+        "UPDATE admin_users SET is_active = ?, updated_at = ? WHERE id = ?",
+      ).bind(newStatus, timestamp, params.id).run();
+
+      if (!newStatus) {
+        await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(params.id).run();
+      }
+
+      await addAuditLog(env.DB, "admin_user", params.id, newStatus ? "activate" : "deactivate", {
+        is_active: newStatus,
+      });
+
+      return jsonSuccess({ id: params.id, is_active: newStatus });
+    } catch (error) {
+      console.error("PUT /api/admin/admin-users/:id/toggle error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to toggle admin user", 500);
     }
   }),
 

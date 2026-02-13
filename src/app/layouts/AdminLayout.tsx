@@ -10,6 +10,7 @@ import {
   Building2,
   Euro,
   Settings,
+  FileText,
   Menu,
   X,
   ChevronRight,
@@ -58,6 +59,7 @@ const ALL_NAV_ITEMS = [
   { href: "/admin/studios", label: "Studios", icon: Building2, superAdminOnly: true },
   { href: "/admin/pricing", label: "Tarifs", icon: Euro, superAdminOnly: true },
   { href: "/admin/settings", label: "Paramètres", icon: Settings, superAdminOnly: true },
+  { href: "/admin/audit-log", label: "Journal d'audit", icon: FileText, superAdminOnly: true },
 ];
 
 export function AdminLayout({ children }: AdminLayoutProps) {

@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatPrice } from "@/lib/booking";
 import { type DbUser } from "@/lib/db-types";
+import { exportUsersCSV } from "@/lib/export";
 
 interface UsersApiResponse {
   data: DbUser[];
@@ -195,6 +196,11 @@ export function AdminUsers() {
     return users.filter((u) => selectedIds.has(u.id));
   }, [users, selectedIds]);
 
+  const handleExportCSV = () => {
+    exportUsersCSV(users);
+    toast.success(`${users.length} client(s) exporté(s)`);
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -204,13 +210,17 @@ export function AdminUsers() {
           <p className="text-zinc-400">{total} client(s)</p>
         </div>
 
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Nouveau client
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            Exporter CSV
+          </Button>
+          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <UserPlus className="h-4 w-4" />
+                Nouveau client
+              </Button>
+            </DialogTrigger>
           <DialogContent className="border-zinc-800 bg-zinc-900">
             <DialogHeader>
               <DialogTitle>Nouveau client</DialogTitle>
@@ -273,7 +283,8 @@ export function AdminUsers() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Search */}
