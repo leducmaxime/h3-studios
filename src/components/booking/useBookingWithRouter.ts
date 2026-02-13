@@ -24,8 +24,8 @@ interface ExtendedBookingState extends BookingState {
   equipment: EquipmentSelection[];
   appliedPromo: PromoCode | null;
   promoDiscount: number;
-  /** Tracks whether we're adding a new booking (vs reviewing cart) */
   isAddingNew: boolean;
+  duplicateError: string | null;
 }
 
 /**
@@ -173,6 +173,7 @@ const initialState: ExtendedBookingState = {
   appliedPromo: null,
   promoDiscount: 0,
   isAddingNew: false,
+  duplicateError: null,
 };
 
 export function useBookingWithRouter(urlStep?: string) {
@@ -397,10 +398,43 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, step: 3 }));
   }, []);
 
-  /** Adds current booking to cart and goes to cart page (step 5) */
-  const confirmBooking = useCallback(() => {
+  const isDuplicateBooking = useCallback((
+    cart: CompletedBooking[],
+    date: Date,
+    startTime: string,
+    endTime: string,
+    studioId: StudioId
+  ): boolean => {
+    const dateStr = date.toDateString();
+    return cart.some((booking) => {
+      if (booking.date.toDateString() !== dateStr) return false;
+      if (booking.studioId !== studioId) return false;
+      
+      const existingStart = TIME_SLOTS.indexOf(booking.startTime);
+      let existingEnd = TIME_SLOTS.indexOf(booking.endTime);
+      if (existingEnd === -1 && booking.endTime === "00:00") existingEnd = TIME_SLOTS.length;
+      
+      const newStart = TIME_SLOTS.indexOf(startTime);
+      let newEnd = TIME_SLOTS.indexOf(endTime);
+      if (newEnd === -1 && endTime === "00:00") newEnd = TIME_SLOTS.length;
+      
+      return newStart < existingEnd && newEnd > existingStart;
+    });
+  }, []);
+
+  const confirmBooking = useCallback((): boolean => {
+    let success = false;
     setState((s) => {
-      if (!s.selectedDate || !s.startTime || !s.endTime || !s.studioId || !s.groupType) return s;
+      if (!s.selectedDate || !s.startTime || !s.endTime || !s.studioId || !s.groupType) {
+        return s;
+      }
+
+      if (isDuplicateBooking(s.cart, s.selectedDate, s.startTime, s.endTime, s.studioId)) {
+        return {
+          ...s,
+          duplicateError: "Ce créneau est déjà dans votre panier",
+        };
+      }
 
       const pricing = calculatePrice(s.studioId, s.groupType, s.selectedDate, s.startTime, s.endTime);
       const bookingRef = generateBookingRef();
@@ -434,6 +468,7 @@ export function useBookingWithRouter(urlStep?: string) {
         paymentStatus: "pending",
       };
 
+      success = true;
       return {
         ...s,
         bookingRef,
@@ -442,8 +477,14 @@ export function useBookingWithRouter(urlStep?: string) {
         appliedPromo: null,
         promoDiscount: 0,
         isAddingNew: false,
+        duplicateError: null,
       };
     });
+    return success;
+  }, [isDuplicateBooking]);
+
+  const clearDuplicateError = useCallback(() => {
+    setState((s) => ({ ...s, duplicateError: null }));
   }, []);
 
   /** From cart page: start adding a new booking (reset booking fields, keep cart + user info) */
@@ -646,6 +687,7 @@ export function useBookingWithRouter(urlStep?: string) {
     removePromo,
     goToCoordonnees,
     confirmBooking,
+    clearDuplicateError,
     addAnotherBooking,
     goToPaymentChoice,
     goToPaymentFromCoordonnees,

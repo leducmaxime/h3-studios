@@ -67,6 +67,7 @@ export function Reservation({ step }: ReservationProps) {
     applyPromo,
     removePromo,
     confirmBooking,
+    clearDuplicateError,
     addAnotherBooking,
     goToPaymentChoice,
     goToPaymentFromCoordonnees,
@@ -123,6 +124,12 @@ export function Reservation({ step }: ReservationProps) {
       scrollToRef(dateRef);
     }
   }, [state.step, state.flow, state.studioId, state.selectedDate]);
+
+  useEffect(() => {
+    if (state.duplicateError) {
+      clearDuplicateError();
+    }
+  }, [state.selectedDate, state.startTime, state.endTime, state.studioId]);
 
   const durationHours = state.startTime && state.endTime
     ? ((() => {
@@ -248,6 +255,13 @@ export function Reservation({ step }: ReservationProps) {
                 {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""} déjà dans le panier ({formatPrice(cartTotal)})
               </span>
             </div>
+          </div>
+        )}
+
+        {state.duplicateError && (
+          <div className="flex items-center gap-3 rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-3">
+            <X className="h-5 w-5 text-red-400" />
+            <span className="text-sm font-medium text-red-300">{state.duplicateError}</span>
           </div>
         )}
 
