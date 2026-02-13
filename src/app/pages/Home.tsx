@@ -1,13 +1,8 @@
 import { ScrollUp } from "@/components/common/ScrollUp";
 
 const services = [
-  "Location de studios",
-  "Repetitions",
-  "Enregistrements",
-  "Location de materiel",
-  "Cours de Batterie",
-  "Privatisation",
-  "Ateliers d'arrangements musicaux",
+  ["Location de studios", "Répétitions"],
+  ["Enregistrements", "Privatisation"],
 ];
 
 export function Home() {
@@ -26,13 +21,17 @@ export function Home() {
           className="lg:w-[650px]"
         />
         <div className="text-center font-blanka text-lg md:text-2xl">
-          {services.map((text, i) => (
-            <span key={i}>
-              <span className="whitespace-nowrap">
-                {text}
-                {i !== services.length - 1 ? " -" : ""}
-              </span>{" "}
-            </span>
+          {services.map((row, i) => (
+            <div key={i} className="flex flex-wrap justify-center gap-x-4 gap-y-0">
+              {row.map((text, j) => (
+                <span key={j}>
+                  <span className="whitespace-nowrap">
+                    {text}
+                    {!(i === services.length - 1 && j === row.length - 1) ? " -" : ""}
+                  </span>{" "}
+                </span>
+              ))}
+            </div>
           ))}
         </div>
         <a href="/reservation">
