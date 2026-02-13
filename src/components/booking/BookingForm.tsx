@@ -84,6 +84,7 @@ export function BookingForm({
             value={userEmail}
             onChange={(e) => onUpdateField("userEmail", e.target.value)}
             placeholder="jean@exemple.fr"
+            pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
             className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
           />
         </div>
@@ -98,6 +99,9 @@ export function BookingForm({
             value={userPhone}
             onChange={(e) => onUpdateField("userPhone", e.target.value)}
             placeholder="06 12 34 56 78"
+            pattern="\d{10}"
+            maxLength={10}
+            minLength={10}
             className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
           />
         </div>
@@ -139,10 +143,14 @@ export function BookingForm({
             </label>
             <input
               id="billingPostalCode"
-              type="text"
+              type="number"
               value={billingPostalCode}
               onChange={(e) => onUpdateField("billingPostalCode", e.target.value)}
               placeholder="94370"
+              pattern="\d{5}"
+              maxLength={5}
+              minLength={5}
+              inputMode="numeric"
               className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
             />
           </div>
