@@ -24,6 +24,7 @@ import { AdminUserDetail } from "@/app/pages/admin/UserDetail";
 import { AdminPayments } from "@/app/pages/admin/Payments";
 import { AdminStudios } from "@/app/pages/admin/Studios";
 import { AdminSettings } from "@/app/pages/admin/Settings";
+import { AdminBookingNew } from "@/app/pages/admin/BookingNew";
 import { Login } from "@/app/pages/admin/Login";
 import { PaymentSuccess } from "@/app/pages/PaymentSuccess";
 import { PaymentCancel } from "@/app/pages/PaymentCancel";
@@ -276,6 +277,7 @@ export default defineApp([
     route("/admin", AdminDashboard),
     route("/admin/calendar", AdminCalendar),
     route("/admin/bookings", AdminBookings),
+    route("/admin/bookings/new", AdminBookingNew),
     route("/admin/bookings/:id", ({ params }) => <AdminBookingDetail bookingId={params.id} />),
     route("/admin/users", AdminUsers),
     route("/admin/users/:id", ({ params }) => <AdminUserDetail userId={params.id} />),

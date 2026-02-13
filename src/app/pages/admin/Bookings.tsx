@@ -1,399 +1,502 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { AdminLayout } from "@/app/layouts/AdminLayout";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search,
-  Filter,
   Download,
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
-  Calendar,
-  X,
-  Check,
+  Eye,
   XCircle,
-  Clock,
   AlertTriangle,
+  Plus,
 } from "lucide-react";
-import {
-  loadAdminStore,
-  saveAdminStore,
-  cancelBooking,
-  markNoShow,
-  type AdminStore,
-  type AdminBooking,
-  type BookingStatus,
-} from "@/lib/admin-store";
-import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
+import { toast } from "sonner";
 
-const STATUS_CONFIG: Record<BookingStatus, { label: string; color: string; icon: React.ElementType }> = {
-  confirmed: { label: "Confirmé", color: "bg-green-500/10 text-green-500", icon: Check },
-  completed: { label: "Terminé", color: "bg-blue-500/10 text-blue-500", icon: Check },
-  cancelled: { label: "Annulé", color: "bg-red-500/10 text-red-500", icon: XCircle },
-  "no-show": { label: "No-show", color: "bg-yellow-500/10 text-yellow-500", icon: AlertTriangle },
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
+import { type DbBooking, type BookingStatus } from "@/lib/db-types";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface BookingWithUser extends DbBooking {
+  user_name?: string;
+  user_email?: string;
+}
+
+interface BookingsApiResponse {
+  success: boolean;
+  data?: {
+    data: BookingWithUser[];
+    total: number;
+    page: number;
+    limit: number;
+  };
+  error?: string;
+}
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<BookingStatus, { label: string }> = {
+  confirmed: { label: "Confirmé" },
+  completed: { label: "Terminé" },
+  cancelled: { label: "Annulé" },
+  "no-show": { label: "No-show" },
 };
 
+const STATUS_CLASSES: Record<BookingStatus, string> = {
+  confirmed: "bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/20",
+  completed: "bg-blue-500/15 text-blue-400 border-blue-500/30 hover:bg-blue-500/20",
+  cancelled: "bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/20",
+  "no-show": "bg-yellow-500/15 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/20",
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
+  const date = new Date(dateStr + "T00:00:00");
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function formatShortDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: string } {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  switch (filter) {
+    case "today":
+      return { dateFrom: todayStr, dateTo: todayStr };
+    case "week": {
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - today.getDay() + 1);
+      return { dateFrom: weekStart.toISOString().slice(0, 10) };
+    }
+    case "month": {
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { dateFrom: monthStart.toISOString().slice(0, 10) };
+    }
+    default:
+      return {};
+  }
 }
 
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export function AdminBookings() {
-  const [store, setStore] = useState<AdminStore | null>(null);
-  const [search, setSearch] = useState("");
+  const [bookings, setBookings] = useState<BookingWithUser[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
   const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const perPage = 20;
 
+  // Debounced search
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+
+  // Cancel dialog state
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; bookingId: string; bookingRef: string }>({
+    open: false,
+    bookingId: "",
+    bookingRef: "",
+  });
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  // No-show dialog state
+  const [noShowDialog, setNoShowDialog] = useState<{ open: boolean; bookingId: string; bookingRef: string }>({
+    open: false,
+    bookingId: "",
+    bookingRef: "",
+  });
+  const [noShowLoading, setNoShowLoading] = useState(false);
+
+  const totalPages = Math.ceil(total / perPage);
+
+  const fetchBookings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("limit", String(perPage));
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (studioFilter !== "all") params.set("studio", studioFilter);
+      if (search) params.set("search", search);
+
+      const dateParams = getDateFilterParams(dateFilter);
+      if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
+      if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
+
+      const res = await fetch(`/api/admin/bookings?${params}`);
+      const json = (await res.json()) as BookingsApiResponse;
+
+      if (json.success && json.data) {
+        setBookings(json.data.data);
+        setTotal(json.data.total);
+      }
+    } catch (error) {
+      console.error("Failed to fetch bookings:", error);
+      toast.error("Erreur lors du chargement des réservations");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, statusFilter, studioFilter, dateFilter, search]);
+
   useEffect(() => {
-    setStore(loadAdminStore());
-  }, []);
+    fetchBookings();
+  }, [fetchBookings]);
 
-  const filteredBookings = useMemo(() => {
-    if (!store) return [];
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-    const today = new Date().toISOString().slice(0, 10);
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-    const weekStartStr = weekStart.toISOString().slice(0, 10);
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    const monthStartStr = monthStart.toISOString().slice(0, 10);
-
-    return store.bookings
-      .filter((b) => {
-        if (statusFilter !== "all" && b.status !== statusFilter) return false;
-        if (studioFilter !== "all" && b.studioId !== studioFilter) return false;
-        
-        if (dateFilter === "today" && b.date !== today) return false;
-        if (dateFilter === "week" && b.date < weekStartStr) return false;
-        if (dateFilter === "month" && b.date < monthStartStr) return false;
-
-        if (search) {
-          const user = store.users.find((u) => u.id === b.userId);
-          const searchLower = search.toLowerCase();
-          const matchesRef = b.bookingRef.toLowerCase().includes(searchLower);
-          const matchesUser = user?.name.toLowerCase().includes(searchLower) ||
-            user?.email.toLowerCase().includes(searchLower) ||
-            user?.phone.includes(search);
-          if (!matchesRef && !matchesUser) return false;
-        }
-
-        return true;
-      })
-      .sort((a, b) => {
-        const dateCompare = b.date.localeCompare(a.date);
-        if (dateCompare !== 0) return dateCompare;
-        return b.startTime.localeCompare(a.startTime);
+  const handleCancel = async () => {
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${cancelDialog.bookingId}/cancel`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: cancelReason || "Annulée par l'admin" }),
       });
-  }, [store, search, statusFilter, studioFilter, dateFilter]);
-
-  const paginatedBookings = useMemo(() => {
-    const start = (page - 1) * perPage;
-    return filteredBookings.slice(start, start + perPage);
-  }, [filteredBookings, page]);
-
-  const totalPages = Math.ceil(filteredBookings.length / perPage);
-
-  const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === paginatedBookings.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(paginatedBookings.map((b) => b.id)));
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success(`Réservation ${cancelDialog.bookingRef} annulée`);
+        setCancelDialog({ open: false, bookingId: "", bookingRef: "" });
+        setCancelReason("");
+        fetchBookings();
+      } else {
+        toast.error(json.error || "Erreur lors de l'annulation");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setCancelLoading(false);
     }
   };
 
-  const handleCancel = (bookingId: string) => {
-    if (!store) return;
-    const reason = prompt("Raison de l'annulation :");
-    if (reason === null) return;
-    
-    cancelBooking(store, bookingId, reason || "Non spécifié");
-    setStore({ ...store });
-    setActionMenuId(null);
+  const handleNoShow = async () => {
+    setNoShowLoading(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${noShowDialog.bookingId}/no-show`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success(`Réservation ${noShowDialog.bookingRef} marquée no-show`);
+        setNoShowDialog({ open: false, bookingId: "", bookingRef: "" });
+        fetchBookings();
+      } else {
+        toast.error(json.error || "Erreur lors du marquage no-show");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setNoShowLoading(false);
+    }
   };
 
-  const handleNoShow = (bookingId: string) => {
-    if (!store) return;
-    if (!confirm("Marquer comme no-show ?")) return;
-    
-    markNoShow(store, bookingId);
-    setStore({ ...store });
-    setActionMenuId(null);
+  const handleExportCSV = () => {
+    toast.info("Export CSV — bientôt disponible");
   };
-
-  const handleBulkCancel = () => {
-    if (!store || selectedIds.size === 0) return;
-    const reason = prompt(`Annuler ${selectedIds.size} réservation(s) ? Raison :`);
-    if (reason === null) return;
-
-    selectedIds.forEach((id) => {
-      cancelBooking(store, id, reason || "Annulation groupée");
-    });
-    setStore({ ...store });
-    setSelectedIds(new Set());
-  };
-
-  if (!store) {
-    return (
-      <AdminLayout>
-        <div className="flex h-64 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
-      </AdminLayout>
-    );
-  }
 
   return (
-    <AdminLayout>
-      <div className="space-y-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Réservations</h1>
-            <p className="text-zinc-400">{filteredBookings.length} résultat(s)</p>
-          </div>
-          <div className="flex gap-2">
-            <button className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-800">
-              <Download className="h-4 w-4" />
-              Exporter
-            </button>
-          </div>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Réservations</h1>
+          <p className="text-zinc-400">{total} résultat(s)</p>
         </div>
-
-        <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-            <input
-              id="booking-search"
-              type="text"
-              placeholder="Rechercher par nom, email, téléphone ou référence..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 pl-10 pr-4 text-sm focus:border-primary focus:outline-none"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <select
-              id="filter-status"
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all"); setPage(1); }}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            >
-              <option value="all">Tous les statuts</option>
-              <option value="confirmed">Confirmé</option>
-              <option value="completed">Terminé</option>
-              <option value="cancelled">Annulé</option>
-              <option value="no-show">No-show</option>
-            </select>
-            <select
-              id="filter-studio"
-              value={studioFilter}
-              onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            >
-              <option value="all">Tous les studios</option>
-              <option value="la-scene">La Scène</option>
-              <option value="le-podium">Le Podium</option>
-            </select>
-            <select
-              id="filter-date"
-              value={dateFilter}
-              onChange={(e) => { setDateFilter(e.target.value as "all" | "today" | "week" | "month"); setPage(1); }}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            >
-              <option value="all">Toutes les dates</option>
-              <option value="today">Aujourd'hui</option>
-              <option value="week">Cette semaine</option>
-              <option value="month">Ce mois</option>
-            </select>
-          </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            <Download className="mr-2 h-4 w-4" />
+            Exporter CSV
+          </Button>
+          <a href="/admin/bookings/new">
+            <Button size="sm">
+              <Plus className="mr-2 h-4 w-4" />
+              Nouvelle réservation
+            </Button>
+          </a>
         </div>
+      </div>
 
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-4 rounded-lg bg-primary/10 px-4 py-3">
-            <span className="text-sm font-medium">{selectedIds.size} sélectionné(s)</span>
-            <button
-              onClick={handleBulkCancel}
-              className="rounded-lg bg-red-500/20 px-3 py-1.5 text-sm font-medium text-red-400 hover:bg-red-500/30"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="ml-auto rounded-lg p-1.5 hover:bg-zinc-800"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
+      {/* Filters */}
+      <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
+            placeholder="Rechercher par nom, email, téléphone ou référence..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 pl-10 pr-4 text-sm focus:border-primary focus:outline-none"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all"); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="all">Tous les statuts</option>
+            <option value="confirmed">Confirmé</option>
+            <option value="completed">Terminé</option>
+            <option value="cancelled">Annulé</option>
+            <option value="no-show">No-show</option>
+          </select>
+          <select
+            value={studioFilter}
+            onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="all">Tous les studios</option>
+            <option value="la-scene">La Scène</option>
+            <option value="le-podium">Le Podium</option>
+          </select>
+          <select
+            value={dateFilter}
+            onChange={(e) => { setDateFilter(e.target.value as "all" | "today" | "week" | "month"); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="all">Toutes les dates</option>
+            <option value="today">Aujourd&apos;hui</option>
+            <option value="week">Cette semaine</option>
+            <option value="month">Ce mois</option>
+          </select>
+        </div>
+      </div>
 
-        <div className="overflow-hidden rounded-xl border border-zinc-800">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px]">
-              <thead className="border-b border-zinc-800 bg-zinc-900">
+      {/* Table */}
+      <div className="overflow-hidden rounded-xl border border-zinc-800">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[800px]">
+            <thead className="border-b border-zinc-800 bg-zinc-900">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Référence</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Client</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Date</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Créneau</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Studio</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Statut</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400">Montant</th>
+                <th className="w-10 px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800">
+              {loading ? (
                 <tr>
-                  <th className="w-10 px-4 py-3">
-                    <input
-                      id="select-all-bookings"
-                      type="checkbox"
-                      checked={selectedIds.size === paginatedBookings.length && paginatedBookings.length > 0}
-                      onChange={toggleSelectAll}
-                      className="rounded border-zinc-600"
-                    />
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Référence</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Client</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Créneau</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Studio</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Statut</th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400">Montant</th>
-                  <th className="w-10 px-4 py-3"></th>
+                  <td colSpan={8} className="px-4 py-12 text-center">
+                    <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800">
-                {paginatedBookings.map((booking) => {
-                  const user = store.users.find((u) => u.id === booking.userId);
+              ) : bookings.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-zinc-400">
+                    Aucune réservation trouvée
+                  </td>
+                </tr>
+              ) : (
+                bookings.map((booking) => {
                   const statusConfig = STATUS_CONFIG[booking.status];
-                  const StatusIcon = statusConfig.icon;
+                  const studioName = STUDIOS[booking.studio_id as StudioId]?.name || booking.studio_id;
 
                   return (
-                    <tr key={booking.id} className="bg-zinc-900/50 hover:bg-zinc-800/50">
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(booking.id)}
-                          onChange={() => toggleSelect(booking.id)}
-                          className="rounded border-zinc-600"
-                        />
-                      </td>
+                    <tr key={booking.id} className="bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors">
                       <td className="px-4 py-3">
                         <a
                           href={`/admin/bookings/${booking.id}`}
                           className="font-mono text-sm text-primary hover:underline"
                         >
-                          {booking.bookingRef}
+                          {booking.booking_ref}
                         </a>
                       </td>
                       <td className="px-4 py-3">
                         <a
-                          href={`/admin/users/${booking.userId}`}
+                          href={`/admin/users/${booking.user_id}`}
                           className="hover:underline"
                         >
-                          <p className="font-medium">{user?.name || "—"}</p>
-                          <p className="text-sm text-zinc-400">{user?.email || "—"}</p>
+                          <p className="font-medium">{booking.user_name || "—"}</p>
+                          <p className="text-sm text-zinc-400">{booking.user_email || "—"}</p>
                         </a>
                       </td>
                       <td className="px-4 py-3 text-sm">{formatDate(booking.date)}</td>
                       <td className="px-4 py-3">
                         <span className="text-sm">
-                          {booking.startTime} - {booking.endTime}
+                          {booking.start_time} - {booking.end_time}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">{STUDIOS[booking.studioId].name}</td>
+                      <td className="px-4 py-3 text-sm">{studioName}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${statusConfig.color}`}>
-                          <StatusIcon className="h-3 w-3" />
+                        <Badge variant="outline" className={STATUS_CLASSES[booking.status]}>
                           {statusConfig.label}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
-                        {formatPrice(booking.totalPrice)}
+                        {formatPrice(booking.total_price)}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="relative">
-                          <button
-                            onClick={() => setActionMenuId(actionMenuId === booking.id ? null : booking.id)}
-                            className="rounded-lg p-1.5 hover:bg-zinc-700"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                          {actionMenuId === booking.id && (
-                            <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-800 py-1 shadow-xl">
-                              <a
-                                href={`/admin/bookings/${booking.id}`}
-                                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-zinc-700"
-                              >
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="rounded-lg p-1.5 hover:bg-zinc-700 focus:outline-none">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem asChild>
+                              <a href={`/admin/bookings/${booking.id}`} className="flex items-center gap-2">
+                                <Eye className="h-4 w-4" />
                                 Voir détails
                               </a>
-                              {booking.status === "confirmed" && (
-                                <>
-                                  <a
-                                    href={`/admin/bookings/${booking.id}/reschedule`}
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-zinc-700"
-                                  >
-                                    Déplacer
-                                  </a>
-                                  <button
-                                    onClick={() => handleNoShow(booking.id)}
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-yellow-400 hover:bg-zinc-700"
-                                  >
-                                    Marquer no-show
-                                  </button>
-                                  <button
-                                    onClick={() => handleCancel(booking.id)}
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-400 hover:bg-zinc-700"
-                                  >
-                                    Annuler
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                            </DropdownMenuItem>
+                            {booking.status === "confirmed" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setNoShowDialog({ open: true, bookingId: booking.id, bookingRef: booking.booking_ref })}
+                                  className="text-yellow-400 focus:text-yellow-400"
+                                >
+                                  <AlertTriangle className="h-4 w-4" />
+                                  Marquer no-show
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => setCancelDialog({ open: true, bookingId: booking.id, bookingRef: booking.booking_ref })}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Annuler
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-zinc-400">
+            Page {page} sur {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-zinc-700 p-2 hover:bg-zinc-800 disabled:opacity-50"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages}
+              className="rounded-lg border border-zinc-700 p-2 hover:bg-zinc-800 disabled:opacity-50"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
         </div>
+      )}
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-400">
-              Page {page} sur {totalPages}
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="rounded-lg border border-zinc-700 p-2 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="rounded-lg border border-zinc-700 p-2 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+      {/* Cancel Dialog */}
+      <Dialog
+        open={cancelDialog.open}
+        onOpenChange={(open) => { if (!open) { setCancelDialog({ open: false, bookingId: "", bookingRef: "" }); setCancelReason(""); } }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Annuler la réservation</DialogTitle>
+            <DialogDescription>
+              Confirmez l&apos;annulation de la réservation <strong>{cancelDialog.bookingRef}</strong>.
+              Cette action est irréversible.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <label className="mb-1.5 block text-sm text-zinc-400">Raison (optionnel)</label>
+            <input
+              type="text"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Raison de l'annulation..."
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            />
           </div>
-        )}
-      </div>
-    </AdminLayout>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setCancelDialog({ open: false, bookingId: "", bookingRef: "" }); setCancelReason(""); }}
+              disabled={cancelLoading}
+            >
+              Retour
+            </Button>
+            <Button variant="destructive" onClick={handleCancel} disabled={cancelLoading}>
+              {cancelLoading ? "Annulation..." : "Confirmer l'annulation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* No-Show Dialog */}
+      <Dialog
+        open={noShowDialog.open}
+        onOpenChange={(open) => { if (!open) setNoShowDialog({ open: false, bookingId: "", bookingRef: "" }); }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Marquer comme no-show</DialogTitle>
+            <DialogDescription>
+              Confirmez le no-show pour la réservation <strong>{noShowDialog.bookingRef}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNoShowDialog({ open: false, bookingId: "", bookingRef: "" })}
+              disabled={noShowLoading}
+            >
+              Retour
+            </Button>
+            <Button
+              onClick={handleNoShow}
+              disabled={noShowLoading}
+              className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30"
+            >
+              {noShowLoading ? "En cours..." : "Confirmer no-show"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
