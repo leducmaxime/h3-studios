@@ -1,11 +1,16 @@
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { ImageCarousel } from "@/components/common/ImageCarousel";
+import { Wifi, TrainFront, MapPin, Music, Users } from "lucide-react";
 
 const studios = [
   {
-    name: "LA SCÈNE",
+    name: "La Scène",
+    size: "42m²",
+    height: "3,50m",
     description:
       "Avec une hauteur de 3,50m et une superficie de 42m², notre studio propose une scène intimiste avec sa rampe d'éclairage. Convenant à tous styles musicaux, ce lieu chaleureux et fonctionnel saura répondre à vos besoins.",
+    features: ["Scène", "Éclairage", "Écran géant", "Vidéoprojecteur"],
+    capacity: "Jusqu'à 10 personnes",
     images: [
       { src: "/images/studios/scene-2.jpg", alt: "La Scène 1" },
       { src: "/images/studios/scene-5.jpg", alt: "La Scène 2" },
@@ -15,9 +20,13 @@ const studios = [
     ],
   },
   {
-    name: "LE PODIUM",
+    name: "Le Podium",
+    size: "35m²",
+    height: "2,80m",
     description:
       "Conçu pour la répétition, cet espace de 35m² offre un cadre simple et fonctionnel, idéal pour vos sessions musicales, en groupe ou en solo. Cette salle est également adapté aux enseignants souhaitant donner des cours à un ou plusieurs élèves.",
+    features: ["Compact", "Fonctionnel", "Idéal cours"],
+    capacity: "Jusqu'à 6 personnes",
     images: [
       { src: "/images/studios/podium-2.jpg", alt: "Le Podium 1" },
       { src: "/images/studios/podium-1.jpg", alt: "Le Podium 2" },
@@ -29,30 +38,88 @@ const studios = [
 
 export function LesStudios() {
   return (
-    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
+    <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
       <ScrollUp />
-      <div className="font-blanka text-3xl md:text-5xl">LES STUDIOS</div>
-      <div className="flex w-full flex-col gap-8 lg:max-w-[900px] lg:flex-row">
+
+      <div className="w-full max-w-5xl px-4">
+        <div className="mb-8 text-center">
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LES STUDIOS</h1>
+          <p className="mt-4 text-lg text-white/60">
+            Deux espaces uniques pour vos répétitions et enregistrements
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-white/50">
+          <span className="flex items-center gap-2">
+            <Wifi className="h-4 w-4 text-primary" />
+            Wifi gratuit
+          </span>
+          <span className="flex items-center gap-2">
+            <TrainFront className="h-4 w-4 text-primary" />
+            2 min du RER A
+          </span>
+          <span className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            20 min de Paris
+          </span>
+        </div>
+      </div>
+
+      <div className="w-full max-w-5xl px-4 space-y-8">
         {studios.map((studio, i) => (
           <div
             key={i}
-            className="flex basis-full flex-col items-center gap-4 border-8 border-primary bg-black p-4 lg:basis-1/2"
+            className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all hover:border-primary/50"
           >
-            <div className="text-2xl font-bold text-primary underline decoration-4 underline-offset-8">
-              {studio.name}
-            </div>
-            <div className="w-full">
-              <div className="aspect-video">
+            <div className="grid lg:grid-cols-2">
+              <div className="relative aspect-video lg:aspect-auto">
                 <ImageCarousel images={studio.images} />
               </div>
-            </div>
-            <div className="px-0 text-center lg:px-4">{studio.description}</div>
-            <div className="mt-auto">
-              <a href="/reservation">
-                <button className="rounded-[3rem] bg-primary px-8 py-2 text-lg font-semibold text-black">
-                  Réservation
-                </button>
-              </a>
+              
+              <div className="flex flex-col justify-between p-6 lg:p-8">
+                <div>
+                  <div className="mb-4 flex items-start justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-primary md:text-3xl">
+                        {studio.name}
+                      </h2>
+                      <p className="mt-1 text-white/60">
+                        {studio.size} • Hauteur {studio.height}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="mb-6 text-white/70 leading-relaxed">
+                    {studio.description}
+                  </p>
+
+                  <div className="mb-6 flex flex-wrap gap-2">
+                    {studio.features.map((feature, j) => (
+                      <span
+                        key={j}
+                        className="rounded-full bg-white/10 px-3 py-1 text-sm text-white/80"
+                      >
+                        {feature}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-white/60">
+                    <Users className="h-4 w-4 text-primary" />
+                    {studio.capacity}
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <a
+                    href="/reservation"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-8 py-3 text-lg font-semibold text-black transition-all hover:bg-primary/90"
+                  >
+                    <Music className="h-5 w-5" />
+                    Réserver
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         ))}
