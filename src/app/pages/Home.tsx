@@ -12,9 +12,8 @@ const services = [
 
 export function Home() {
   return (
-    <div className="mx-4 flex min-h-fit grow flex-col items-center justify-between pb-8 pt-12">
-      <div className="basis-1/3"></div>
-      <div className="flex h-full flex-col items-center justify-between gap-8">
+    <div className="mx-4 flex min-h-fit grow flex-col items-center justify-center pb-8 pt-32">
+      <div className="flex h-full flex-col items-center justify-center gap-8">
         <ScrollUp />
         <img
           src="/images/home/1.png"
@@ -42,7 +41,6 @@ export function Home() {
           </button>
         </a>
       </div>
-      <div className="basis-2/3"></div>
     </div>
   );
 }
