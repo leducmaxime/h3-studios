@@ -13,6 +13,14 @@
     "enabled": true
   },
 
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "h3-studios-db",
+      "database_id": "8a1d88d0-d741-4367-91c9-bbcf4b719b9b"
+    }
+  ],
+
   "env": {
     "staging": {
       "name": "h3-studios-staging",
