@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ChevronRight,
   Plus,
+  FileText,
 } from "lucide-react";
 import {
   LineChart,
@@ -36,6 +37,8 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { STUDIOS, formatPrice } from "@/lib/booking";
+import { generateMonthlyReportPDF } from "@/lib/export";
+import { Button } from "@/components/ui/button";
 
 interface DashboardStats {
   todayBookings: number;
@@ -212,6 +215,10 @@ export function AdminDashboard() {
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [period, setPeriod] = useState<Period>("month");
   const [loading, setLoading] = useState(true);
+  const [reportMonth, setReportMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   const fetchStats = useCallback(async () => {
     try {
@@ -260,6 +267,47 @@ export function AdminDashboard() {
     Promise.all([fetchStats(), fetchCharts(period)]).finally(() => setLoading(false));
   }, [fetchStats, fetchCharts, period]);
 
+  const handleGenerateMonthlyReport = async () => {
+    const [year, month] = reportMonth.split("-").map(Number);
+    try {
+      const res = await fetch(`/api/admin/stats?month=${month}&year=${year}`);
+      const json = await res.json() as { success: boolean; data?: DashboardStats };
+      
+      const chartsRes = await fetch(`/api/admin/stats/charts?period=month`);
+      const chartsJson = await chartsRes.json() as {
+        success: boolean;
+        data?: { studios: StudioPoint[] };
+      };
+
+      if (json.success && json.data) {
+        const studioStats = (chartsJson.data?.studios || []).map(s => ({
+          studio_id: s.studio,
+          count: s.count,
+          revenue: s.revenue,
+        }));
+        const reportStats = {
+          revenue: json.data.monthRevenue,
+          bookingCount: json.data.monthBookings,
+          occupancyRate: json.data.occupancyToday || 0,
+          noShowRate: 0,
+          studioStats,
+          weeklyStats: Array.from({ length: 5 }, (_, i) => ({ week: i + 1, count: 0, revenue: 0 })),
+        };
+        generateMonthlyReportPDF(reportStats, { month, year });
+      }
+    } catch (err) {
+      console.error("Failed to generate report:", err);
+    }
+  };
+
+  const monthOptions = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+    return { value, label };
+  });
+
   if (loading && !stats) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -275,13 +323,38 @@ export function AdminDashboard() {
           <h1 className="text-2xl font-bold">Tableau de bord</h1>
           <p className="text-zinc-400">Vue d&apos;ensemble de votre activité</p>
         </div>
-        <a
-          href="/admin/bookings/new"
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-black transition-colors hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Nouvelle réservation
-        </a>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Select value={reportMonth} onValueChange={setReportMonth}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGenerateMonthlyReport}
+              className="border-primary/30 text-primary hover:bg-primary/10"
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Rapport PDF
+            </Button>
+          </div>
+          <a
+            href="/admin/bookings/new"
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-black transition-colors hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Nouvelle réservation
+          </a>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   AlertTriangle,
   Music,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,7 +27,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId } from "@/lib/booking";
-import { type DbBooking, type DbUser, type BookingStatus } from "@/lib/db-types";
+import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
+import { generateInvoicePDF } from "@/lib/export";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + "T00:00:00");
@@ -64,6 +66,7 @@ interface BookingDetailProps {
 export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [booking, setBooking] = useState<DbBooking | null>(null);
   const [user, setUser] = useState<DbUser | null>(null);
+  const [payment, setPayment] = useState<DbPayment | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Reschedule dialog
@@ -98,6 +101,13 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         const userJson = (await userRes.json()) as { success: boolean; data?: DbUser };
         if (userJson.success && userJson.data) {
           setUser(userJson.data);
+        }
+
+        // Fetch payment for this booking
+        const paymentRes = await fetch(`/api/admin/payments?booking_id=${json.data.id}&limit=1`);
+        const paymentJson = (await paymentRes.json()) as { success: boolean; data?: { data: DbPayment[] } };
+        if (paymentJson.success && paymentJson.data?.data?.length) {
+          setPayment(paymentJson.data.data[0]);
         }
       }
     } catch (error) {
@@ -294,6 +304,20 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 >
                   <XCircle className="mr-2 h-4 w-4" />
                   Annuler
+                </Button>
+              </div>
+            )}
+
+            {booking.status !== "cancelled" && user && (
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-800 pt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => generateInvoicePDF(booking, payment, user)}
+                  className="border-primary/30 text-primary hover:bg-primary/10"
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Facture PDF
                 </Button>
               </div>
             )}
