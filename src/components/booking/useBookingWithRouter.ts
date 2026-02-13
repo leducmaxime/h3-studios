@@ -403,23 +403,31 @@ export function useBookingWithRouter(urlStep?: string) {
     date: Date,
     startTime: string,
     endTime: string,
-    studioId: StudioId
+    studioId: StudioId,
+    groupType: GroupType
   ): boolean => {
     const dateStr = date.toDateString();
-    return cart.some((booking) => {
+    const newStart = TIME_SLOTS.indexOf(startTime);
+    let newEnd = TIME_SLOTS.indexOf(endTime);
+    if (newEnd === -1 && endTime === "00:00") newEnd = TIME_SLOTS.length;
+
+    const overlappingBookings = cart.filter((booking) => {
       if (booking.date.toDateString() !== dateStr) return false;
-      if (booking.studioId !== studioId) return false;
       
       const existingStart = TIME_SLOTS.indexOf(booking.startTime);
       let existingEnd = TIME_SLOTS.indexOf(booking.endTime);
       if (existingEnd === -1 && booking.endTime === "00:00") existingEnd = TIME_SLOTS.length;
       
-      const newStart = TIME_SLOTS.indexOf(startTime);
-      let newEnd = TIME_SLOTS.indexOf(endTime);
-      if (newEnd === -1 && endTime === "00:00") newEnd = TIME_SLOTS.length;
-      
       return newStart < existingEnd && newEnd > existingStart;
     });
+
+    if (overlappingBookings.length === 0) return false;
+
+    if (groupType === "solo" || groupType === "duo") {
+      return true;
+    }
+
+    return overlappingBookings.some(b => b.studioId === studioId);
   }, []);
 
   const confirmBooking = useCallback((): boolean => {
@@ -429,7 +437,7 @@ export function useBookingWithRouter(urlStep?: string) {
         return s;
       }
 
-      if (isDuplicateBooking(s.cart, s.selectedDate, s.startTime, s.endTime, s.studioId)) {
+      if (isDuplicateBooking(s.cart, s.selectedDate, s.startTime, s.endTime, s.studioId, s.groupType)) {
         return {
           ...s,
           duplicateError: "Ce créneau est déjà dans votre panier",
