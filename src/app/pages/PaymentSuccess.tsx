@@ -43,13 +43,13 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
       <div className="w-full max-w-[600px] px-4">
-        <div className="relative overflow-hidden rounded-2xl border-4 border-green-500 bg-black/80 backdrop-blur">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent" />
+        <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
 
           <div className="relative p-6 sm:p-8 text-center">
             <div className="mb-6 flex justify-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
-                <CheckCircle className="h-12 w-12 text-green-500" />
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/20">
+                <CheckCircle className="h-12 w-12 text-primary" />
               </div>
             </div>
 
@@ -71,7 +71,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                 </div>
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-white/60">Total payé</span>
-                  <span className="text-xl font-bold text-green-400">
+                  <span className="text-xl font-bold text-primary">
                     {formatPrice(bookingData.total)}
                   </span>
                 </div>
