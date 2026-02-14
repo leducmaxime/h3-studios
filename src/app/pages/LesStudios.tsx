@@ -2,7 +2,7 @@
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { ImageCarousel } from "@/components/common/ImageCarousel";
-import { Wifi, TrainFront, MapPin, Music, Calendar, Clock } from "lucide-react";
+import { Wifi, TrainFront, MapPin, Music, Calendar, Clock, Wrench } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const studios = [
@@ -118,6 +118,16 @@ export function LesStudios() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className={`w-full max-w-6xl px-4 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "500ms" }}>
+        <a
+          href="/le-materiel"
+          className="inline-flex items-center justify-center gap-3 rounded-lg border-2 border-primary bg-transparent px-8 py-4 text-lg font-bold text-primary transition-all hover:bg-primary hover:text-black"
+        >
+          <Wrench className="h-5 w-5" />
+          Découvrir le matériel disponible
+        </a>
       </div>
     </div>
   );

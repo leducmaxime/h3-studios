@@ -7,7 +7,6 @@ import { Facebook, Instagram } from "lucide-react";
 const menuData = [
   { id: 1, title: "Réservation", path: "/reservation" },
   { id: 2, title: "Les Studios", path: "/les-studios" },
-  { id: 3, title: "Le Matériel", path: "/le-materiel" },
   { id: 4, title: "Avis", path: "/avis" },
   { id: 5, title: "L'Équipe", path: "/equipe" },
   { id: 6, title: "Actualités", path: "/actualites" },
