@@ -64,9 +64,6 @@ export function Actualites() {
         <div className="mb-12 text-center">
           <h1 className="font-blanka text-5xl md:text-6xl lg:text-7xl">ACTUALITÉS</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-          <p className="mt-6 text-lg text-white/60 max-w-2xl mx-auto">
-            Suivez nos dernières nouvelles et découvertes sur nos réseaux sociaux
-          </p>
         </div>
 
         <a
