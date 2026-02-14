@@ -1,7 +1,7 @@
 "use client";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
-import { Music, Mic, Radio, Calendar } from "lucide-react";
+import { Music, Radio, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const services = [
@@ -9,11 +9,6 @@ const services = [
     icon: Music,
     title: "Location de studios",
     description: "Deux espaces professionnels pour vos répétitions",
-  },
-  {
-    icon: Mic,
-    title: "Enregistrements",
-    description: "Matériel de qualité pour vos sessions d'enregistrement",
   },
   {
     icon: Radio,
@@ -56,7 +51,7 @@ export function Home() {
           </p>
         </div>
 
-        <div className="mb-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {services.map((service, i) => {
             const Icon = service.icon;
             return (
@@ -83,12 +78,12 @@ export function Home() {
 
         <div className="text-center">
           <a href="/reservation">
-            <button className="group relative overflow-hidden rounded-full bg-primary px-12 py-4 text-xl font-bold text-black transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(249,176,53,0.5)] md:text-2xl">
+            <button className="group relative overflow-hidden rounded-full bg-primary px-16 py-6 text-2xl font-bold text-black shadow-[0_0_50px_rgba(249,176,53,0.3)] transition-all hover:scale-110 hover:shadow-[0_0_80px_rgba(249,176,53,0.6)] md:px-20 md:py-8 md:text-3xl">
               <span className="relative z-10">Réserver maintenant</span>
-              <div className="absolute inset-0 -z-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <div className="absolute inset-0 -z-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           </a>
-          <p className="mt-4 text-sm text-white/50">
+          <p className="mt-6 text-base text-white/50">
             Ouvert 7j/7 • Uniquement sur réservation
           </p>
         </div>
