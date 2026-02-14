@@ -7,50 +7,43 @@ import { useState, useEffect } from "react";
 const reviews = [
   {
     id: 1,
-    author: "Jérémy D",
+    author: "Mardochée D.",
     rating: 5,
-    text: "Super studio! Très bien équipé, propre et acoustiquement parfait. L'équipe est très accueillante. Je recommande vivement!",
-    date: "Il y a 2 semaines",
+    text: "Le studio est très bien situé, l'équipement est de qualité, et c'est toujours un réel plaisir de répéter au Studio H3. En plus, le gérant et toute l'équipe sont géniaux : accueillants, professionnels et à l'écoute. Je recommande vivement 🙏🏽",
+    date: "Il y a 1 mois",
   },
   {
     id: 2,
-    author: "Marie L",
+    author: "Gams G.",
     rating: 5,
-    text: "Excellent studio de répétition. Le matériel est de qualité et l'espace est très confortable. Parfait pour nos répétitions de groupe.",
+    text: "Studio de répétition très très sympa comme ses gérants. Toujours disponible et dont le prix est vraiment très intéressant par rapport aux autres studios. Mille merci à eux et je recommande à tous les musiciens, groupes, chorales...",
     date: "Il y a 1 mois",
   },
   {
     id: 3,
-    author: "Thomas B",
+    author: "Pascal G.",
     rating: 5,
-    text: "Très bon accueil, studios propres et bien insonorisés. Le rapport qualité/prix est excellent. On reviendra!",
+    text: "Un super studio de répétition. Le grand studio a une très bonne acoustique, et Marcel le gérant en plus d'être adorable et à l'écoute de nos besoins, fait toujours des balances impeccables !",
     date: "Il y a 1 mois",
   },
   {
     id: 4,
-    author: "Sophie M",
+    author: "Fab F.",
     rating: 5,
-    text: "Super expérience ! Studio spacieux avec tout le matériel nécessaire. La scène avec éclairage est top pour se mettre en conditions de concert.",
-    date: "Il y a 2 mois",
+    text: "Bien situé, facile d'accès (à deux pas de la station RER A), H3 Studios offre des espaces confortables avec équipements pro pour des séances de répétitions ou d'enregistrement agréables. Rapport qualité prix au top !",
+    date: "Il y a 1 mois",
   },
   {
     id: 5,
-    author: "Antoine R",
+    author: "Linda S.",
     rating: 5,
-    text: "Top pour répéter avec mon groupe. Ambiance sympa et matériel au point. Facile à réserver en ligne.",
-    date: "Il y a 2 mois",
-  },
-  {
-    id: 6,
-    author: "Camille P",
-    rating: 5,
-    text: "Je donne des cours de batterie dans ce studio depuis quelques mois. Les conditions sont idéales pour l'enseignement. Je recommande!",
-    date: "Il y a 3 mois",
+    text: "Toujours un plaisir de venir répéter chez H3 Studios ! L'équipe est au top, toujours de très bons conseils, dans une ambiance à la fois pro et super conviviale. On s'y sent comme en famille. Merci Marcel !",
+    date: "Il y a 1 mois",
   },
 ];
 
-const totalReviews = 47;
-const averageRating = 4.9;
+const totalReviews = 5;
+const averageRating = 5;
 
 function StarRating({ rating }: { rating: number }) {
   return (
