@@ -20,6 +20,7 @@ import { AdminDashboard } from "@/app/pages/admin/Dashboard";
 import { AdminCalendar } from "@/app/pages/admin/Calendar";
 import { AdminBookings } from "@/app/pages/admin/Bookings";
 import { AdminBookingDetail } from "@/app/pages/admin/BookingDetail";
+import { AdminBlockedSlots } from "@/app/pages/admin/BlockedSlots";
 import { AdminUsers } from "@/app/pages/admin/Users";
 import { AdminUserDetail } from "@/app/pages/admin/UserDetail";
 import { AdminPayments } from "@/app/pages/admin/Payments";
@@ -293,6 +294,7 @@ export default defineApp([
     route("/admin/bookings", AdminBookings),
     route("/admin/bookings/new", AdminBookingNew),
     route("/admin/bookings/:id", ({ params }) => <AdminBookingDetail bookingId={params.id} />),
+    route("/admin/blocked-slots", AdminBlockedSlots),
     route("/admin/users", AdminUsers),
     route("/admin/users/:id", ({ params }) => <AdminUserDetail userId={params.id} />),
     route("/admin/payments", AdminPayments),
@@ -904,30 +906,30 @@ export default defineApp([
     if (request.method === "POST") {
       try {
         const body = await request.json() as {
-          studio_id?: string | null;
+          studioId?: string | null;
           date?: string;
-          start_time?: string;
-          end_time?: string;
+          startTime?: string;
+          endTime?: string;
           reason?: string;
         };
 
-        if (!body.date || !body.start_time || !body.end_time || !body.reason) {
-          return jsonError("Champs obligatoires manquants: date, start_time, end_time, reason", 400);
+        if (!body.date || !body.startTime || !body.endTime || !body.reason) {
+          return jsonError("Champs obligatoires manquants: date, startTime, endTime, reason", 400);
         }
 
         const result = await addBlockedSlot(env.DB, {
-          studio_id: body.studio_id ?? null,
+          studio_id: body.studioId ?? null,
           date: body.date,
-          start_time: body.start_time,
-          end_time: body.end_time,
+          start_time: body.startTime,
+          end_time: body.endTime,
           reason: body.reason,
         });
 
         await addAuditLog(env.DB, "blocked_slot", result.id, "create", {
-          studio_id: body.studio_id,
+          studio_id: body.studioId,
           date: body.date,
-          start_time: body.start_time,
-          end_time: body.end_time,
+          start_time: body.startTime,
+          end_time: body.endTime,
           reason: body.reason,
         });
 

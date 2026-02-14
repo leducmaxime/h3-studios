@@ -16,6 +16,7 @@ import {
   ChevronRight,
   LogOut,
   ArrowLeft,
+  Ban,
 } from "lucide-react";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -54,6 +55,7 @@ const ALL_NAV_ITEMS = [
   { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard, exact: true, superAdminOnly: false },
   { href: "/admin/calendar", label: "Calendrier", icon: Calendar, superAdminOnly: false },
   { href: "/admin/bookings", label: "Réservations", icon: ClipboardList, superAdminOnly: false },
+  { href: "/admin/blocked-slots", label: "Blocages d'agenda", icon: Ban, superAdminOnly: false },
   { href: "/admin/users", label: "Clients", icon: Users, superAdminOnly: false },
   { href: "/admin/payments", label: "Paiements", icon: CreditCard, superAdminOnly: false },
   { href: "/admin/studios", label: "Studios", icon: Building2, superAdminOnly: true },
