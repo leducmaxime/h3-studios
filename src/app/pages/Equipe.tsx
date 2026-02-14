@@ -1,22 +1,27 @@
 "use client";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
+import { Music, Mic, Drum } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const team = [
   {
     name: "Marcel",
-    role: "Gérant",
     image: "/images/about/marcel.png",
     bio: `Musicien passionné depuis toujours : violon, piano, basse, batterie, percussions d'orchestre… Il a fait de la musique son métier !
 
-Il est professeur de percussions en conservatoire depuis 30 ans, ainsi que de MAO (Musique Assistée par Ordinateur) et chef adjoint d'un orchestre d'Harmonie.
+Il est professeur de percussions en conservatoire depuis 30 ans, ainsi que de MAO (Musique Assistée par Ordinateur) et chef adjoint d'un orchestre d'Harmonie. Il a également été professeur de MAA (Musiques Amplifiées Actuelles).
 
-Marcel a joué durant 25 ans dans un orchestre symphonique et s'est lancé dans la musique à l'image. Anecdote : si vous allez au Grand Rex à Paris, vous pourrez même entendre l'une de ses compositions !`,
+Marcel a joué durant 25 ans dans un orchestre symphonique, réalisé de nombreux arrangements pour tout type d'ensembles (notamment symphoniques), et s'est lancé depuis quelques années dans la musique à l'image.
+
+Anecdote : si vous allez au Grand Rex à Paris, vous pourrez même entendre l'une de ses compositions en salle !
+
+Depuis 3 ans, il est gérant des studios, tout en restant actif sur scène comme batteur, bassiste, et comme pianiste/percussionniste (@Triba Mondo).
+
+Chez H3 Studios, Marcel est celui qui a dédié toute sa vie à la musique, c'est l'expertise musicale incarnée du studio.`,
   },
   {
     name: "Caroline",
-    role: "Co-gérante",
     image: "/images/about/caro.png",
     bio: `C'est en passionnée de musique que Caroline a rejoint l'aventure H3 Studios. Elle la pratique en tant qu'amatrice en chantant dans plusieurs groupes et chorales.
 
@@ -26,11 +31,14 @@ Caroline, c'est LA touche féminine de ce trio !`,
   },
   {
     name: "Alexandre",
-    role: "Co-gérant",
     image: "/images/about/alex.png",
-    bio: `Alexandre baigne dans la musique depuis son plus jeune âge et s'est essayé à plusieurs instruments, du violon à la guitare en passant par le piano et les percussions.
+    bio: `Alexandre baigne dans la musique depuis son plus jeune âge et, jusqu'à l'âge adulte, s'est essayé à plusieurs instruments, du violon à la guitare en passant par le piano et les percussions.
 
-Il a décidé de ne pas en faire son métier et s'orienter dans l'informatique. Ces dernières années l'ont vu franchir le pas sur le saxophone ténor. Il a intégré un groupe de funk, les Pink Elefunk, ainsi qu'un atelier de jazz.`,
+Mais pour que la musique reste toujours un plaisir, il a décidé de ne pas en faire son métier et de s'orienter dans l'informatique : il est actuellement en poste chez un leader européen du numérique.
+
+Ces dernières années l'ont vu franchir le pas sur la pratique d'un instrument qui l'avait toujours fasciné, le saxophone, le ténor en particulier. Ses progrès constants lui ont donné l'occasion d'intégrer un groupe local de funk, les Pink Elefunk, ainsi qu'un atelier de jazz lui permettant d'exprimer sa créativité.
+
+Le projet H3 Studios est une occasion unique de faire de la musique une part plus importante de sa vie, en permettant aux autres de pouvoir également exprimer cette passion qu'ils ont en commun.`,
   },
 ];
 
@@ -77,7 +85,6 @@ export function Equipe() {
                     <h2 className="text-2xl font-bold text-primary">
                       {member.name}
                     </h2>
-                    <p className="text-sm text-white/70">{member.role}</p>
                   </div>
                   <div className="absolute -right-2 -top-2 h-16 w-16 rounded-full bg-primary/20 blur-2xl transition-all duration-500 group-hover:bg-primary/40 group-hover:blur-3xl" />
                 </div>
@@ -94,6 +101,21 @@ export function Equipe() {
                 <div className="absolute -bottom-1 right-4 h-3 w-3 rounded-full bg-primary opacity-0 transition-all duration-500 delay-75 group-hover:opacity-100" />
               </div>
             ))}
+          </div>
+
+          <div className="mt-16 flex flex-wrap items-center justify-center gap-8 text-white/50">
+            <div className="flex items-center gap-2">
+              <Music className="h-5 w-5 text-primary" />
+              <span>Passion</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Mic className="h-5 w-5 text-primary" />
+              <span>Expertise</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Drum className="h-5 w-5 text-primary" />
+              <span>Expérience</span>
+            </div>
           </div>
         </div>
       </div>
