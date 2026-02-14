@@ -13,7 +13,6 @@ import {
   calculatePrice,
   calculateEquipmentPrice,
   generateBookingRef,
-  generateMockAvailability,
   assignStudioForSoloDuo,
   loadUserPreferences,
   saveUserPreferences,
@@ -184,6 +183,22 @@ export function useBookingWithRouter(urlStep?: string) {
   });
   const [isHydrated, setIsHydrated] = useState(false);
   const isInitialMount = useRef(true);
+  const [availability, setAvailability] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!state.selectedDate) return;
+    const dateStr = state.selectedDate.toISOString().slice(0, 10);
+    fetch(`/api/availability?date=${dateStr}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const json = data as { success: boolean; data: string[] };
+        if (json.success && Array.isArray(json.data)) {
+          setAvailability(new Set(json.data));
+        }
+      })
+      .catch(console.error);
+  }, [state.selectedDate]);
 
   useEffect(() => {
     if (isHydrated) return;
@@ -344,8 +359,7 @@ export function useBookingWithRouter(urlStep?: string) {
         if (s.flow === "time-first") {
           // Solo/duo skip studio selection — auto-assign based on availability
           if (s.groupType === "solo" || s.groupType === "duo") {
-            const avail = s.selectedDate ? generateMockAvailability(s.selectedDate) : new Set<string>();
-            const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, avail);
+            const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, availability);
             return { ...s, studioId: studio };
           }
           // Group: stay on step 1 — studio selection shown inline
@@ -356,7 +370,7 @@ export function useBookingWithRouter(urlStep?: string) {
       }
       return s;
     });
-  }, []);
+  }, [availability]);
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
     setState((s) => ({ ...s, groupType }));
@@ -539,19 +553,58 @@ export function useBookingWithRouter(urlStep?: string) {
     }));
   }, []);
 
-  const selectPaymentMethod = useCallback((method: PaymentMethod) => {
-    setState((s) => {
-      if (method === "card") {
-        return { ...s, paymentMethod: method, step: 7 };
+  const selectPaymentMethod = useCallback(async (method: PaymentMethod) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
+    try {
+      for (const booking of state.cart) {
+        const res = await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookingRef: booking.bookingRef,
+            user: {
+              name: booking.userName,
+              email: booking.userEmail,
+              phone: booking.userPhone,
+              bandName: booking.bandName,
+            },
+            studioId: booking.studioId,
+            date: booking.date.toISOString().slice(0, 10),
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            groupType: booking.groupType,
+            equipment: booking.equipment,
+            equipmentPrice: booking.equipmentPrice,
+            price: booking.price,
+            paymentMethod: method,
+            paymentStatus: method === "card" ? "pending_payment" : "pay-on-site",
+            promoCode: booking.promoCode,
+            promoDiscount: booking.promoDiscount,
+          }),
+        });
+        const json = await res.json() as { success: boolean; error?: string };
+        if (!json.success) throw new Error(json.error);
       }
-      const updatedCart = s.cart.map((booking) => ({
-        ...booking,
-        paymentMethod: "cash" as PaymentMethod,
-        paymentStatus: "pay-on-site" as const,
-      }));
-      return { ...s, paymentMethod: method, cart: updatedCart, step: 8 };
-    });
-  }, []);
+
+      setState((s) => {
+        if (method === "card") {
+          return { ...s, paymentMethod: method, step: 7 };
+        }
+        const updatedCart = s.cart.map((booking) => ({
+          ...booking,
+          paymentMethod: "cash" as PaymentMethod,
+          paymentStatus: "pay-on-site" as const,
+        }));
+        return { ...s, paymentMethod: method, cart: updatedCart, step: 8 };
+      });
+    } catch (err) {
+      alert("Erreur lors de la réservation: " + err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [state.cart, isSubmitting]);
 
   const processPayment = useCallback(() => {
     setState((s) => {
@@ -579,7 +632,6 @@ export function useBookingWithRouter(urlStep?: string) {
   const goBack = useCallback(() => {
     setState((s) => {
       if (s.step === 0) {
-        // If adding new from cart, go back to cart
         if (s.isAddingNew && s.cart.length > 0) {
           return {
             ...s,
@@ -598,40 +650,26 @@ export function useBookingWithRouter(urlStep?: string) {
         return s;
       }
       if (s.step === 1) {
-        // Progressive back within the unified booking step:
-        // studio-first: if date selected, clear date first
         if (s.flow === "studio-first" && s.selectedDate) {
           return { ...s, selectedDate: null, startTime: null, endTime: null };
         }
-        // studio-first: if studio selected but no date, clear studio
         if (s.flow === "studio-first" && s.studioId) {
           return { ...s, studioId: null, selectedDate: null, startTime: null, endTime: null };
         }
-        // time-first: if date selected, clear date first
         if (s.flow === "time-first" && s.selectedDate) {
           return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null };
         }
         return { ...s, step: 0, flow: null };
       }
 
-      // Step 3 (coordonnées, now after cart): go back to cart
       if (s.step === 3) return { ...s, step: 5 };
-      // Step 5 (cart): locked — cannot go back from cart
       if (s.step === 5) return s;
-      // Step 6 (payment choice): go back to coordonnées
       if (s.step === 6) return { ...s, step: 3, paymentMethod: null };
-      // Step 7 (payment): go back to payment choice
       if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
-      // Step 8 (done): go back to payment choice
       if (s.step === 8) return { ...s, step: 6 };
       return s;
     });
   }, []);
-
-  const availability = useMemo(() => {
-    if (!state.selectedDate) return new Set<string>();
-    return generateMockAvailability(state.selectedDate);
-  }, [state.selectedDate]);
 
   const pricing = useMemo(() => {
     if (!state.studioId || !state.selectedDate || !state.startTime || !state.endTime || !state.groupType) {

@@ -349,10 +349,10 @@ export function generateBookingRef(): string {
 }
 
 export function getAvailableRanges(
+  availability: Set<string>,
   date: Date,
   studioFilter?: StudioId | null
 ): string[] {
-  const availability = generateMockAvailability(date);
   const ranges: string[] = [];
   let rangeStart: string | null = null;
 
@@ -402,32 +402,6 @@ function formatTimeRange(start: string, end: string): string {
     return `${h}h`;
   };
   return `${formatHour(start)}-${formatHour(end)}`;
-}
-
-export function generateMockAvailability(date: Date): Set<string> {
-  const booked = new Set<string>();
-  const seed = date.getDate() + date.getMonth() * 31;
-  const random = (n: number) => ((seed * 9301 + 49297) % 233280) / 233280 * n;
-  
-  const numBooked = Math.floor(random(8)) + 2;
-  const sceneSlots = getStudioTimeSlots("la-scene", date);
-  const podiumSlots = getStudioTimeSlots("le-podium", date);
-  
-  for (let i = 0; i < numBooked; i++) {
-    const useScene = random(1) > 0.5;
-    const studioSlots = useScene ? sceneSlots : podiumSlots;
-    const studioId = useScene ? "la-scene" : "le-podium";
-    if (studioSlots.length < 4) continue;
-    
-    const startIdx = Math.floor(random(studioSlots.length - 4));
-    const duration = Math.floor(random(4)) + 2;
-    
-    for (let j = 0; j < duration && startIdx + j < studioSlots.length; j++) {
-      booked.add(`${studioId}-${studioSlots[startIdx + j]}`);
-    }
-  }
-  
-  return booked;
 }
 
 export function generateICS(

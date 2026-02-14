@@ -82,9 +82,19 @@ import {
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters } from "@/lib/db-types";
 
+import { ALL_TIME_SLOTS } from "@/lib/booking";
+
 const DocumentWithPath = ({ children, path }: { children: React.ReactNode; path: string }) => (
   <Document path={path}>{children}</Document>
 );
+
+function getSlotsForBooking(start: string, end: string): string[] {
+  const startIdx = ALL_TIME_SLOTS.indexOf(start);
+  let endIdx = ALL_TIME_SLOTS.indexOf(end);
+  if (endIdx === -1 && end === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  if (startIdx === -1 || endIdx === -1) return [];
+  return ALL_TIME_SLOTS.slice(startIdx, endIdx);
+}
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -365,6 +375,121 @@ export default defineApp([
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
+    }
+  }),
+
+  // ─── Public Booking API ──────────────────────────────────────────────────────
+
+  route("/api/availability", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const url = new URL(request.url);
+      const date = url.searchParams.get("date");
+      if (!date) return jsonError("Date requise", 400);
+
+      const bookings = await getBookingsByDate(env.DB, date);
+      const blockedSlots = await getBlockedSlots(env.DB, undefined, date);
+
+      const bookedSlots: string[] = [];
+
+      for (const b of bookings) {
+        const slots = getSlotsForBooking(b.start_time, b.end_time);
+        slots.forEach(time => bookedSlots.push(`${b.studio_id}-${time}`));
+      }
+
+      for (const s of blockedSlots) {
+        const slots = getSlotsForBooking(s.start_time, s.end_time);
+        if (s.studio_id) {
+          slots.forEach(time => bookedSlots.push(`${s.studio_id}-${time}`));
+        } else {
+          slots.forEach(time => {
+            bookedSlots.push(`la-scene-${time}`);
+            bookedSlots.push(`le-podium-${time}`);
+          });
+        }
+      }
+
+      return jsonSuccess(bookedSlots);
+    } catch (error) {
+      console.error("GET /api/availability error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch availability", 500);
+    }
+  }),
+
+  route("/api/bookings", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as {
+        bookingRef: string;
+        userId?: string;
+        user: {
+          name: string;
+          email: string;
+          phone: string;
+          bandName: string;
+        };
+        studioId: string;
+        date: string;
+        startTime: string;
+        endTime: string;
+        groupType: string;
+        equipment: Array<{ id: string; quantity: number }>;
+        equipmentPrice: number;
+        price: number;
+        paymentMethod: string;
+        paymentStatus: string;
+        promoCode?: string;
+        promoDiscount?: number;
+      };
+
+      let user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(body.user.email).first<{ id: string }>();
+      
+      if (!user) {
+        user = await createUser(env.DB, {
+          name: body.user.name,
+          email: body.user.email,
+          phone: body.user.phone,
+          band_name: body.user.bandName,
+        });
+      } else {
+        await updateUser(env.DB, user.id, {
+          name: body.user.name,
+          phone: body.user.phone,
+          band_name: body.user.bandName,
+        });
+      }
+
+      const conflict = await checkConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
+      if (conflict) {
+        return jsonError("Ce créneau n'est plus disponible", 409);
+      }
+
+      const booking = await createBooking(env.DB, {
+        booking_ref: body.bookingRef,
+        user_id: user.id,
+        studio_id: body.studioId,
+        date: body.date,
+        start_time: body.startTime,
+        end_time: body.endTime,
+        group_type: body.groupType,
+        status: "confirmed",
+        base_price: body.price - body.equipmentPrice + (body.promoDiscount || 0),
+        equipment_price: body.equipmentPrice,
+        total_price: body.price,
+        equipment: JSON.stringify(body.equipment),
+        payment_method: body.paymentMethod,
+        payment_status: body.paymentStatus,
+        notes: body.promoCode ? `Code promo: ${body.promoCode}` : null,
+        cancelled_at: null,
+        cancel_reason: null,
+      });
+
+      return jsonSuccess({ success: true, bookingId: booking.id, ref: booking.booking_ref });
+    } catch (error) {
+      console.error("POST /api/bookings error:", error);
+      return jsonError(error instanceof Error ? error.message : "Booking failed", 500);
     }
   }),
 

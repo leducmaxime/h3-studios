@@ -76,7 +76,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
     weekDates.forEach((date) => {
       if (isPast(date) || isTooFarInFuture(date)) return;
       const key = date.toISOString().split("T")[0];
-      map.set(key, getAvailableRanges(date, studioFilter));
+      map.set(key, getAvailableRanges(new Set(), date, studioFilter));
     });
     return map;
   }, [weekDates, studioFilter]);
