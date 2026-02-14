@@ -196,10 +196,6 @@ const adminAuthMiddleware = (): RouteMiddleware =>
     }
 
     if (isSuperAdminRoute(pathname) && user.role !== "super-admin") {
-      return new Response(JSON.stringify({ success: false, error: "Forbidden" }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      });
     }
 
     const modifiedHeaders = new Headers(request.headers);

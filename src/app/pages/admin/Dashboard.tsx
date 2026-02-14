@@ -11,6 +11,10 @@ import {
   ChevronRight,
   Plus,
   FileText,
+  Ban,
+  Building2,
+  Euro,
+  Settings,
 } from "lucide-react";
 import {
   LineChart,
@@ -682,6 +686,16 @@ export function AdminDashboard() {
                 </div>
               </a>
               <a
+                href="/admin/blocked-slots"
+                className="flex items-center gap-3 rounded-lg border border-zinc-700 p-4 transition-colors hover:border-primary hover:bg-primary/5"
+              >
+                <Ban className="h-6 w-6 text-primary" />
+                <div>
+                  <p className="font-medium">Blocages</p>
+                  <p className="text-sm text-zinc-400">Fermetures / Vacances</p>
+                </div>
+              </a>
+              <a
                 href="/admin/users"
                 className="flex items-center gap-3 rounded-lg border border-zinc-700 p-4 transition-colors hover:border-primary hover:bg-primary/5"
               >
@@ -695,10 +709,40 @@ export function AdminDashboard() {
                 href="/admin/studios"
                 className="flex items-center gap-3 rounded-lg border border-zinc-700 p-4 transition-colors hover:border-primary hover:bg-primary/5"
               >
-                <TrendingUp className="h-6 w-6 text-primary" />
+                <Building2 className="h-6 w-6 text-primary" />
                 <div>
                   <p className="font-medium">Studios</p>
                   <p className="text-sm text-zinc-400">Configuration</p>
+                </div>
+              </a>
+              <a
+                href="/admin/pricing"
+                className="flex items-center gap-3 rounded-lg border border-zinc-700 p-4 transition-colors hover:border-primary hover:bg-primary/5"
+              >
+                <Euro className="h-6 w-6 text-primary" />
+                <div>
+                  <p className="font-medium">Tarifs</p>
+                  <p className="text-sm text-zinc-400">Prix des créneaux</p>
+                </div>
+              </a>
+              <a
+                href="/admin/settings"
+                className="flex items-center gap-3 rounded-lg border border-zinc-700 p-4 transition-colors hover:border-primary hover:bg-primary/5"
+              >
+                <Settings className="h-6 w-6 text-primary" />
+                <div>
+                  <p className="font-medium">Paramètres</p>
+                  <p className="text-sm text-zinc-400">Config générale</p>
+                </div>
+              </a>
+              <a
+                href="/admin/audit-log"
+                className="flex items-center gap-3 rounded-lg border border-zinc-700 p-4 transition-colors hover:border-primary hover:bg-primary/5"
+              >
+                <FileText className="h-6 w-6 text-primary" />
+                <div>
+                  <p className="font-medium">Journal d'audit</p>
+                  <p className="text-sm text-zinc-400">Historique</p>
                 </div>
               </a>
             </div>
