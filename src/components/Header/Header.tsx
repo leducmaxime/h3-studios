@@ -139,7 +139,7 @@ export function Header() {
                   {menuData.map((menuItem) => (
                     <li
                       key={menuItem.id}
-                      className="group relative last:!ml-auto last:text-primary"
+                      className="group relative"
                     >
                       <a
                         href={menuItem.path}
@@ -158,7 +158,7 @@ export function Header() {
                       </a>
                     </li>
                   ))}
-                  <li className="mt-4 flex gap-4 lg:ml-6 lg:mt-0">
+                  <li className="mt-4 flex gap-4 lg:ml-auto lg:mt-0">
                     <a
                       href="https://www.facebook.com/profile.php?id=100089893392179"
                       target="_blank"

@@ -46,9 +46,6 @@ export function Home() {
             className="mx-auto w-full max-w-xl"
           />
           <div className="mx-auto mt-8 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-          <p className="mt-6 text-lg text-white/60">
-            Studios de répétition et enregistrement à Sucy-en-Brie
-          </p>
         </div>
 
         <div className="mb-12 text-center">
