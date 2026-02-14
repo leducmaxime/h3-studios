@@ -1,6 +1,6 @@
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { ImageCarousel } from "@/components/common/ImageCarousel";
-import { Wifi, TrainFront, MapPin, Music } from "lucide-react";
+import { Wifi, TrainFront, MapPin, Music, Calendar, Clock } from "lucide-react";
 
 const studios = [
   {
@@ -57,6 +57,17 @@ export function LesStudios() {
           <span className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-primary" />
             20 min de Paris
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-white/50">
+          <span className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary" />
+            Ouvert 7j/7
+          </span>
+          <span className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" />
+            Uniquement sur réservation
           </span>
         </div>
       </div>
