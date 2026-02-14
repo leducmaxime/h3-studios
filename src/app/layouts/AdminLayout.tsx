@@ -78,9 +78,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       .catch(console.error);
   }, []);
 
-  const navItems = ALL_NAV_ITEMS.filter(
-    (item) => !item.superAdminOnly || user?.role === "super-admin"
-  );
+  const navItems = ALL_NAV_ITEMS;
 
   const handleLogout = async () => {
     try {
