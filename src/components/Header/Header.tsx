@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { navigate } from "rwsdk/client";
+import { Facebook, Instagram } from "lucide-react";
 
 const menuData = [
   { id: 1, title: "Réservation", path: "/reservation" },
@@ -134,7 +135,7 @@ export function Header() {
                     : "invisible top-[120%] opacity-0"
                 }`}
               >
-                <ul className="block lg:flex lg:w-full lg:space-x-6">
+                <ul className="block lg:flex lg:w-full lg:items-center lg:space-x-6">
                   {menuData.map((menuItem) => (
                     <li
                       key={menuItem.id}
@@ -157,6 +158,26 @@ export function Header() {
                       </a>
                     </li>
                   ))}
+                  <li className="mt-4 flex gap-4 lg:ml-6 lg:mt-0">
+                    <a
+                      href="https://www.facebook.com/profile.php?id=100089893392179"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary transition-opacity hover:opacity-70"
+                      aria-label="Facebook"
+                    >
+                      <Facebook className="h-5 w-5" />
+                    </a>
+                    <a
+                      href="https://www.instagram.com/h3_studios_sucy/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary transition-opacity hover:opacity-70"
+                      aria-label="Instagram"
+                    >
+                      <Instagram className="h-5 w-5" />
+                    </a>
+                  </li>
                 </ul>
               </nav>
             </div>
