@@ -121,6 +121,19 @@ export const pageSEO: Record<string, PageSEO> = {
     ],
     path: "/equipe",
   },
+  "/actualites": {
+    title: "Actualités - Suivez nos Nouvelles | H3 STUDIOS Sucy-en-Brie",
+    description:
+      "Suivez les actualités de H3 Studios sur Instagram @h3_studios_sucy. Découvrez nos dernières nouvelles, événements et coulisses du studio.",
+    keywords: [
+      "actualités H3 Studios",
+      "nouvelles studio",
+      "Instagram H3 Studios",
+      "événements musique",
+      "coulisses studio",
+    ],
+    path: "/actualites",
+  },
 };
 
 export const routes = Object.keys(pageSEO);

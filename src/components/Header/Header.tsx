@@ -9,7 +9,8 @@ const menuData = [
   { id: 3, title: "Réservation", path: "/reservation" },
   { id: 4, title: "Avis", path: "/avis" },
   { id: 5, title: "L'Équipe", path: "/equipe" },
-  { id: 6, title: "À Propos", path: "/a-propos" },
+  { id: 6, title: "Actualités", path: "/actualites" },
+  { id: 7, title: "À Propos", path: "/a-propos" },
 ];
 
 function usePathname() {

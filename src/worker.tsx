@@ -14,6 +14,7 @@ import { Reservation } from "@/app/pages/Reservation";
 import { APropos } from "@/app/pages/APropos";
 import { Avis } from "@/app/pages/Avis";
 import { Equipe } from "@/app/pages/Equipe";
+import { Actualites } from "@/app/pages/Actualites";
 import { generateSitemap, generateRobotsTxt } from "@/app/seo";
 import { AdminDashboard } from "@/app/pages/admin/Dashboard";
 import { AdminCalendar } from "@/app/pages/admin/Calendar";
@@ -273,6 +274,12 @@ export default defineApp([
   render(({ children }) => <DocumentWithPath path="/equipe">{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/equipe", Equipe),
+    ]),
+  ]),
+
+  render(({ children }) => <DocumentWithPath path="/actualites">{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/actualites", Actualites),
     ]),
   ]),
 
