@@ -6,6 +6,7 @@ import { env } from "cloudflare:workers";
 import { Document } from "@/app/Document";
 import { setCommonHeaders } from "@/app/headers";
 import { MainLayout } from "@/app/layouts/MainLayout";
+import { AdminLayout } from "@/app/layouts/AdminLayout";
 import { Home } from "@/app/pages/Home";
 import { LesStudios } from "@/app/pages/LesStudios";
 import { LeMateriel } from "@/app/pages/LeMateriel";
@@ -295,19 +296,21 @@ export default defineApp([
   ]),
 
   render(({ children }) => <DocumentWithPath path="/admin">{children}</DocumentWithPath>, [
-    route("/admin", AdminDashboard),
-    route("/admin/calendar", AdminCalendar),
-    route("/admin/bookings", AdminBookings),
-    route("/admin/bookings/new", AdminBookingNew),
-    route("/admin/bookings/:id", ({ params }) => <AdminBookingDetail bookingId={params.id} />),
-    route("/admin/blocked-slots", AdminBlockedSlots),
-    route("/admin/users", AdminUsers),
-    route("/admin/users/:id", ({ params }) => <AdminUserDetail userId={params.id} />),
-    route("/admin/payments", AdminPayments),
-    route("/admin/studios", AdminStudios),
-    route("/admin/pricing", AdminPricing),
-    route("/admin/settings", AdminSettings),
-    route("/admin/audit-log", AdminAuditLog),
+    layout(AdminLayout, [
+      route("/admin", AdminDashboard),
+      route("/admin/calendar", AdminCalendar),
+      route("/admin/bookings", AdminBookings),
+      route("/admin/bookings/new", AdminBookingNew),
+      route("/admin/bookings/:id", ({ params }) => <AdminBookingDetail bookingId={params.id} />),
+      route("/admin/blocked-slots", AdminBlockedSlots),
+      route("/admin/users", AdminUsers),
+      route("/admin/users/:id", ({ params }) => <AdminUserDetail userId={params.id} />),
+      route("/admin/payments", AdminPayments),
+      route("/admin/studios", AdminStudios),
+      route("/admin/pricing", AdminPricing),
+      route("/admin/settings", AdminSettings),
+      route("/admin/audit-log", AdminAuditLog),
+    ]),
   ]),
 
   render(({ children }) => <DocumentWithPath path="/payment">{children}</DocumentWithPath>, [

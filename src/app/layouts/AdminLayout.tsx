@@ -48,7 +48,7 @@ interface AdminUser {
 }
 
 interface AdminLayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 const ALL_NAV_ITEMS = [
