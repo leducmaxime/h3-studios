@@ -5,7 +5,7 @@ const team = [
   {
     name: "Marcel",
     role: "Gérant",
-    image: "/images/team/marcel.jpg",
+    image: "/images/about/marcel.png",
     bio: `Musicien passionné depuis toujours : violon, piano, basse, batterie, percussions d'orchestre… Il a fait de la musique son métier !
 
 Il est professeur de percussions en conservatoire depuis 30 ans, ainsi que de MAO (Musique Assistée par Ordinateur) et chef adjoint d'un orchestre d'Harmonie. Il a également été professeur de MAA (Musiques Amplifiées Actuelles).
@@ -21,7 +21,7 @@ Chez H3 Studios, Marcel est celui qui a dédié toute sa vie à la musique, c'es
   {
     name: "Caroline",
     role: "Co-gérante",
-    image: "/images/team/caroline.jpg",
+    image: "/images/about/caro.png",
     bio: `C'est en passionnée de musique que Caroline a rejoint l'aventure H3 Studios. Elle la pratique en tant qu'amatrice en chantant dans plusieurs groupes et chorales.
 
 Fan de pop-rock, elle souhaite renouer prochainement avec son amour de jeunesse, la basse.
@@ -31,7 +31,7 @@ Caroline, c'est LA touche féminine de ce trio !`,
   {
     name: "Alexandre",
     role: "Co-gérant",
-    image: "/images/team/alexandre.jpg",
+    image: "/images/about/alex.png",
     bio: `Alexandre baigne dans la musique depuis son plus jeune âge et, jusqu'à l'âge adulte, s'est essayé à plusieurs instruments, du violon à la guitare en passant par le piano et les percussions.
 
 Mais pour que la musique reste toujours un plaisir, il a décidé de ne pas en faire son métier et de s'orienter dans l'informatique : il est actuellement en poste chez un leader européen du numérique.

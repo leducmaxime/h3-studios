@@ -1,7 +1,6 @@
 "use client";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
-import { Map } from "@/components/common/Map";
 import { Mail, Phone, MapPin, Train, Car, Music, GraduationCap, Calendar, Send, User, AtSign, MessageSquare } from "lucide-react";
 import { useState } from "react";
 
@@ -256,12 +255,20 @@ export function APropos() {
                 <span>Stationnement gratuit dans la rue</span>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-          <div className="aspect-video w-full">
-            <Map />
+            
+            <div className="mt-6 overflow-hidden rounded-xl">
+              <iframe
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2638.5466!2d2.5197!3d48.7714!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47e5e1a1b1b1b1b1%3A0x1234567890abcdef!2s3%20Rue%20de%20la%20Grande%20Ceinture%2C%2094370%20Sucy-en-Brie!5e0!3m2!1sfr!2sfr!4v1700000000000"
+                width="100%"
+                height="250"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title="H3 Studios - Localisation"
+                className="rounded-lg"
+              />
+            </div>
           </div>
         </div>
       </div>
