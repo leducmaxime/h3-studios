@@ -95,12 +95,19 @@ interface PendingPayment {
 }
 
 type Period = "week" | "month" | "quarter" | "year";
+type RevenuePeriod = "day" | "month" | "year";
 
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
   { value: "week", label: "7 jours" },
   { value: "month", label: "30 jours" },
   { value: "quarter", label: "90 jours" },
   { value: "year", label: "12 mois" },
+];
+
+const REVENUE_PERIOD_OPTIONS: { value: RevenuePeriod; label: string }[] = [
+  { value: "day", label: "Par jour (7j)" },
+  { value: "month", label: "Par mois (30j)" },
+  { value: "year", label: "Par an (365j)" },
 ];
 
 const CHART_COLORS = {
@@ -214,6 +221,7 @@ export function AdminDashboard() {
   const [upcomingBookings, setUpcomingBookings] = useState<UpcomingBooking[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [period, setPeriod] = useState<Period>("month");
+  const [revenuePeriod, setRevenuePeriod] = useState<RevenuePeriod>("month");
   const [loading, setLoading] = useState(true);
   const [reportMonth, setReportMonth] = useState(() => {
     const d = new Date();
@@ -230,10 +238,10 @@ export function AdminDashboard() {
     }
   }, []);
 
-  const fetchCharts = useCallback(async (p: Period) => {
+  const fetchCharts = useCallback(async (p: Period, rp: RevenuePeriod) => {
     try {
       const [revenueRes, chartsRes] = await Promise.all([
-        fetch(`/api/admin/stats/revenue?period=${p}`),
+        fetch(`/api/admin/stats/revenue?period=${rp === "day" ? "week" : rp}`),
         fetch(`/api/admin/stats/charts?period=${p}`),
       ]);
 
@@ -264,8 +272,8 @@ export function AdminDashboard() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchStats(), fetchCharts(period)]).finally(() => setLoading(false));
-  }, [fetchStats, fetchCharts, period]);
+    Promise.all([fetchStats(), fetchCharts(period, revenuePeriod)]).finally(() => setLoading(false));
+  }, [fetchStats, fetchCharts, period, revenuePeriod]);
 
   const handleGenerateMonthlyReport = async () => {
     const [year, month] = reportMonth.split("-").map(Number);
@@ -412,7 +420,22 @@ export function AdminDashboard() {
 
         <TabsContent value="charts">
           <div className="grid gap-6 lg:grid-cols-2">
-            <ChartCard title="Revenus">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-medium text-zinc-400">Revenus</h3>
+                <Select value={revenuePeriod} onValueChange={(v) => setRevenuePeriod(v as RevenuePeriod)}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REVENUE_PERIOD_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={revenueData}>
@@ -443,7 +466,7 @@ export function AdminDashboard() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            </ChartCard>
+            </div>
 
             <ChartCard title="Occupation par jour">
               <div className="h-[280px]">
