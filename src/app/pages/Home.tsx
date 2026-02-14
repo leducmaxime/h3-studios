@@ -12,7 +12,7 @@ const services = [
   },
   {
     icon: Radio,
-    title: "Répétitions",
+    title: "REPETITIONS",
     description: "Environnement optimal pour travailler votre son",
   },
   {
