@@ -2,7 +2,7 @@
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { Mail, Phone, MapPin, Train, Car, Music, GraduationCap, Calendar, Send, User, AtSign, MessageSquare } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function ContactForm() {
   const [formData, setFormData] = useState({
@@ -144,12 +144,18 @@ function ContactForm() {
 }
 
 export function APropos() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
       <ScrollUp />
 
       <div className="w-full max-w-5xl px-4">
-        <div className="mb-8 text-center">
+        <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">À PROPOS</h1>
           <p className="mt-4 text-lg text-white/60">
             Un son authentique pour des artistes authentiques
@@ -158,7 +164,7 @@ export function APropos() {
       </div>
 
       <div className="w-full max-w-5xl px-4 space-y-6">
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+        <div className={`overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
           <div className="relative aspect-[21/9]">
             <img
               src="/images/about/bandeau.jpg"
@@ -177,7 +183,7 @@ export function APropos() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all hover:border-primary/50">
+          <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
               <Music className="h-6 w-6 text-primary" />
             </div>
@@ -187,7 +193,7 @@ export function APropos() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all hover:border-primary/50">
+          <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "300ms" }}>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
               <GraduationCap className="h-6 w-6 text-primary" />
             </div>
@@ -197,7 +203,7 @@ export function APropos() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all hover:border-primary/50">
+          <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "400ms" }}>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
               <Calendar className="h-6 w-6 text-primary" />
             </div>
@@ -208,7 +214,7 @@ export function APropos() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8">
+        <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "500ms" }}>
           <h2 className="mb-6 text-xl font-bold text-primary">Contact</h2>
           <div className="mb-6 grid gap-6 sm:grid-cols-2">
             <a
@@ -233,7 +239,7 @@ export function APropos() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8">
+        <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "600ms" }}>
           <h2 className="mb-6 text-xl font-bold text-primary">Localisation</h2>
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">

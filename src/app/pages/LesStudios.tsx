@@ -1,6 +1,9 @@
+"use client";
+
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { ImageCarousel } from "@/components/common/ImageCarousel";
 import { Wifi, TrainFront, MapPin, Music, Calendar, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const studios = [
   {
@@ -33,19 +36,25 @@ const studios = [
 ];
 
 export function LesStudios() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
       <ScrollUp />
 
       <div className="w-full max-w-5xl px-4">
-        <div className="mb-8 text-center">
+        <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LES STUDIOS</h1>
           <p className="mt-4 text-lg text-white/60">
             Deux espaces uniques pour vos répétitions et enregistrements
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-white/50">
+        <div className={`flex flex-wrap items-center justify-center gap-6 text-sm text-white/50 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
           <span className="flex items-center gap-2">
             <Wifi className="h-4 w-4 text-primary" />
             Wifi gratuit
@@ -60,7 +69,7 @@ export function LesStudios() {
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-white/50">
+        <div className={`flex flex-wrap items-center justify-center gap-6 text-sm text-white/50 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
           <span className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-primary" />
             Ouvert 7j/7
@@ -76,7 +85,8 @@ export function LesStudios() {
         {studios.map((studio, i) => (
           <div
             key={i}
-            className="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all hover:border-primary/50"
+            className={`group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+            style={{ transitionDelay: `${300 + i * 100}ms` }}
           >
             <div className="relative aspect-video">
               <ImageCarousel images={studio.images} />

@@ -1,5 +1,8 @@
+"use client";
+
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { Star, Quote } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const reviews = [
   {
@@ -65,13 +68,19 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export function Avis() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
       <ScrollUp />
-      <div className="font-blanka text-3xl md:text-5xl">AVIS CLIENTS</div>
+      <div className={`font-blanka text-3xl md:text-5xl transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>AVIS CLIENTS</div>
 
       <div className="w-full max-w-[900px] px-4">
-        <div className="mb-8 flex flex-col items-center gap-4 rounded-2xl border-4 border-primary bg-black/80 p-6 text-center">
+        <div className={`mb-8 flex flex-col items-center gap-4 rounded-2xl border-4 border-primary bg-black/80 p-6 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
           <div className="flex items-center gap-3">
             <span className="text-4xl font-bold text-primary">{averageRating}</span>
             <div className="flex flex-col items-start gap-1">
@@ -92,10 +101,11 @@ export function Avis() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {reviews.map((review) => (
+          {reviews.map((review, index) => (
             <div
               key={review.id}
-              className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4"
+              className={`flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+              style={{ transitionDelay: `${200 + index * 100}ms` }}
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
@@ -116,7 +126,7 @@ export function Avis() {
           ))}
         </div>
 
-        <div className="mt-8 text-center">
+        <div className={`mt-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "800ms" }}>
           <a
             href="https://www.google.com/search?q=H3+studios+sucy+en+brie+avis"
             target="_blank"
