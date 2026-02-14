@@ -147,10 +147,10 @@ export function Header() {
                           setNavbarOpen(false);
                           navigate(menuItem.path);
                         }}
-                        className={`flex py-2 text-lg font-bold lg:mr-0 lg:inline-flex lg:px-0 lg:py-6 ${
+                        className={`flex py-2 text-lg font-bold transition-colors lg:mr-0 lg:inline-flex lg:px-0 lg:py-6 ${
                           currentPath === menuItem.path
-                            ? "underline decoration-primary decoration-2 underline-offset-8"
-                            : ""
+                            ? "text-primary underline decoration-primary decoration-2 underline-offset-8"
+                            : "hover:text-primary"
                         }`}
                       >
                         {menuItem.title}
