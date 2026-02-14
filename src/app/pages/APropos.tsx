@@ -171,7 +171,7 @@ export function APropos() {
           <div className="p-6 lg:p-8">
             <p className="text-lg text-white/80 leading-relaxed">
               <span className="font-bold text-primary">H3 Studios</span>
-              {" }, situé à 2 minutes à pied de la gare de Sucy-Bonneuil, est un lieu originellement dédié aux répétitions et enregistrements de groupes de musique amplifiée, mais permet aussi, de par son architecture et ses équipements, d'accueillir d'autres activités, culturelles ou non."}
+              {", situé à 2 minutes à pied de la gare de Sucy-Bonneuil, est un lieu originellement dédié aux répétitions et enregistrements de groupes de musique amplifiée, mais permet aussi, de par son architecture et ses équipements, d'accueillir d'autres activités, culturelles ou non."}
             </p>
           </div>
         </div>
@@ -208,34 +208,34 @@ export function APropos() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8">
-            <h2 className="mb-6 text-xl font-bold text-primary">Contact</h2>
-            <div className="mb-6 space-y-4">
-              <a
-                href="mailto:contact@h3-studios.fr"
-                className="flex items-center gap-3 text-white/70 transition-colors hover:text-primary"
-              >
-                <Mail className="h-5 w-5 text-primary" />
-                <span>contact@h3-studios.fr</span>
-              </a>
-              <a
-                href="tel:+33613440875"
-                className="flex items-center gap-3 text-white/70 transition-colors hover:text-primary"
-              >
-                <Phone className="h-5 w-5 text-primary" />
-                <span>06 13 44 08 75</span>
-              </a>
-            </div>
-            
-            <div className="border-t border-white/10 pt-6">
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-white/50">Ou envoyez-nous un message</h3>
-              <ContactForm />
-            </div>
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8">
+          <h2 className="mb-6 text-xl font-bold text-primary">Contact</h2>
+          <div className="mb-6 grid gap-6 sm:grid-cols-2">
+            <a
+              href="mailto:contact@h3-studios.fr"
+              className="flex items-center gap-3 text-white/70 transition-colors hover:text-primary"
+            >
+              <Mail className="h-5 w-5 text-primary" />
+              <span>contact@h3-studios.fr</span>
+            </a>
+            <a
+              href="tel:+33613440875"
+              className="flex items-center gap-3 text-white/70 transition-colors hover:text-primary"
+            >
+              <Phone className="h-5 w-5 text-primary" />
+              <span>06 13 44 08 75</span>
+            </a>
           </div>
+          
+          <div className="border-t border-white/10 pt-6">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-white/50">Ou envoyez-nous un message</h3>
+            <ContactForm />
+          </div>
+        </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8">
-            <h2 className="mb-6 text-xl font-bold text-primary">Localisation</h2>
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8">
+          <h2 className="mb-6 text-xl font-bold text-primary">Localisation</h2>
+          <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <a
                 href="https://maps.app.goo.gl/STjxqLmfUnL6mEMY9"
@@ -256,11 +256,11 @@ export function APropos() {
               </div>
             </div>
             
-            <div className="mt-6 overflow-hidden rounded-xl">
+            <div className="overflow-hidden rounded-xl">
               <iframe
                 src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2638.5466!2d2.5197!3d48.7714!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47e5e1a1b1b1b1b1%3A0x1234567890abcdef!2s3%20Rue%20de%20la%20Grande%20Ceinture%2C%2094370%20Sucy-en-Brie!5e0!3m2!1sfr!2sfr!4v1700000000000"
                 width="100%"
-                height="250"
+                height="200"
                 style={{ border: 0 }}
                 allowFullScreen
                 loading="lazy"
