@@ -4,57 +4,41 @@ import { ScrollUp } from "@/components/common/ScrollUp";
 import { Instagram, ExternalLink, Calendar, Music } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const mockPosts = [
-  {
-    id: 1,
-    image: "/images/studios/scene-2.jpg",
-    caption: "Nouvelles installations dans le studio La Scène !",
-    date: "12 février 2025",
-    likes: 45,
-  },
-  {
-    id: 2,
-    image: "/images/studios/podium-1.jpg",
-    caption: "Répétition du groupe @TribaMondo ce weekend",
-    date: "8 février 2025",
-    likes: 32,
-  },
-  {
-    id: 3,
-    image: "/images/studios/scene-3.jpg",
-    caption: "Le matériel arrive pour les sessions d'enregistrement",
-    date: "5 février 2025",
-    likes: 28,
-  },
-  {
-    id: 4,
-    image: "/images/studios/podium-2.jpg",
-    caption: "Profitez de nos tarifs préférentiels en semaine !",
-    date: "1 février 2025",
-    likes: 51,
-  },
-  {
-    id: 5,
-    image: "/images/studios/scene-1.jpg",
-    caption: "La Scène prête pour vos prochains concerts",
-    date: "28 janvier 2025",
-    likes: 39,
-  },
-  {
-    id: 6,
-    image: "/images/studios/podium-3.jpg",
-    caption: "Cours de batterie disponibles au Podium",
-    date: "24 janvier 2025",
-    likes: 27,
-  },
-];
+interface InstagramPost {
+  id: string;
+  caption: string;
+  media_type: string;
+  media_url: string;
+  permalink: string;
+  thumbnail_url?: string;
+  timestamp: string;
+}
 
 export function Actualites() {
   const [isVisible, setIsVisible] = useState(false);
+  const [posts, setPosts] = useState<InstagramPost[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setIsVisible(true);
+    fetch("/api/instagram/feed")
+      .then(res => res.json())
+      .then((data: any) => {
+        if (data.success && Array.isArray(data.data)) {
+          setPosts(data.data);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
+
+  const formatDate = (isoString: string) => {
+    return new Date(isoString).toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
 
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-20 pt-32">
@@ -87,50 +71,56 @@ export function Actualites() {
           <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-primary/50" />
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {mockPosts.map((post, i) => (
-            <a
-              key={post.id}
-              href="https://www.instagram.com/h3_studios_sucy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`group overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_30px_rgba(249,176,53,0.1)] ${
-                isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-              }`}
-              style={{ transitionDelay: `${i * 100}ms` }}
-            >
-              <div className="relative aspect-square overflow-hidden">
-                <img
-                  src={post.image}
-                  alt={post.caption}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                <div className="absolute bottom-0 left-0 right-0 p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                  <p className="text-sm text-white line-clamp-2">{post.caption}</p>
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="py-20 text-center text-white/40">
+            Aucune publication trouvée.
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {posts.map((post, i) => (
+              <a
+                key={post.id}
+                href={post.permalink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`group overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_30px_rgba(249,176,53,0.1)] ${
+                  isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+                }`}
+                style={{ transitionDelay: `${i * 100}ms` }}
+              >
+                <div className="relative aspect-square overflow-hidden bg-zinc-900">
+                  <img
+                    src={post.media_type === "VIDEO" ? post.thumbnail_url : post.media_url}
+                    alt={post.caption}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                    <p className="text-sm text-white line-clamp-3">{post.caption}</p>
+                  </div>
                 </div>
-                <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/50 px-2 py-1 text-xs text-white/80 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Instagram className="h-3 w-3" />
-                  {post.likes}
+                <div className="p-4">
+                  <p className="mb-2 line-clamp-2 text-sm text-white/70">{post.caption || "Publication Instagram"}</p>
+                  <div className="flex items-center gap-2 text-xs text-white/50">
+                    <Calendar className="h-3 w-3" />
+                    {formatDate(post.timestamp)}
+                  </div>
                 </div>
-              </div>
-              <div className="p-4">
-                <p className="mb-2 line-clamp-2 text-sm text-white/70">{post.caption}</p>
-                <div className="flex items-center gap-2 text-xs text-white/50">
-                  <Calendar className="h-3 w-3" />
-                  {post.date}
-                </div>
-              </div>
-            </a>
-          ))}
-        </div>
+              </a>
+            ))}
+          </div>
+        )}
 
         <div className="mt-12 text-center">
           <a
             href="https://www.instagram.com/h3_studios_sucy"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-black transition-all hover:bg-primary/90"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-all hover:bg-primary/90"
           >
             <Instagram className="h-5 w-5" />
             Voir toutes les publications
@@ -140,3 +130,4 @@ export function Actualites() {
     </div>
   );
 }
+

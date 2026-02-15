@@ -13,6 +13,9 @@ import {
   Banknote,
   CalendarClock,
   CalendarDays,
+  Instagram,
+  RefreshCw,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -516,6 +519,130 @@ function CreateOperatorDialog({ open, onOpenChange, onCreated }: {
   );
 }
 
+function InstagramTab({ settings, onUpdate }: {
+  settings: Record<string, string>;
+  onUpdate: (key: string, value: string) => void;
+}) {
+  const [token, setToken] = useState(settings["instagram_access_token"] || "");
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    setToken(settings["instagram_access_token"] || "");
+  }, [settings]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/instagram/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        onUpdate("instagram_access_token", token);
+        toast.success("Token Instagram mis à jour et flux synchronisé");
+      } else {
+        toast.error(json.error || "Erreur lors de la sauvegarde");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/admin/instagram/sync", { method: "POST" });
+      const json = await res.json() as { success: boolean; count?: number; error?: string };
+      if (json.success) {
+        toast.success(`${json.count} publications synchronisées`);
+      } else {
+        toast.error(json.error || "Échec de la synchronisation");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+        <div className="mb-6 flex items-start gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-pink-500/10 text-pink-500">
+            <Instagram className="h-6 w-6" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold">Flux Instagram</h3>
+            <p className="text-sm text-zinc-400">
+              Affichez automatiquement vos derniers posts Instagram sur la page "Actualités".
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={syncing || !settings["instagram_access_token"]}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            Synchroniser
+          </Button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="ig-token">Access Token (Long-lived)</Label>
+            <div className="flex gap-2">
+              <Input
+                id="ig-token"
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="Entrez votre token Instagram..."
+                className="bg-zinc-800 border-zinc-700"
+              />
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Le token sera automatiquement rafraîchi par le système pour ne jamais expirer.
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-primary mb-2 flex items-center gap-2">
+              <Shield className="h-3 w-3" />
+              Comment obtenir un token ?
+            </h4>
+            <ol className="text-xs text-zinc-400 space-y-2 list-decimal ml-4">
+              <li>Allez sur le portail <a href="https://developers.facebook.com" target="_blank" className="text-primary underline">Meta for Developers</a></li>
+              <li>Créez une App de type "Consommateur" ou "Autre"</li>
+              <li>Ajoutez le produit "Instagram Basic Display"</li>
+              <li>Configurez les URLs de redirection (utilisez l'URL de ce site)</li>
+              <li>Ajoutez un utilisateur de test Instagram</li>
+              <li>Générez un token via le "User Token Generator" dans les paramètres Instagram Basic Display</li>
+            </ol>
+            <a 
+              href="https://developers.facebook.com/docs/instagram-basic-display-api/getting-started" 
+              target="_blank"
+              className="mt-3 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+            >
+              Documentation officielle <ExternalLink className="h-2 w-2" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AdminSettings() {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -567,6 +694,10 @@ export function AdminSettings() {
             <Shield className="h-4 w-4" />
             Sécurité
           </TabsTrigger>
+          <TabsTrigger value="instagram" className="gap-2">
+            <Instagram className="h-4 w-4" />
+            Instagram
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="booking" className="mt-6">
@@ -575,6 +706,10 @@ export function AdminSettings() {
 
         <TabsContent value="security" className="mt-6">
           <SecurityTab currentUser={currentUser} />
+        </TabsContent>
+
+        <TabsContent value="instagram" className="mt-6">
+          <InstagramTab settings={settings} onUpdate={handleSettingUpdate} />
         </TabsContent>
       </Tabs>
     </div>

@@ -89,6 +89,10 @@ import {
   getReviewsSyncData,
   syncGoogleReviews,
 } from "@/lib/google-reviews";
+import {
+  getCachedInstagramFeed,
+  syncInstagram,
+} from "@/lib/instagram";
 
 const DocumentWithPath = ({ children, path }: { children: React.ReactNode; path: string }) => (
   <Document path={path}>{children}</Document>
@@ -1748,6 +1752,52 @@ const app = defineApp([
     }
   }),
 
+  route("/api/instagram/feed", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const posts = await getCachedInstagramFeed(env.DB);
+      return jsonSuccess(posts);
+    } catch (error) {
+      console.error("GET /api/instagram/feed error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch feed", 500);
+    }
+  }),
+
+  route("/api/admin/instagram/sync", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const result = await syncInstagram(env.DB);
+      if (!result.success) return jsonError(result.error || "Sync failed", 500);
+
+      await addAuditLog(env.DB, "instagram", "feed", "sync", { count: result.count });
+      return jsonSuccess(result);
+    } catch (error) {
+      console.error("POST /api/admin/instagram/sync error:", error);
+      return jsonError(error instanceof Error ? error.message : "Sync failed", 500);
+    }
+  }),
+
+  route("/api/admin/instagram/token", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const { token } = await request.json() as { token: string };
+      if (!token) return jsonError("Token requis", 400);
+
+      await setSetting(env.DB, "instagram_access_token", token);
+      await addAuditLog(env.DB, "settings", "instagram", "update_token", {});
+
+      const result = await syncInstagram(env.DB);
+
+      return jsonSuccess({ success: true, sync: result });
+    } catch (error) {
+      console.error("POST /api/admin/instagram/token error:", error);
+      return jsonError(error instanceof Error ? error.message : "Update failed", 500);
+    }
+  }),
+
   // ─── Admin Google Reviews Sync API ──────────────────────────────────────────
 
   route("/api/admin/reviews/sync", async ({ request }) => {
@@ -1829,17 +1879,20 @@ async function handleScheduled(controller: ScheduledController) {
   console.log(`[Cron] Triggered: ${controller.cron} at ${new Date().toISOString()}`);
 
   const apiKey = (env as any).GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    console.error("[Cron] GOOGLE_PLACES_API_KEY not configured");
-    return;
+  if (apiKey) {
+    const result = await syncGoogleReviews(env.DB, apiKey);
+    if (result.success) {
+      console.log(`[Cron] Reviews synced: ${result.reviewsCount} reviews, ${result.averageRating}/5`);
+    } else {
+      console.error(`[Cron] Reviews sync failed: ${result.error}`);
+    }
   }
 
-  const result = await syncGoogleReviews(env.DB, apiKey);
-
-  if (result.success) {
-    console.log(`[Cron] Reviews synced: ${result.reviewsCount} reviews, ${result.averageRating}/5`);
+  const igResult = await syncInstagram(env.DB);
+  if (igResult.success) {
+    console.log(`[Cron] Instagram synced: ${igResult.count} posts`);
   } else {
-    console.error(`[Cron] Sync failed: ${result.error}`);
+    console.error(`[Cron] Instagram sync failed: ${igResult.error}`);
   }
 }
 
