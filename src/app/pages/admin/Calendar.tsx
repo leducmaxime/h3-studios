@@ -345,8 +345,8 @@ export function AdminCalendar() {
                             {booking.user_band_name || booking.user_name || booking.booking_ref}
                           </p>
                           {hasOptions(booking.equipment) && (
-                            <span title="Options incluses" className="shrink-0 rounded bg-primary/20 p-0.5 text-[10px] font-bold text-primary">
-                              +
+                            <span title="Options incluses" className="shrink-0 rounded bg-primary/20 px-1 text-[10px] font-bold text-primary italic">
+                              (option)
                             </span>
                           )}
                         </div>
@@ -419,7 +419,7 @@ export function AdminCalendar() {
                             {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
                           </span>
                           {hasOptions(booking.equipment) && (
-                            <span className="shrink-0 text-[10px] font-bold">+</span>
+                            <span className="shrink-0 text-[10px] font-bold italic opacity-80">(option)</span>
                           )}
                         </button>
                     ))}
