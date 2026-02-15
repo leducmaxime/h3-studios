@@ -49,9 +49,6 @@ export function LesStudios() {
       <div className="w-full max-w-5xl px-4">
         <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LES STUDIOS</h1>
-          <p className="mt-4 text-lg text-white/60">
-            Deux espaces uniques pour vos répétitions et enregistrements
-          </p>
         </div>
 
         <div className={`flex flex-wrap items-center justify-center gap-6 text-sm text-white/50 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
