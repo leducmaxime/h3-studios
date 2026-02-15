@@ -138,11 +138,11 @@ export function Avis() {
           </a>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-wrap justify-center gap-4">
           {reviews.map((review, index) => (
             <div
               key={review.id}
-              className={`flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+              className={`flex w-full flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 transition-all duration-700 sm:w-[calc(50%-1rem)] lg:w-[calc(33.33%-1rem)] ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
               style={{ transitionDelay: `${200 + index * 100}ms` }}
             >
               <div className="flex items-start justify-between">
