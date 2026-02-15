@@ -21,17 +21,27 @@
     }
   ],
 
+  "triggers": {
+    "crons": ["0 6 * * *"]
+  },
+
   "env": {
     "staging": {
       "name": "h3-studios-staging",
       "vars": {
         "ENVIRONMENT": "staging"
+      },
+      "triggers": {
+        "crons": ["0 6 * * *"]
       }
     },
     "production": {
       "name": "h3-studios-prod",
       "vars": {
         "ENVIRONMENT": "production"
+      },
+      "triggers": {
+        "crons": ["0 6 * * *"]
       }
     }
   }

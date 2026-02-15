@@ -84,6 +84,11 @@ import {
 import { type BookingFilters, type AuditLogFilters } from "@/lib/db-types";
 
 import { ALL_TIME_SLOTS } from "@/lib/booking";
+import {
+  getStoredReviews,
+  getReviewsSyncData,
+  syncGoogleReviews,
+} from "@/lib/google-reviews";
 
 const DocumentWithPath = ({ children, path }: { children: React.ReactNode; path: string }) => (
   <Document path={path}>{children}</Document>
@@ -207,7 +212,7 @@ const adminAuthMiddleware = (): RouteMiddleware =>
     rInfo.request = new Request(request, { headers: modifiedHeaders });
   };
 
-export default defineApp([
+const app = defineApp([
   setCommonHeaders(),
   adminAuthMiddleware(),
   
@@ -1695,6 +1700,60 @@ export default defineApp([
     }
   }),
 
+  // ─── Public Google Reviews API ──────────────────────────────────────────────
+
+  route("/api/reviews", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const reviews = await getStoredReviews(env.DB);
+      const syncData = await getReviewsSyncData(env.DB);
+
+      return jsonSuccess({
+        reviews,
+        totalReviews: syncData?.totalReviews ?? reviews.length,
+        averageRating: syncData?.averageRating ?? 5,
+        lastSync: syncData?.lastSync ?? null,
+      });
+    } catch (error) {
+      console.error("GET /api/reviews error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch reviews", 500);
+    }
+  }),
+
+  // ─── Admin Google Reviews Sync API ──────────────────────────────────────────
+
+  route("/api/admin/reviews/sync", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const apiKey = env.GOOGLE_PLACES_API_KEY;
+      if (!apiKey) {
+        return jsonError("GOOGLE_PLACES_API_KEY not configured", 500);
+      }
+
+      const result = await syncGoogleReviews(env.DB, apiKey);
+
+      if (!result.success) {
+        return jsonError(result.error || "Sync failed", 500);
+      }
+
+      await addAuditLog(env.DB, "reviews", "google", "sync", {
+        reviewsCount: result.reviewsCount,
+        averageRating: result.averageRating,
+      });
+
+      return jsonSuccess({
+        success: true,
+        reviewsCount: result.reviewsCount,
+        averageRating: result.averageRating,
+      });
+    } catch (error) {
+      console.error("POST /api/admin/reviews/sync error:", error);
+      return jsonError(error instanceof Error ? error.message : "Sync failed", 500);
+    }
+  }),
+
   // ─── Payment & Webhook API ─────────────────────────────────────────────────
 
   route("/api/payment/webhook", async (info) => {
@@ -1737,3 +1796,26 @@ export default defineApp([
     }
   }),
 ]);
+
+async function handleScheduled(controller: ScheduledController) {
+  console.log(`[Cron] Triggered: ${controller.cron} at ${new Date().toISOString()}`);
+
+  const apiKey = env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) {
+    console.error("[Cron] GOOGLE_PLACES_API_KEY not configured");
+    return;
+  }
+
+  const result = await syncGoogleReviews(env.DB, apiKey);
+
+  if (result.success) {
+    console.log(`[Cron] Reviews synced: ${result.reviewsCount} reviews, ${result.averageRating}/5`);
+  } else {
+    console.error(`[Cron] Sync failed: ${result.error}`);
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  scheduled: handleScheduled,
+};

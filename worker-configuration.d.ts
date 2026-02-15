@@ -8,6 +8,9 @@ declare namespace Cloudflare {
 		ENVIRONMENT: "staging" | "production";
 		DB: D1Database;
 		ASSETS: Fetcher;
+		GOOGLE_PLACES_API_KEY?: string;
+		STRIPE_SECRET_KEY?: string;
+		STRIPE_WEBHOOK_SECRET?: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

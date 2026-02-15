@@ -1,49 +1,61 @@
 "use client";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
-import { Star, Quote } from "lucide-react";
+import { Star } from "lucide-react";
 import { useState, useEffect } from "react";
 
-const reviews = [
+interface Review {
+  id: string;
+  author_name: string;
+  rating: number;
+  text: string | null;
+  relative_time: string | null;
+}
+
+interface ReviewsData {
+  reviews: Review[];
+  totalReviews: number;
+  averageRating: number;
+  lastSync: string | null;
+}
+
+const FALLBACK_REVIEWS: Review[] = [
   {
-    id: 1,
-    author: "Mardochée D.",
+    id: "1",
+    author_name: "Mardochée D.",
     rating: 5,
     text: "Le studio est très bien situé, l'équipement est de qualité, et c'est toujours un réel plaisir de répéter au Studio H3. En plus, le gérant et toute l'équipe sont géniaux : accueillants, professionnels et à l'écoute. Je recommande vivement 🙏🏽",
-    date: "Il y a 1 mois",
+    relative_time: "Il y a 1 mois",
   },
   {
-    id: 2,
-    author: "Gams G.",
+    id: "2",
+    author_name: "Gams G.",
     rating: 5,
     text: "Studio de répétition très très sympa comme ses gérants. Toujours disponible et dont le prix est vraiment très intéressant par rapport aux autres studios. Mille merci à eux et je recommande à tous les musiciens, groupes, chorales...",
-    date: "Il y a 1 mois",
+    relative_time: "Il y a 1 mois",
   },
   {
-    id: 3,
-    author: "Pascal G.",
+    id: "3",
+    author_name: "Pascal G.",
     rating: 5,
     text: "Un super studio de répétition. Le grand studio a une très bonne acoustique, et Marcel le gérant en plus d'être adorable et à l'écoute de nos besoins, fait toujours des balances impeccables !",
-    date: "Il y a 1 mois",
+    relative_time: "Il y a 1 mois",
   },
   {
-    id: 4,
-    author: "Fab F.",
+    id: "4",
+    author_name: "Fab F.",
     rating: 5,
     text: "Bien situé, facile d'accès (à deux pas de la station RER A), H3 Studios offre des espaces confortables avec équipements pro pour des séances de répétitions ou d'enregistrement agréables. Rapport qualité prix au top !",
-    date: "Il y a 1 mois",
+    relative_time: "Il y a 1 mois",
   },
   {
-    id: 5,
-    author: "Linda S.",
+    id: "5",
+    author_name: "Linda S.",
     rating: 5,
     text: "Toujours un plaisir de venir répéter chez H3 Studios ! L'équipe est au top, toujours de très bons conseils, dans une ambiance à la fois pro et super conviviale. On s'y sent comme en famille. Merci Marcel !",
-    date: "Il y a 1 mois",
+    relative_time: "Il y a 1 mois",
   },
 ];
-
-const totalReviews = 5;
-const averageRating = 5;
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -62,9 +74,35 @@ function StarRating({ rating }: { rating: number }) {
 
 export function Avis() {
   const [isVisible, setIsVisible] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>(FALLBACK_REVIEWS);
+  const [totalReviews, setTotalReviews] = useState(5);
+  const [averageRating, setAverageRating] = useState(5);
 
   useEffect(() => {
     setIsVisible(true);
+
+    fetch("/api/reviews")
+      .then((res) => res.json())
+      .then((data: unknown) => {
+        const typedData = data as { success: boolean; data?: ReviewsData };
+        if (typedData.success && typedData.data) {
+          const apiReviews = typedData.data.reviews.map((r) => ({
+            id: r.id,
+            author_name: r.author_name,
+            rating: r.rating,
+            text: r.text,
+            relative_time: r.relative_time,
+          }));
+          if (apiReviews.length > 0) {
+            setReviews(apiReviews);
+            setTotalReviews(typedData.data.totalReviews);
+            setAverageRating(typedData.data.averageRating);
+          }
+        }
+      })
+      .catch(() => {
+        // Keep fallback reviews on error
+      });
   }, []);
 
   return (
@@ -103,11 +141,11 @@ export function Avis() {
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-lg font-bold text-primary">
-                    {review.author.charAt(0)}
+                    {review.author_name.charAt(0)}
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-medium">{review.author}</span>
-                    <span className="text-xs text-white/50">{review.date}</span>
+                    <span className="font-medium">{review.author_name}</span>
+                    <span className="text-xs text-white/50">{review.relative_time || "Récemment"}</span>
                   </div>
                 </div>
               </div>
