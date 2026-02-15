@@ -1721,6 +1721,32 @@ const app = defineApp([
     }
   }),
 
+  route("/api/reviews/sync", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const apiKey = env.GOOGLE_PLACES_API_KEY;
+      if (!apiKey) {
+        return jsonError("GOOGLE_PLACES_API_KEY not configured", 500);
+      }
+
+      const result = await syncGoogleReviews(env.DB, apiKey);
+
+      if (!result.success) {
+        return jsonError(result.error || "Sync failed", 500);
+      }
+
+      return jsonSuccess({
+        success: true,
+        reviewsCount: result.reviewsCount,
+        averageRating: result.averageRating,
+      });
+    } catch (error) {
+      console.error("POST /api/reviews/sync error:", error);
+      return jsonError(error instanceof Error ? error.message : "Sync failed", 500);
+    }
+  }),
+
   // ─── Admin Google Reviews Sync API ──────────────────────────────────────────
 
   route("/api/admin/reviews/sync", async ({ request }) => {
