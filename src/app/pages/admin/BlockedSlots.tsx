@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, ALL_TIME_SLOTS, type StudioId } from "@/lib/booking";
 
 interface BlockedSlot {
@@ -53,7 +54,7 @@ function formatDate(dateStr: string): string {
 
 function getMinDate(): string {
   const today = new Date();
-  return today.toISOString().slice(0, 10);
+  return formatDateISO(today);
 }
 
 export function AdminBlockedSlots() {

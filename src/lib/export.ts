@@ -1,5 +1,6 @@
 import { type DbBooking, type DbUser, type DbPayment } from "./db-types";
 import { STUDIOS, formatPrice, type StudioId } from "./booking";
+import { formatDateISO } from "./utils";
 import { jsPDF } from "jspdf";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -103,7 +104,7 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
   });
 
   const csv = [headers.join(","), ...rows].join("\n");
-  const timestamp = new Date().toISOString().slice(0, 10);
+  const timestamp = formatDateISO(new Date());
   downloadCSV(`h3-reservations-${timestamp}.csv`, csv);
 }
 
@@ -133,7 +134,7 @@ export function exportUsersCSV(users: DbUser[]): void {
   });
 
   const csv = [headers.join(","), ...rows].join("\n");
-  const timestamp = new Date().toISOString().slice(0, 10);
+  const timestamp = formatDateISO(new Date());
   downloadCSV(`h3-clients-${timestamp}.csv`, csv);
 }
 
@@ -180,7 +181,7 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
   });
 
   const csv = [headers.join(","), ...rows].join("\n");
-  const timestamp = new Date().toISOString().slice(0, 10);
+  const timestamp = formatDateISO(new Date());
   downloadCSV(`h3-paiements-${timestamp}.csv`, csv);
 }
 

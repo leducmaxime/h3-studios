@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, TIME_SLOTS, generateBookingRef, formatPrice, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 
@@ -78,7 +79,7 @@ export function AdminBookingNew() {
   useEffect(() => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    setDate(tomorrow.toISOString().slice(0, 10));
+    setDate(formatDateISO(tomorrow));
   }, []);
 
   // Fetch equipment

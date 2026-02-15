@@ -16,6 +16,7 @@ import {
   type BookingStatus,
   type DbPaymentStatus,
 } from "./db-types";
+import { getParisDateISO } from "./utils";
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -767,15 +768,15 @@ export interface DashboardStats {
 }
 
 export async function getDashboardStats(db: D1Database): Promise<DashboardStats> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getParisDateISO();
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  const weekStartStr = getParisDateISO(weekStart);
 
   const monthStart = new Date();
   monthStart.setDate(1);
-  const monthStartStr = monthStart.toISOString().slice(0, 10);
+  const monthStartStr = getParisDateISO(monthStart);
 
   const [todayResult, weekResult, monthResult, pendingResult, occupancyResult] = await db.batch([
     db.prepare(

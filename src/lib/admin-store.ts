@@ -1,4 +1,5 @@
 import { type StudioId, type GroupType, type PaymentMethod, type PaymentStatus, type EquipmentSelection, STUDIOS, EQUIPMENT, TIME_SLOTS, calculatePrice, calculateEquipmentPrice } from "./booking";
+import { formatDateISO } from "./utils";
 
 export type BookingStatus = "confirmed" | "cancelled" | "completed" | "no-show";
 
@@ -90,7 +91,7 @@ function generateId(): string {
 }
 
 function generateBookingRef(date: Date): string {
-  const datePart = date.toISOString().slice(0, 10).replace(/-/g, "");
+  const datePart = formatDateISO(date).replace(/-/g, "");
   const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `H3-${datePart}-${randomPart}`;
 }
@@ -143,7 +144,7 @@ function generateMockBookings(users: AdminUser[], daysBack: number, daysForward:
   
   for (let dayOffset = -daysBack; dayOffset <= daysForward; dayOffset++) {
     const date = new Date(today.getTime() + dayOffset * 24 * 60 * 60 * 1000);
-    const dateStr = date.toISOString().slice(0, 10);
+    const dateStr = formatDateISO(date);
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     const bookingsPerDay = isWeekend ? randomInt(6, 12) : randomInt(3, 8);
     
@@ -647,14 +648,14 @@ export function getStats(store: AdminStore): {
   recentActivity: AuditLog[];
 } {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = formatDateISO(now);
   
   const weekStart = new Date(now);
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  weekStart.setDate(now.getDate() - now.getDay() + 1);
+  const weekStartStr = formatDateISO(weekStart);
   
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthStartStr = monthStart.toISOString().slice(0, 10);
+  const monthStartStr = formatDateISO(monthStart);
   
   const todayBookings = store.bookings.filter(b => b.date === today && b.status !== "cancelled");
   const weekBookings = store.bookings.filter(b => b.date >= weekStartStr && b.date <= today && b.status !== "cancelled");

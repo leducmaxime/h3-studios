@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, formatPrice } from "@/lib/booking";
 import { type DbUser, type DbBooking } from "@/lib/db-types";
 
@@ -165,7 +166,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     );
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatDateISO(new Date());
   const upcomingBookings = bookings.filter(
     (b) => b.status === "confirmed" && b.date >= today,
   );

@@ -1,3 +1,5 @@
+import { formatDateISO, getParisDateISO } from "./utils";
+
 export type StudioId = "la-scene" | "le-podium";
 export type GroupType = "solo" | "duo" | "group";
 export type BookingFlow = "time-first" | "studio-first";
@@ -342,8 +344,7 @@ export function formatPrice(amount: number): string {
 }
 
 export function generateBookingRef(): string {
-  const now = new Date();
-  const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const datePart = getParisDateISO().replace(/-/g, "");
   const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `H3-${datePart}-${randomPart}`;
 }

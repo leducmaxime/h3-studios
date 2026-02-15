@@ -85,6 +85,10 @@ import { type BookingFilters, type AuditLogFilters } from "@/lib/db-types";
 
 import { ALL_TIME_SLOTS } from "@/lib/booking";
 import {
+  formatDateISO,
+  getParisDateISO,
+} from "@/lib/utils";
+import {
   getStoredReviews,
   getReviewsSyncData,
   syncGoogleReviews,
@@ -817,7 +821,7 @@ const app = defineApp([
       }
 
       // Default: today
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getParisDateISO();
       const bookings = await getBookingsByDate(env.DB, today);
       return jsonSuccess(bookings);
     } catch (error) {
@@ -1593,8 +1597,8 @@ const app = defineApp([
 
       const fromDate = new Date();
       fromDate.setDate(fromDate.getDate() - days);
-      const fromStr = fromDate.toISOString().slice(0, 10);
-      const toStr = new Date().toISOString().slice(0, 10);
+      const fromStr = getParisDateISO(fromDate);
+      const toStr = getParisDateISO();
 
       const bookings = await env.DB.prepare(
         "SELECT date, SUM(total_price) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date ORDER BY date ASC",
@@ -1629,8 +1633,8 @@ const app = defineApp([
 
       const fromDate = new Date();
       fromDate.setDate(fromDate.getDate() - days);
-      const fromStr = fromDate.toISOString().slice(0, 10);
-      const toStr = new Date().toISOString().slice(0, 10);
+      const fromStr = getParisDateISO(fromDate);
+      const toStr = getParisDateISO();
 
       const [occupancyResult, studioResult, paymentResult, upcomingResult, pendingPayResult] = await env.DB.batch([
         // Occupation by day of week (0=Sunday..6=Saturday)

@@ -26,6 +26,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, TIME_SLOTS, type StudioId } from "@/lib/booking";
 import { type DbBlockedSlot, type DbPricing, type DbEquipment } from "@/lib/db-types";
 
@@ -104,7 +105,7 @@ const GROUP_LABELS: Record<string, string> = {
 
 const INITIAL_BLOCK_FORM: BlockForm = {
   studioId: "",
-  date: new Date().toISOString().slice(0, 10),
+  date: formatDateISO(new Date()),
   startTime: "10:00",
   endTime: "00:00",
   reason: "",
@@ -375,7 +376,7 @@ export function AdminStudios() {
   // ─── Derived data ─────────────────────────────────────────────────────
 
   const studioEntries = Object.entries(STUDIOS) as [StudioId, typeof STUDIOS[StudioId]][];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatDateISO(new Date());
   const upcomingBlocks = blockedSlots
     .filter((s) => s.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date));

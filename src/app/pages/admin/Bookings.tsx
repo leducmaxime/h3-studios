@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
@@ -78,7 +79,7 @@ function formatDate(dateStr: string): string {
 
 function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: string } {
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = formatDateISO(today);
 
   switch (filter) {
     case "today":
@@ -86,11 +87,11 @@ function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: stri
     case "week": {
       const weekStart = new Date(today);
       weekStart.setDate(today.getDate() - today.getDay() + 1);
-      return { dateFrom: weekStart.toISOString().slice(0, 10) };
+      return { dateFrom: formatDateISO(weekStart) };
     }
     case "month": {
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { dateFrom: monthStart.toISOString().slice(0, 10) };
+      return { dateFrom: formatDateISO(monthStart) };
     }
     default:
       return {};

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { formatDateISO } from "@/lib/utils";
 import {
   type BookingState,
   type BookingFlow,
@@ -188,7 +189,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
   useEffect(() => {
     if (!state.selectedDate) return;
-    const dateStr = state.selectedDate.toISOString().slice(0, 10);
+    const dateStr = formatDateISO(state.selectedDate);
     fetch(`/api/availability?date=${dateStr}`)
       .then((res) => res.json())
       .then((data) => {
@@ -571,7 +572,7 @@ export function useBookingWithRouter(urlStep?: string) {
               bandName: booking.bandName,
             },
             studioId: booking.studioId,
-            date: booking.date.toISOString().slice(0, 10),
+            date: formatDateISO(booking.date),
             startTime: booking.startTime,
             endTime: booking.endTime,
             groupType: booking.groupType,
