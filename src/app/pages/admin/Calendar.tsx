@@ -28,6 +28,8 @@ interface CalendarBooking {
   id: string;
   booking_ref: string;
   user_id: string;
+  user_name?: string;
+  user_band_name?: string;
   studio_id: string;
   date: string;
   start_time: string;
@@ -327,7 +329,7 @@ export function AdminCalendar() {
                         style={style}
                       >
                         <p className="truncate text-sm font-medium">
-                          {booking.booking_ref}
+                          {booking.user_band_name || booking.user_name || booking.booking_ref}
                         </p>
                         <p className="truncate text-xs opacity-80">
                           {booking.start_time}–{booking.end_time} · {formatPrice(booking.total_price)}
@@ -388,14 +390,14 @@ export function AdminCalendar() {
                     className={`min-h-[100px] border-l border-zinc-800 p-1 ${isToday ? "bg-primary/5" : ""}`}
                   >
                     {dayBookings.slice(0, 4).map((booking) => (
-                      <button
-                        key={booking.id}
-                        type="button"
-                        onClick={() => setSelectedBooking(booking)}
-                        className="mb-1 block w-full truncate rounded bg-primary/20 px-1.5 py-0.5 text-left text-xs text-primary transition-colors hover:bg-primary/30"
-                      >
-                        {booking.start_time} {booking.booking_ref.slice(-4)}
-                      </button>
+                        <button
+                          key={booking.id}
+                          type="button"
+                          onClick={() => setSelectedBooking(booking)}
+                          className="mb-1 block w-full truncate rounded bg-primary/20 px-1.5 py-0.5 text-left text-xs text-primary transition-colors hover:bg-primary/30"
+                        >
+                          {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                        </button>
                     ))}
                     {dayBookings.length > 4 && (
                       <span className="text-xs text-zinc-500">+{dayBookings.length - 4} autres</span>
@@ -589,6 +591,17 @@ export function AdminCalendar() {
                 <div>
                   <p className="text-zinc-400">Studio</p>
                   <p className="font-medium">{studioName}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-lg bg-zinc-800/50 p-3">
+                <User className="h-4 w-4 shrink-0 text-zinc-400" />
+                <div>
+                  <p className="text-zinc-400">Client</p>
+                  <p className="font-medium">
+                    {b.user_name || "—"}
+                    {b.user_band_name && <span className="ml-1 text-zinc-500">({b.user_band_name})</span>}
+                  </p>
                 </div>
               </div>
 

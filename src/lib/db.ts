@@ -147,10 +147,14 @@ export async function updateBooking(
 export async function getBookingsByDate(
   db: D1Database,
   date: string,
-): Promise<DbBooking[]> {
+): Promise<(DbBooking & { user_name?: string; user_band_name?: string })[]> {
   const result = await db.prepare(
-    "SELECT * FROM bookings WHERE date = ? AND status != 'cancelled' ORDER BY start_time ASC",
-  ).bind(date).all<DbBooking>();
+    `SELECT b.*, u.name as user_name, u.band_name as user_band_name 
+     FROM bookings b
+     LEFT JOIN users u ON b.user_id = u.id
+     WHERE b.date = ? AND b.status != 'cancelled' 
+     ORDER BY b.start_time ASC`,
+  ).bind(date).all<DbBooking & { user_name?: string; user_band_name?: string }>();
   return result.results;
 }
 
@@ -158,10 +162,14 @@ export async function getBookingsByDateRange(
   db: D1Database,
   startDate: string,
   endDate: string,
-): Promise<DbBooking[]> {
+): Promise<(DbBooking & { user_name?: string; user_band_name?: string })[]> {
   const result = await db.prepare(
-    "SELECT * FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' ORDER BY date ASC, start_time ASC",
-  ).bind(startDate, endDate).all<DbBooking>();
+    `SELECT b.*, u.name as user_name, u.band_name as user_band_name 
+     FROM bookings b
+     LEFT JOIN users u ON b.user_id = u.id
+     WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled' 
+     ORDER BY b.date ASC, b.start_time ASC`,
+  ).bind(startDate, endDate).all<DbBooking & { user_name?: string; user_band_name?: string }>();
   return result.results;
 }
 
