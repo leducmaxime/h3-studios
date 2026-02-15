@@ -41,7 +41,7 @@ export async function fetchGoogleReviews(apiKey: string): Promise<{
   userRatingCount: number;
 }> {
   const response = await fetch(
-    `https://places.googleapis.com/v1/places/${PLACE_ID}`,
+    `https://places.googleapis.com/v1/places/${PLACE_ID}?languageCode=fr`,
     {
       headers: {
         "X-Goog-Api-Key": apiKey,
