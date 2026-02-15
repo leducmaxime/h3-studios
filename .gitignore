@@ -67,4 +67,4 @@ coverage
 .wrangler
 
 # Sisyphus session data
-.sisyphus/
+.sisyphus/public/videos/*.mp4
