@@ -13,12 +13,12 @@ const services = [
   {
     icon: Radio,
     title: "REPETITIONS",
-    description: "Environnement optimal pour travailler votre son pensé pour chacun !",
+    description: "Environnement optimal pour travailler votre son, pensé pour chacun !",
   },
   {
     icon: Calendar,
     title: "Privatisation",
-    description: "Réservez nos espaces pour vos événements privés",
+    description: "Réservez nos espaces pour vos événements privés, contactez-nous !",
   },
 ];
 
