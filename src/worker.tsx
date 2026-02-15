@@ -48,29 +48,28 @@ import {
 import {
   getBookings,
   getBookingById,
+  getBookingByRef,
   createBooking,
   updateBooking,
-  checkConflict,
   getBookingsByDate,
   getBookingsByDateRange,
-  addAuditLog,
-  getPricingForBooking,
-  getUsers,
-  getUserById,
+  checkConflict,
   createUser,
   updateUser,
+  getUsers,
+  getUserById,
   blockUser,
   mergeUsers,
   getPayments,
+  getPaymentsByBookingId,
+  addPayment,
   markPaymentPaid,
   refundPayment,
   getBlockedSlots,
   addBlockedSlot,
   removeBlockedSlot,
-  getAllSettings,
-  setSetting,
-  getAuditLogs,
   getPricing,
+  getPricingForBooking,
   updatePricing,
   getEquipment,
   updateEquipment,
@@ -79,6 +78,10 @@ import {
   updatePromoCode,
   getOpeningHours,
   updateOpeningHours,
+  getAllSettings,
+  setSetting,
+  addAuditLog,
+  getAuditLogs,
   getDashboardStats,
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters } from "@/lib/db-types";
@@ -387,6 +390,63 @@ const app = defineApp([
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
+    }
+  }),
+
+  route("/api/contact", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as {
+        name?: string;
+        email?: string;
+        subject?: string;
+        message?: string;
+      };
+
+      if (!body.name || !body.email || !body.subject || !body.message) {
+        return jsonError("Tous les champs sont obligatoires", 400);
+      }
+
+      if (!env.RESEND_API_KEY) {
+        console.error("RESEND_API_KEY not configured");
+        return jsonError("Service d'email non configuré", 500);
+      }
+
+      const emailHtml = `
+        <h2>Nouveau message de contact</h2>
+        <p><strong>Nom :</strong> ${body.name}</p>
+        <p><strong>Email :</strong> ${body.email}</p>
+        <p><strong>Objet :</strong> ${body.subject}</p>
+        <p><strong>Message :</strong></p>
+        <p>${body.message.replace(/\n/g, "<br>")}</p>
+      `;
+
+      const resendResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "H3 Studios <contact@h3-studios.fr>",
+          to: "contact@h3-studios.fr",
+          subject: `[Contact] ${body.subject}`,
+          html: emailHtml,
+          reply_to: body.email,
+        }),
+      });
+
+      if (!resendResponse.ok) {
+        const errorData = await resendResponse.text();
+        console.error("Resend API error:", errorData);
+        return jsonError("Échec de l'envoi du message", 500);
+      }
+
+      return jsonSuccess({ sent: true });
+    } catch (error) {
+      console.error("POST /api/contact error:", error);
+      return jsonError(error instanceof Error ? error.message : "Contact form failed", 500);
     }
   }),
 
@@ -799,6 +859,41 @@ const app = defineApp([
       console.error("PUT /api/admin/bookings/:id/no-show error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to mark no-show", 500);
     }
+  }),
+
+  route("/api/admin/bookings/:id/payments", async ({ request, params }) => {
+    if (request.method === "GET") {
+      try {
+        const payments = await getPaymentsByBookingId(env.DB, params.id);
+        return jsonSuccess(payments);
+      } catch (error) {
+        console.error("GET /api/admin/bookings/:id/payments error:", error);
+        return jsonError(error instanceof Error ? error.message : "Failed to fetch payments", 500);
+      }
+    }
+
+    if (request.method === "POST") {
+      try {
+        const body = await request.json() as { amount: number; method: string; status: string };
+        if (!body.amount || !body.method || !body.status) {
+          return jsonError("Champs obligatoires manquants: amount, method, status", 400);
+        }
+
+        const result = await addPayment(env.DB, {
+          booking_id: params.id,
+          amount: body.amount,
+          method: body.method,
+          status: body.status as any,
+        });
+
+        return jsonSuccess(result);
+      } catch (error) {
+        console.error("POST /api/admin/bookings/:id/payments error:", error);
+        return jsonError(error instanceof Error ? error.message : "Failed to add payment", 500);
+      }
+    }
+
+    return jsonError("Method not allowed", 405);
   }),
 
   route("/api/admin/calendar", async ({ request }) => {
@@ -1865,11 +1960,25 @@ const app = defineApp([
       }
 
       const session = event.data.object;
-      console.log("Payment confirmed:", {
-        sessionId: session.id,
-        bookingRefs: session.metadata.booking_refs,
-        email: session.customer_email || session.metadata.customer_email,
-      });
+      const bookingRefs = (session.metadata.booking_refs || "").split(",").filter(Boolean);
+      
+      console.log("Payment confirmed for refs:", bookingRefs);
+
+      for (const ref of bookingRefs) {
+        const booking = await getBookingByRef(env.DB, ref);
+        if (!booking) {
+          console.error(`Webhook error: Booking not found for ref ${ref}`);
+          continue;
+        }
+
+        await addPayment(env.DB, {
+          booking_id: booking.id,
+          amount: booking.total_price,
+          method: "card",
+          status: "paid",
+          paid_at: new Date().toISOString().replace("T", " ").slice(0, 19),
+        });
+      }
 
       return new Response("OK", { status: 200 });
     } catch (error) {

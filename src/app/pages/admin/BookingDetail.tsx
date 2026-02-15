@@ -13,6 +13,11 @@ import {
   AlertTriangle,
   Music,
   FileText,
+  Plus,
+  CheckCircle2,
+  Loader2,
+  Banknote,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,6 +31,15 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { generateInvoicePDF } from "@/lib/export";
@@ -66,8 +80,11 @@ interface BookingDetailProps {
 export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [booking, setBooking] = useState<DbBooking | null>(null);
   const [user, setUser] = useState<DbUser | null>(null);
-  const [payment, setPayment] = useState<DbPayment | null>(null);
+  const [payments, setPayments] = useState<DbPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [newPayment, setNewPayment] = useState({ amount: "", method: "cash" });
+  const [addingPayment, setAddingPayment] = useState(false);
 
   // Reschedule dialog
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -103,12 +120,19 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           setUser(userJson.data);
         }
 
-        // Fetch payment for this booking
-        const paymentRes = await fetch(`/api/admin/payments?booking_id=${json.data.id}&limit=1`);
-        const paymentJson = (await paymentRes.json()) as { success: boolean; data?: { data: DbPayment[] } };
-        if (paymentJson.success && paymentJson.data?.data?.length) {
-          setPayment(paymentJson.data.data[0]);
+        // Fetch payments for this booking
+        setLoadingPayments(true);
+        const paymentRes = await fetch(`/api/admin/bookings/${bookingId}/payments`);
+        const paymentJson = (await paymentRes.json()) as { success: boolean; data?: DbPayment[] };
+        if (paymentJson.success && paymentJson.data) {
+          setPayments(paymentJson.data);
         }
+        setLoadingPayments(false);
+
+        setNewPayment({
+          amount: (json.data.total_price / 100).toString(),
+          method: json.data.payment_method === "card" ? "card" : "cash"
+        });
       }
     } catch (error) {
       console.error("Failed to fetch booking:", error);
@@ -122,20 +146,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     fetchBooking();
   }, [fetchBooking]);
 
-  if (loading || !booking) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
-
-  const studio = STUDIOS[booking.studio_id as StudioId];
-  const equipmentList: Array<{ id: string; quantity: number; name?: string }> = booking.equipment
-    ? (() => { try { return JSON.parse(booking.equipment); } catch { return []; } })()
-    : [];
-
   const handleCancel = async () => {
+    if (!booking) return;
     setCancelLoading(true);
     try {
       const res = await fetch(`/api/admin/bookings/${booking.id}/cancel`, {
@@ -160,6 +172,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   };
 
   const handleNoShow = async () => {
+    if (!booking) return;
     setNoShowLoading(true);
     try {
       const res = await fetch(`/api/admin/bookings/${booking.id}/no-show`, {
@@ -183,6 +196,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   };
 
   const handleReschedule = async () => {
+    if (!booking) return;
     setRescheduleLoading(true);
     setRescheduleError("");
     try {
@@ -204,6 +218,62 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     } finally {
       setRescheduleLoading(false);
     }
+  };
+
+  const handleAddPayment = async () => {
+    if (!booking || !newPayment.amount) return;
+    const amountCents = Math.round(parseFloat(newPayment.amount) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) {
+      toast.error("Montant invalide");
+      return;
+    }
+
+    setAddingPayment(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amountCents,
+          method: newPayment.method,
+          status: "paid",
+        }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Paiement enregistré");
+        fetchBooking();
+      } else {
+        toast.error(json.error || "Erreur");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setAddingPayment(false);
+    }
+  };
+
+  if (loading || !booking) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  const studio = STUDIOS[booking.studio_id as StudioId];
+  const equipmentList: Array<{ id: string; quantity: number; name?: string }> = booking.equipment
+    ? (() => { try { return JSON.parse(booking.equipment); } catch { return []; } })()
+    : [];
+
+  const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+  const balance = booking.total_price - totalPaid;
+
+  const methodLabels: Record<string, string> = {
+    card: "Carte bancaire",
+    cash: "Espèces",
+    cheque: "Chèque",
+    transfer: "Virement",
   };
 
   return (
@@ -313,7 +383,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => generateInvoicePDF(booking, payment, user)}
+                  onClick={() => generateInvoicePDF(booking, payments[0] || null, user)}
                   className="border-primary/30 text-primary hover:bg-primary/10"
                 >
                   <FileText className="mr-2 h-4 w-4" />
@@ -329,6 +399,116 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 </p>
               </div>
             )}
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-semibold">Historique des paiements</h2>
+              {balance <= 0 ? (
+                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 px-3 py-1">Soldé</Badge>
+              ) : (
+                <Badge variant="outline" className="border-amber-500/50 text-amber-500 font-bold">Reste: {formatPrice(balance)}</Badge>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-zinc-800/20 border border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                    <CreditCard className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm font-medium text-zinc-300">Total session</span>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-xl text-primary">{formatPrice(booking.total_price)}</p>
+                  {totalPaid > 0 && totalPaid < booking.total_price && (
+                    <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">Payé: {formatPrice(totalPaid)}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                {loadingPayments ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+                  </div>
+                ) : payments.length === 0 ? (
+                  <div className="text-center py-8 px-4 rounded-lg border border-dashed border-zinc-800">
+                    <p className="text-sm text-zinc-500 italic">Aucun paiement enregistré pour le moment.</p>
+                  </div>
+                ) : (
+                  payments.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-800/40 p-4 transition-colors hover:bg-zinc-800/60">
+                      <div className="flex items-center gap-4">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${p.status === "paid" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
+                          {p.method === "card" ? <CreditCard className="h-5 w-5" /> : p.method === "cash" ? <Banknote className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                        </div>
+                        <div>
+                          <p className="font-bold text-zinc-100">{formatPrice(p.amount)}</p>
+                          <p className="text-xs text-zinc-500 font-medium">
+                            {methodLabels[p.method] || p.method} · {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant={p.status === "paid" ? "default" : "secondary"} className={`text-[10px] uppercase font-bold tracking-tight ${p.status === "paid" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}`}>
+                        {p.status === "paid" ? "Validé" : "En attente"}
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {balance > 0 && (
+                <div className="mt-8 pt-6 border-t border-zinc-800">
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 space-y-5">
+                    <div className="flex items-center gap-2">
+                      <Plus className="h-4 w-4 text-primary" />
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-primary">Nouvel encaissement</h3>
+                    </div>
+                    
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="amount" className="text-[10px] uppercase font-bold text-zinc-500 ml-1">Montant à ajouter (€)</Label>
+                        <Input
+                          id="amount"
+                          type="number"
+                          step="0.01"
+                          value={newPayment.amount}
+                          onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
+                          className="bg-zinc-900 border-zinc-700 h-11 text-base font-semibold focus:ring-primary"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="method" className="text-[10px] uppercase font-bold text-zinc-500 ml-1">Mode de règlement</Label>
+                        <Select
+                          value={newPayment.method}
+                          onValueChange={(v) => setNewPayment({ ...newPayment, method: v })}
+                        >
+                          <SelectTrigger className="bg-zinc-900 border-zinc-700 h-11 text-sm focus:ring-primary">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-zinc-800">
+                            <SelectItem value="card">Carte Bancaire</SelectItem>
+                            <SelectItem value="cash">Espèces</SelectItem>
+                            <SelectItem value="cheque">Chèque</SelectItem>
+                            <SelectItem value="transfer">Virement</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <Button
+                      onClick={handleAddPayment}
+                      className="w-full h-12 font-bold text-sm gap-2 shadow-lg shadow-primary/10"
+                      disabled={addingPayment}
+                    >
+                      {addingPayment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+                      Valider l&apos;encaissement
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -363,37 +543,45 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Paiement</h2>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Répétition</span>
-                <span>{formatPrice(booking.base_price)}</span>
-              </div>
-              {booking.equipment_price > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Options suppl.</span>
-                  <span>{formatPrice(booking.equipment_price)}</span>
-                </div>
+            <h2 className="mb-4 font-semibold">Actions globales</h2>
+            <div className="grid gap-3">
+              <Button
+                variant="outline"
+                className="justify-start border-primary/30 text-primary hover:bg-primary/10 h-12"
+                onClick={() => generateInvoicePDF(booking, payments[0] || null, user || ({} as DbUser))}
+                disabled={!user}
+              >
+                <FileText className="mr-3 h-5 w-5" />
+                Générer la facture PDF
+              </Button>
+              {booking.status === "confirmed" && (
+                <>
+                  <Button
+                    variant="outline"
+                    className="justify-start h-12 transition-all hover:bg-zinc-800"
+                    onClick={() => setRescheduleOpen(true)}
+                  >
+                    <RefreshCw className="mr-3 h-5 w-5 text-zinc-400" />
+                    Déplacer la session
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 h-12"
+                    onClick={() => setNoShowOpen(true)}
+                  >
+                    <AlertTriangle className="mr-3 h-5 w-5" />
+                    Marquer absent (No-show)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start border-red-500/30 text-red-400 hover:bg-red-500/10 h-12"
+                    onClick={() => setCancelOpen(true)}
+                  >
+                    <XCircle className="mr-3 h-5 w-5" />
+                    Annuler la réservation
+                  </Button>
+                </>
               )}
-              <div className="border-t border-zinc-800 pt-3">
-                <div className="flex items-center justify-between text-lg font-semibold">
-                  <span>Total</span>
-                  <span className="text-primary">{formatPrice(booking.total_price)}</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-zinc-400">Méthode</span>
-                <span className="flex items-center gap-1">
-                  <CreditCard className="h-4 w-4" />
-                  {booking.payment_method === "card" ? "Carte" : "Espèces"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Statut</span>
-                <span className={booking.payment_status === "paid" ? "text-green-500" : "text-yellow-500"}>
-                  {booking.payment_status === "paid" ? "Payé" : "En attente"}
-                </span>
-              </div>
             </div>
           </div>
         </div>
@@ -401,44 +589,46 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
       {/* Reschedule Dialog */}
       <Dialog open={rescheduleOpen} onOpenChange={(open) => { if (!open) { setRescheduleOpen(false); setRescheduleError(""); } }}>
-        <DialogContent>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
           <DialogHeader>
             <DialogTitle>Déplacer la réservation</DialogTitle>
             <DialogDescription>Choisissez une nouvelle date et un nouveau créneau.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <label className="mb-1 block text-sm text-zinc-400">Date</label>
-              <input
+              <Label className="mb-1 block text-zinc-400">Date</Label>
+              <Input
                 type="date"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 focus:border-primary focus:outline-none"
+                className="bg-zinc-800 border-zinc-700"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-zinc-400">Début</label>
-              <select
-                value={newStartTime}
-                onChange={(e) => setNewStartTime(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 focus:border-primary focus:outline-none"
-              >
-                {TIME_SLOTS.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+              <Label className="mb-1 block text-zinc-400">Début</Label>
+              <Select value={newStartTime} onValueChange={setNewStartTime}>
+                <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-800 border-zinc-700">
+                  {TIME_SLOTS.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="mb-1 block text-sm text-zinc-400">Fin</label>
-              <select
-                value={newEndTime}
-                onChange={(e) => setNewEndTime(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 focus:border-primary focus:outline-none"
-              >
-                {[...TIME_SLOTS.slice(1), "00:00"].map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+              <Label className="mb-1 block text-zinc-400">Fin</Label>
+              <Select value={newEndTime} onValueChange={setNewEndTime}>
+                <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-800 border-zinc-700">
+                  {[...TIME_SLOTS.slice(1), "00:00"].map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           {rescheduleError && <p className="text-sm text-red-400">{rescheduleError}</p>}
@@ -453,23 +643,21 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Cancel Dialog */}
       <Dialog open={cancelOpen} onOpenChange={(open) => { if (!open) { setCancelOpen(false); setCancelReason(""); } }}>
-        <DialogContent>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
           <DialogHeader>
             <DialogTitle>Annuler la réservation</DialogTitle>
             <DialogDescription>
               Confirmez l&apos;annulation de <strong>{booking.booking_ref}</strong>. Cette action est irréversible.
             </DialogDescription>
           </DialogHeader>
-          <div>
-            <label className="mb-1.5 block text-sm text-zinc-400">Raison (optionnel)</label>
-            <input
-              type="text"
+          <div className="space-y-2">
+            <Label className="text-zinc-400">Raison (optionnel)</Label>
+            <Input
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               placeholder="Raison de l'annulation..."
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              className="bg-zinc-800 border-zinc-700"
             />
           </div>
           <DialogFooter>
@@ -483,9 +671,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         </DialogContent>
       </Dialog>
 
-      {/* No-Show Dialog */}
       <Dialog open={noShowOpen} onOpenChange={(open) => { if (!open) setNoShowOpen(false); }}>
-        <DialogContent>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
           <DialogHeader>
             <DialogTitle>Marquer comme no-show</DialogTitle>
             <DialogDescription>

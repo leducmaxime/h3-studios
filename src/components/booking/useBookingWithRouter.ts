@@ -580,7 +580,7 @@ export function useBookingWithRouter(urlStep?: string) {
             equipmentPrice: booking.equipmentPrice,
             price: booking.price,
             paymentMethod: method,
-            paymentStatus: method === "card" ? "pending_payment" : "pay-on-site",
+            paymentStatus: method === "card" ? "pending" : "pay-on-site",
             promoCode: booking.promoCode,
             promoDiscount: booking.promoDiscount,
           }),

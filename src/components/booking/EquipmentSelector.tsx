@@ -87,9 +87,10 @@ export function EquipmentSelector({
               }
             } else {
               const unitPrice = eq.sessionPricing[0];
+              const isDegressive = eq.id === "cymbal";
               priceDisplay = quantity === 0
-                ? `${unitPrice}€/séance`
-                : `${subtotal}€/séance`;
+                ? `${unitPrice}€/séance${isDegressive ? " (tarif dégressif)" : ""}`
+                : `${subtotal}€/séance${isDegressive && quantity > 0 ? " (tarif dégressif)" : ""}`;
             }
           } else {
             subtotal = eq.pricePerHour * quantity * durationHours;

@@ -26,7 +26,7 @@ export interface Equipment {
 }
 
 export const EQUIPMENT: Record<EquipmentId, Equipment> = {
-  cymbal: { id: "cymbal", name: "2 Cymbales Crash", pricePerHour: 0, maxPerSession: 1, pricingType: "session", sessionPricing: [3] },
+  cymbal: { id: "cymbal", name: "Cymbale Crash", pricePerHour: 0, maxPerSession: 2, pricingType: "session", sessionPricing: [3, 5] },
   mic: { id: "mic", name: "Micro supplémentaire", pricePerHour: 2, maxPerSession: 4, pricingType: "session", sessionPricing: [3, 5, 6, 6] }, // 4ème offert (même prix que 3)
   guitar: { id: "guitar", name: "Guitare électrique", pricePerHour: 0, maxPerSession: 3, pricingType: "session", sessionPricing: [3, 6, 9] },
   bass: { id: "bass", name: "Basse", pricePerHour: 0, maxPerSession: 1, pricingType: "session", sessionPricing: [3] },

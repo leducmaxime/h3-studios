@@ -10,10 +10,27 @@ import {
   Music,
   CreditCard,
   Plus,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Banknote,
+  Wallet,
+  Loader2,
 } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -21,9 +38,19 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { STUDIOS, formatPrice, ALL_TIME_SLOTS, type StudioId } from "@/lib/booking";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
+
+interface DbPayment {
+  id: string;
+  amount: number;
+  method: string;
+  status: string;
+  paid_at: string | null;
+  created_at: string;
+}
 
 interface CalendarBooking {
   id: string;
@@ -184,6 +211,64 @@ export function AdminCalendar() {
   });
   const [view, setView] = useState<ViewType>("day");
   const [selectedBooking, setSelectedBooking] = useState<CalendarBooking | null>(null);
+  const [bookingPayments, setBookingPayments] = useState<DbPayment[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [newPayment, setNewPayment] = useState({ amount: "", method: "cash" });
+
+  useEffect(() => {
+    if (selectedBooking) {
+      setLoadingPayments(true);
+      fetch(`/api/admin/bookings/${selectedBooking.id}/payments`)
+        .then((res) => res.json())
+        .then((json: any) => {
+          if (json.success) setBookingPayments(json.data);
+        })
+        .catch(console.error)
+        .finally(() => setLoadingPayments(false));
+      
+      setNewPayment({ 
+        amount: ((selectedBooking.total_price) / 100).toString(), 
+        method: selectedBooking.payment_method === "card" ? "card" : "cash" 
+      });
+    } else {
+      setBookingPayments([]);
+    }
+  }, [selectedBooking]);
+
+  const handleAddPayment = async () => {
+    if (!selectedBooking || !newPayment.amount) return;
+    const amountCents = Math.round(parseFloat(newPayment.amount) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) {
+      toast.error("Montant invalide");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amountCents,
+          method: newPayment.method,
+          status: "paid", // Direct payments from admin are usually already paid
+        }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Paiement ajouté");
+        // Refresh payments
+        const pRes = await fetch(`/api/admin/bookings/${selectedBooking.id}/payments`);
+        const pJson = await pRes.json() as any;
+        if (pJson.success) setBookingPayments(pJson.data);
+        // Refresh booking status in the list
+        loadBookings();
+      } else {
+        toast.error(json.error || "Erreur lors de l'ajout");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    }
+  };
 
   // ─── Derived dates ──────────────────────────────────────────────────────
 
@@ -572,16 +657,31 @@ export function AdminCalendar() {
     const b = selectedBooking;
     const studioName = b.studio_id === "la-scene" ? "La Scène" : b.studio_id === "le-podium" ? "Le Podium" : b.studio_id;
 
+    const totalPaid = bookingPayments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+    const balance = b.total_price - totalPaid;
+
+    const methodLabels: Record<string, string> = {
+      card: "Carte bancaire",
+      cash: "Espèces",
+      cheque: "Chèque",
+      transfer: "Virement",
+    };
+
     return (
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
-        <DialogContent className="border-zinc-800 bg-zinc-900">
+        <DialogContent className="max-w-2xl border-zinc-800 bg-zinc-900 text-zinc-100">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-primary" />
-              Réservation {b.booking_ref}
+            <DialogTitle className="flex items-center justify-between gap-2 text-xl font-bold">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-6 w-6 text-primary" />
+                {b.user_band_name || b.user_name || b.booking_ref}
+              </div>
+              <Badge className={`${STATUS_COLORS[b.status] || ""} border px-3 py-1 text-xs uppercase tracking-wider`}>
+                {STATUS_LABELS[b.status] || b.status}
+              </Badge>
             </DialogTitle>
-            <DialogDescription>
-              {new Date(b.date + "T00:00:00").toLocaleDateString("fr-FR", {
+            <DialogDescription className="text-zinc-400">
+              Réf: {b.booking_ref} · {new Date(b.date + "T00:00:00").toLocaleDateString("fr-FR", {
                 weekday: "long",
                 day: "numeric",
                 month: "long",
@@ -590,121 +690,170 @@ export function AdminCalendar() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Status badge */}
-            <div>
-              <Badge
-                className={`${STATUS_COLORS[b.status] || ""} border`}
-              >
-                {STATUS_LABELS[b.status] || b.status}
-              </Badge>
-            </div>
-
-            {/* Details grid */}
-            <div className="grid gap-3 text-sm">
-              <div className="flex items-center gap-3 rounded-lg bg-zinc-800/50 p-3">
-                <Clock className="h-4 w-4 shrink-0 text-zinc-400" />
-                <div>
-                  <p className="text-zinc-400">Horaire</p>
-                  <p className="font-medium">{b.start_time} – {b.end_time}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-lg bg-zinc-800/50 p-3">
-                <Music className="h-4 w-4 shrink-0 text-zinc-400" />
-                <div>
-                  <p className="text-zinc-400">Studio</p>
-                  <p className="font-medium">{studioName}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-lg bg-zinc-800/50 p-3">
-                <User className="h-4 w-4 shrink-0 text-zinc-400" />
-                <div>
-                  <p className="text-zinc-400">Client</p>
-                  <p className="font-medium">
-                    {b.user_name || "—"}
-                    {b.user_band_name && <span className="ml-1 text-zinc-500">({b.user_band_name})</span>}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-lg bg-zinc-800/50 p-3">
-                <User className="h-4 w-4 shrink-0 text-zinc-400" />
-                <div>
-                  <p className="text-zinc-400">Type</p>
-                  <p className="font-medium">{GROUP_LABELS[b.group_type] || b.group_type}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-lg bg-zinc-800/50 p-3">
-                <CreditCard className="h-4 w-4 shrink-0 text-zinc-400" />
-                <div>
-                  <p className="text-zinc-400">Tarif</p>
-                  <p className="font-medium">
-                    {formatPrice(b.total_price)}
-                    {b.equipment_price > 0 && (
-                      <span className="ml-1 text-xs text-zinc-500">(dont {formatPrice(b.equipment_price)} équipement)</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              {hasOptions(b.equipment) && (
-                <div className="flex items-start gap-3 rounded-lg bg-primary/5 border border-primary/20 p-3">
-                  <Plus className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+          <div className="grid gap-6 py-4 md:grid-cols-2">
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Détails de la session</h4>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-3 rounded-lg bg-zinc-800 p-3">
+                  <Clock className="h-4 w-4 shrink-0 text-primary" />
                   <div>
-                    <p className="text-xs font-bold text-primary uppercase tracking-wider">Options incluses</p>
-                    <div className="mt-1 text-sm text-zinc-300">
-                      {JSON.parse(b.equipment!).map((eq: any, i: number) => (
-                        <span key={eq.id}>
-                          {eq.quantity}× {eq.id}{i < JSON.parse(b.equipment!).length - 1 ? ", " : ""}
-                        </span>
-                      ))}
+                    <p className="text-[10px] uppercase text-zinc-500 font-bold">Horaire</p>
+                    <p className="text-sm font-medium">{b.start_time} – {b.end_time}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-lg bg-zinc-800 p-3">
+                  <Music className="h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="text-[10px] uppercase text-zinc-500 font-bold">Studio</p>
+                    <p className="text-sm font-medium">{studioName}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-lg bg-zinc-800 p-3">
+                  <User className="h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="text-[10px] uppercase text-zinc-500 font-bold">Client</p>
+                    <p className="text-sm font-medium">
+                      {b.user_name || "—"}
+                      {b.user_band_name && <span className="ml-1 text-zinc-400">({b.user_band_name})</span>}
+                    </p>
+                  </div>
+                </div>
+
+              <div className="flex items-center gap-3 rounded-lg bg-zinc-800 p-3">
+                <CreditCard className="h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <p className="text-[10px] uppercase text-zinc-500 font-bold">Total à payer</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-sm font-bold text-primary">{formatPrice(b.total_price)}</p>
+                    {totalPaid > 0 && totalPaid < b.total_price && (
+                      <p className="text-[10px] text-emerald-500 font-medium">(Déjà payé: {formatPrice(totalPaid)})</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+                {hasOptions(b.equipment) && (
+                  <div className="flex items-start gap-3 rounded-lg bg-primary/5 border border-primary/20 p-3">
+                    <Plus className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                    <div>
+                      <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Options</p>
+                      <div className="mt-1 text-xs text-zinc-300">
+                        {JSON.parse(b.equipment!).map((eq: any, i: number) => (
+                          <div key={eq.id}>
+                            {eq.quantity}× {eq.id}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
+                )}
+              </div>
+
+              {b.notes && (
+                <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-3 text-sm italic text-zinc-400">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500 not-italic">Notes</p>
+                  {b.notes}
                 </div>
               )}
             </div>
 
-            {/* Payment info */}
-            {b.payment_status && (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-zinc-500">Paiement :</span>
-                <Badge variant="outline" className="text-xs">
-                  {b.payment_method === "card" ? "Carte" : b.payment_method === "cash" ? "Espèces" : b.payment_method}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={`text-xs ${
-                    b.payment_status === "paid"
-                      ? "border-emerald-500/30 text-emerald-400"
-                      : b.payment_status === "pending"
-                        ? "border-amber-500/30 text-amber-400"
-                        : "border-zinc-500/30 text-zinc-400"
-                  }`}
-                >
-                  {b.payment_status === "paid" ? "Payé" : b.payment_status === "pending" ? "En attente" : b.payment_status}
-                </Badge>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Paiements</h4>
+                {balance <= 0 ? (
+                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50">Soldé</Badge>
+                ) : (
+                  <Badge variant="outline" className="border-amber-500/50 text-amber-500">Reste: {formatPrice(balance)}</Badge>
+                )}
               </div>
-            )}
 
-            {/* Notes */}
-            {b.notes && (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-3 text-sm">
-                <p className="mb-1 text-xs text-zinc-500">Notes</p>
-                <p className="text-zinc-300">{b.notes}</p>
+              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                {loadingPayments ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
+                  </div>
+                ) : bookingPayments.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-zinc-600 italic">Aucun paiement enregistré</p>
+                ) : (
+                  bookingPayments.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-800/40 p-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        {p.status === "paid" ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Clock className="h-3 w-3 text-amber-500" />}
+                        <div>
+                          <p className="font-medium text-zinc-200">{formatPrice(p.amount)} · {methodLabels[p.method] || p.method}</p>
+                          <p className="text-[10px] text-zinc-500">{new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="text-[9px] h-4">
+                        {p.status === "paid" ? "Payé" : "Attente"}
+                      </Badge>
+                    </div>
+                  ))
+                )}
               </div>
-            )}
 
-            {/* Link to full details */}
+              {balance > 0 && (
+                <div className="rounded-lg border border-zinc-800 bg-zinc-800/20 p-3 space-y-3">
+                  <p className="text-[10px] font-bold uppercase text-zinc-500">Ajouter un paiement</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="amount" className="text-[9px] text-zinc-500 uppercase">Montant (€)</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        step="0.01"
+                        value={newPayment.amount}
+                        onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
+                        className="h-8 text-xs bg-zinc-900 border-zinc-700"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="method" className="text-[9px] text-zinc-500 uppercase">Méthode</Label>
+                      <Select
+                        value={newPayment.method}
+                        onValueChange={(v) => setNewPayment({ ...newPayment, method: v })}
+                      >
+                        <SelectTrigger className="h-8 text-xs bg-zinc-900 border-zinc-700">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-700">
+                          <SelectItem value="card">Carte Bancaire</SelectItem>
+                          <SelectItem value="cash">Espèces</SelectItem>
+                          <SelectItem value="cheque">Chèque</SelectItem>
+                          <SelectItem value="transfer">Virement</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleAddPayment}
+                    className="w-full h-8 text-xs gap-2"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Enregistrer le paiement
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-2 flex gap-3 border-t border-zinc-800 pt-6">
             <a
               href={`/admin/bookings/${b.id}`}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary/10 px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700"
             >
-              Voir les détails complets
+              Détails complets
               <ChevronRight className="h-4 w-4" />
             </a>
+            <Button
+              variant="outline"
+              onClick={() => setSelectedBooking(null)}
+              className="flex-1 bg-transparent border-zinc-700 text-zinc-400 hover:text-zinc-100"
+            >
+              Fermer
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

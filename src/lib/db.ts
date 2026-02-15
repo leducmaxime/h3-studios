@@ -394,11 +394,64 @@ export async function getPayments(
   return { data: result.results, total, page, limit };
 }
 
+export async function getPaymentsByBookingId(
+  db: D1Database,
+  bookingId: string,
+): Promise<DbPayment[]> {
+  const result = await db.prepare("SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at ASC")
+    .bind(bookingId)
+    .all<DbPayment>();
+  return result.results;
+}
+
 export async function getPaymentByBookingId(
   db: D1Database,
   bookingId: string,
 ): Promise<DbPayment | null> {
-  return db.prepare("SELECT * FROM payments WHERE booking_id = ?").bind(bookingId).first<DbPayment>();
+  return db.prepare("SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at DESC").bind(bookingId).first<DbPayment>();
+}
+
+export async function addPayment(
+  db: D1Database,
+  data: {
+    booking_id: string;
+    amount: number;
+    method: string;
+    status: DbPaymentStatus;
+    paid_at?: string | null;
+  }
+): Promise<{ success: boolean; id: string }> {
+  const id = generateId();
+  const timestamp = now();
+  
+  await db.prepare(
+    `INSERT INTO payments (id, booking_id, amount, method, status, refunded_amount, paid_at, created_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?)`
+  ).bind(
+    id, 
+    data.booking_id, 
+    data.amount, 
+    data.method, 
+    data.status, 
+    data.paid_at || (data.status === "paid" ? timestamp : null),
+    timestamp
+  ).run();
+
+  if (data.status === "paid") {
+    const payments = await getPaymentsByBookingId(db, data.booking_id);
+    const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+    
+    const booking = await db.prepare("SELECT total_price FROM bookings WHERE id = ?").bind(data.booking_id).first<{ total_price: number }>();
+    if (booking && totalPaid >= booking.total_price) {
+      await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
+        .bind(timestamp, data.booking_id)
+        .run();
+    }
+  }
+
+  await addAuditLog(db, "payment", id, "create", { bookingId: data.booking_id, amount: data.amount, method: data.method });
+
+  return { success: true, id };
 }
 
 export async function markPaymentPaid(

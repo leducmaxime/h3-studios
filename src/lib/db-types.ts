@@ -45,7 +45,7 @@ export interface DbUser {
 // --- Bookings ---
 
 export type BookingStatus = "confirmed" | "cancelled" | "completed" | "no-show";
-export type PaymentMethod = "card" | "cash";
+export type PaymentMethod = "card" | "cash" | "cheque" | "transfer";
 export type PaymentStatus = "pending" | "paid" | "pay-on-site";
 export type GroupType = "solo" | "duo" | "group";
 export type StudioId = "la-scene" | "le-podium";

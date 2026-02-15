@@ -104,7 +104,10 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
       </div>
 
       <p className="text-center text-sm text-white/40">
-        Des questions ? Contactez-nous à contact@h3-studios.fr
+        Des questions,{" "}
+        <a href="/a-propos#contact" className="text-primary hover:underline">
+          contactez-nous
+        </a>
       </p>
     </div>
   );

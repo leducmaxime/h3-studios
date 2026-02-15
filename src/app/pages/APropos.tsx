@@ -13,19 +13,37 @@ function ContactForm() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (error) setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
     
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    setSubmitted(true);
-    setIsSubmitting(false);
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json() as { success?: boolean; error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error || "Échec de l'envoi");
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'envoi du message");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -39,6 +57,7 @@ function ContactForm() {
         <button
           onClick={() => {
             setSubmitted(false);
+            setError(null);
             setFormData({ name: "", email: "", subject: "", message: "" });
           }}
           className="mt-2 text-sm text-white/50 hover:text-primary"
@@ -122,6 +141,12 @@ function ContactForm() {
         />
       </div>
 
+      {error && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
       <button
         type="submit"
         disabled={isSubmitting}
@@ -165,11 +190,14 @@ export function APropos() {
 
       <div className="w-full max-w-5xl px-4 space-y-6">
         <div className={`overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
-          <div className="relative aspect-[21/9]">
-            <img
-              src="/images/about/bandeau.jpg"
-              alt="H3 Studios"
-              className="h-full w-full object-cover"
+          <div className="relative aspect-[21/9] overflow-hidden">
+            <video
+              src="/videos/hero-about.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="h-full w-full object-cover grayscale contrast-[1.4] brightness-[0.9]"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           </div>
@@ -214,7 +242,11 @@ export function APropos() {
           </div>
         </div>
 
-        <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "500ms" }}>
+        <div
+          id="contact"
+          className={`rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+          style={{ transitionDelay: "500ms" }}
+        >
           <h2 className="mb-6 text-xl font-bold text-primary">Contact</h2>
           <div className="mb-6 grid gap-6 sm:grid-cols-2">
             <a
@@ -244,7 +276,7 @@ export function APropos() {
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <a
-                href="https://maps.app.goo.gl/STjxqLmfUnL6mEMY9"
+                href="https://www.google.com/maps/place/H3+Studios/@48.7705935,2.5030795,17z/data=!3m1!4b1!4m6!3m5!1s0x47e60b37cb1ad28b:0x40d26627b3082428!8m2!3d48.7705935!4d2.5056598!16s%2Fg%2F11w8gqst45"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-start gap-3 text-white/70 transition-colors hover:text-primary"
@@ -264,7 +296,7 @@ export function APropos() {
             
             <div className="overflow-hidden rounded-xl">
               <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2638.5466!2d2.5197!3d48.7714!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47e5e1a1b1b1b1b1%3A0x1234567890abcdef!2s3%20Rue%20de%20la%20Grande%20Ceinture%2C%2094370%20Sucy-en-Brie!5e0!3m2!1sfr!2sfr!4v1700000000000"
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2638.6015!2d2.5030795!3d48.7705935!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47e60b37cb1ad28b%3A0x40d26627b3082428!2sH3%20Studios!5e0!3m2!1sfr!2sfr!4v1739634000000"
                 width="100%"
                 height="200"
                 style={{ border: 0 }}
