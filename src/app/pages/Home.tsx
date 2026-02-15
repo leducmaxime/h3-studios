@@ -13,7 +13,7 @@ const services = [
   {
     icon: Radio,
     title: "REPETITIONS",
-    description: "Environnement optimal pour travailler votre son",
+    description: "Environnement optimal pour travailler votre son pensé pour chacun !",
   },
   {
     icon: Calendar,
