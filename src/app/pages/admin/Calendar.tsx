@@ -9,6 +9,7 @@ import {
   User,
   Music,
   CreditCard,
+  Plus,
 } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,6 +40,7 @@ interface CalendarBooking {
   base_price: number;
   equipment_price: number;
   total_price: number;
+  equipment: string | null;
   payment_method: string | null;
   payment_status: string | null;
   notes: string | null;
@@ -159,6 +161,16 @@ function getOccupancyColor(rate: number): { bg: string; text: string } {
   if (rate < 0.5) return { bg: "bg-emerald-500/15", text: "text-emerald-400" };
   if (rate <= 0.8) return { bg: "bg-amber-500/15", text: "text-amber-400" };
   return { bg: "bg-red-500/15", text: "text-red-400" };
+}
+
+function hasOptions(equipment: string | null): boolean {
+  if (!equipment) return false;
+  try {
+    const parsed = JSON.parse(equipment);
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -328,9 +340,16 @@ export function AdminCalendar() {
                         className={`absolute left-1 right-1 overflow-hidden rounded-lg border p-2 text-left transition-all hover:scale-[1.02] hover:shadow-lg ${STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed}`}
                         style={style}
                       >
-                        <p className="truncate text-sm font-medium">
-                          {booking.user_band_name || booking.user_name || booking.booking_ref}
-                        </p>
+                        <div className="flex items-center gap-1 overflow-hidden">
+                          <p className="truncate text-sm font-medium">
+                            {booking.user_band_name || booking.user_name || booking.booking_ref}
+                          </p>
+                          {hasOptions(booking.equipment) && (
+                            <span title="Options incluses" className="shrink-0 rounded bg-primary/20 p-0.5 text-[10px] font-bold text-primary">
+                              +
+                            </span>
+                          )}
+                        </div>
                         <p className="truncate text-xs opacity-80">
                           {booking.start_time}–{booking.end_time} · {formatPrice(booking.total_price)}
                         </p>
@@ -394,9 +413,14 @@ export function AdminCalendar() {
                           key={booking.id}
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
-                          className="mb-1 block w-full truncate rounded bg-primary/20 px-1.5 py-0.5 text-left text-xs text-primary transition-colors hover:bg-primary/30"
+                          className="mb-1 flex w-full items-center gap-1 overflow-hidden rounded bg-primary/20 px-1.5 py-0.5 text-left text-xs text-primary transition-colors hover:bg-primary/30"
                         >
-                          {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                          <span className="truncate">
+                            {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                          </span>
+                          {hasOptions(booking.equipment) && (
+                            <span className="shrink-0 text-[10px] font-bold">+</span>
+                          )}
                         </button>
                     ))}
                     {dayBookings.length > 4 && (
@@ -625,6 +649,22 @@ export function AdminCalendar() {
                   </p>
                 </div>
               </div>
+
+              {hasOptions(b.equipment) && (
+                <div className="flex items-start gap-3 rounded-lg bg-primary/5 border border-primary/20 p-3">
+                  <Plus className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-primary uppercase tracking-wider">Options incluses</p>
+                    <div className="mt-1 text-sm text-zinc-300">
+                      {JSON.parse(b.equipment!).map((eq: any, i: number) => (
+                        <span key={eq.id}>
+                          {eq.quantity}× {eq.id}{i < JSON.parse(b.equipment!).length - 1 ? ", " : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Payment info */}
