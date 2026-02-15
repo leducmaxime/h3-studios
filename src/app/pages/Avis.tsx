@@ -9,6 +9,7 @@ interface Review {
   author_name: string;
   rating: number;
   text: string | null;
+  text_original: string | null;
   relative_time: string | null;
 }
 
@@ -25,6 +26,7 @@ const FALLBACK_REVIEWS: Review[] = [
     author_name: "Mardochée D.",
     rating: 5,
     text: "Le studio est très bien situé, l'équipement est de qualité, et c'est toujours un réel plaisir de répéter au Studio H3. En plus, le gérant et toute l'équipe sont géniaux : accueillants, professionnels et à l'écoute. Je recommande vivement 🙏🏽",
+    text_original: null,
     relative_time: "Il y a 1 mois",
   },
   {
@@ -32,6 +34,7 @@ const FALLBACK_REVIEWS: Review[] = [
     author_name: "Gams G.",
     rating: 5,
     text: "Studio de répétition très très sympa comme ses gérants. Toujours disponible et dont le prix est vraiment très intéressant par rapport aux autres studios. Mille merci à eux et je recommande à tous les musiciens, groupes, chorales...",
+    text_original: null,
     relative_time: "Il y a 1 mois",
   },
   {
@@ -39,6 +42,7 @@ const FALLBACK_REVIEWS: Review[] = [
     author_name: "Pascal G.",
     rating: 5,
     text: "Un super studio de répétition. Le grand studio a une très bonne acoustique, et Marcel le gérant en plus d'être adorable et à l'écoute de nos besoins, fait toujours des balances impeccables !",
+    text_original: null,
     relative_time: "Il y a 1 mois",
   },
   {
@@ -46,6 +50,7 @@ const FALLBACK_REVIEWS: Review[] = [
     author_name: "Fab F.",
     rating: 5,
     text: "Bien situé, facile d'accès (à deux pas de la station RER A), H3 Studios offre des espaces confortables avec équipements pro pour des séances de répétitions ou d'enregistrement agréables. Rapport qualité prix au top !",
+    text_original: null,
     relative_time: "Il y a 1 mois",
   },
   {
@@ -53,6 +58,7 @@ const FALLBACK_REVIEWS: Review[] = [
     author_name: "Linda S.",
     rating: 5,
     text: "Toujours un plaisir de venir répéter chez H3 Studios ! L'équipe est au top, toujours de très bons conseils, dans une ambiance à la fois pro et super conviviale. On s'y sent comme en famille. Merci Marcel !",
+    text_original: null,
     relative_time: "Il y a 1 mois",
   },
 ];
@@ -91,6 +97,7 @@ export function Avis() {
             author_name: r.author_name,
             rating: r.rating,
             text: r.text,
+            text_original: r.text_original,
             relative_time: r.relative_time,
           }));
           if (apiReviews.length > 0) {
@@ -151,7 +158,7 @@ export function Avis() {
               </div>
               <StarRating rating={review.rating} />
               <p className="text-sm text-white/80 leading-relaxed">
-                "{review.text}"
+                "{review.text_original || review.text}"
               </p>
             </div>
           ))}
