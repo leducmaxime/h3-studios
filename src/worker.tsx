@@ -1725,7 +1725,7 @@ const app = defineApp([
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
 
     try {
-      const apiKey = env.GOOGLE_PLACES_API_KEY;
+      const apiKey = (env as any).GOOGLE_PLACES_API_KEY;
       if (!apiKey) {
         return jsonError("GOOGLE_PLACES_API_KEY not configured", 500);
       }
@@ -1740,6 +1740,7 @@ const app = defineApp([
         success: true,
         reviewsCount: result.reviewsCount,
         averageRating: result.averageRating,
+        totalReviews: result.totalReviews,
       });
     } catch (error) {
       console.error("POST /api/reviews/sync error:", error);
@@ -1753,7 +1754,7 @@ const app = defineApp([
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
 
     try {
-      const apiKey = env.GOOGLE_PLACES_API_KEY;
+      const apiKey = (env as any).GOOGLE_PLACES_API_KEY;
       if (!apiKey) {
         return jsonError("GOOGLE_PLACES_API_KEY not configured", 500);
       }
@@ -1773,6 +1774,7 @@ const app = defineApp([
         success: true,
         reviewsCount: result.reviewsCount,
         averageRating: result.averageRating,
+        totalReviews: result.totalReviews,
       });
     } catch (error) {
       console.error("POST /api/admin/reviews/sync error:", error);
@@ -1826,7 +1828,7 @@ const app = defineApp([
 async function handleScheduled(controller: ScheduledController) {
   console.log(`[Cron] Triggered: ${controller.cron} at ${new Date().toISOString()}`);
 
-  const apiKey = env.GOOGLE_PLACES_API_KEY;
+  const apiKey = (env as any).GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
     console.error("[Cron] GOOGLE_PLACES_API_KEY not configured");
     return;

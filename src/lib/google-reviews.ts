@@ -38,13 +38,14 @@ const PLACE_ID = "ChIJi9IayzcL5kcRKCQIsydm0kA";
 export async function fetchGoogleReviews(apiKey: string): Promise<{
   reviews: GoogleApiReview[];
   rating: number;
+  userRatingCount: number;
 }> {
   const response = await fetch(
     `https://places.googleapis.com/v1/places/${PLACE_ID}`,
     {
       headers: {
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "reviews,rating",
+        "X-Goog-FieldMask": "reviews,rating,userRatingCount",
       },
     }
   );
@@ -53,10 +54,11 @@ export async function fetchGoogleReviews(apiKey: string): Promise<{
     throw new Error(`Google API error: ${response.status}`);
   }
 
-  const data = await response.json() as { reviews?: GoogleApiReview[]; rating?: number };
+  const data = await response.json() as { reviews?: GoogleApiReview[]; rating?: number; userRatingCount?: number };
   return {
     reviews: data.reviews || [],
     rating: data.rating || 0,
+    userRatingCount: data.userRatingCount || 0,
   };
 }
 
@@ -85,7 +87,8 @@ export async function getReviewsSyncData(db: D1Database): Promise<GoogleReviewsS
 export async function syncReviewsToDatabase(
   db: D1Database,
   reviews: GoogleApiReview[],
-  averageRating: number
+  averageRating: number,
+  totalReviews: number
 ): Promise<void> {
   await db.batch([
     db.prepare("DELETE FROM google_reviews"),
@@ -119,7 +122,7 @@ export async function syncReviewsToDatabase(
       .bind(
         JSON.stringify({
           lastSync: new Date().toISOString(),
-          totalReviews: reviews.length,
+          totalReviews,
           averageRating,
         } as GoogleReviewsSyncData)
       ),
@@ -129,26 +132,24 @@ export async function syncReviewsToDatabase(
 export async function syncGoogleReviews(
   db: D1Database,
   apiKey: string
-): Promise<{ success: boolean; reviewsCount: number; averageRating: number; error?: string }> {
+): Promise<{ success: boolean; reviewsCount: number; averageRating: number; totalReviews: number; error?: string }> {
   try {
-    const { reviews, rating } = await fetchGoogleReviews(apiKey);
+    const { reviews, rating, userRatingCount } = await fetchGoogleReviews(apiKey);
 
-    if (reviews.length === 0) {
-      return { success: false, reviewsCount: 0, averageRating: 0, error: "No reviews found" };
-    }
-
-    await syncReviewsToDatabase(db, reviews, rating);
+    await syncReviewsToDatabase(db, reviews, rating, userRatingCount || reviews.length);
 
     return {
       success: true,
       reviewsCount: reviews.length,
       averageRating: rating,
+      totalReviews: userRatingCount || reviews.length,
     };
   } catch (error) {
     return {
       success: false,
       reviewsCount: 0,
       averageRating: 0,
+      totalReviews: 0,
       error: error instanceof Error ? error.message : "Unknown error",
     };
   }

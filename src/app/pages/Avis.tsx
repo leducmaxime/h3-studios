@@ -81,8 +81,8 @@ function StarRating({ rating }: { rating: number }) {
 export function Avis() {
   const [isVisible, setIsVisible] = useState(false);
   const [reviews, setReviews] = useState<Review[]>(FALLBACK_REVIEWS);
-  const [totalReviews, setTotalReviews] = useState(5);
-  const [averageRating, setAverageRating] = useState(5);
+  const [totalReviews, setTotalReviews] = useState(43);
+  const [averageRating, setAverageRating] = useState(4.9);
 
   useEffect(() => {
     setIsVisible(true);
