@@ -8,7 +8,7 @@ const services = [
   {
     icon: Music,
     title: "Location de studios",
-    description: "Deux espaces professionnels pour vos répétitions",
+    description: "Deux espaces professionnels pour vos répétitions ou évènement divers",
   },
   {
     icon: Radio,
