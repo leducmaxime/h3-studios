@@ -33,6 +33,7 @@ import { AdminBookingNew } from "@/app/pages/admin/BookingNew";
 import { Login } from "@/app/pages/admin/Login";
 import { PaymentSuccess } from "@/app/pages/PaymentSuccess";
 import { PaymentCancel } from "@/app/pages/PaymentCancel";
+import { TimePickerDemo } from "@/app/pages/TimePickerDemo";
 import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
 import {
   type AdminRole,
@@ -306,6 +307,12 @@ const app = defineApp([
   render(({ children }) => <DocumentWithPath path="/actualites">{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/actualites", Actualites),
+    ]),
+  ]),
+
+  render(({ children }) => <DocumentWithPath path="/demo-timepicker">{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/demo-timepicker", TimePickerDemo),
     ]),
   ]),
 
