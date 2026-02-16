@@ -187,6 +187,26 @@ export function useBookingWithRouter(urlStep?: string) {
   const [availability, setAvailability] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const mergedAvailability = useMemo(() => {
+    if (!state.selectedDate) return availability;
+    
+    const merged = new Set(availability);
+    const selectedDateStr = state.selectedDate.toDateString();
+    
+    for (const booking of state.cart) {
+      if (booking.date.toDateString() === selectedDateStr) {
+        const startIdx = TIME_SLOTS.indexOf(booking.startTime);
+        let endIdx = TIME_SLOTS.indexOf(booking.endTime);
+        if (endIdx === -1 && booking.endTime === "00:00") endIdx = TIME_SLOTS.length;
+        for (let i = startIdx; i < endIdx; i++) {
+          merged.add(`${booking.studioId}-${TIME_SLOTS[i]}`);
+        }
+      }
+    }
+    
+    return merged;
+  }, [availability, state.cart, state.selectedDate]);
+
   useEffect(() => {
     if (!state.selectedDate) return;
     const dateStr = formatDateISO(state.selectedDate);
@@ -359,17 +379,6 @@ export function useBookingWithRouter(urlStep?: string) {
       if (s.startTime && s.endTime) {
         if (s.flow === "time-first") {
           if (s.groupType === "solo" || s.groupType === "duo") {
-            const mergedAvailability = new Set(availability);
-            for (const booking of s.cart) {
-              if (booking.date.toDateString() === s.selectedDate!.toDateString()) {
-                const startIdx = TIME_SLOTS.indexOf(booking.startTime);
-                let endIdx = TIME_SLOTS.indexOf(booking.endTime);
-                if (endIdx === -1 && booking.endTime === "00:00") endIdx = TIME_SLOTS.length;
-                for (let i = startIdx; i < endIdx; i++) {
-                  mergedAvailability.add(`${booking.studioId}-${TIME_SLOTS[i]}`);
-                }
-              }
-            }
             const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, mergedAvailability);
             return { ...s, studioId: studio };
           }
@@ -379,7 +388,7 @@ export function useBookingWithRouter(urlStep?: string) {
       }
       return s;
     });
-  }, [availability]);
+  }, [mergedAvailability]);
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
     setState((s) => ({ ...s, groupType }));
@@ -716,7 +725,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
   return {
     state,
-    availability,
+    availability: mergedAvailability,
     pricing,
     cartTotal,
     canProceedToStudio,

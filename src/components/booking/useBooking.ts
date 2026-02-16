@@ -66,6 +66,26 @@ export function useBooking() {
   const [availability, setAvailability] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const mergedAvailability = useMemo(() => {
+    if (!state.selectedDate) return availability;
+
+    const merged = new Set(availability);
+    const selectedDateStr = state.selectedDate.toDateString();
+
+    for (const booking of state.cart) {
+      if (booking.date.toDateString() === selectedDateStr) {
+        const startIdx = TIME_SLOTS.indexOf(booking.startTime);
+        let endIdx = TIME_SLOTS.indexOf(booking.endTime);
+        if (endIdx === -1 && booking.endTime === "00:00") endIdx = TIME_SLOTS.length;
+        for (let i = startIdx; i < endIdx; i++) {
+          merged.add(`${booking.studioId}-${TIME_SLOTS[i]}`);
+        }
+      }
+    }
+
+    return merged;
+  }, [availability, state.cart, state.selectedDate]);
+
   useEffect(() => {
     if (!state.selectedDate) return;
     const dateStr = formatDateISO(state.selectedDate);
@@ -142,9 +162,8 @@ export function useBooking() {
     setState((s) => {
       if (s.startTime && s.endTime) {
         if (s.flow === "time-first") {
-          // Solo/duo skip studio selection — auto-assign based on availability
           if (s.groupType === "solo" || s.groupType === "duo") {
-            const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, availability);
+            const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, mergedAvailability);
             return { ...s, studioId: studio, step: 3 };
           }
           return { ...s, step: 2 };
@@ -153,7 +172,7 @@ export function useBooking() {
       }
       return s;
     });
-  }, [availability]);
+  }, [mergedAvailability]);
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
     setState((s) => ({ ...s, groupType }));
@@ -441,7 +460,7 @@ export function useBooking() {
 
   return {
     state,
-    availability,
+    availability: mergedAvailability,
     pricing,
     cartTotal,
     canProceedToStudio,
