@@ -622,15 +622,14 @@ function InstagramTab({ settings, onUpdate }: {
               Comment obtenir un token ?
             </h4>
             <ol className="text-xs text-zinc-400 space-y-2 list-decimal ml-4">
-              <li>Allez sur le portail <a href="https://developers.facebook.com" target="_blank" className="text-primary underline">Meta for Developers</a></li>
-              <li>Créez une App de type "Consommateur" ou "Autre"</li>
-              <li>Ajoutez le produit "Instagram Basic Display"</li>
-              <li>Configurez les URLs de redirection (utilisez l'URL de ce site)</li>
-              <li>Ajoutez un utilisateur de test Instagram</li>
-              <li>Générez un token via le "User Token Generator" dans les paramètres Instagram Basic Display</li>
+              <li>Passez le compte <strong className="text-zinc-300">@h3_studios_sucy</strong> en compte Professionnel (Business ou Créateur) dans les paramètres Instagram</li>
+              <li>Allez sur <a href="https://developers.facebook.com" target="_blank" className="text-primary underline">Meta for Developers</a> et créez une App de type "Business"</li>
+              <li>Ajoutez le produit <strong className="text-zinc-300">"Instagram"</strong> (pas "Basic Display" qui est obsolète)</li>
+              <li>Dans les paramètres de l'app, utilisez le <strong className="text-zinc-300">Token Generator</strong> avec la permission <code className="bg-zinc-800 px-1 rounded text-[10px]">instagram_business_basic</code></li>
+              <li>Collez le token généré ci-dessus — il sera automatiquement rafraîchi</li>
             </ol>
             <a 
-              href="https://developers.facebook.com/docs/instagram-basic-display-api/getting-started" 
+              href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login/" 
               target="_blank"
               className="mt-3 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
             >

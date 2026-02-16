@@ -358,15 +358,23 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => {
       if (s.startTime && s.endTime) {
         if (s.flow === "time-first") {
-          // Solo/duo skip studio selection — auto-assign based on availability
           if (s.groupType === "solo" || s.groupType === "duo") {
-            const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, availability);
+            const mergedAvailability = new Set(availability);
+            for (const booking of s.cart) {
+              if (booking.date.toDateString() === s.selectedDate!.toDateString()) {
+                const startIdx = TIME_SLOTS.indexOf(booking.startTime);
+                let endIdx = TIME_SLOTS.indexOf(booking.endTime);
+                if (endIdx === -1 && booking.endTime === "00:00") endIdx = TIME_SLOTS.length;
+                for (let i = startIdx; i < endIdx; i++) {
+                  mergedAvailability.add(`${booking.studioId}-${TIME_SLOTS[i]}`);
+                }
+              }
+            }
+            const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, mergedAvailability);
             return { ...s, studioId: studio };
           }
-          // Group: stay on step 1 — studio selection shown inline
           return s;
         }
-        // studio-first: stay on step 1 — recap/options shown inline after time selection
         return s;
       }
       return s;
@@ -437,10 +445,6 @@ export function useBookingWithRouter(urlStep?: string) {
     });
 
     if (overlappingBookings.length === 0) return false;
-
-    if (groupType === "solo" || groupType === "duo") {
-      return true;
-    }
 
     return overlappingBookings.some(b => b.studioId === studioId);
   }, []);

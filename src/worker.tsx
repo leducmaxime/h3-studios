@@ -83,6 +83,7 @@ import {
   addAuditLog,
   getAuditLogs,
   getDashboardStats,
+  getSetting,
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters } from "@/lib/db-types";
 
@@ -90,6 +91,7 @@ import { ALL_TIME_SLOTS } from "@/lib/booking";
 import {
   formatDateISO,
   getParisDateISO,
+  getParisNow,
 } from "@/lib/utils";
 import {
   getStoredReviews,
@@ -482,6 +484,21 @@ const app = defineApp([
         }
       }
 
+      // Block slots that fall within min_advance_hours from now
+      const paris = getParisNow();
+      if (date === paris.dateISO) {
+        const minAdvanceHours = parseInt(await getSetting(env.DB, "booking.min_advance_hours") || "2", 10);
+        const cutoffMinutes = (paris.hours * 60 + paris.minutes) + minAdvanceHours * 60;
+
+        for (const slot of ALL_TIME_SLOTS) {
+          const [h, m] = slot.split(":").map(Number);
+          if (h * 60 + m < cutoffMinutes) {
+            bookedSlots.push(`la-scene-${slot}`);
+            bookedSlots.push(`le-podium-${slot}`);
+          }
+        }
+      }
+
       return jsonSuccess(bookedSlots);
     } catch (error) {
       console.error("GET /api/availability error:", error);
@@ -536,6 +553,24 @@ const app = defineApp([
       const conflict = await checkConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
       if (conflict) {
         return jsonError("Ce créneau n'est plus disponible", 409);
+      }
+
+      const paris = getParisNow();
+      if (body.date === paris.dateISO) {
+        const minAdvanceHours = parseInt(await getSetting(env.DB, "booking.min_advance_hours") || "2", 10);
+        const cutoffMinutes = (paris.hours * 60 + paris.minutes) + minAdvanceHours * 60;
+        const [startH, startM] = body.startTime.split(":").map(Number);
+        if (startH * 60 + startM < cutoffMinutes) {
+          return jsonError(`Les réservations doivent être faites au moins ${minAdvanceHours}h à l'avance`, 400);
+        }
+      }
+
+      const maxAdvanceDays = parseInt(await getSetting(env.DB, "booking.max_advance_days") || "90", 10);
+      const bookingDate = new Date(body.date + "T00:00:00");
+      const todayDate = new Date(paris.dateISO + "T00:00:00");
+      const diffDays = Math.round((bookingDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays > maxAdvanceDays) {
+        return jsonError(`Les réservations ne peuvent pas dépasser ${maxAdvanceDays} jours à l'avance`, 400);
       }
 
       const booking = await createBooking(env.DB, {

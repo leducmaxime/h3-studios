@@ -73,7 +73,7 @@ interface CalendarBooking {
   notes: string | null;
 }
 
-type ViewType = "day" | "week" | "month";
+type ViewType = "week" | "month";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -209,7 +209,7 @@ export function AdminCalendar() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   });
-  const [view, setView] = useState<ViewType>("day");
+  const [view, setView] = useState<ViewType>("week");
   const [selectedBooking, setSelectedBooking] = useState<CalendarBooking | null>(null);
   const [bookingPayments, setBookingPayments] = useState<DbPayment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -301,9 +301,7 @@ export function AdminCalendar() {
     setLoading(true);
     try {
       let data: CalendarBooking[];
-      if (view === "day") {
-        data = await fetchBookings({ date: toDateStr(currentDate) });
-      } else if (view === "week") {
+      if (view === "week") {
         data = await fetchBookings({
           startDate: toDateStr(weekDates[0]),
           endDate: toDateStr(weekDates[6]),
@@ -355,51 +353,75 @@ export function AdminCalendar() {
     setCurrentDate(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   };
 
-  const navigateToDay = (date: Date) => {
-    setCurrentDate(date);
-    setView("day");
-  };
-
   // ─── View subtitle ─────────────────────────────────────────────────────
 
   const subtitle = useMemo(() => {
-    if (view === "day") return formatDateHeader(currentDate);
     if (view === "week") return `Semaine du ${formatShortDate(weekDates[0])}`;
     return formatMonthHeader(currentDate);
   }, [view, currentDate, weekDates]);
 
-  // ─── Day view ───────────────────────────────────────────────────────────
+  // ─── Week view ──────────────────────────────────────────────────────────
 
-  const renderDayView = () => {
-    const dateStr = toDateStr(currentDate);
-    const dayBookings = bookings.filter((b) => b.date === dateStr);
+  const STUDIO_COLORS: Record<StudioId, { bg: string; text: string; border: string }> = {
+    "la-scene": {
+      bg: "bg-blue-500/15",
+      text: "text-blue-400",
+      border: "border-blue-500/30",
+    },
+    "le-podium": {
+      bg: "bg-purple-500/15",
+      text: "text-purple-400",
+      border: "border-purple-500/30",
+    },
+  };
+
+  const CONSULTATION_COLORS = {
+    bg: "bg-emerald-500/15",
+    text: "text-emerald-400",
+    border: "border-emerald-500/30",
+  };
+
+  const renderWeekView = () => {
     const studios: StudioId[] = ["la-scene", "le-podium"];
-
-    const getBookingStyle = (booking: CalendarBooking) => {
-      const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-      let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-      const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-      const height = (endIdx - startIdx) * 30;
-      return { top: `${top}px`, height: `${Math.max(height, 30)}px` };
-    };
+    const today = new Date();
 
     return (
       <div className="overflow-x-auto">
-        <div className="min-w-[600px]">
-          {/* Header */}
-          <div className="grid grid-cols-[80px_1fr_1fr] border-b border-zinc-800">
-            <div className="p-3 text-sm font-medium text-zinc-400" />
-            {studios.map((studioId) => (
-              <div key={studioId} className="border-l border-zinc-800 p-3 text-center">
-                <p className="font-medium">{STUDIOS[studioId].name}</p>
-                <p className="text-sm text-zinc-400">{STUDIOS[studioId].size}</p>
+        <div className="min-w-[1100px]">
+          <div className="grid grid-cols-[100px_repeat(7,_minmax(0,1fr))] border-b border-zinc-800">
+            <div className="p-3 text-sm font-medium text-zinc-400">Studio</div>
+            {weekDates.map((date) => {
+              const isToday = isSameDay(date, today);
+              return (
+                <div
+                  key={date.toISOString()}
+                  className={`border-l border-zinc-800 p-3 text-center ${isToday ? "bg-primary/5" : ""}`}
+                >
+                  <p className={`text-sm ${isToday ? "font-medium text-primary" : "text-zinc-400"}`}>
+                    {formatShortDate(date)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-[100px_repeat(14,_minmax(0,1fr))] border-b border-zinc-800 bg-zinc-950/50">
+            <div className="p-2 text-xs text-zinc-500" />
+            {weekDates.map((date) => (
+              <div key={`${date.toISOString()}-studios`} className="contents">
+                {studios.map((studioId) => (
+                  <div
+                    key={`${date.toISOString()}-${studioId}`}
+                    className={`border-l border-zinc-800 p-2 text-center text-xs font-medium ${STUDIO_COLORS[studioId].text}`}
+                  >
+                    {studioId === "la-scene" ? "La Scène" : "Le Podium"}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
 
-          {/* Time grid */}
-          <div className="relative grid grid-cols-[80px_1fr_1fr]">
+          <div className="grid grid-cols-[100px_repeat(14,_minmax(0,1fr))]">
             <div className="border-r border-zinc-800">
               {VISIBLE_HOURS.map((hour) => (
                 <div key={hour} className="h-[60px] border-b border-zinc-800 pr-3 pt-1 text-right text-xs text-zinc-500">
@@ -408,114 +430,91 @@ export function AdminCalendar() {
               ))}
             </div>
 
-            {studios.map((studioId) => {
-              const studioBookings = dayBookings.filter((b) => b.studio_id === studioId);
+            {weekDates.map((date) => {
+              const dateStr = toDateStr(date);
+              const isToday = isSameDay(date, today);
+
               return (
-                <div key={studioId} className="relative border-l border-zinc-800">
-                  {VISIBLE_HOURS.map((hour) => (
-                    <div key={hour} className="h-[60px] border-b border-zinc-800" />
-                  ))}
-                  {studioBookings.map((booking) => {
-                    const style = getBookingStyle(booking);
+                <div key={`${date.toISOString()}-cols`} className="contents">
+                  {studios.map((studioId) => {
+                    const studioBookings = bookings.filter(
+                      (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
+                    );
+
                     return (
-                      <button
-                        key={booking.id}
-                        type="button"
-                        onClick={() => setSelectedBooking(booking)}
-                        className={`absolute left-1 right-1 overflow-hidden rounded-lg border p-2 text-left transition-all hover:scale-[1.02] hover:shadow-lg ${STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed}`}
-                        style={style}
+                      <div
+                        key={`${dateStr}-${studioId}`}
+                        className={`relative border-l border-zinc-800 ${isToday ? "bg-primary/5" : ""}`}
                       >
-                        <div className="flex items-center gap-1 overflow-hidden">
-                          <p className="truncate text-sm font-medium">
-                            {booking.user_band_name || booking.user_name || booking.booking_ref}
-                          </p>
-                          {hasOptions(booking.equipment) && (
-                            <span title="Options incluses" className="shrink-0 rounded bg-primary/20 px-1 text-[10px] font-bold text-primary italic">
-                              (option)
-                            </span>
-                          )}
-                        </div>
-                        <p className="truncate text-xs opacity-80">
-                          {booking.start_time}–{booking.end_time} · {formatPrice(booking.total_price)}
-                        </p>
-                      </button>
+                        {VISIBLE_HOURS.map((hour) => (
+                          <div key={hour} className="h-[60px] border-b border-zinc-800" />
+                        ))}
+
+                        {studioBookings.map((booking) => {
+                          const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                          let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                          if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                          const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                          const height = (endIdx - startIdx) * 30;
+                          const colors = STUDIO_COLORS[studioId];
+
+                          return (
+                            <button
+                              key={booking.id}
+                              type="button"
+                              onClick={() => setSelectedBooking(booking)}
+                              className={`absolute left-0.5 right-0.5 overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg ${colors.bg} ${colors.border} ${colors.text}`}
+                              style={{ top: `${top}px`, height: `${Math.max(height, 24)}px` }}
+                            >
+                              <p className="truncate text-[11px] font-medium leading-tight">
+                                {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                              </p>
+                              {hasOptions(booking.equipment) && (
+                                <span className="text-[9px] opacity-80">(opt)</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
                     );
                   })}
+
+                  <div className="col-span-2 relative">
+                    {(() => {
+                      const consultationBookings = bookings.filter(
+                        (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
+                      );
+
+                      return consultationBookings.map((booking) => {
+                        const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                        let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                        if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                        const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                        const height = (endIdx - startIdx) * 30;
+
+                        return (
+                          <button
+                            key={booking.id}
+                            type="button"
+                            onClick={() => setSelectedBooking(booking)}
+                            className={`absolute left-1 right-1 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
+                            style={{ top: `${top}px`, height: `${Math.max(height, 24)}px` }}
+                          >
+                            <p className="truncate text-[11px] font-medium leading-tight">
+                              {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                            </p>
+                            <p className="text-[9px] opacity-80">
+                              {GROUP_LABELS[booking.group_type]}
+                            </p>
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ─── Week view ──────────────────────────────────────────────────────────
-
-  const renderWeekView = () => {
-    const studios: StudioId[] = ["la-scene", "le-podium"];
-    const today = new Date();
-
-    return (
-      <div className="overflow-x-auto">
-        <div className="min-w-[900px]">
-          <div className="grid grid-cols-8 border-b border-zinc-800">
-            <div className="p-3" />
-            {weekDates.map((date) => {
-              const isToday = isSameDay(date, today);
-              return (
-                <button
-                  key={date.toISOString()}
-                  type="button"
-                  onClick={() => navigateToDay(date)}
-                  className={`border-l border-zinc-800 p-3 text-center transition-colors hover:bg-zinc-800/50 ${isToday ? "bg-primary/5" : ""}`}
-                >
-                  <p className={`text-sm ${isToday ? "font-medium text-primary" : "text-zinc-400"}`}>
-                    {formatShortDate(date)}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-
-          {studios.map((studioId) => (
-            <div key={studioId} className="grid grid-cols-8 border-b border-zinc-800">
-              <div className="p-3 text-sm font-medium">{STUDIOS[studioId].name}</div>
-              {weekDates.map((date) => {
-                const dateStr = toDateStr(date);
-                const dayBookings = bookings.filter(
-                  (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled",
-                );
-                const isToday = isSameDay(date, today);
-
-                return (
-                  <div
-                    key={dateStr}
-                    className={`min-h-[100px] border-l border-zinc-800 p-1 ${isToday ? "bg-primary/5" : ""}`}
-                  >
-                    {dayBookings.slice(0, 4).map((booking) => (
-                        <button
-                          key={booking.id}
-                          type="button"
-                          onClick={() => setSelectedBooking(booking)}
-                          className="mb-1 flex w-full items-center gap-1 overflow-hidden rounded bg-primary/20 px-1.5 py-0.5 text-left text-xs text-primary transition-colors hover:bg-primary/30"
-                        >
-                          <span className="truncate">
-                            {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                          </span>
-                          {hasOptions(booking.equipment) && (
-                            <span className="shrink-0 text-[10px] font-bold italic opacity-80">(option)</span>
-                          )}
-                        </button>
-                    ))}
-                    {dayBookings.length > 4 && (
-                      <span className="text-xs text-zinc-500">+{dayBookings.length - 4} autres</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
         </div>
       </div>
     );
@@ -566,11 +565,9 @@ export function AdminCalendar() {
                 const isToday = isSameDay(date, today);
 
                 return (
-                  <button
+                  <div
                     key={dateStr}
-                    type="button"
-                    onClick={() => navigateToDay(date)}
-                    className={`group min-h-[100px] border-l border-zinc-800 p-2 text-left transition-all first:border-l-0 hover:bg-zinc-800/30 ${bg}`}
+                    className={`group min-h-[100px] border-l border-zinc-800 p-2 text-left first:border-l-0 ${bg}`}
                   >
                     {/* Day number */}
                     <div className="mb-1 flex items-center justify-between">
@@ -623,7 +620,7 @@ export function AdminCalendar() {
                         </div>
                       </div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -904,7 +901,6 @@ export function AdminCalendar() {
 
         <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
           <TabsList>
-            <TabsTrigger value="day">Jour</TabsTrigger>
             <TabsTrigger value="week">Semaine</TabsTrigger>
             <TabsTrigger value="month">Mois</TabsTrigger>
           </TabsList>
@@ -913,7 +909,6 @@ export function AdminCalendar() {
 
       {/* Calendar content */}
       <div className="rounded-xl border border-zinc-800 bg-zinc-900">
-        {view === "day" && renderDayView()}
         {view === "week" && renderWeekView()}
         {view === "month" && renderMonthView()}
       </div>
