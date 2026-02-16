@@ -405,24 +405,8 @@ export function AdminCalendar() {
             })}
           </div>
 
-          <div className="grid grid-cols-[100px_repeat(14,_minmax(0,1fr))] border-b border-zinc-800 bg-zinc-950/50">
-            <div className="p-2 text-xs text-zinc-500" />
-            {weekDates.map((date) => (
-              <div key={`${date.toISOString()}-studios`} className="contents">
-                {studios.map((studioId) => (
-                  <div
-                    key={`${date.toISOString()}-${studioId}`}
-                    className={`border-l border-zinc-800 p-2 text-center text-xs font-medium ${STUDIO_COLORS[studioId].text}`}
-                  >
-                    {studioId === "la-scene" ? "La Scène" : "Le Podium"}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-[100px_repeat(14,_minmax(0,1fr))]">
-            <div className="border-r border-zinc-800">
+          <div className="grid grid-cols-[100px_repeat(7,_minmax(0,1fr))]">
+            <div className="border-r border-zinc-800 bg-zinc-950/30">
               {VISIBLE_HOURS.map((hour) => (
                 <div key={hour} className="h-[60px] border-b border-zinc-800 pr-3 pt-1 text-right text-xs text-zinc-500">
                   {hour}
@@ -435,82 +419,96 @@ export function AdminCalendar() {
               const isToday = isSameDay(date, today);
 
               return (
-                <div key={`${date.toISOString()}-cols`} className="contents">
+                <div
+                  key={`${date.toISOString()}-day`}
+                  className={`relative border-l border-zinc-800 ${isToday ? "bg-primary/5" : ""}`}
+                >
+                  <div className="grid grid-cols-2 h-full">
+                    <div className={`border-r border-zinc-800/50 ${isToday ? "bg-blue-500/5" : ""}`}>
+                      <div className={`text-center py-1 text-[10px] font-medium border-b border-zinc-800 ${STUDIO_COLORS["la-scene"].text}`}>
+                        La Scène
+                      </div>
+                    </div>
+                    <div className={`${isToday ? "bg-purple-500/5" : ""}`}>
+                      <div className={`text-center py-1 text-[10px] font-medium border-b border-zinc-800 ${STUDIO_COLORS["le-podium"].text}`}>
+                        Le Podium
+                      </div>
+                    </div>
+                  </div>
+
+                  {VISIBLE_HOURS.map((hour) => (
+                    <div key={hour} className="h-[60px] border-b border-zinc-800" />
+                  ))}
+
                   {studios.map((studioId) => {
                     const studioBookings = bookings.filter(
                       (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
                     );
 
-                    return (
-                      <div
-                        key={`${dateStr}-${studioId}`}
-                        className={`relative border-l border-zinc-800 ${isToday ? "bg-primary/5" : ""}`}
-                      >
-                        {VISIBLE_HOURS.map((hour) => (
-                          <div key={hour} className="h-[60px] border-b border-zinc-800" />
-                        ))}
+                    return studioBookings.map((booking) => {
+                      const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                      let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                      const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                      const height = (endIdx - startIdx) * 30;
+                      const colors = STUDIO_COLORS[studioId];
+                      const leftPos = studioId === "la-scene" ? "4px" : "50%";
+                      const width = "calc(50% - 8px)";
 
-                        {studioBookings.map((booking) => {
-                          const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                          let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                          if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                          const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                          const height = (endIdx - startIdx) * 30;
-                          const colors = STUDIO_COLORS[studioId];
-
-                          return (
-                            <button
-                              key={booking.id}
-                              type="button"
-                              onClick={() => setSelectedBooking(booking)}
-                              className={`absolute left-0.5 right-0.5 overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg ${colors.bg} ${colors.border} ${colors.text}`}
-                              style={{ top: `${top}px`, height: `${Math.max(height, 24)}px` }}
-                            >
-                              <p className="truncate text-[11px] font-medium leading-tight">
-                                {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                              </p>
-                              {hasOptions(booking.equipment) && (
-                                <span className="text-[9px] opacity-80">(opt)</span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
+                      return (
+                        <button
+                          key={booking.id}
+                          type="button"
+                          onClick={() => setSelectedBooking(booking)}
+                          className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg ${colors.bg} ${colors.border} ${colors.text}`}
+                          style={{
+                            top: `${top}px`,
+                            height: `${Math.max(height, 24)}px`,
+                            left: leftPos,
+                            width: width,
+                          }}
+                        >
+                          <p className="truncate text-[11px] font-medium leading-tight">
+                            {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                          </p>
+                          {hasOptions(booking.equipment) && (
+                            <span className="text-[9px] opacity-80">(opt)</span>
+                          )}
+                        </button>
+                      );
+                    });
                   })}
 
-                  <div className="col-span-2 relative">
-                    {(() => {
-                      const consultationBookings = bookings.filter(
-                        (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
+                  {(() => {
+                    const consultationBookings = bookings.filter(
+                      (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
+                    );
+
+                    return consultationBookings.map((booking) => {
+                      const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                      let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                      const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                      const height = (endIdx - startIdx) * 30;
+
+                      return (
+                        <button
+                          key={booking.id}
+                          type="button"
+                          onClick={() => setSelectedBooking(booking)}
+                          className={`absolute left-1 right-1 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
+                          style={{ top: `${top}px`, height: `${Math.max(height, 24)}px` }}
+                        >
+                          <p className="truncate text-[11px] font-medium leading-tight">
+                            {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                          </p>
+                          <p className="text-[9px] opacity-80">
+                            {GROUP_LABELS[booking.group_type]}
+                          </p>
+                        </button>
                       );
-
-                      return consultationBookings.map((booking) => {
-                        const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                        let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                        if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                        const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                        const height = (endIdx - startIdx) * 30;
-
-                        return (
-                          <button
-                            key={booking.id}
-                            type="button"
-                            onClick={() => setSelectedBooking(booking)}
-                            className={`absolute left-1 right-1 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
-                            style={{ top: `${top}px`, height: `${Math.max(height, 24)}px` }}
-                          >
-                            <p className="truncate text-[11px] font-medium leading-tight">
-                              {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                            </p>
-                            <p className="text-[9px] opacity-80">
-                              {GROUP_LABELS[booking.group_type]}
-                            </p>
-                          </button>
-                        );
-                      });
-                    })()}
-                  </div>
+                    });
+                  })()}
                 </div>
               );
             })}
