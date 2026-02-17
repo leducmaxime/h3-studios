@@ -224,17 +224,102 @@ export const CLOSING_TIME = "00:00";
 export const SLOT_DURATION_MINUTES = 30;
 export const MIN_BOOKING_SLOTS = 2;
 
+// Detailed occupancy information
+export interface OccupancyInfo {
+  studioId: StudioId;
+  time: string;
+  groupType?: GroupType | "blocked";
+  bookingId?: string;
+}
+
+// Legacy compatibility: convert old format string to OccupancyInfo
+export function parseOccupancy(occupancy: Set<string | OccupancyInfo>): Set<OccupancyInfo> {
+  const result = new Set<OccupancyInfo>();
+  for (const item of occupancy) {
+    if (typeof item === "string") {
+      // Legacy format: "studioId-time"
+      const [studioId, time] = item.split("-");
+      if (studioId && time) {
+        result.add({ studioId: studioId as StudioId, time, groupType: "blocked" });
+      }
+    } else {
+      result.add(item);
+    }
+  }
+  return result;
+}
+
+/**
+ * Check if a studio is available for the given time range.
+ * Considers bookings by group type - solo/duo can overlap with other solo/duo
+ * but groups cannot overlap with anyone.
+ */
+export function isStudioAvailable(
+  studioId: StudioId,
+  startTime: string,
+  endTime: string,
+  occupancy: Set<OccupancyInfo>,
+  requesterGroupType: GroupType
+): boolean {
+  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
+  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
+  if (endIdx === -1 && endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
+
+  for (const slot of range) {
+    const occupant = Array.from(occupancy).find(o => o.studioId === studioId && o.time === slot);
+    if (!occupant) continue;
+
+    if (occupant.groupType === "blocked") return false;
+
+    // Groups cannot share with anyone
+    if (requesterGroupType === "group") return false;
+
+    // Solo/duo can share with other solo/duo, but not with groups
+    if (occupant.groupType === "group") return false;
+  }
+
+  return true;
+}
+
+/**
+ * Find a conflicting solo/duo booking that could be moved.
+ * Returns the bookingId if found, null otherwise.
+ */
+export function findMoveableSoloDuoBooking(
+  studioId: StudioId,
+  startTime: string,
+  endTime: string,
+  occupancy: Set<OccupancyInfo>
+): string | null {
+  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
+  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
+  if (endIdx === -1 && endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
+
+  for (const slot of range) {
+    const occupant = Array.from(occupancy).find(o => o.studioId === studioId && o.time === slot);
+    if (occupant && (occupant.groupType === "solo" || occupant.groupType === "duo") && occupant.bookingId) {
+      return occupant.bookingId;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Auto-assign studio for solo/duo bookings.
  * Groups have priority — solo/duo gets whatever is left.
+ * Solo/duo can double-book (one on each studio) if both available.
  * If the slot extends past Le Podium's closing time, only La Scène is possible.
  */
 export function assignStudioForSoloDuo(
   date: Date,
   startTime: string,
   endTime: string,
-  availability: Set<string>
+  occupancy: Set<string | OccupancyInfo>
 ): StudioId {
+  const detailedOccupancy = parseOccupancy(occupancy);
   const podiumSlots = getStudioTimeSlots("le-podium", date);
   const sceneSlots = getStudioTimeSlots("la-scene", date);
 
@@ -248,20 +333,19 @@ export function assignStudioForSoloDuo(
   const podiumCoversRange = bookedRange.every((t) => podiumSlots.includes(t));
   const sceneCoversRange = bookedRange.every((t) => sceneSlots.includes(t));
 
-  // Check if a group already booked one of the studios on this range
-  const sceneBooked = bookedRange.some((t) => availability.has(`la-scene-${t}`));
-  const podiumBooked = bookedRange.some((t) => availability.has(`le-podium-${t}`));
+  // Check availability considering group types
+  const sceneAvailable = isStudioAvailable("la-scene", startTime, endTime, detailedOccupancy, "solo");
+  const podiumAvailable = isStudioAvailable("le-podium", startTime, endTime, detailedOccupancy, "solo");
 
   // If only one studio covers the range, use that one
   if (!podiumCoversRange && sceneCoversRange) return "la-scene";
   if (!sceneCoversRange && podiumCoversRange) return "le-podium";
 
-  // If a group took La Scène, assign Le Podium (if it covers the range)
-  if (sceneBooked && !podiumBooked && podiumCoversRange) return "le-podium";
-  // If a group took Le Podium, assign La Scène (if it covers the range)
-  if (podiumBooked && !sceneBooked && sceneCoversRange) return "la-scene";
+  // Prefer La Scène by default (larger room, open later)
+  if (sceneAvailable && sceneCoversRange) return "la-scene";
+  if (podiumAvailable && podiumCoversRange) return "le-podium";
 
-  // Default: La Scène (larger room, open later)
+  // Fallback: if neither available (shouldn't happen if UI is correct)
   return "la-scene";
 }
 

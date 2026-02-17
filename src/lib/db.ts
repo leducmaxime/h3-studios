@@ -208,6 +208,54 @@ export async function checkConflict(
   `).bind(...params).first<DbBooking>();
 }
 
+export async function checkConflictWithGroupType(
+  db: D1Database,
+  studioId: string,
+  date: string,
+  startTime: string,
+  endTime: string,
+  excludeBookingId?: string,
+): Promise<DbBooking | null> {
+  const params: unknown[] = [studioId, date, endTime, startTime];
+  let excludeClause = "";
+
+  if (excludeBookingId) {
+    excludeClause = "AND id != ?";
+    params.push(excludeBookingId);
+  }
+
+  return db.prepare(`
+    SELECT * FROM bookings
+    WHERE studio_id = ? AND date = ? AND status != 'cancelled'
+      AND start_time < ? AND end_time > ?
+      AND group_type IN ('group', 'solo', 'duo')
+      ${excludeClause}
+    LIMIT 1
+  `).bind(...params).first<DbBooking>();
+}
+
+export async function moveBookingToOtherStudio(
+  db: D1Database,
+  bookingId: string,
+  newStudioId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const booking = await db.prepare("SELECT * FROM bookings WHERE id = ?").bind(bookingId).first<DbBooking>();
+  if (!booking) {
+    return { success: false, error: "Réservation introuvable" };
+  }
+
+  const conflict = await checkConflict(db, newStudioId, booking.date, booking.start_time, booking.end_time, bookingId);
+  if (conflict) {
+    return { success: false, error: "L'autre studio n'est pas disponible pour ce créneau" };
+  }
+
+  await db.prepare("UPDATE bookings SET studio_id = ?, updated_at = ? WHERE id = ?")
+    .bind(newStudioId, now(), bookingId)
+    .run();
+
+  return { success: true };
+}
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 export async function getUsers(

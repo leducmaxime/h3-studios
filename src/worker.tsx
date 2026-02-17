@@ -54,6 +54,8 @@ import {
   getBookingsByDate,
   getBookingsByDateRange,
   checkConflict,
+  checkConflictWithGroupType,
+  moveBookingToOtherStudio,
   createUser,
   updateUser,
   getUsers,
@@ -465,21 +467,30 @@ const app = defineApp([
       const bookings = await getBookingsByDate(env.DB, date);
       const blockedSlots = await getBlockedSlots(env.DB, undefined, date);
 
-      const bookedSlots: string[] = [];
+      const bookedSlots: Array<{ studioId: string; time: string; groupType?: string; bookingId?: string }> = [];
 
       for (const b of bookings) {
         const slots = getSlotsForBooking(b.start_time, b.end_time);
-        slots.forEach(time => bookedSlots.push(`${b.studio_id}-${time}`));
+        slots.forEach(time => bookedSlots.push({
+          studioId: b.studio_id,
+          time,
+          groupType: b.group_type,
+          bookingId: b.id
+        }));
       }
 
       for (const s of blockedSlots) {
         const slots = getSlotsForBooking(s.start_time, s.end_time);
         if (s.studio_id) {
-          slots.forEach(time => bookedSlots.push(`${s.studio_id}-${time}`));
+          slots.forEach(time => bookedSlots.push({
+            studioId: s.studio_id as string,
+            time,
+            groupType: "blocked"
+          }));
         } else {
           slots.forEach(time => {
-            bookedSlots.push(`la-scene-${time}`);
-            bookedSlots.push(`le-podium-${time}`);
+            bookedSlots.push({ studioId: "la-scene", time, groupType: "blocked" });
+            bookedSlots.push({ studioId: "le-podium", time, groupType: "blocked" });
           });
         }
       }
@@ -493,8 +504,8 @@ const app = defineApp([
         for (const slot of ALL_TIME_SLOTS) {
           const [h, m] = slot.split(":").map(Number);
           if (h * 60 + m < cutoffMinutes) {
-            bookedSlots.push(`la-scene-${slot}`);
-            bookedSlots.push(`le-podium-${slot}`);
+            bookedSlots.push({ studioId: "la-scene", time: slot, groupType: "blocked" });
+            bookedSlots.push({ studioId: "le-podium", time: slot, groupType: "blocked" });
           }
         }
       }
@@ -550,9 +561,34 @@ const app = defineApp([
         });
       }
 
-      const conflict = await checkConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
+      // Check for conflicts - groups can displace solo/duo bookings
+      const conflict = await checkConflictWithGroupType(env.DB, body.studioId, body.date, body.startTime, body.endTime);
       if (conflict) {
-        return jsonError("Ce créneau n'est plus disponible", 409);
+        // If group booking conflicts with solo/duo, try to move the solo/duo
+        if (body.groupType === "group" && (conflict.group_type === "solo" || conflict.group_type === "duo")) {
+          const otherStudioId = body.studioId === "la-scene" ? "le-podium" : "la-scene";
+
+          // Check if other studio is available for the full duration
+          const otherStudioConflict = await checkConflict(env.DB, otherStudioId, body.date, body.startTime, body.endTime, conflict.id);
+          if (otherStudioConflict) {
+            return jsonError("Ce créneau n'est plus disponible - l'autre studio est également occupé", 409);
+          }
+
+          // Move the solo/duo booking to the other studio
+          const moveResult = await moveBookingToOtherStudio(env.DB, conflict.id, otherStudioId);
+          if (!moveResult.success) {
+            return jsonError(`Impossible de déplacer la réservation existante: ${moveResult.error}`, 409);
+          }
+
+          // Log the move in audit
+          await addAuditLog(env.DB, "booking", conflict.id, "move-for-group", {
+            fromStudio: body.studioId,
+            toStudio: otherStudioId,
+            reason: "Group booking displaced solo/duo",
+          });
+        } else {
+          return jsonError("Ce créneau n'est plus disponible", 409);
+        }
       }
 
       const paris = getParisNow();

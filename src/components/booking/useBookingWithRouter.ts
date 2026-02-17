@@ -11,6 +11,7 @@ import {
   type EquipmentSelection,
   type PaymentMethod,
   type PromoCode,
+  type OccupancyInfo,
   calculatePrice,
   calculateEquipmentPrice,
   generateBookingRef,
@@ -184,26 +185,30 @@ export function useBookingWithRouter(urlStep?: string) {
   });
   const [isHydrated, setIsHydrated] = useState(false);
   const isInitialMount = useRef(true);
-  const [availability, setAvailability] = useState<Set<string>>(new Set());
+  const [availability, setAvailability] = useState<Set<OccupancyInfo>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const mergedAvailability = useMemo(() => {
     if (!state.selectedDate) return availability;
-    
+
     const merged = new Set(availability);
     const selectedDateStr = state.selectedDate.toDateString();
-    
+
     for (const booking of state.cart) {
       if (booking.date.toDateString() === selectedDateStr) {
         const startIdx = TIME_SLOTS.indexOf(booking.startTime);
         let endIdx = TIME_SLOTS.indexOf(booking.endTime);
         if (endIdx === -1 && booking.endTime === "00:00") endIdx = TIME_SLOTS.length;
         for (let i = startIdx; i < endIdx; i++) {
-          merged.add(`${booking.studioId}-${TIME_SLOTS[i]}`);
+          merged.add({
+            studioId: booking.studioId,
+            time: TIME_SLOTS[i],
+            groupType: booking.groupType,
+          });
         }
       }
     }
-    
+
     return merged;
   }, [availability, state.cart, state.selectedDate]);
 
@@ -213,7 +218,7 @@ export function useBookingWithRouter(urlStep?: string) {
     fetch(`/api/availability?date=${dateStr}`)
       .then((res) => res.json())
       .then((data) => {
-        const json = data as { success: boolean; data: string[] };
+        const json = data as { success: boolean; data: OccupancyInfo[] };
         if (json.success && Array.isArray(json.data)) {
           setAvailability(new Set(json.data));
         }

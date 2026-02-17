@@ -11,11 +11,12 @@ import {
   PRICING,
   type GroupType,
   type StudioId,
+  type OccupancyInfo,
 } from "@/lib/booking";
 
 interface TimeSlotPickerProps {
   date: Date;
-  availability: Set<string>;
+  availability: Set<string> | Set<OccupancyInfo>;
   startTime: string | null;
   endTime: string | null;
   onSelectRange: (start: string, end: string) => void;
@@ -104,17 +105,50 @@ export function TimeSlotPicker({
     return sceneClose > podiumClose ? sceneClose : podiumClose;
   }, [studioFilter, date]);
 
-  const isSlotBooked = useCallback(
-    (time: string) => {
-      if (studioFilter) {
-        return availability.has(`${studioFilter}-${time}`);
+  const occupancyArray = useMemo(() => {
+    const items = Array.from(availability as Set<unknown>);
+    return items.map((item): OccupancyInfo | null => {
+      if (typeof item === "string") {
+        const [studioId, time] = item.split("-");
+        if (studioId && time) {
+          return { studioId: studioId as StudioId, time, groupType: "blocked" };
+        }
+        return null;
       }
-      return (
-        availability.has(`la-scene-${time}`) &&
-        availability.has(`le-podium-${time}`)
-      );
+      return item as OccupancyInfo;
+    }).filter((item): item is OccupancyInfo => item !== null);
+  }, [availability]);
+
+  const isOccupiedBy = useCallback(
+    (studioId: StudioId, time: string): OccupancyInfo | null => {
+      return occupancyArray.find((item) => item.studioId === studioId && item.time === time) || null;
     },
-    [availability, studioFilter]
+    [occupancyArray]
+  );
+
+  const isSlotBooked = useCallback(
+    (time: string): boolean => {
+      if (studioFilter) {
+        const occupant = isOccupiedBy(studioFilter, time);
+        if (!occupant) return false;
+        if (groupType !== "group") {
+          return occupant.groupType === "group" || occupant.groupType === "blocked";
+        }
+        return true;
+      }
+      const sceneOccupant = isOccupiedBy("la-scene", time);
+      const podiumOccupant = isOccupiedBy("le-podium", time);
+
+      if (groupType !== "group") {
+        const sceneBlocked = sceneOccupant && (sceneOccupant.groupType === "group" || sceneOccupant.groupType === "blocked");
+        const podiumBlocked = podiumOccupant && (podiumOccupant.groupType === "group" || podiumOccupant.groupType === "blocked");
+        return !!(sceneBlocked && podiumBlocked);
+      }
+      const sceneBooked = !!sceneOccupant;
+      const podiumBooked = !!podiumOccupant;
+      return sceneBooked && podiumBooked;
+    },
+    [isOccupiedBy, studioFilter, groupType]
   );
 
   const canStartAt = useCallback(
