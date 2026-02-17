@@ -248,20 +248,30 @@ export function APropos() {
           style={{ transitionDelay: "500ms" }}
         >
           <h2 className="mb-6 text-xl font-bold text-primary">Contact</h2>
-          <div className="mb-6 grid gap-6 sm:grid-cols-2">
+          <div className="mb-6 grid gap-4 sm:grid-cols-2">
             <a
               href="mailto:contact@h3-studios.fr"
-              className="flex items-center gap-3 text-white/70 transition-colors hover:text-primary"
+              className="group flex items-center justify-center gap-3 rounded-lg border border-primary/20 bg-primary/10 px-6 py-4 transition-all hover:bg-primary/20 hover:scale-[1.02]"
             >
-              <Mail className="h-5 w-5 text-primary" />
-              <span>contact@h3-studios.fr</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-black">
+                <Mail className="h-5 w-5" />
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-medium text-primary uppercase tracking-wider">Email</span>
+                <span className="text-lg font-bold text-white group-hover:text-primary transition-colors">contact@h3-studios.fr</span>
+              </div>
             </a>
             <a
               href="tel:+33613440875"
-              className="flex items-center gap-3 text-white/70 transition-colors hover:text-primary"
+              className="group flex items-center justify-center gap-3 rounded-lg border border-primary/20 bg-primary/10 px-6 py-4 transition-all hover:bg-primary/20 hover:scale-[1.02]"
             >
-              <Phone className="h-5 w-5 text-primary" />
-              <span>06 13 44 08 75</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-black">
+                <Phone className="h-5 w-5" />
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-medium text-primary uppercase tracking-wider">Téléphone</span>
+                <span className="text-lg font-bold text-white group-hover:text-primary transition-colors">06 13 44 08 75</span>
+              </div>
             </a>
           </div>
           
