@@ -637,10 +637,11 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
-    setState((s) => ({
-      ...s,
-      cart: s.cart.filter((b) => b.id !== bookingId),
-    }));
+    setState((s) => {
+      const newCart = s.cart.filter((b) => b.id !== bookingId);
+
+      return { ...s, cart: newCart, appliedPromo: null, promoDiscount: 0 };
+    });
   }, []);
 
   const resetBooking = useCallback(() => {
