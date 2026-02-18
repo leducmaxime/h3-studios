@@ -75,9 +75,9 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                     {formatPrice(bookingData.total)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-white/60">Confirmation envoyée à</span>
-                  <span className="text-sm text-white/80">{bookingData.email}</span>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="flex-shrink-0 text-white/60">Confirmation envoyée à</span>
+                  <span className="min-w-0 truncate text-right text-sm text-white/80">{bookingData.email}</span>
                 </div>
               </div>
             )}
