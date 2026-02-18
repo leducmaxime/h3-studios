@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getAvailableRanges, type StudioId } from "@/lib/booking";
+import { getAvailableRanges, ALL_TIME_SLOTS, type StudioId, type CompletedBooking } from "@/lib/booking";
 
 interface WeekCalendarProps {
   onSelectDate: (date: Date) => void;
   selectedDate: Date | null;
   studioFilter?: StudioId | null;
+  cart?: CompletedBooking[];
 }
 
 const DAYS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -63,23 +64,62 @@ function formatWeekRange(dates: Date[]): string {
   return `${first.getDate()} ${MONTHS_FR[first.getMonth()]} - ${last.getDate()} ${MONTHS_FR[last.getMonth()]} ${last.getFullYear()}`;
 }
 
-export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekCalendarProps) {
+function getCartOccupancy(cart: CompletedBooking[], dateStr: string): Set<string> {
+  const set = new Set<string>();
+  for (const booking of cart) {
+    const d = booking.date instanceof Date ? booking.date : new Date(booking.date);
+    const bookingDateStr = d.toISOString().split("T")[0];
+    if (bookingDateStr !== dateStr) continue;
+    const startIdx = ALL_TIME_SLOTS.indexOf(booking.startTime);
+    let endIdx = ALL_TIME_SLOTS.indexOf(booking.endTime);
+    if (endIdx === -1 && booking.endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+    if (startIdx === -1 || endIdx === -1) continue;
+    for (let i = startIdx; i < endIdx; i++) {
+      set.add(`${booking.studioId}-${ALL_TIME_SLOTS[i]}`);
+    }
+  }
+  return set;
+}
+
+export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = [] }: WeekCalendarProps) {
   const today = useMemo(() => new Date(), []);
   const [dayOffset, setDayOffset] = useState(0);
+  const [weekOccupancy, setWeekOccupancy] = useState<Map<string, Set<string>>>(new Map());
 
   const weekDates = useMemo(() => getSlidingWeekDates(today, dayOffset), [dayOffset, today]);
 
   const maxDayOffset = 60; // ~2 months
+
+  useEffect(() => {
+    setWeekOccupancy(new Map());
+    weekDates.forEach((date) => {
+      if (isPast(date) || isTooFarInFuture(date)) return;
+      const dateStr = date.toISOString().split("T")[0];
+      fetch(`/api/availability?date=${dateStr}`)
+        .then((res) => res.json())
+        .then((data: unknown) => {
+          const json = data as { success: boolean; data: { studioId: string; time: string }[] };
+          if (json.success && Array.isArray(json.data)) {
+            const set = new Set<string>(json.data.map((item) => `${item.studioId}-${item.time}`));
+            setWeekOccupancy((prev) => new Map(prev).set(dateStr, set));
+          }
+        })
+        .catch(console.error);
+    });
+  }, [weekDates]);
 
   const availabilityMap = useMemo(() => {
     const map = new Map<string, string[]>();
     weekDates.forEach((date) => {
       if (isPast(date) || isTooFarInFuture(date)) return;
       const key = date.toISOString().split("T")[0];
-      map.set(key, getAvailableRanges(new Set(), date, studioFilter));
+      const apiOccupancy = weekOccupancy.get(key) ?? new Set<string>();
+      const cartOccupancyForDate = getCartOccupancy(cart, key);
+      const merged = new Set<string>([...apiOccupancy, ...cartOccupancyForDate]);
+      map.set(key, getAvailableRanges(merged, date, studioFilter));
     });
     return map;
-  }, [weekDates, studioFilter]);
+  }, [weekDates, studioFilter, weekOccupancy, cart]);
 
   const goToPreviousWeek = () => {
     setDayOffset((d) => Math.max(0, d - 7));
@@ -125,6 +165,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
           const selected = selectedDate && isSameDay(date, selectedDate);
           const ranges = availabilityMap.get(dateKey) || [];
           const hasAvailability = ranges.length > 0;
+          const isFull = !past && !tooFar && !hasAvailability;
           const disabled = past || tooFar || !hasAvailability;
 
           return (
@@ -134,9 +175,11 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
               disabled={disabled}
               className={`
                 relative flex flex-col items-center justify-center rounded-lg lg:rounded-xl p-1.5 lg:p-3 min-h-[72px] lg:min-h-[100px] transition-all
-                ${disabled
+                ${past || tooFar
                   ? "opacity-30 cursor-not-allowed bg-white/5"
-                  : "hover:bg-primary/20 cursor-pointer bg-white/10"
+                  : isFull
+                    ? "opacity-70 cursor-not-allowed bg-white/5"
+                    : "hover:bg-primary/20 cursor-pointer bg-white/10"
                 }
                 ${selected
                   ? "ring-2 ring-primary ring-offset-1 lg:ring-offset-2 ring-offset-black bg-primary/20 text-primary"
@@ -155,14 +198,20 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter }: WeekC
                 {date.getDate()}
               </span>
               <span className={`text-[9px] lg:text-xs mt-0.5 lg:mt-1 ${
-                disabled
+                past || tooFar
                   ? "text-white/30"
-                  : selected
-                    ? "text-primary/70"
-                    : "text-emerald-400/80"
+                  : isFull
+                    ? "text-red-400"
+                    : selected
+                      ? "text-primary/70"
+                      : "text-emerald-400/80"
               }`}>
-                <span className="lg:hidden">{disabled ? "Complet" : "Dispo"}</span>
-                <span className="hidden lg:inline">{disabled ? "Complet" : "Disponible"}</span>
+                <span className="lg:hidden">
+                  {past || tooFar ? "" : isFull ? "Complet" : "Dispo"}
+                </span>
+                <span className="hidden lg:inline">
+                  {past || tooFar ? "" : isFull ? "Complet" : "Disponible"}
+                </span>
               </span>
             </button>
           );

@@ -130,6 +130,7 @@ export function BookingWidget() {
                     selectedDate={state.selectedDate}
                     onSelectDate={selectDate}
                     studioFilter={null}
+                    cart={state.cart}
                   />
                   {state.selectedDate && (
                     <TimeSlotPicker
@@ -228,6 +229,7 @@ export function BookingWidget() {
                     selectedDate={state.selectedDate}
                     onSelectDate={selectDate}
                     studioFilter={state.studioId}
+                    cart={state.cart}
                   />
                   {state.selectedDate && (
                     <TimeSlotPicker

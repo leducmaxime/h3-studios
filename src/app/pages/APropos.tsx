@@ -248,10 +248,10 @@ export function APropos() {
           style={{ transitionDelay: "500ms" }}
         >
           <h2 className="mb-6 text-xl font-bold text-primary">Contact</h2>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          <div className="mb-6 grid gap-4 sm:grid-cols-2 relative z-10">
             <a
               href="mailto:contact@h3-studios.fr"
-              className="group flex items-center justify-center gap-3 rounded-lg border border-primary/20 bg-primary/10 px-6 py-4 transition-all hover:bg-primary/20 hover:scale-[1.02]"
+              className="group flex items-center justify-center gap-3 rounded-lg border border-primary/20 bg-primary/10 px-6 py-4 transition-all hover:bg-primary/20 hover:scale-[1.02] active:scale-95 cursor-pointer relative z-20"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-black">
                 <Mail className="h-5 w-5" />
@@ -263,7 +263,7 @@ export function APropos() {
             </a>
             <a
               href="tel:+33613440875"
-              className="group flex items-center justify-center gap-3 rounded-lg border border-primary/20 bg-primary/10 px-6 py-4 transition-all hover:bg-primary/20 hover:scale-[1.02]"
+              className="group flex items-center justify-center gap-3 rounded-lg border border-primary/20 bg-primary/10 px-6 py-4 transition-all hover:bg-primary/20 hover:scale-[1.02] active:scale-95 cursor-pointer relative z-20"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-black">
                 <Phone className="h-5 w-5" />

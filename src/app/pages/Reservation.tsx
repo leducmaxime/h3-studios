@@ -391,6 +391,7 @@ export function Reservation({ step }: ReservationProps) {
                   selectedDate={state.selectedDate}
                   onSelectDate={selectDate}
                   studioFilter={null}
+                  cart={state.cart}
                 />
 
                 {/* Time slot picker — appears after date selection */}
@@ -521,6 +522,7 @@ export function Reservation({ step }: ReservationProps) {
                       selectedDate={state.selectedDate}
                       onSelectDate={selectDate}
                       studioFilter={state.studioId}
+                      cart={state.cart}
                     />
                   </div>
                 )}
