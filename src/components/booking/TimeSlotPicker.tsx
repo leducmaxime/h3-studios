@@ -169,15 +169,12 @@ export function TimeSlotPicker({
     if (!pendingStart) return false;
     const startIdx = rulerLabels.indexOf(pendingStart);
     const endIdx = rulerLabels.indexOf(label);
-    if (endIdx <= startIdx) return false; // avant ou au même niveau
-    if (endIdx - startIdx < 2) return false; // trop proche (< 1h = 2 slots)
+    if (endIdx <= startIdx) return false;
 
-    // Vérifier qu'aucun slot entre pendingStart et label n'est booké
-    // On vérifie les SLOTS (visibleSlots), pas les labels
     const startSlotIdx = visibleSlots.indexOf(pendingStart);
     const endSlotIdx = label === closingTime
       ? visibleSlots.length
-      : visibleSlots.indexOf(label);
+      : visibleSlots.indexOf(label) + 1;
 
     for (let i = startSlotIdx; i < endSlotIdx; i++) {
       if (isSlotBooked(visibleSlots[i])) return false;
@@ -277,7 +274,8 @@ export function TimeSlotPicker({
     // Dans le preview hover ?
     if (pendingStart && hoveredMarker) {
       const pStartIdx = rulerLabels.indexOf(pendingStart);
-      const pEndIdx = rulerLabels.indexOf(hoveredMarker);
+      const pHoveredIdx = rulerLabels.indexOf(hoveredMarker);
+      const pEndIdx = hoveredMarker === closingTime ? pHoveredIdx : pHoveredIdx + 1;
       const labelIdx = rulerLabels.indexOf(prevLabel);
       if (pEndIdx > pStartIdx && labelIdx >= pStartIdx && labelIdx < pEndIdx) {
         if (isReachableAsEnd(hoveredMarker)) {
@@ -355,8 +353,9 @@ export function TimeSlotPicker({
     // Clic après le start : vérifier si atteignable
     if (!isReachableAsEnd(label)) return;
 
-    // Sélection valide !
-    onSelectRange(pendingStart, label);
+    const endLabelIdx = rulerLabels.indexOf(label);
+    const actualEnd = label === closingTime ? label : rulerLabels[endLabelIdx + 1];
+    onSelectRange(pendingStart, actualEnd);
     onConfirm(); // auto-avance à l'étape suivante
   }, [pendingStart, rulerLabels, isSlotBooked, isReachableAsEnd, onClear, onSelectRange, onConfirm]);
 
@@ -508,7 +507,10 @@ export function TimeSlotPicker({
         {/* Récap live — preview ou confirmé */}
         {(() => {
           const displayStart = startTime || (pendingStart && hoveredMarker && isReachableAsEnd(hoveredMarker) ? pendingStart : null);
-          const displayEnd = endTime || (pendingStart && hoveredMarker && isReachableAsEnd(hoveredMarker) ? hoveredMarker : null);
+          const hoveredActualEnd = pendingStart && hoveredMarker && isReachableAsEnd(hoveredMarker)
+            ? (hoveredMarker === closingTime ? hoveredMarker : rulerLabels[rulerLabels.indexOf(hoveredMarker) + 1])
+            : null;
+          const displayEnd = endTime || hoveredActualEnd;
 
           if (!displayStart || !displayEnd) return null;
 
