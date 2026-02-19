@@ -442,24 +442,37 @@ export function TimeSlotPicker({
               </>
             ) : (
               <>
-                {/* MODE FIN — marqueur d'ouverture 0px, puis labels à droite 72px */}
                 {(() => {
-                  const isOpeningStart = pendingStart === rulerLabels[0];
+                  const openingLabel = rulerLabels[0];
+                  const isOpeningStart = pendingStart === openingLabel;
+                  const isHalfHourOpening = openingLabel.endsWith(":30");
+                  const hourNumOpening = parseInt(openingLabel.split(":")[0]);
+                  const openingIsPeak = hasPeakPricing && isPeakTime(date, openingLabel);
                   return (
                     <div
-                      className="flex flex-col items-start justify-end pb-1"
-                      style={{ width: "0px", overflow: "visible" }}
+                      style={{ width: "24px" }}
+                      className={`flex items-end justify-end h-12 py-1 pr-0.5 rounded ${
+                        isOpeningStart
+                          ? (openingIsPeak ? "bg-primary/40" : "bg-white/30")
+                          : "bg-white/5"
+                      }`}
                     >
-                      <div className={`w-px h-4 ${isOpeningStart ? "bg-primary" : "bg-white/50"}`} />
-                      <span
-                        className={`text-xs whitespace-nowrap leading-none mt-0.5 ${
-                          isOpeningStart
-                            ? "bg-primary/30 text-black font-bold px-0.5 rounded"
-                            : "text-white/40"
-                        }`}
-                      >
-                        {formatMarkerLabel(rulerLabels[0])}
-                      </span>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <div className={`w-px ${isHalfHourOpening ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
+                        {isHalfHourOpening ? (
+                          <div className="flex flex-col items-center leading-none">
+                            <span className="text-[9px] text-white/40">{hourNumOpening}h</span>
+                            <span className="text-xs font-medium text-white/70">30</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm font-medium text-white/70">
+                            {formatMarkerLabel(openingLabel)}
+                          </span>
+                        )}
+                        {openingIsPeak && (
+                          <span className="text-[8px] text-primary">⚡</span>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
@@ -470,6 +483,7 @@ export function TimeSlotPicker({
                   const segmentState = getSegmentState(slot, rightLabel);
                   const markerState = getMarkerState(rightLabel, i + 1);
                   const isStartBoundary = rightLabel === pendingStart;
+                  const segmentIsPeak = hasPeakPricing && isPeakTime(date, slot);
                   const cursorClass =
                     markerState === "blocked" || markerState === "too-close" || markerState === "closing"
                       ? "cursor-not-allowed"
@@ -478,7 +492,7 @@ export function TimeSlotPicker({
                     <button
                       key={slot}
                       style={{ width: "72px" }}
-                      className={`flex items-end justify-end h-12 py-1 pr-0.5 rounded
+                      className={`relative flex items-end justify-end h-12 py-1 pr-0.5 rounded
                         ${getSegmentClass(segmentState)} ${cursorClass}`}
                       onClick={() => handleMarkerClick(rightLabel)}
                       onMouseEnter={() => setHoveredMarker(rightLabel)}
@@ -490,35 +504,24 @@ export function TimeSlotPicker({
                           : `${hourNum}h`
                       }
                     >
-                      <div className="flex flex-col items-center gap-0.5">
+                      {isStartBoundary && (
+                        <div className={`absolute right-0 top-0 bottom-0 w-6 rounded-r ${
+                          segmentIsPeak ? "bg-primary/40" : "bg-white/30"
+                        }`} />
+                      )}
+                      <div className="relative z-10 flex flex-col items-center gap-0.5">
                         <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
                         {isHalfHour ? (
                           <div className="flex flex-col items-center leading-none">
-                            <span
-                              className={`text-[9px] ${
-                                isStartBoundary ? "text-primary/70" : "text-white/40"
-                              }`}
-                            >
+                            <span className="text-[9px] text-white/40">
                               {hourNum}h
                             </span>
-                            <span
-                              className={`text-xs font-medium ${
-                                isStartBoundary
-                                  ? "bg-primary/30 text-black font-bold px-0.5 rounded"
-                                  : getMarkerTextClass(markerState)
-                              }`}
-                            >
+                            <span className={`text-xs font-medium ${getMarkerTextClass(markerState)}`}>
                               30
                             </span>
                           </div>
                         ) : (
-                          <span
-                            className={`text-sm font-medium ${
-                              isStartBoundary
-                                ? "bg-primary/30 text-black font-bold px-1 rounded"
-                                : getMarkerTextClass(markerState)
-                            }`}
-                          >
+                          <span className={`text-sm font-medium ${getMarkerTextClass(markerState)}`}>
                             {rightLabel === "00:00" ? "00h" : `${hourNum}h`}
                           </span>
                         )}
