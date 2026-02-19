@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ALL_TIME_SLOTS, getStudioTimeSlots, MIN_BOOKING_SLOTS, type StudioId, type CompletedBooking } from "@/lib/booking";
+import { formatDateISO } from "@/lib/utils";
 
 interface WeekCalendarProps {
   onSelectDate: (date: Date) => void;
@@ -68,7 +69,7 @@ function getCartOccupancy(cart: CompletedBooking[], dateStr: string): Set<string
   const set = new Set<string>();
   for (const booking of cart) {
     const d = booking.date instanceof Date ? booking.date : new Date(booking.date);
-    const bookingDateStr = d.toISOString().split("T")[0];
+    const bookingDateStr = formatDateISO(d);
     if (bookingDateStr !== dateStr) continue;
     const startIdx = ALL_TIME_SLOTS.indexOf(booking.startTime);
     let endIdx = ALL_TIME_SLOTS.indexOf(booking.endTime);
@@ -111,7 +112,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
     setWeekOccupancy(new Map());
     weekDates.forEach((date) => {
       if (isPast(date) || isTooFarInFuture(date)) return;
-      const dateStr = date.toISOString().split("T")[0];
+      const dateStr = formatDateISO(date);
       fetch(`/api/availability?date=${dateStr}`)
         .then((res) => res.json())
         .then((data: unknown) => {
@@ -161,7 +162,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
 
       <div className="grid grid-cols-7 gap-1 lg:gap-2">
         {weekDates.map((date) => {
-          const dateKey = date.toISOString().split("T")[0];
+          const dateKey = formatDateISO(date);
           const dayIndex = date.getDay();
           const past = isPast(date);
           const tooFar = isTooFarInFuture(date);
