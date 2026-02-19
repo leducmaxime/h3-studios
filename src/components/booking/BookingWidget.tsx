@@ -128,7 +128,7 @@ export function BookingWidget() {
                   </div>
                   {(state.groupType === "solo" || state.groupType === "duo") && (
                     <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center text-sm font-medium text-primary/90">
-                      Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+                      Le choix du studio se fera sur place selon la disponibilité, priorité aux groupes.
                     </p>
                   )}
                   <WeekCalendar
@@ -445,7 +445,7 @@ export function BookingWidget() {
                             )}
                             {(booking.groupType === "solo" || booking.groupType === "duo") && (
                               <div className="mt-1 text-xs text-primary/70">
-                                Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+                                Le choix du studio se fera sur place selon la disponibilité, priorité aux groupes.
                               </div>
                             )}
                           </div>

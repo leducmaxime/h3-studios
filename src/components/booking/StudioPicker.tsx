@@ -30,7 +30,7 @@ export function StudioPicker({ onSelect, onBack, groupType, hideHeader = false }
         )}
         <div className="flex flex-col items-center gap-4 rounded-xl border border-white/20 bg-white/5 p-6 text-center">
           <p className="text-white/70">
-            Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+            Le choix du studio se fera sur place selon la disponibilité, priorité aux groupes.
           </p>
           <button
             onClick={() => onSelect("la-scene")}
