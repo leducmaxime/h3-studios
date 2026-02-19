@@ -396,7 +396,12 @@ export function useBookingWithRouter(urlStep?: string) {
   }, [mergedAvailability]);
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
-    setState((s) => ({ ...s, groupType }));
+    setState((s) => {
+      if (groupType === "solo" || groupType === "duo") {
+        return { ...s, groupType, flow: "time-first", step: 1 };
+      }
+      return { ...s, groupType };
+    });
   }, []);
 
   const selectStudio = useCallback((studioId: StudioId) => {
@@ -679,7 +684,8 @@ export function useBookingWithRouter(urlStep?: string) {
         if (s.flow === "time-first" && s.selectedDate) {
           return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null };
         }
-        return { ...s, step: 0, flow: null };
+        const isSoloDuo = s.groupType === "solo" || s.groupType === "duo";
+        return { ...s, step: 0, flow: null, groupType: isSoloDuo ? null : s.groupType };
       }
 
       if (s.step === 3) return { ...s, step: 5 };
