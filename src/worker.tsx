@@ -629,6 +629,12 @@ const app = defineApp([
         cancel_reason: null,
       });
 
+      if (body.promoCode) {
+        await env.DB.prepare(
+          "UPDATE promo_codes SET usage_count = usage_count + 1 WHERE code = ?",
+        ).bind(body.promoCode.trim().toUpperCase()).run();
+      }
+
       return jsonSuccess({ success: true, bookingId: booking.id, ref: booking.booking_ref });
     } catch (error) {
       console.error("POST /api/bookings error:", error);
