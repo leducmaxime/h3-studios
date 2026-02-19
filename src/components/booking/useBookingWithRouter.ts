@@ -185,6 +185,8 @@ export function useBookingWithRouter(urlStep?: string) {
   });
   const [isHydrated, setIsHydrated] = useState(false);
   const isInitialMount = useRef(true);
+  const appliedPromoRef = useRef<PromoCode | null>(null);
+  appliedPromoRef.current = state.appliedPromo;
   const [availability, setAvailability] = useState<Set<OccupancyInfo>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -585,7 +587,9 @@ export function useBookingWithRouter(urlStep?: string) {
     setIsSubmitting(true);
 
     try {
-      for (const booking of state.cart) {
+      const promoCodeToApply = appliedPromoRef.current?.code ?? null;
+      for (let i = 0; i < state.cart.length; i++) {
+        const booking = state.cart[i];
         const res = await fetch("/api/bookings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -607,7 +611,7 @@ export function useBookingWithRouter(urlStep?: string) {
             price: booking.price,
             paymentMethod: method,
             paymentStatus: method === "card" ? "pending" : "pay-on-site",
-            promoCode: booking.promoCode,
+            promoCode: i === 0 ? promoCodeToApply : null,
             promoDiscount: booking.promoDiscount,
           }),
         });
