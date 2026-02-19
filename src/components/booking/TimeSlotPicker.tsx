@@ -434,10 +434,10 @@ export function TimeSlotPicker({
                             {formatMarkerLabel(slot)}
                           </span>
                         )}
-                        {hasPeakPricing && isPeakTime(date, slot) && (
-                          <span className="text-[8px] text-primary">⚡</span>
-                        )}
                       </div>
+                      {hasPeakPricing && isPeakTime(date, slot) && (
+                        <span className="absolute inset-0 flex items-center justify-center text-xs text-primary pointer-events-none select-none">⚡</span>
+                      )}
                     </button>
                   );
                 })}
@@ -489,10 +489,10 @@ export function TimeSlotPicker({
                             {formatMarkerLabel(slot)}
                           </span>
                         )}
-                        {hasPeakPricing && isPeakTime(date, slot) && (
-                          <span className="text-[8px] text-primary">⚡</span>
-                        )}
                       </div>
+                      {hasPeakPricing && isPeakTime(date, slot) && (
+                        <span className="absolute inset-0 flex items-center justify-center text-xs text-primary pointer-events-none select-none">⚡</span>
+                      )}
                     </button>
                   );
                 })}
@@ -556,7 +556,7 @@ export function TimeSlotPicker({
           const isPreview = !startTime || !endTime;
 
           return (
-            <div className={`mt-3 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${isPreview ? "bg-white/5 border border-white/10" : "bg-primary/10 border border-primary/30"}`}>
+            <div className={`mt-3 flex items-center justify-center gap-3 rounded-lg px-4 py-3 text-base ${isPreview ? "bg-white/5 border border-white/10" : "bg-primary/10 border border-primary/30"}`}>
               <span className={`font-semibold ${isPreview ? "text-white/70" : "text-primary"}`}>
                 {displayStart.replace(":00", "h").replace(":30", "h30")} → {displayEnd.replace(":00", "h").replace(":30", "h30")}
               </span>
@@ -572,61 +572,25 @@ export function TimeSlotPicker({
           );
         })()}
 
-        {/* Légende */}
-        <div className="flex flex-wrap items-center gap-3 text-xs text-white/50 mt-2">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-6 h-3 bg-white/10 border border-white/20 rounded-sm" />
-            Disponible
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-white/50 mt-3">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-5 h-3 flex-shrink-0 bg-white/10 border border-white/20 rounded-sm" />
+            Disponible {hourlyRates.offPeakMin === hourlyRates.offPeakMax ? hourlyRates.offPeakMin : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}`}€/h
           </span>
           {hasPeakPricing && (
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-6 h-3 bg-primary/10 border border-primary/30 rounded-sm" />
-              <span className="text-primary">⚡ Peak</span>
+            <span className="flex items-center gap-1.5 text-primary">
+              <span className="text-sm leading-none">⚡</span>
+              Disponible {hourlyRates.peakMin === hourlyRates.peakMax ? hourlyRates.peakMin : `${hourlyRates.peakMin}-${hourlyRates.peakMax}`}€/h
             </span>
           )}
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-6 h-3 bg-red-500/20 border border-red-500/40 rounded-sm" />
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-5 h-3 flex-shrink-0 bg-red-500/20 border border-red-500/40 rounded-sm" />
             Réservé
           </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-6 h-3 bg-primary/40 border border-primary/60 rounded-sm" />
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-5 h-3 flex-shrink-0 bg-primary/40 border border-primary/60 rounded-sm" />
             Sélectionné
           </span>
-        </div>
-
-        {/* Tarifs */}
-        <div className="flex flex-wrap items-center justify-center gap-2 lg:gap-3 xl:gap-4 text-[10px] lg:text-xs text-white/60">
-          {hasPeakPricing ? (
-            <>
-              <div className="flex items-center gap-1 lg:gap-1.5">
-                <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[8px] lg:text-[9px] text-white/50">18</div>
-                <span>
-                  {hourlyRates.offPeakMin === hourlyRates.offPeakMax
-                    ? `${hourlyRates.offPeakMin}€/h`
-                    : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
-                </span>
-              </div>
-              <div className="flex items-center gap-1 lg:gap-1.5">
-                <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-primary/20 bg-primary/10 flex items-center justify-center">
-                  <span className="text-[9px] lg:text-[10px] text-primary">⚡</span>
-                </div>
-                <span className="text-primary">
-                  {hourlyRates.peakMin === hourlyRates.peakMax
-                    ? `${hourlyRates.peakMin}€/h`
-                    : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center gap-1 lg:gap-1.5">
-              <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[8px] lg:text-[9px] text-white/50">18</div>
-              <span>
-                {hourlyRates.offPeakMin === hourlyRates.offPeakMax
-                  ? `${hourlyRates.offPeakMin}€/h`
-                  : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
-              </span>
-            </div>
-          )}
         </div>
       </div>
     </div>

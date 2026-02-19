@@ -1,6 +1,6 @@
 "use client";
 
-import { Music, Mic, Users } from "lucide-react";
+import { Music, Mic } from "lucide-react";
 import {
   type StudioId,
   type GroupType,
@@ -98,14 +98,7 @@ export function StudioCard({
             <p className="text-xs text-white/70">{studio.size}</p>
           </div>
         </div>
-        {canSelectWithMove && (
-          <div className="absolute top-2 right-2 rounded-md bg-amber-500/90 px-2 py-1">
-            <span className="flex items-center gap-1 text-xs font-semibold text-black">
-              <Users className="h-3 w-3" />
-              Déplacement auto
-            </span>
-          </div>
-        )}
+
       </div>
 
       <div className="flex flex-col gap-4 px-4 pb-4">
@@ -124,12 +117,6 @@ export function StudioCard({
                   {formatPrice(total)}
                 </span>
               </div>
-
-              {canSelectWithMove && (
-                <div className="mt-2 rounded bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300">
-                  Une réservation solo/duo sera déplacée sur l&apos;autre studio
-                </div>
-              )}
 
               {isMixedPricing && (
                 <div className="mt-2 space-y-1 border-t border-white/10 pt-2 text-xs text-white/60">
@@ -168,7 +155,7 @@ export function StudioCard({
             }
           `}
         >
-          {!isAvailable ? "Indisponible" : canSelectWithMove ? "Sélectionner (avec déplacement)" : "Sélectionner"}
+          {!isAvailable ? "Indisponible" : "Sélectionner"}
         </button>
       </div>
     </div>
