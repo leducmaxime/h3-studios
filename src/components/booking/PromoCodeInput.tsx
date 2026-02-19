@@ -3,11 +3,7 @@
 import { useState } from "react";
 import { Tag, Check, X, Loader2 } from "lucide-react";
 
-import {
-  validatePromoCode,
-  calculatePromoDiscount,
-  type PromoCode,
-} from "@/lib/booking";
+import { type PromoCode } from "@/lib/booking";
 
 interface PromoCodeInputProps {
   total: number;
@@ -21,24 +17,29 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
   const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
 
-  const handleApply = () => {
+  const handleApply = async () => {
     if (!code.trim()) return;
-
     setIsValidating(true);
     setError(null);
-
-    // Simuler un délai réseau
-    setTimeout(() => {
-      const result = validatePromoCode(code, total);
-      if (result.valid && result.promo) {
-        const discount = calculatePromoDiscount(result.promo, total);
-        onApply(result.promo, discount);
+    try {
+      const res = await fetch("/api/promo-codes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.trim(), total }),
+      });
+      const json = await res.json() as { success: boolean; data?: { valid: boolean; promo?: PromoCode; discount?: number; error?: string } };
+      const data = json.data;
+      if (data?.valid && data.promo && data.discount !== undefined) {
+        onApply(data.promo, data.discount);
         setCode("");
       } else {
-        setError(result.error || "Code invalide");
+        setError(data?.error || "Code invalide");
       }
+    } catch {
+      setError("Erreur de connexion, réessayez");
+    } finally {
       setIsValidating(false);
-    }, 400);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

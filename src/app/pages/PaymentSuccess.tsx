@@ -15,6 +15,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
     total: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     const storedData = localStorage.getItem("h3-pending-payment");
@@ -30,6 +31,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
       }
     }
     setLoading(false);
+    setTimeout(() => setIsVisible(true), 50);
   }, []);
 
   if (loading) {
@@ -42,7 +44,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
-      <div className="w-full max-w-[600px] px-4">
+      <div className={`w-full max-w-[600px] px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
 
@@ -103,7 +105,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
         </div>
       </div>
 
-      <p className="text-center text-sm text-white/40">
+      <p className={`text-center text-sm text-white/40 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         Des questions,{" "}
         <a href="/a-propos#contact" className="text-primary hover:underline">
           contactez-nous

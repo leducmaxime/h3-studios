@@ -381,6 +381,13 @@ export function AdminCalendar() {
     border: "border-emerald-500/30",
   };
 
+  function getPaymentStatusColor(booking: CalendarBooking): { bg: string; text: string; border: string } {
+    if (booking.payment_status === "paid") {
+      return { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30" };
+    }
+    return { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30" };
+  }
+
   const renderWeekView = () => {
     const studios: StudioId[] = ["la-scene", "le-podium"];
     const today = new Date();
@@ -440,27 +447,27 @@ export function AdminCalendar() {
                     <div key={hour} className="h-[60px] border-b border-zinc-800" />
                   ))}
 
-                  {studios.map((studioId) => {
-                    const studioBookings = bookings.filter(
-                      (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
-                    );
+                   {studios.map((studioId) => {
+                     const studioBookings = bookings.filter(
+                       (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
+                     );
 
-                    return studioBookings.map((booking) => {
-                      const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                      let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                      const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                      const height = (endIdx - startIdx) * 30;
-                      const colors = STUDIO_COLORS[studioId];
-                      const leftPos = studioId === "la-scene" ? "4px" : "50%";
-                      const width = "calc(50% - 8px)";
+                     return studioBookings.map((booking) => {
+                       const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                       let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                       if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                       const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                       const height = (endIdx - startIdx) * 30;
+                       const paymentColors = getPaymentStatusColor(booking);
+                       const leftPos = studioId === "la-scene" ? "4px" : "50%";
+                      const width = studioId === "la-scene" ? "calc(50% - 8px)" : "calc(50% - 8px)";
 
-                      return (
+                       return (
                         <button
                           key={booking.id}
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
-                          className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg ${colors.bg} ${colors.border} ${colors.text}`}
+                          className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
                           style={{
                             top: `${top}px`,
                             height: `${Math.max(height, 24)}px`,

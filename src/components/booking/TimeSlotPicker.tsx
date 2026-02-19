@@ -45,10 +45,12 @@ export function TimeSlotPicker({
   hideHeader = false,
   groupType = "group",
 }: TimeSlotPickerProps) {
-  // Timeline states
   const [pendingStart, setPendingStart] = useState<string | null>(null);
   const [hoveredMarker, setHoveredMarker] = useState<string | null>(null);
+  const [virtualHoverRange, setVirtualHoverRange] = useState<{ start: string; endLabel: string } | null>(null);
+  const [slotsPerRow, setSlotsPerRow] = useState(10);
   const settingNewStartRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!startTime) {
@@ -65,6 +67,21 @@ export function TimeSlotPicker({
       setPendingStart(null);
     }
   }, [startTime, endTime]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const width = el.getBoundingClientRect().width;
+      const raw = Math.floor(width / 72);
+      const even = Math.max(2, Math.floor(raw / 2) * 2);
+      setSlotsPerRow(Math.min(10, even));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Solo/duo have flat pricing (no peak/off-peak distinction)
   const hasPeakPricing = groupType === "group";
@@ -136,6 +153,42 @@ export function TimeSlotPicker({
     [isOccupiedBy, studioFilter, groupType]
   );
 
+  const isSlotIsolated = useCallback(
+    (time: string): boolean => {
+      const idx = visibleSlots.indexOf(time);
+      if (idx === -1 || isSlotBooked(time)) return false;
+      const prevIsConstraint = idx === 0 || isSlotBooked(visibleSlots[idx - 1]);
+      const nextIsConstraint = idx === visibleSlots.length - 1 || isSlotBooked(visibleSlots[idx + 1]);
+      return prevIsConstraint && nextIsConstraint;
+    },
+    [visibleSlots, isSlotBooked]
+  );
+
+  const isSlotEffectivelyBooked = useCallback(
+    (time: string): boolean => isSlotBooked(time) || isSlotIsolated(time),
+    [isSlotBooked, isSlotIsolated]
+  );
+
+  const isLastFreeBeforeConstraint = useCallback(
+    (slotIdx: number): boolean => {
+      if (slotIdx < 0 || slotIdx >= visibleSlots.length) return false;
+      if (isSlotEffectivelyBooked(visibleSlots[slotIdx])) return false;
+      const nextIdx = slotIdx + 1;
+      return nextIdx >= visibleSlots.length || isSlotEffectivelyBooked(visibleSlots[nextIdx]);
+    },
+    [visibleSlots, isSlotEffectivelyBooked]
+  );
+
+  const isSecondToLastFreeBeforeConstraint = useCallback(
+    (slotIdx: number): boolean => {
+      if (slotIdx < 0 || slotIdx >= visibleSlots.length) return false;
+      if (isSlotEffectivelyBooked(visibleSlots[slotIdx])) return false;
+      const nextIdx = slotIdx + 1;
+      return nextIdx < visibleSlots.length && isLastFreeBeforeConstraint(nextIdx);
+    },
+    [visibleSlots, isSlotEffectivelyBooked, isLastFreeBeforeConstraint]
+  );
+
   const hourlyRates = useMemo(() => {
     if (studioFilter) {
       const offPeak = PRICING[studioFilter][groupType].offPeak;
@@ -167,6 +220,14 @@ export function TimeSlotPicker({
     return [...visibleSlots, closingTime];
   }, [visibleSlots, closingTime]);
 
+  const rows = useMemo(() => {
+    const result: string[][] = [];
+    for (let i = 0; i < visibleSlots.length; i += slotsPerRow) {
+      result.push(visibleSlots.slice(i, i + slotsPerRow));
+    }
+    return result;
+  }, [visibleSlots, slotsPerRow]);
+
   // Format d'affichage des labels
   const formatMarkerLabel = useCallback((label: string): string => {
     if (label === "00:00") return "00h";
@@ -187,10 +248,10 @@ export function TimeSlotPicker({
       : visibleSlots.indexOf(label) + 1;
 
     for (let i = startSlotIdx; i < endSlotIdx; i++) {
-      if (isSlotBooked(visibleSlots[i])) return false;
+      if (isSlotEffectivelyBooked(visibleSlots[i])) return false;
     }
     return true;
-  }, [pendingStart, rulerLabels, visibleSlots, closingTime, isSlotBooked]);
+  }, [pendingStart, rulerLabels, visibleSlots, closingTime, isSlotEffectivelyBooked]);
 
   // État d'un marqueur pour le style
   const getMarkerState = useCallback((label: string, labelIdx: number): string => {
@@ -199,34 +260,31 @@ export function TimeSlotPicker({
     // Le pendingStart sélectionné
     if (label === pendingStart) return "start-selected";
 
-    // Si pendingStart est actif, calculer l'état par rapport à lui
     if (pendingStart) {
       const startIdx = rulerLabels.indexOf(pendingStart);
       if (labelIdx <= startIdx) {
-        // Avant le start : potentiellement un nouveau start (sauf dernier label)
-        if (isLast) return "closing"; // on peut pas sélectionner closingTime comme start
-        if (isSlotBooked(label)) return "blocked";
-        return "available"; // peut être un nouveau start (reset)
+        if (isLast) return "closing";
+        if (isSlotEffectivelyBooked(label)) return "blocked";
+        return "available";
       }
       if (!isReachableAsEnd(label)) {
-        if (!isLast && isSlotBooked(label)) {
-          const prevIsBooked = labelIdx - 1 > startIdx && isSlotBooked(rulerLabels[labelIdx - 1]);
+        if (!isLast && isSlotEffectivelyBooked(label)) {
+          const prevIsBooked = labelIdx - 1 > startIdx && isSlotEffectivelyBooked(rulerLabels[labelIdx - 1]);
           return prevIsBooked ? "blocked" : "blocked-boundary";
         }
         return "too-close";
       }
-      return "available-end"; // valid end time
+      return "available-end";
     }
 
-    // Pas de pendingStart
     if (isLast) return "closing";
-    if (isSlotBooked(label)) {
-      const prevIsBooked = labelIdx > 0 && isSlotBooked(rulerLabels[labelIdx - 1]);
+    if (isSlotEffectivelyBooked(label)) {
+      const prevIsBooked = labelIdx > 0 && isSlotEffectivelyBooked(rulerLabels[labelIdx - 1]);
       return prevIsBooked ? "blocked" : "blocked-boundary";
     }
     if (startTime === label) return "start-confirmed";
     return "available";
-  }, [pendingStart, rulerLabels, isSlotBooked, isReachableAsEnd, startTime]);
+  }, [pendingStart, rulerLabels, isSlotEffectivelyBooked, isReachableAsEnd, startTime]);
 
   // Classe Tailwind d'un marqueur selon son état
   const getMarkerClass = useCallback((state: string): string => {
@@ -276,13 +334,9 @@ export function TimeSlotPicker({
 
   // État d'un segment (zone colorée entre deux marqueurs)
   const getSegmentState = useCallback((prevLabel: string, nextLabel: string): string => {
-    // Le segment représente le SLOT qui commence à prevLabel
-    const slot = prevLabel; // slot "prevLabel → nextLabel"
-    const isBooked = isSlotBooked(slot);
+    const slot = prevLabel;
+    if (isSlotEffectivelyBooked(slot)) return "booked";
 
-    if (isBooked) return "booked";
-
-    // Dans la sélection confirmée ?
     if (startTime && endTime) {
       const startIdx = visibleSlots.indexOf(startTime);
       const endIdx = endTime === closingTime ? visibleSlots.length : visibleSlots.indexOf(endTime);
@@ -292,7 +346,6 @@ export function TimeSlotPicker({
       }
     }
 
-    // Dans le preview hover ?
     if (pendingStart && hoveredMarker) {
       const pStartIdx = rulerLabels.indexOf(pendingStart);
       const pHoveredIdx = rulerLabels.indexOf(hoveredMarker);
@@ -305,11 +358,20 @@ export function TimeSlotPicker({
       }
     }
 
-    // Peak non sélectionné
+    if (!pendingStart && virtualHoverRange) {
+      const vStartIdx = visibleSlots.indexOf(virtualHoverRange.start);
+      const vEndLabel = virtualHoverRange.endLabel;
+      const vEndIdx = vEndLabel === closingTime ? visibleSlots.length : visibleSlots.indexOf(vEndLabel);
+      const slotIdx = visibleSlots.indexOf(slot);
+      if (vStartIdx >= 0 && slotIdx >= vStartIdx && slotIdx < vEndIdx) {
+        return isPeakTime(date, slot) ? "preview-peak" : "preview";
+      }
+    }
+
     if (hasPeakPricing && isPeakTime(date, slot)) return "peak";
 
     return "neutral";
-  }, [isSlotBooked, startTime, endTime, visibleSlots, closingTime, date, pendingStart, hoveredMarker, rulerLabels, isReachableAsEnd, hasPeakPricing]);
+  }, [isSlotEffectivelyBooked, startTime, endTime, visibleSlots, closingTime, date, pendingStart, hoveredMarker, rulerLabels, isReachableAsEnd, hasPeakPricing, virtualHoverRange]);
 
   // Classe Tailwind d'un segment
   const getSegmentClass = useCallback((state: string): string => {
@@ -317,11 +379,9 @@ export function TimeSlotPicker({
       case "booked":
         return "bg-red-500/20 border-t-2 border-red-500/50";
       case "selected":
-        return "bg-white/30 border-t-2 border-white/50";
       case "selected-peak":
         return "bg-primary/40 border-t-2 border-primary/70";
       case "preview":
-        return "bg-white/15 border-t border-white/30";
       case "preview-peak":
         return "bg-primary/20 border-t border-primary/40";
       case "peak":
@@ -331,14 +391,36 @@ export function TimeSlotPicker({
     }
   }, []);
 
-  // Gestion du clic sur un marqueur
   const handleMarkerClick = useCallback((label: string): void => {
     const labelIdx = rulerLabels.indexOf(label);
     const isLast = labelIdx === rulerLabels.length - 1;
 
     if (!pendingStart) {
       if (isLast) return;
-      if (isSlotBooked(label)) return;
+      if (isSlotEffectivelyBooked(label)) return;
+
+      const slotIdx = visibleSlots.indexOf(label);
+
+      if (slotIdx >= 0 && isLastFreeBeforeConstraint(slotIdx)) {
+        const prevIdx = slotIdx - 1;
+        if (prevIdx >= 0 && !isSlotEffectivelyBooked(visibleSlots[prevIdx])) {
+          const endLabel = rulerLabels[labelIdx + 1] ?? closingTime;
+          settingNewStartRef.current = true;
+          onSelectRange(visibleSlots[prevIdx], endLabel);
+          onConfirm();
+        }
+        return;
+      }
+
+      if (slotIdx >= 0 && isSecondToLastFreeBeforeConstraint(slotIdx)) {
+        const nextIdx = slotIdx + 1;
+        const endLabel = rulerLabels[nextIdx + 1] ?? closingTime;
+        settingNewStartRef.current = true;
+        onSelectRange(label, endLabel);
+        onConfirm();
+        return;
+      }
+
       settingNewStartRef.current = true;
       setPendingStart(label);
       onClear();
@@ -347,7 +429,6 @@ export function TimeSlotPicker({
 
     const pendingIdx = rulerLabels.indexOf(pendingStart);
 
-    // Clic sur le pendingStart lui-même = cancel
     if (label === pendingStart) {
       setPendingStart(null);
       onClear();
@@ -355,21 +436,41 @@ export function TimeSlotPicker({
     }
 
     if (labelIdx <= pendingIdx) {
-      if (isLast || isSlotBooked(label)) return;
+      if (isLast || isSlotEffectivelyBooked(label)) return;
       settingNewStartRef.current = true;
       setPendingStart(label);
       onClear();
       return;
     }
 
-    // Clic après le start : vérifier si atteignable
     if (!isReachableAsEnd(label)) return;
 
     const endLabelIdx = rulerLabels.indexOf(label);
     const actualEnd = label === closingTime ? label : rulerLabels[endLabelIdx + 1];
     onSelectRange(pendingStart, actualEnd);
-    onConfirm(); // auto-avance à l'étape suivante
-  }, [pendingStart, rulerLabels, isSlotBooked, isReachableAsEnd, onClear, onSelectRange, onConfirm]);
+    onConfirm();
+  }, [pendingStart, rulerLabels, visibleSlots, closingTime, isSlotEffectivelyBooked, isLastFreeBeforeConstraint, isSecondToLastFreeBeforeConstraint, isReachableAsEnd, onClear, onSelectRange, onConfirm]);
+
+  const handleMouseEnter = useCallback((slot: string) => {
+    setHoveredMarker(slot);
+    if (!pendingStart) {
+      const slotIdx = visibleSlots.indexOf(slot);
+      if (slotIdx >= 0 && isLastFreeBeforeConstraint(slotIdx)) {
+        const prevIdx = slotIdx - 1;
+        if (prevIdx >= 0 && !isSlotEffectivelyBooked(visibleSlots[prevIdx])) {
+          const endLabel = rulerLabels[slotIdx + 1] ?? closingTime;
+          setVirtualHoverRange({ start: visibleSlots[prevIdx], endLabel });
+          return;
+        }
+      }
+      setVirtualHoverRange(null);
+    }
+  }, [pendingStart, visibleSlots, isLastFreeBeforeConstraint, isSlotEffectivelyBooked, rulerLabels, closingTime]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredMarker(null);
+    setVirtualHoverRange(null);
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -393,33 +494,41 @@ export function TimeSlotPicker({
           {pendingStart ? "Heure de fin" : "Sélectionnez votre heure de début"}
         </span>
 
-        {/* Container principal scrollable horizontalement */}
         <div
+          ref={containerRef}
           data-testid="timeline-ruler"
-          className="overflow-x-auto"
-          onMouseLeave={() => setHoveredMarker(null)}
+          className="flex flex-col"
+          onMouseLeave={handleMouseLeave}
         >
-          <div className="flex min-w-max items-end pt-6 pb-3 relative pl-9 pr-9">
-            {pendingStart === null ? (
-              <>
-                {/* MODE DÉBUT — labels à gauche, toutes les cases 72px, fermeture à la fin */}
-                {visibleSlots.map((slot, i) => {
+          {rows.map((rowSlots, rowIdx) => {
+            const isLastRow = rowIdx === rows.length - 1;
+            const globalOffset = rowIdx * slotsPerRow;
+            const rowEndMarker = isLastRow ? closingTime : visibleSlots[globalOffset + slotsPerRow];
+            const rowEndMarkerIdx = isLastRow ? rulerLabels.length - 1 : rulerLabels.indexOf(rowEndMarker);
+            const rowEndMarkerState = getMarkerState(rowEndMarker, rowEndMarkerIdx);
+            const rowEndClickable = rowEndMarkerState === "available-end";
+            return (
+              <div key={rowIdx} className="flex items-end justify-center pt-6 pb-3 relative">
+                {rowSlots.map((slot, localIdx) => {
+                  const globalIdx = globalOffset + localIdx;
+                  const segmentState = getSegmentState(slot, rulerLabels[globalIdx + 1]);
                   const isHalfHour = slot.endsWith(":30");
                   const hourNum = parseInt(slot.split(":")[0]);
-                  const segmentState = getSegmentState(slot, rulerLabels[i + 1]);
-                  const markerState = getMarkerState(slot, i);
-                  const isBlocked = markerState === "blocked" || markerState === "blocked-boundary";
-                  const isYellow = segmentState === "selected" || segmentState === "selected-peak";
+                  const markerState = getMarkerState(slot, globalIdx);
+                  const isPendingStartCell = slot === pendingStart;
+                  const isBlocked = markerState === "blocked" || markerState === "blocked-boundary" || markerState === "too-close";
+                  const isYellow = isPendingStartCell || segmentState === "preview" || segmentState === "preview-peak" || segmentState === "selected" || segmentState === "selected-peak";
+                  const bgClass = isPendingStartCell
+                    ? getSegmentClass("selected-peak")
+                    : getSegmentClass(segmentState);
                   const cursorClass = isBlocked ? "cursor-not-allowed" : "cursor-pointer";
                   return (
                     <button
                       key={slot}
                       style={{ width: "72px" }}
-                      className={`relative h-12 py-1 rounded transition-colors
-                        ${getSegmentClass(segmentState)} ${cursorClass}
-                        ${!isBlocked && !isYellow ? "hover:bg-white/[0.12]" : ""}`}
+                      className={`relative h-12 py-1 rounded transition-colors ${bgClass} ${cursorClass} ${!isBlocked && !isYellow ? "hover:bg-white/[0.12]" : ""}`}
                       onClick={() => handleMarkerClick(slot)}
-                      onMouseEnter={() => setHoveredMarker(slot)}
+                      onMouseEnter={() => handleMouseEnter(slot)}
                       aria-label={isHalfHour ? `${hourNum}h30` : `${hourNum}h`}
                     >
                       <div className="absolute bottom-1 left-0 flex flex-col items-center gap-0.5 -translate-x-1/2">
@@ -435,96 +544,37 @@ export function TimeSlotPicker({
                           </span>
                         )}
                       </div>
-                      {hasPeakPricing && isPeakTime(date, slot) && !isSlotBooked(slot) && (
+                      {hasPeakPricing && isPeakTime(date, slot) && !isSlotEffectivelyBooked(slot) && (
                         <span className="absolute inset-0 flex items-center justify-center text-xs text-primary pointer-events-none select-none">⚡</span>
                       )}
                     </button>
                   );
                 })}
-                {/* Marqueur de fermeture — 0px de large, overflow visible */}
                 <div
-                  className="flex flex-col items-center justify-end pb-1"
+                  className={`flex flex-col items-center justify-end pb-1 ${rowEndClickable ? "cursor-pointer" : ""}`}
                   style={{ width: "0px", overflow: "visible" }}
+                  onClick={() => { if (rowEndClickable) handleMarkerClick(rowEndMarker); }}
+                  onMouseEnter={() => handleMouseEnter(rowEndMarker)}
                 >
                   <div className="w-px h-4 bg-white/50" />
-                  <span className="text-sm font-medium text-white/50 whitespace-nowrap">
-                    {formatMarkerLabel(closingTime)}
+                  <span className={`text-sm font-medium whitespace-nowrap ${getMarkerTextClass(rowEndMarkerState)}`}>
+                    {formatMarkerLabel(rowEndMarker)}
                   </span>
                 </div>
-              </>
-            ) : (
-              <>
-                {visibleSlots.map((slot, i) => {
-                  const segmentState = getSegmentState(slot, rulerLabels[i + 1]);
-                  const isHalfHour = slot.endsWith(":30");
-                  const hourNum = parseInt(slot.split(":")[0]);
-                  const markerState = getMarkerState(slot, i);
-                  const isPendingStartCell = slot === pendingStart;
-                  const slotIsPeak = isPeakTime(date, slot);
-                  const bgClass = isPendingStartCell
-                    ? getSegmentClass(slotIsPeak ? "selected-peak" : "selected")
-                    : getSegmentClass(segmentState);
-                  const isYellow = isPendingStartCell || segmentState === "preview" || segmentState === "preview-peak" || segmentState === "selected" || segmentState === "selected-peak";
-                  const cursorClass = markerState === "blocked" || markerState === "blocked-boundary" || markerState === "too-close"
-                    ? "cursor-not-allowed"
-                    : "cursor-pointer";
-                  return (
-                    <button
-                      key={slot}
-                      style={{ width: "72px" }}
-                      className={`relative h-12 py-1 rounded transition-colors ${bgClass} ${cursorClass} ${cursorClass === "cursor-pointer" && !isYellow ? "hover:bg-white/[0.12]" : ""}`}
-                      onClick={() => handleMarkerClick(slot)}
-                      onMouseEnter={() => setHoveredMarker(slot)}
-                      aria-label={isHalfHour ? `${hourNum}h30` : `${hourNum}h`}
-                    >
-                      <div className="absolute bottom-1 left-0 flex flex-col items-center gap-0.5 -translate-x-1/2">
-                        <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
-                        {isHalfHour ? (
-                          <div className={`flex flex-col items-center leading-none ${getMarkerTextClass(markerState)}`}>
-                            <span className="text-[9px]">{hourNum}h</span>
-                            <span className="text-xs font-medium">30</span>
-                          </div>
-                        ) : (
-                          <span className={`text-sm font-medium ${getMarkerTextClass(markerState)}`}>
-                            {formatMarkerLabel(slot)}
-                          </span>
-                        )}
-                      </div>
-                      {hasPeakPricing && isPeakTime(date, slot) && !isSlotBooked(slot) && (
-                        <span className="absolute inset-0 flex items-center justify-center text-xs text-primary pointer-events-none select-none">⚡</span>
-                      )}
-                    </button>
-                  );
-                })}
-                {(() => {
-                  const closingMarkerState = getMarkerState(closingTime, rulerLabels.length - 1);
-                  const closingClickable = closingMarkerState === "available-end";
-                  return (
-                    <div
-                      className={`flex flex-col items-center justify-end pb-1 ${closingClickable ? "cursor-pointer" : ""}`}
-                      style={{ width: "0px", overflow: "visible" }}
-                      onClick={() => { if (closingClickable) handleMarkerClick(closingTime); }}
-                      onMouseEnter={() => setHoveredMarker(closingTime)}
-                    >
-                      <div className="w-px h-4 bg-white/50" />
-                      <span className={`text-sm font-medium whitespace-nowrap ${getMarkerTextClass(closingMarkerState)}`}>
-                        {formatMarkerLabel(closingTime)}
-                      </span>
-                    </div>
-                  );
-                })()}
-              </>
-            )}
-          </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Récap live — preview ou confirmé */}
         {(() => {
-          const displayStart = startTime || (pendingStart && hoveredMarker && isReachableAsEnd(hoveredMarker) ? pendingStart : null);
+          const displayStart = startTime
+            || (pendingStart && hoveredMarker && isReachableAsEnd(hoveredMarker) ? pendingStart : null)
+            || (virtualHoverRange ? virtualHoverRange.start : null);
           const hoveredActualEnd = pendingStart && hoveredMarker && isReachableAsEnd(hoveredMarker)
             ? (hoveredMarker === closingTime ? hoveredMarker : rulerLabels[rulerLabels.indexOf(hoveredMarker) + 1])
             : null;
-          const displayEnd = endTime || hoveredActualEnd;
+          const displayEnd = endTime || hoveredActualEnd || (virtualHoverRange ? virtualHoverRange.endLabel : null);
 
           if (!displayStart || !displayEnd) return null;
 

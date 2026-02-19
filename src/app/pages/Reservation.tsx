@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter";
@@ -20,7 +20,7 @@ import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, EQUIPMENT, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, EQUIPMENT, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
 
 const GROUP_LABELS: Record<GroupType, string> = {
   solo: "Solo/Prof particulier",
@@ -79,6 +79,23 @@ export function Reservation({ step }: ReservationProps) {
     selectPaymentMethod,
     processPayment,
   } = useBookingWithRouter(step);
+
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/public-holidays")
+      .then((r) => r.json() as Promise<{ success: boolean; data: string[] }>)
+      .then((json) => { if (json.success) setPublicHolidays(json.data); })
+      .catch(() => {});
+    fetch("/api/peak-hours")
+      .then((r) => r.json() as Promise<{ success: boolean; data: { peakStartHour: number } }>)
+      .then((json) => { if (json.success) setPeakStartHour(json.data.peakStartHour); })
+      .catch(() => {});
+  }, []);
 
   // Scroll to top on every step change (scroll container is #root, not document)
   useEffect(() => {
@@ -286,11 +303,11 @@ export function Reservation({ step }: ReservationProps) {
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
       <ScrollUp />
-      <div className="text-center font-blanka text-3xl md:text-5xl">
+      <div className={`text-center font-blanka text-3xl md:text-5xl transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         RESERVATION
       </div>
       
-      <div className="w-full max-w-none sm:max-w-[900px] -mx-4 sm:mx-0">
+      <div className={`w-full max-w-none sm:max-w-[900px] -mx-4 sm:mx-0 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         {/* Cart banner — shown when adding a new booking with items already in cart */}
         {showCartBanner && (
           <div className="mb-4 flex items-center justify-between rounded-xl border-2 border-primary/30 bg-primary/10 px-4 py-3">

@@ -71,7 +71,14 @@ export interface DbBooking {
   updated_at: string;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  user_name: string | null;
+  user_email: string | null;
+  user_band_name: string | null;
+  user_phone: string | null;
 }
+
+// Type for creating bookings (excludes auto-generated fields and user fields from LEFT JOIN)
+export type CreateBooking = Omit<DbBooking, "id" | "created_at" | "updated_at" | "user_name" | "user_email" | "user_band_name" | "user_phone">;
 
 // --- Payments ---
 
@@ -206,3 +213,6 @@ export interface AuditLogFilters {
   dateFrom?: string;
   dateTo?: string;
 }
+
+// Extended type with user data from LEFT JOIN
+export interface BookingWithUser extends DbBooking {}

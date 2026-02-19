@@ -1,3 +1,7 @@
+"use client";
+
+import { useState, useEffect } from "react";
+
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { BookingWidget } from "@/components/booking/BookingWidget";
 import {
@@ -10,18 +14,24 @@ import {
 } from "@/components/ui/table";
 
 export function TarifsReservation() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
       <ScrollUp />
-      <div className="text-center font-blanka text-3xl md:text-5xl">
+      <div className={`text-center font-blanka text-3xl md:text-5xl transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         TARIFS ET RESERVATION
       </div>
       
-      <div className="w-full max-w-none sm:max-w-[900px] -mx-4 sm:mx-0">
+      <div className={`w-full max-w-none sm:max-w-[900px] -mx-4 sm:mx-0 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         <BookingWidget />
       </div>
 
-      <div className="mt-8 flex w-full max-w-[1048px] flex-col gap-8 px-4">
+      <div className={`mt-8 flex w-full max-w-[1048px] flex-col gap-8 px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="flex w-full flex-col items-center gap-8 text-center">
             <div className="text-center font-blanka text-2xl">GRILLE TARIFAIRE</div>

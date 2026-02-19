@@ -33,15 +33,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
-import { type DbBooking, type BookingStatus } from "@/lib/db-types";
+import { type DbBooking, type BookingStatus, type BookingWithUser } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-interface BookingWithUser extends DbBooking {
-  user_name?: string;
-  user_email?: string;
-}
 
 interface BookingsApiResponse {
   success: boolean;

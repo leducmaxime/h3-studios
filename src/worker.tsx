@@ -78,6 +78,7 @@ import {
   getPromoCodes,
   createPromoCode,
   updatePromoCode,
+  validatePromoCode,
   getOpeningHours,
   updateOpeningHours,
   getAllSettings,
@@ -141,6 +142,7 @@ const SUPER_ADMIN_ROUTE_PREFIXES = [
   "/api/admin/settings",
   "/api/admin/admin-users",
   "/api/admin/opening-hours",
+  "/api/admin/public-holidays",
   "/admin/studios",
   "/admin/pricing",
   "/admin/settings",
@@ -639,6 +641,55 @@ const app = defineApp([
     } catch (error) {
       console.error("POST /api/bookings error:", error);
       return jsonError(error instanceof Error ? error.message : "Booking failed", 500);
+    }
+  }),
+
+  route("/api/public-holidays", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+    try {
+      const raw = await getSetting(env.DB, "public_holidays");
+      const holidays: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+      return jsonSuccess(holidays);
+    } catch (error) {
+      console.error("GET /api/public-holidays error:", error);
+      return jsonError("Failed to fetch public holidays", 500);
+    }
+  }),
+
+  route("/api/peak-hours", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+    try {
+      const raw = await getSetting(env.DB, "peak_start_hour");
+      const peakStartHour = raw ? parseInt(raw, 10) : 18;
+      return jsonSuccess({ peakStartHour });
+    } catch (error) {
+      console.error("GET /api/peak-hours error:", error);
+      return jsonError("Failed to fetch peak hours config", 500);
+    }
+  }),
+
+  route("/api/promo-codes/validate", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+    try {
+      const body = await request.json() as { code: string; total: number };
+      if (!body.code || typeof body.total !== "number") return jsonError("Paramètres invalides", 400);
+      const result = await validatePromoCode(env.DB, body.code, body.total);
+      if (!result.valid || !result.promo) {
+        return jsonSuccess({ valid: false, error: result.error });
+      }
+      const p = result.promo;
+      const description = p.type === "percentage" ? `${p.value}% de réduction` : `${p.value}€ de réduction`;
+      const discount = p.type === "percentage"
+        ? Math.round(body.total * p.value / 100)
+        : Math.min(p.value, body.total);
+      return jsonSuccess({
+        valid: true,
+        promo: { code: p.code, type: p.type, value: p.value, description, minTotal: p.min_total > 0 ? p.min_total : undefined },
+        discount,
+      });
+    } catch (error) {
+      console.error("POST /api/promo-codes/validate error:", error);
+      return jsonError(error instanceof Error ? error.message : "Validation failed", 500);
     }
   }),
 
@@ -1733,6 +1784,67 @@ const app = defineApp([
       } catch (error) {
         console.error("PUT /api/admin/opening-hours error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to update opening hours", 500);
+      }
+    }
+
+    return jsonError("Method not allowed", 405);
+  }),
+
+  route("/api/admin/public-holidays", async ({ request }) => {
+    if (request.method === "GET") {
+      try {
+        const raw = await getSetting(env.DB, "public_holidays");
+        const holidays: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+        return jsonSuccess(holidays);
+      } catch (error) {
+        console.error("GET /api/admin/public-holidays error:", error);
+        return jsonError("Failed to fetch public holidays", 500);
+      }
+    }
+
+    if (request.method === "PUT") {
+      try {
+        const body = await request.json() as string[];
+        if (!Array.isArray(body)) return jsonError("Body doit être un tableau de dates", 400);
+        const validated = body.filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d));
+        const sorted = [...new Set(validated)].sort();
+        await setSetting(env.DB, "public_holidays", JSON.stringify(sorted));
+        await addAuditLog(env.DB, "setting", "public_holidays", "update", { count: sorted.length });
+        return jsonSuccess(sorted);
+      } catch (error) {
+        console.error("PUT /api/admin/public-holidays error:", error);
+        return jsonError("Failed to update public holidays", 500);
+      }
+    }
+
+    return jsonError("Method not allowed", 405);
+  }),
+
+  route("/api/admin/peak-hours", async ({ request }) => {
+    if (request.method === "GET") {
+      try {
+        const raw = await getSetting(env.DB, "peak_start_hour");
+        const peakStartHour = raw ? parseInt(raw, 10) : 18;
+        return jsonSuccess({ peakStartHour });
+      } catch (error) {
+        console.error("GET /api/admin/peak-hours error:", error);
+        return jsonError("Failed to fetch peak hours config", 500);
+      }
+    }
+
+    if (request.method === "PUT") {
+      try {
+        const body = await request.json() as { peakStartHour: number };
+        const hour = Math.round(body.peakStartHour);
+        if (typeof hour !== "number" || hour < 10 || hour > 23) {
+          return jsonError("Heure invalide (10-23)", 400);
+        }
+        await setSetting(env.DB, "peak_start_hour", String(hour));
+        await addAuditLog(env.DB, "setting", "peak_start_hour", "update", { peakStartHour: hour });
+        return jsonSuccess({ peakStartHour: hour });
+      } catch (error) {
+        console.error("PUT /api/admin/peak-hours error:", error);
+        return jsonError("Failed to update peak hours config", 500);
       }
     }
 

@@ -42,10 +42,7 @@ function formatPriceForCSV(cents: number): string {
 
 // ─── Bookings Export ─────────────────────────────────────────────────────────
 
-interface BookingWithUser extends DbBooking {
-  user_name?: string;
-  user_email?: string;
-}
+interface BookingWithUser extends DbBooking {}
 
 export function exportBookingsCSV(bookings: BookingWithUser[]): void {
   const headers = [
@@ -187,10 +184,7 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
 
 // ─── PDF Invoice Export ───────────────────────────────────────────────────────
 
-interface InvoiceBooking extends DbBooking {
-  user_name?: string;
-  user_email?: string;
-}
+interface InvoiceBooking extends DbBooking {}
 
 export function generateInvoicePDF(
   booking: InvoiceBooking,

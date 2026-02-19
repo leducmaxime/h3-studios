@@ -45,28 +45,30 @@ export function Actualites() {
       <ScrollUp />
 
       <div className="w-full max-w-6xl px-4">
-        <div className="mb-12 text-center">
+        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
           <h1 className="font-blanka text-5xl md:text-6xl lg:text-7xl">ACTUALITÉS</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
         </div>
 
-        <a
-          href="https://www.instagram.com/h3_studios_sucy"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group mx-auto mb-16 flex max-w-md items-center justify-center gap-4 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 to-transparent p-6 transition-all hover:border-primary hover:bg-primary/20"
-        >
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/20 transition-colors group-hover:bg-primary/30">
-            <Instagram className="h-7 w-7 text-primary" />
-          </div>
-          <div className="text-left">
-            <p className="text-lg font-semibold text-primary">@h3_studios_sucy</p>
-            <p className="text-sm text-white/60">Suivez-nous sur Instagram</p>
-          </div>
-          <ExternalLink className="ml-auto h-5 w-5 text-white/40 transition-colors group-hover:text-primary" />
-        </a>
+        <div className={`transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+          <a
+            href="https://www.instagram.com/h3_studios_sucy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group mx-auto mb-16 flex max-w-md items-center justify-center gap-4 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 to-transparent p-6 transition-all hover:border-primary hover:bg-primary/20"
+          >
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/20 transition-colors group-hover:bg-primary/30">
+              <Instagram className="h-7 w-7 text-primary" />
+            </div>
+            <div className="text-left">
+              <p className="text-lg font-semibold text-primary">@h3_studios_sucy</p>
+              <p className="text-sm text-white/60">Suivez-nous sur Instagram</p>
+            </div>
+            <ExternalLink className="ml-auto h-5 w-5 text-white/40 transition-colors group-hover:text-primary" />
+          </a>
+        </div>
 
-        <div className="mb-12 text-center">
+        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
           <h2 className="font-blanka text-2xl md:text-3xl">DERNIÈRES PUBLICATIONS</h2>
           <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-primary/50" />
         </div>
@@ -90,7 +92,7 @@ export function Actualites() {
                 className={`group overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_30px_rgba(249,176,53,0.1)] ${
                   isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
                 }`}
-                style={{ transitionDelay: `${i * 100}ms` }}
+                style={{ transitionDelay: `${300 + i * 100}ms` }}
               >
                 <div className="relative aspect-square overflow-hidden bg-zinc-900">
                   <img

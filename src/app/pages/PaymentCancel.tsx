@@ -1,11 +1,19 @@
 "use client";
 
+import { useState, useEffect } from "react";
+
 import { XCircle, ArrowLeft, RefreshCw, Phone } from "lucide-react";
 
 export function PaymentCancel() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
-      <div className="w-full max-w-[600px] px-4">
+      <div className={`w-full max-w-[600px] px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <div className="relative overflow-hidden rounded-2xl border-4 border-yellow-500 bg-black/80 backdrop-blur">
           <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent" />
 

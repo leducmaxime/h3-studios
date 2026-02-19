@@ -16,6 +16,8 @@ import {
   ToggleRight,
   Percent,
   Tag,
+  CalendarDays,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -102,6 +104,364 @@ function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ─── Public Holidays helpers ────────────────────────────────────────────────
+
+function easterDate(year: number): Date {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function toISO(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function frenchPublicHolidays(year: number): string[] {
+  const easter = easterDate(year);
+  const fixed = [
+    `${year}-01-01`,
+    `${year}-05-01`,
+    `${year}-05-08`,
+    `${year}-07-14`,
+    `${year}-08-15`,
+    `${year}-11-01`,
+    `${year}-11-11`,
+    `${year}-12-25`,
+  ];
+  const variable = [
+    toISO(addDays(easter, 1)),   // Lundi de Pâques
+    toISO(addDays(easter, 39)),  // Ascension
+    toISO(addDays(easter, 50)),  // Lundi de Pentecôte
+  ];
+  return [...fixed, ...variable].sort();
+}
+
+function formatHolidayDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// ─── PublicHolidaysSection Component ────────────────────────────────────────
+
+function PublicHolidaysSection() {
+  const [holidays, setHolidays] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [newDate, setNewDate] = useState("");
+
+  const fetchHolidays = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/public-holidays");
+      if (!res.ok) throw new Error("Failed to fetch");
+      const json = (await res.json()) as { success: boolean; data: string[] };
+      if (json.success) setHolidays(json.data);
+    } catch (error) {
+      console.error("Failed to fetch public holidays:", error);
+      toast.error("Erreur lors du chargement des jours fériés");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHolidays();
+  }, [fetchHolidays]);
+
+  const saveHolidays = async (updated: string[]) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/public-holidays", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+      const json = (await res.json()) as { success: boolean; data: string[]; error?: string };
+      if (json.success) {
+        setHolidays(json.data);
+      } else {
+        toast.error(json.error || "Erreur lors de la sauvegarde");
+      }
+    } catch (error) {
+      console.error("Failed to save public holidays:", error);
+      toast.error("Erreur lors de la sauvegarde des jours fériés");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAdd = async () => {
+    if (!newDate) return;
+    if (holidays.includes(newDate)) {
+      toast.info("Cette date est déjà dans la liste");
+      return;
+    }
+    await saveHolidays([...holidays, newDate].sort());
+    setNewDate("");
+  };
+
+  const handleRemove = async (iso: string) => {
+    await saveHolidays(holidays.filter((h) => h !== iso));
+  };
+
+  const handleLoadFrench = async (year: number) => {
+    const generated = frenchPublicHolidays(year);
+    const merged = Array.from(new Set([...holidays, ...generated])).sort();
+    await saveHolidays(merged);
+    toast.success(`Fériés ${year} chargés`);
+  };
+
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+      <div className="border-b border-zinc-800 px-6 py-4">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="h-5 w-5 text-primary" />
+          <div>
+            <h2 className="font-semibold">Jours fériés</h2>
+            <p className="text-sm text-zinc-400">Facturés au tarif week-end (heures pleines)</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-5">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleLoadFrench(currentYear)}
+            disabled={saving}
+          >
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Fériés français {currentYear}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleLoadFrench(currentYear + 1)}
+            disabled={saving}
+          >
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Fériés français {currentYear + 1}
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={newDate}
+            onChange={(e) => setNewDate(e.target.value)}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <Button size="sm" onClick={handleAdd} disabled={saving || !newDate}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Ajouter
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : holidays.length === 0 ? (
+          <p className="text-sm text-zinc-500 italic">Aucun jour férié enregistré.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            {holidays.map((iso) => (
+              <div
+                key={iso}
+                className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-800/50 px-4 py-2.5"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs text-zinc-500 tabular-nums">{iso}</span>
+                  <span className="text-sm capitalize text-zinc-300">{formatHolidayDate(iso)}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRemove(iso)}
+                  disabled={saving}
+                  className="h-7 w-7 p-0 text-zinc-500 hover:text-red-400"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-start gap-2 rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
+          <p className="text-xs text-zinc-500">
+            Les jours fériés sont tarifés au même prix que le samedi et le dimanche (heures pleines toute la journée).
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PeakHoursSection Component ─────────────────────────────────────────────
+
+const PEAK_HOUR_OPTIONS = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+
+function PeakHoursSection() {
+  const [peakStartHour, setPeakStartHourState] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(18);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/peak-hours")
+      .then((r) => r.json() as Promise<{ success: boolean; data: { peakStartHour: number } }>)
+      .then((json) => {
+        if (json.success) {
+          setPeakStartHourState(json.data.peakStartHour);
+          setDraft(json.data.peakStartHour);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to fetch peak hours:", error);
+        toast.error("Erreur lors du chargement de la configuration");
+      });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/peak-hours", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ peakStartHour: draft }),
+      });
+      const json = (await res.json()) as { success: boolean; data: { peakStartHour: number }; error?: string };
+      if (json.success) {
+        setPeakStartHourState(json.data.peakStartHour);
+        setEditing(false);
+        toast.success(`Heure pleine démarrant à ${json.data.peakStartHour}h sauvegardée`);
+      } else {
+        toast.error(json.error || "Erreur lors de la sauvegarde");
+      }
+    } catch (error) {
+      console.error("Failed to save peak hours:", error);
+      toast.error("Erreur lors de la sauvegarde");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const displayHour = editing ? draft : (peakStartHour ?? 18);
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+      <div className="border-b border-zinc-800 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Info className="h-5 w-5 text-primary" />
+            <div>
+              <h2 className="font-semibold">Définition des heures pleines / creuses</h2>
+              <p className="text-sm text-zinc-400">Heure de début des tarifs pleins en semaine</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {editing ? (
+              <>
+                <Button variant="outline" size="sm" onClick={() => { setEditing(false); setDraft(peakStartHour ?? 18); }} disabled={saving}>
+                  <X className="mr-1.5 h-3.5 w-3.5" />
+                  Annuler
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                  Sauvegarder
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)} disabled={peakStartHour === null}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                Modifier
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Sun className="h-5 w-5 text-zinc-400" />
+              <h3 className="font-medium">Heures creuses</h3>
+            </div>
+            <div className="space-y-2 text-sm text-zinc-400">
+              <div className="flex items-center justify-between rounded-md bg-zinc-800 px-3 py-2">
+                <span>Lundi → Vendredi</span>
+                <Badge variant="outline">10h — {displayHour}h</Badge>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Moon className="h-5 w-5 text-primary" />
+              <h3 className="font-medium">Heures pleines</h3>
+            </div>
+            <div className="space-y-2 text-sm text-zinc-400">
+              <div className="flex items-center justify-between rounded-md bg-zinc-800 px-3 py-2">
+                <span>Lundi → Vendredi</span>
+                {editing ? (
+                  <select
+                    value={draft}
+                    onChange={(e) => setDraft(parseInt(e.target.value, 10))}
+                    className="rounded-md border border-zinc-600 bg-zinc-700 px-2 py-1 text-sm text-white focus:border-primary focus:outline-none"
+                  >
+                    {PEAK_HOUR_OPTIONS.map((h) => (
+                      <option key={h} value={h}>{h}h — Fermeture</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Badge variant="default">{displayHour}h — Fermeture</Badge>
+                )}
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-zinc-800 px-3 py-2">
+                <span>Samedi & Dimanche</span>
+                <Badge variant="default">Toute la journée</Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
+          <p className="text-xs text-zinc-500">
+            Les créneaux en semaine à partir de {displayHour}h sont facturés au tarif plein. Les week-ends et jours fériés sont toujours au tarif plein.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── PricingTab Component ────────────────────────────────────────────────────
@@ -355,61 +715,9 @@ function PricingTab() {
         </div>
       ))}
 
-      {/* Peak hours definition */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-        <div className="border-b border-zinc-800 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Info className="h-5 w-5 text-primary" />
-            <div>
-              <h2 className="font-semibold">Définition des heures pleines / creuses</h2>
-              <p className="text-sm text-zinc-400">Règles actuelles de tarification</p>
-            </div>
-          </div>
-        </div>
+      <PeakHoursSection />
 
-        <div className="p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Sun className="h-5 w-5 text-zinc-400" />
-                <h3 className="font-medium">Heures creuses</h3>
-              </div>
-              <div className="space-y-2 text-sm text-zinc-400">
-                <div className="flex items-center justify-between rounded-md bg-zinc-800 px-3 py-2">
-                  <span>Lundi → Vendredi</span>
-                  <Badge variant="outline">10h — 18h</Badge>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Moon className="h-5 w-5 text-primary" />
-                <h3 className="font-medium">Heures pleines</h3>
-              </div>
-              <div className="space-y-2 text-sm text-zinc-400">
-                <div className="flex items-center justify-between rounded-md bg-zinc-800 px-3 py-2">
-                  <span>Lundi → Vendredi</span>
-                  <Badge variant="default">18h — Fermeture</Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-md bg-zinc-800 px-3 py-2">
-                  <span>Samedi & Dimanche</span>
-                  <Badge variant="default">Toute la journée</Badge>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 flex items-start gap-2 rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-3">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
-            <p className="text-xs text-zinc-500">
-              La distinction heures pleines / creuses est déterminée par l&apos;heure de début du
-              créneau (≥ 18h en semaine) et le jour (samedi et dimanche = heures pleines toute la
-              journée). Cette logique est définie dans le code source.
-            </p>
-          </div>
-        </div>
-      </div>
+      <PublicHolidaysSection />
     </div>
   );
 }

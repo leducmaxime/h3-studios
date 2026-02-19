@@ -123,15 +123,8 @@ const INITIAL_EQUIPMENT_FORM: EquipmentForm = {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function AdminStudios() {
-  const [blockedSlots, setBlockedSlots] = useState<DbBlockedSlot[]>([]);
-  const [pricing, setPricing] = useState<PricingByStudio>({});
   const [equipment, setEquipment] = useState<DbEquipment[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Block slot dialog
-  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [blockForm, setBlockForm] = useState<BlockForm>(INITIAL_BLOCK_FORM);
 
   // Equipment dialog
   const [eqDialogOpen, setEqDialogOpen] = useState(false);

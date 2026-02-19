@@ -15,6 +15,7 @@ import {
   type AuditLogFilters,
   type BookingStatus,
   type DbPaymentStatus,
+  type CreateBooking,
 } from "./db-types";
 import { getParisDateISO } from "./utils";
 
@@ -36,7 +37,7 @@ export async function getBookings(
 ): Promise<PaginatedResult<DbBooking>> {
   const conditions: string[] = [];
   const params: unknown[] = [];
-
+  
   if (filters.status) {
     conditions.push("b.status = ?");
     params.push(filters.status);
@@ -66,18 +67,18 @@ export async function getBookings(
     const term = `%${filters.search}%`;
     params.push(term, term);
   }
-
+  
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const joinUser = filters.search ? "LEFT JOIN users u ON b.user_id = u.id" : "";
-
+  const joinUser = "LEFT JOIN users u ON b.user_id = u.id";
+  
   const countSql = `SELECT COUNT(*) as total FROM bookings b ${joinUser} ${where}`;
   const countResult = await db.prepare(countSql).bind(...params).first<{ total: number }>();
   const total = countResult?.total ?? 0;
-
+  
   const offset = (page - 1) * limit;
-  const dataSql = `SELECT b.* FROM bookings b ${joinUser} ${where} ORDER BY b.date DESC, b.start_time DESC LIMIT ? OFFSET ?`;
+  const dataSql = `SELECT b.*, u.name as user_name, u.email as user_email, u.band_name as user_band_name FROM bookings b ${joinUser} ${where} ORDER BY b.date DESC, b.start_time DESC LIMIT ? OFFSET ?`;
   const dataResult = await db.prepare(dataSql).bind(...params, limit, offset).all<DbBooking>();
-
+  
   return { data: dataResult.results, total, page, limit };
 }
 
@@ -97,7 +98,7 @@ export async function getBookingByRef(
 
 export async function createBooking(
   db: D1Database,
-  data: Omit<DbBooking, "id" | "created_at" | "updated_at">,
+  data: CreateBooking,
 ): Promise<DbBooking> {
   const id = generateId();
   const timestamp = now();

@@ -13,7 +13,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/" }) => {
   const jsonLd = generateJsonLd();
 
   return (
-    <html lang="fr">
+    <html lang="fr" className="dark">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />

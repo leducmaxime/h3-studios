@@ -349,11 +349,36 @@ export function assignStudioForSoloDuo(
   return "la-scene";
 }
 
+let _publicHolidays: Set<string> = new Set();
+let _peakStartHour = 18;
+
+export function setPublicHolidays(dates: string[]): void {
+  _publicHolidays = new Set(dates);
+}
+
+export function setPeakStartHour(hour: number): void {
+  _peakStartHour = hour;
+}
+
+export function getPeakStartHour(): number {
+  return _peakStartHour;
+}
+
+function dateToParisISO(date: Date): string {
+  return date.toLocaleDateString("fr-FR", {
+    timeZone: "Europe/Paris",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).split("/").reverse().join("-");
+}
+
 export function isPeakTime(date: Date, time: string): boolean {
   const hour = parseInt(time.split(":")[0], 10);
   const dayOfWeek = date.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-  return hour >= 18 || isWeekend;
+  const isHoliday = _publicHolidays.has(dateToParisISO(date));
+  return hour >= _peakStartHour || isWeekend || isHoliday;
 }
 
 export function getSlotRate(
