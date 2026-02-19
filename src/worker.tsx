@@ -48,10 +48,43 @@ import {
 import {
   getBookings,
   getBookingById,
+  getBookingByRef,
   createBooking,
   updateBooking,
   getBookingsByDate,
   getBookingsByDateRange,
+  getBookingsByUser,
+  checkConflict,
+  checkConflictWithGroupType,
+  moveBookingToOtherStudio,
+  getUsers,
+  getUserById,
+  getUserByEmail,
+  createUser,
+  updateUser,
+  blockUser,
+  mergeUsers,
+  getPayments,
+  getPaymentsByBookingId,
+  getPaymentByBookingId,
+  addPayment,
+  markPaymentPaid,
+  refundPayment,
+  getBlockedSlots,
+  addBlockedSlot,
+  removeBlockedSlot,
+  getPricing,
+  updatePricing,
+  getPricingForBooking,
+  getEquipment,
+  updateEquipment,
+  getPromoCodes,
+  createPromoCode,
+  updatePromoCode,
+  validatePromoCode,
+  getOpeningHours,
+  updateOpeningHours,
+  getAllSettings,
   getOrphanedBookings,
   deleteOrphanedBookings,
   setSetting,
@@ -1019,7 +1052,7 @@ const app = defineApp([
 
     try {
       const result = await deleteOrphanedBookings(env.DB);
-      await addAuditLog(env.DB, "booking", "delete", {
+      await addAuditLog(env.DB, "booking", "orphaned", "bulk-delete", {
         bookingsDeleted: result.count,
       });
 
