@@ -160,9 +160,8 @@ export function TimeSlotPicker({
   // Format d'affichage des labels
   const formatMarkerLabel = useCallback((label: string): string => {
     if (label === "00:00") return "00h";
-    const [h, m] = label.split(":").map(Number);
-    if (m === 0) return `${h}h`;
-    return "·"; // demi-heure = point discret
+    const [h] = label.split(":").map(Number);
+    return `${h}h`;
   }, []);
 
   // Est-ce que ce label est atteignable comme endTime depuis pendingStart ?
@@ -228,6 +227,28 @@ export function TimeSlotPicker({
         return "text-red-400/50 cursor-not-allowed";
       case "too-close":
         return "text-white/20 cursor-not-allowed";
+      case "closing":
+        return "text-white/50";
+      default:
+        return "text-white/50";
+    }
+  }, []);
+
+  // Couleur de texte seulement (sans background/cursor)
+  const getMarkerTextClass = useCallback((state: string): string => {
+    switch (state) {
+      case "start-selected":
+        return "text-black font-bold";
+      case "start-confirmed":
+        return "text-black font-semibold";
+      case "available-end":
+        return "text-white/90";
+      case "available":
+        return "text-white/70";
+      case "blocked":
+        return "text-red-400/50";
+      case "too-close":
+        return "text-white/20";
       case "closing":
         return "text-white/50";
       default:
@@ -367,40 +388,64 @@ export function TimeSlotPicker({
           className="overflow-x-auto"
           onMouseLeave={() => setHoveredMarker(null)}
         >
-          <div className="flex min-w-max items-end pb-2 pt-4 relative">
+          <div className="flex min-w-max items-end pt-6 pb-3 relative">
             {rulerLabels.map((label, i) => {
               const isHalfHour = label.endsWith(":30");
               const isClosingTime = i === rulerLabels.length - 1;
               const markerState = getMarkerState(label, i);
-
-              // Segment coloré AVANT ce marqueur (sauf le premier)
               const segmentState = i > 0 ? getSegmentState(rulerLabels[i - 1], label) : null;
+              const cursorClass =
+                markerState === "blocked" || markerState === "too-close" || markerState === "closing"
+                  ? "cursor-not-allowed"
+                  : "cursor-pointer";
+              const hourNum = parseInt(label.split(":")[0]);
 
+              // Premier label (opening time) : bouton étroit sans segment à gauche
+              if (i === 0) {
+                return (
+                  <button
+                    key={label}
+                    className={`flex flex-col items-center justify-end min-h-12 px-1 pb-1 rounded ${cursorClass} ${getMarkerTextClass(markerState)}`}
+                    onClick={() => handleMarkerClick(label)}
+                    onMouseEnter={() => setHoveredMarker(label)}
+                    aria-label={formatMarkerLabel(label)}
+                  >
+                    <div className="w-px h-4 bg-white/50" />
+                    <span className="text-sm font-medium">{formatMarkerLabel(label)}</span>
+                    {hasPeakPricing && isPeakTime(date, label) && (
+                      <span className="text-[8px] text-primary">⚡</span>
+                    )}
+                  </button>
+                );
+              }
+
+              // Labels suivants : bouton full-width (72px) = segment cliquable, texte à droite
               return (
-                <div key={label} className="flex items-end">
-                  {/* Segment entre le marqueur précédent et celui-ci */}
-                  {segmentState && (
-                    <div className={`h-8 ${getSegmentClass(segmentState)}`} style={{ width: "56px" }} />
-                  )}
-
-                  {/* Marqueur */}
-                  <div className="flex flex-col items-center" style={{ width: "0px", position: "relative" }}>
+                <button
+                  key={label}
+                  style={{ width: "72px" }}
+                  className={`flex flex-col items-end justify-end min-h-12 py-1 pr-1 rounded ${getSegmentClass(segmentState!)} ${cursorClass}`}
+                  onClick={() => handleMarkerClick(label)}
+                  onMouseEnter={() => setHoveredMarker(label)}
+                  aria-label={isHalfHour ? `${hourNum}h30` : formatMarkerLabel(label)}
+                >
+                  <div className="flex flex-col items-center gap-0.5">
                     <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
-                    {!isHalfHour && (
-                      <button
-                        className={`absolute bottom-0 -translate-x-1/2 flex flex-col items-center gap-0.5 px-1 py-0.5 rounded text-xs transition-all whitespace-nowrap ${getMarkerClass(markerState)}`}
-                        onClick={() => handleMarkerClick(label)}
-                        onMouseEnter={() => setHoveredMarker(label)}
-                        aria-label={`${formatMarkerLabel(label)}`}
-                      >
-                        <span>{formatMarkerLabel(label)}</span>
-                        {hasPeakPricing && isPeakTime(date, label) && !isClosingTime && (
-                          <span className="text-[8px] text-primary">⚡</span>
-                        )}
-                      </button>
+                    {isHalfHour ? (
+                      <div className={`flex flex-col items-center leading-none ${getMarkerTextClass(markerState)}`}>
+                        <span className="text-[9px] text-white/40">{hourNum}h</span>
+                        <span className="text-xs font-medium">30</span>
+                      </div>
+                    ) : (
+                      <span className={`text-sm font-medium ${getMarkerTextClass(markerState)}`}>
+                        {formatMarkerLabel(label)}
+                      </span>
+                    )}
+                    {hasPeakPricing && isPeakTime(date, label) && !isClosingTime && (
+                      <span className="text-[8px] text-primary">⚡</span>
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
