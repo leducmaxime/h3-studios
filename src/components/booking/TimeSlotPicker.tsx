@@ -219,9 +219,12 @@ export function TimeSlotPicker({
     }
 
     // Pas de pendingStart
-    if (isLast) return "closing"; // dernier label = closingTime seulement (pas clickable comme start)
-    if (isSlotBooked(label)) return "blocked";
-    if (startTime === label) return "start-confirmed"; // sélection confirmée
+    if (isLast) return "closing";
+    if (isSlotBooked(label)) {
+      const prevIsBooked = labelIdx > 0 && isSlotBooked(rulerLabels[labelIdx - 1]);
+      return prevIsBooked ? "blocked" : "blocked-boundary";
+    }
+    if (startTime === label) return "start-confirmed";
     return "available";
   }, [pendingStart, rulerLabels, isSlotBooked, isReachableAsEnd, startTime]);
 
@@ -405,7 +408,7 @@ export function TimeSlotPicker({
                   const hourNum = parseInt(slot.split(":")[0]);
                   const segmentState = getSegmentState(slot, rulerLabels[i + 1]);
                   const markerState = getMarkerState(slot, i);
-                  const isBlocked = markerState === "blocked";
+                  const isBlocked = markerState === "blocked" || markerState === "blocked-boundary";
                   const isYellow = segmentState === "selected" || segmentState === "selected-peak";
                   const cursorClass = isBlocked ? "cursor-not-allowed" : "cursor-pointer";
                   return (
