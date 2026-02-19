@@ -301,6 +301,7 @@ export function AdminBookings() {
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Créneau</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Studio</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Statut</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Paiement</th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400">Montant</th>
                 <th className="w-10 px-4 py-3" />
               </tr>
@@ -312,16 +313,27 @@ export function AdminBookings() {
                     <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                   </td>
                 </tr>
-              ) : bookings.length === 0 ? (
+                ) : bookings.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-zinc-400">
-                    Aucune réservation trouvée
+                  <td colSpan={9} className="px-4 py-12 text-center">
+                    <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                   </td>
                 </tr>
-              ) : (
+                ) : (
                 bookings.map((booking) => {
                   const statusConfig = STATUS_CONFIG[booking.status];
                   const studioName = STUDIOS[booking.studio_id as StudioId]?.name || booking.studio_id;
+
+                  const paymentStatus = booking.payment_status;
+                  let paymentBadge: React.ReactNode = <span className="text-zinc-500">—</span>;
+
+                  if (paymentStatus === "paid" || paymentStatus === "pay-on-site") {
+                    paymentBadge = <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Payé</Badge>;
+                  } else if (paymentStatus === "pending") {
+                    paymentBadge = <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Reste à payer</Badge>;
+                  }
+
+                  const displayName = booking.user_band_name || booking.user_name || "—";
 
                   return (
                     <tr key={booking.id} className="bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors">
@@ -338,7 +350,7 @@ export function AdminBookings() {
                           href={`/admin/users/${booking.user_id}`}
                           className="hover:underline"
                         >
-                          <p className="font-medium">{booking.user_name || "—"}</p>
+                          <p className="font-medium">{displayName}</p>
                           <p className="text-sm text-zinc-400">{booking.user_email || "—"}</p>
                         </a>
                       </td>
@@ -353,6 +365,9 @@ export function AdminBookings() {
                         <Badge variant="outline" className={STATUS_CLASSES[booking.status]}>
                           {statusConfig.label}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        {paymentBadge}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
                         {formatPrice(booking.total_price)}
