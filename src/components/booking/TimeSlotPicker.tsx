@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { ChevronLeft } from "lucide-react";
 import {
   getStudioTimeSlots,
@@ -48,11 +48,15 @@ export function TimeSlotPicker({
   // Timeline states
   const [pendingStart, setPendingStart] = useState<string | null>(null);
   const [hoveredMarker, setHoveredMarker] = useState<string | null>(null);
+  const settingNewStartRef = useRef(false);
 
-  // Sync pendingStart with parent state
   useEffect(() => {
     if (!startTime) {
-      setPendingStart(null);
+      if (settingNewStartRef.current) {
+        settingNewStartRef.current = false;
+      } else {
+        setPendingStart(null);
+      }
     }
   }, [startTime]);
 
@@ -198,7 +202,13 @@ export function TimeSlotPicker({
         if (isSlotBooked(label)) return "blocked";
         return "available"; // peut être un nouveau start (reset)
       }
-      if (!isReachableAsEnd(label)) return "too-close"; // < 1h ou bloqué
+      if (!isReachableAsEnd(label)) {
+        if (!isLast && isSlotBooked(label)) {
+          const prevIsBooked = labelIdx - 1 > startIdx && isSlotBooked(rulerLabels[labelIdx - 1]);
+          return prevIsBooked ? "blocked" : "blocked-boundary";
+        }
+        return "too-close";
+      }
       return "available-end"; // valid end time
     }
 
@@ -244,6 +254,8 @@ export function TimeSlotPicker({
         return "text-white/70";
       case "blocked":
         return "text-red-400/50";
+      case "blocked-boundary":
+        return "text-white/70";
       case "too-close":
         return "text-white/50";
       case "closing":
@@ -316,9 +328,9 @@ export function TimeSlotPicker({
     const isLast = labelIdx === rulerLabels.length - 1;
 
     if (!pendingStart) {
-      // Premier clic = sélection du start
-      if (isLast) return; // pas de start sur le dernier label
+      if (isLast) return;
       if (isSlotBooked(label)) return;
+      settingNewStartRef.current = true;
       setPendingStart(label);
       onClear();
       return;
@@ -333,18 +345,9 @@ export function TimeSlotPicker({
       return;
     }
 
-    // Clic avant ou au même niveau que le start = reset, nouveau start
     if (labelIdx <= pendingIdx) {
-      if (isLast) {
-        setPendingStart(null);
-        onClear();
-        return;
-      }
-      if (isSlotBooked(label)) {
-        setPendingStart(null);
-        onClear();
-        return;
-      }
+      if (isLast || isSlotBooked(label)) return;
+      settingNewStartRef.current = true;
       setPendingStart(label);
       onClear();
       return;
@@ -453,7 +456,7 @@ export function TimeSlotPicker({
                     ? getSegmentClass(slotIsPeak ? "selected-peak" : "selected")
                     : getSegmentClass(segmentState);
                   const isYellow = isPendingStartCell || segmentState === "preview" || segmentState === "preview-peak" || segmentState === "selected" || segmentState === "selected-peak";
-                  const cursorClass = markerState === "blocked" || markerState === "too-close"
+                  const cursorClass = markerState === "blocked" || markerState === "blocked-boundary" || markerState === "too-close"
                     ? "cursor-not-allowed"
                     : "cursor-pointer";
                   return (
