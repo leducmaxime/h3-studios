@@ -1,34 +1,14 @@
 "use client";
 
-import { Calendar, Music2, ArrowRight } from "lucide-react";
-import { type BookingFlow, type GroupType } from "@/lib/booking";
+import { Calendar, Music2 } from "lucide-react";
+import { type BookingFlow } from "@/lib/booking";
 
 interface FlowChoiceProps {
   onSelect: (flow: BookingFlow) => void;
   disabled?: boolean;
-  groupType?: GroupType | null;
 }
 
-export function FlowChoice({ onSelect, disabled = false, groupType }: FlowChoiceProps) {
-  const isSoloDuo = groupType === "solo" || groupType === "duo";
-
-  if (isSoloDuo && !disabled) {
-    return (
-      <div className="flex flex-col items-center gap-6 py-2">
-        <p className="text-center text-sm font-medium text-primary/90">
-          Le choix du studio se fera selon la disponibilité, priorité aux groupes.
-        </p>
-        <button
-          onClick={() => onSelect("time-first")}
-          className="flex w-full max-w-xs items-center justify-center gap-2 rounded-xl border-2 border-primary/50 bg-white/5 py-4 text-lg font-semibold text-primary transition-all hover:border-primary hover:bg-primary/10 hover:scale-[1.02]"
-        >
-          Continuer
-          <ArrowRight className="h-5 w-5" />
-        </button>
-      </div>
-    );
-  }
-
+export function FlowChoice({ onSelect, disabled = false }: FlowChoiceProps) {
   const studioDisabled = disabled;
 
   return (

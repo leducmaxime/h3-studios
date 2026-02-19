@@ -361,7 +361,7 @@ export function Reservation({ step }: ReservationProps) {
                   onChange={setGroupType}
                 />
                 {state.groupType !== null && (
-                  <FlowChoice onSelect={selectFlow} groupType={state.groupType} />
+                  <FlowChoice onSelect={selectFlow} />
                 )}
               </div>
             )}
@@ -387,6 +387,12 @@ export function Reservation({ step }: ReservationProps) {
                           : "Récapitulatif de votre réservation"}
                   </p>
                 </div>
+
+                {(state.groupType === "solo" || state.groupType === "duo") && (
+                  <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center text-sm font-medium text-primary/90">
+                    Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+                  </p>
+                )}
 
                 {/* Date picker */}
                 <WeekCalendar
@@ -646,6 +652,11 @@ export function Reservation({ step }: ReservationProps) {
                                 );
                               })}
                             </div>
+                          )}
+                          {(booking.groupType === "solo" || booking.groupType === "duo") && (
+                            <p className="mt-2 text-xs text-primary/70">
+                              Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+                            </p>
                           )}
                         </div>
                       ))}

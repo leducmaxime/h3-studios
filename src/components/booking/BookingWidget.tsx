@@ -103,7 +103,7 @@ export function BookingWidget() {
                 value={state.groupType}
                 onChange={setGroupType}
               />
-              <FlowChoice onSelect={selectFlow} disabled={!state.groupType} groupType={state.groupType} />
+              <FlowChoice onSelect={selectFlow} disabled={!state.groupType} />
             </div>
           )}
 
@@ -126,6 +126,11 @@ export function BookingWidget() {
                         : "Choisissez votre créneau"}
                     </p>
                   </div>
+                  {(state.groupType === "solo" || state.groupType === "duo") && (
+                    <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center text-sm font-medium text-primary/90">
+                      Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+                    </p>
+                  )}
                   <WeekCalendar
                     selectedDate={state.selectedDate}
                     onSelectDate={selectDate}
@@ -424,21 +429,26 @@ export function BookingWidget() {
                         key={booking.id}
                         className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4"
                       >
-                        <div className="flex-1">
-                          <div className="font-medium">
-                            {booking.groupType === "group" ? STUDIOS[booking.studioId].name : "Répétition"}
-                          </div>
-                          <div className="text-sm text-white/60">
-                            {formatDate(booking.date, "short")} • {booking.startTime} - {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
-                          </div>
-                          {booking.equipmentPrice > 0 && (
-                            <div className="mt-1 text-xs text-white/40">
-                              Options : {booking.equipment.filter(e => e.quantity > 0).map(e =>
-                                `${EQUIPMENT[e.id]?.name || e.id} x${e.quantity}`
-                              ).join(", ")}
+                          <div className="flex-1">
+                            <div className="font-medium">
+                              {booking.groupType === "group" ? STUDIOS[booking.studioId].name : "Répétition"}
                             </div>
-                          )}
-                        </div>
+                            <div className="text-sm text-white/60">
+                              {formatDate(booking.date, "short")} • {booking.startTime} - {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
+                            </div>
+                            {booking.equipmentPrice > 0 && (
+                              <div className="mt-1 text-xs text-white/40">
+                                Options : {booking.equipment.filter(e => e.quantity > 0).map(e =>
+                                  `${EQUIPMENT[e.id]?.name || e.id} x${e.quantity}`
+                                ).join(", ")}
+                              </div>
+                            )}
+                            {(booking.groupType === "solo" || booking.groupType === "duo") && (
+                              <div className="mt-1 text-xs text-primary/70">
+                                Le choix du studio se fera selon la disponibilité, priorité aux groupes.
+                              </div>
+                            )}
+                          </div>
                         <div className="flex items-center gap-3">
                           <span className="text-lg font-semibold text-primary">{formatPrice(booking.price)}</span>
                           <button
