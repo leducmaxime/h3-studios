@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getAvailableRanges, ALL_TIME_SLOTS, type StudioId, type CompletedBooking } from "@/lib/booking";
+import { ALL_TIME_SLOTS, getStudioTimeSlots, MIN_BOOKING_SLOTS, type StudioId, type CompletedBooking } from "@/lib/booking";
 
 interface WeekCalendarProps {
   onSelectDate: (date: Date) => void;
@@ -81,6 +81,23 @@ function getCartOccupancy(cart: CompletedBooking[], dateStr: string): Set<string
   return set;
 }
 
+function hasBookableAvailability(occupancy: Set<string>, date: Date, studioFilter?: StudioId | null): boolean {
+  const studios: StudioId[] = studioFilter ? [studioFilter] : ["la-scene", "le-podium"];
+
+  for (const studioId of studios) {
+    const slots = getStudioTimeSlots(studioId, date);
+    let consecutive = 0;
+
+    for (const time of slots) {
+      const blocked = occupancy.has(`${studioId}-${time}`);
+      consecutive = blocked ? 0 : consecutive + 1;
+      if (consecutive >= MIN_BOOKING_SLOTS) return true;
+    }
+  }
+
+  return false;
+}
+
 export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = [] }: WeekCalendarProps) {
   const today = useMemo(() => new Date(), []);
   const [dayOffset, setDayOffset] = useState(0);
@@ -107,19 +124,6 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
         .catch(console.error);
     });
   }, [weekDates]);
-
-  const availabilityMap = useMemo(() => {
-    const map = new Map<string, string[]>();
-    weekDates.forEach((date) => {
-      if (isPast(date) || isTooFarInFuture(date)) return;
-      const key = date.toISOString().split("T")[0];
-      const apiOccupancy = weekOccupancy.get(key) ?? new Set<string>();
-      const cartOccupancyForDate = getCartOccupancy(cart, key);
-      const merged = new Set<string>([...apiOccupancy, ...cartOccupancyForDate]);
-      map.set(key, getAvailableRanges(merged, date, studioFilter));
-    });
-    return map;
-  }, [weekDates, studioFilter, weekOccupancy, cart]);
 
   const goToPreviousWeek = () => {
     setDayOffset((d) => Math.max(0, d - 7));
@@ -163,8 +167,10 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
           const tooFar = isTooFarInFuture(date);
           const todayDate = isToday(date);
           const selected = selectedDate && isSameDay(date, selectedDate);
-          const ranges = availabilityMap.get(dateKey) || [];
-          const hasAvailability = ranges.length > 0;
+          const apiOccupancy = weekOccupancy.get(dateKey) ?? new Set<string>();
+          const cartOccupancyForDate = getCartOccupancy(cart, dateKey);
+          const merged = new Set<string>([...apiOccupancy, ...cartOccupancyForDate]);
+          const hasAvailability = hasBookableAvailability(merged, date, studioFilter);
           const isFull = !past && !tooFar && !hasAvailability;
           const disabled = past || tooFar || !hasAvailability;
 

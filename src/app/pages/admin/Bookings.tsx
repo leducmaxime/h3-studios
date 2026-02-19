@@ -105,7 +105,7 @@ export function AdminBookings() {
   const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "pending" | "pay-on-site">("all");
-  const [sortBy, setSortBy] = useState<BookingSortField>("date");
+  const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
   const [page, setPage] = useState(1);
   const perPage = 20;

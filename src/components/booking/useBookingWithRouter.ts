@@ -596,10 +596,10 @@ export function useBookingWithRouter(urlStep?: string) {
           body: JSON.stringify({
             bookingRef: booking.bookingRef,
             user: {
-              name: booking.userName,
-              email: booking.userEmail,
-              phone: booking.userPhone,
-              bandName: booking.bandName,
+              name: state.userName,
+              email: state.userEmail,
+              phone: state.userPhone,
+              bandName: state.bandName,
             },
             studioId: booking.studioId,
             date: formatDateISO(booking.date),
@@ -635,7 +635,7 @@ export function useBookingWithRouter(urlStep?: string) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.cart, isSubmitting]);
+  }, [state.cart, state.userName, state.userEmail, state.userPhone, state.bandName, isSubmitting]);
 
   const processPayment = useCallback(() => {
     setState((s) => {

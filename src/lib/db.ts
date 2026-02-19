@@ -77,14 +77,14 @@ export async function getBookings(
 
   const offset = (page - 1) * limit;
 
-  const sortBy = filters.sortBy || "date";
+  const sortBy = filters.sortBy || "created_at";
   const sortOrder = filters.sortOrder || "desc";
 
   const validSortFields = ["date", "start_time", "total_price", "status", "payment_status", "created_at"];
   const safeSortBy = validSortFields.includes(sortBy) ? sortBy : "date";
   const safeSortOrder = sortOrder === "asc" ? "ASC" : "DESC";
 
-  const dataSql = `SELECT b.*, u.name as user_name, u.email as user_email, u.band_name as user_band_name FROM bookings b ${joinUser} ${where} ORDER BY b.${safeSortBy} ${safeSortOrder} LIMIT ? OFFSET ?`;
+  const dataSql = `SELECT b.*, u.name as user_name, u.email as user_email, u.band_name as user_band_name FROM bookings b ${joinUser} ${where} ORDER BY b.${safeSortBy} ${safeSortOrder}, b.created_at DESC LIMIT ? OFFSET ?`;
   const dataResult = await db.prepare(dataSql).bind(...params, limit, offset).all<DbBooking>();
 
   return { data: dataResult.results, total, page, limit };

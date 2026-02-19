@@ -320,10 +320,10 @@ export function useBooking() {
           body: JSON.stringify({
             bookingRef: booking.bookingRef,
             user: {
-              name: booking.userName,
-              email: booking.userEmail,
-              phone: booking.userPhone,
-              bandName: booking.bandName,
+              name: state.userName,
+              email: state.userEmail,
+              phone: state.userPhone,
+              bandName: state.bandName,
             },
             studioId: booking.studioId,
             date: formatDateISO(booking.date),
@@ -334,7 +334,7 @@ export function useBooking() {
             equipmentPrice: booking.equipmentPrice,
             price: booking.price,
             paymentMethod: method,
-            paymentStatus: method === "card" ? "pending_payment" : "pay-on-site",
+            paymentStatus: method === "card" ? "pending" : "pay-on-site",
             promoCode: booking.promoCode,
             promoDiscount: booking.promoDiscount,
           }),
@@ -359,7 +359,7 @@ export function useBooking() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.cart, isSubmitting]);
+  }, [state.cart, state.userName, state.userEmail, state.userPhone, state.bandName, isSubmitting]);
 
   const processPayment = useCallback(() => {
     setState((s) => {

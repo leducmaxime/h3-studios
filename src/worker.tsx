@@ -551,20 +551,29 @@ const app = defineApp([
         promoDiscount?: number;
       };
 
-      let user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(body.user.email).first<{ id: string }>();
+      const name = body.user?.name?.trim() || "";
+      const email = body.user?.email?.trim() || "";
+      const phone = body.user?.phone?.trim() || "";
+      const bandName = body.user?.bandName?.trim() || "";
+
+      if (!name || !email || !phone) {
+        return jsonError("Merci de renseigner nom, email et téléphone.", 400);
+      }
+
+      let user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first<{ id: string }>();
       
       if (!user) {
         user = await createUser(env.DB, {
-          name: body.user.name,
-          email: body.user.email,
-          phone: body.user.phone,
-          band_name: body.user.bandName,
+          name,
+          email,
+          phone,
+          band_name: bandName,
         });
       } else {
         await updateUser(env.DB, user.id, {
-          name: body.user.name,
-          phone: body.user.phone,
-          band_name: body.user.bandName,
+          name,
+          phone,
+          band_name: bandName,
         });
       }
 
