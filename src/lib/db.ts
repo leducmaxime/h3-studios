@@ -953,3 +953,38 @@ export async function getDashboardStats(db: D1Database): Promise<DashboardStats>
     occupancyToday: totalSlots > 0 ? Math.round((usedSlots / totalSlots) * 100) : 0,
   };
 }
+
+// ─── Orphaned Bookings Cleanup ─────────────────────────────────────────
+
+export interface OrphanedBooking {
+  id: string;
+  booking_ref: string;
+  user_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  studio_id: string;
+  status: string;
+  total_price: number;
+}
+
+export async function getOrphanedBookings(db: D1Database): Promise<OrphanedBooking[]> {
+  const result = await db.prepare(`
+    SELECT b.id, b.booking_ref, b.user_id, b.date, b.start_time, b.end_time, b.studio_id, b.status, b.total_price
+    FROM bookings b
+    LEFT JOIN users u ON b.user_id = u.id
+    WHERE u.id IS NULL
+    ORDER BY b.date DESC, b.created_at DESC
+  `).all<OrphanedBooking>();
+  return result.results;
+}
+
+export async function deleteOrphanedBookings(db: D1Database): Promise<{ success: boolean; count: number }> {
+  const result = await db.prepare(`
+    DELETE FROM bookings
+    WHERE user_id NOT IN (SELECT id FROM users)
+  `).run();
+  
+  const count = result.meta.changes || 0;
+  return { success: true, count };
+}

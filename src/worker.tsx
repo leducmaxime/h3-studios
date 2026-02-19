@@ -48,40 +48,12 @@ import {
 import {
   getBookings,
   getBookingById,
-  getBookingByRef,
   createBooking,
   updateBooking,
   getBookingsByDate,
   getBookingsByDateRange,
-  checkConflict,
-  checkConflictWithGroupType,
-  moveBookingToOtherStudio,
-  createUser,
-  updateUser,
-  getUsers,
-  getUserById,
-  blockUser,
-  mergeUsers,
-  getPayments,
-  getPaymentsByBookingId,
-  addPayment,
-  markPaymentPaid,
-  refundPayment,
-  getBlockedSlots,
-  addBlockedSlot,
-  removeBlockedSlot,
-  getPricing,
-  getPricingForBooking,
-  updatePricing,
-  getEquipment,
-  updateEquipment,
-  getPromoCodes,
-  createPromoCode,
-  updatePromoCode,
-  validatePromoCode,
-  getOpeningHours,
-  updateOpeningHours,
-  getAllSettings,
+  getOrphanedBookings,
+  deleteOrphanedBookings,
   setSetting,
   addAuditLog,
   getAuditLogs,
@@ -1026,6 +998,36 @@ const app = defineApp([
     }
 
     return jsonError("Method not allowed", 405);
+  }),
+
+  // ─── Orphaned Bookings API ───────────────────────────────────────
+
+  route("/api/admin/orphaned-bookings", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const orphaned = await getOrphanedBookings(env.DB);
+      return jsonSuccess({ count: orphaned.length, bookings: orphaned });
+    } catch (error) {
+      console.error("GET /api/admin/orphaned-bookings error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch orphaned bookings", 500);
+    }
+  }),
+
+  route("/api/admin/orphaned-bookings/delete", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const result = await deleteOrphanedBookings(env.DB);
+      await addAuditLog(env.DB, "booking", "delete", {
+        bookingsDeleted: result.count,
+      });
+
+      return jsonSuccess({ success: true, count: result.count });
+    } catch (error) {
+      console.error("POST /api/admin/orphaned-bookings/delete error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to delete orphaned bookings", 500);
+    }
   }),
 
   route("/api/admin/calendar", async ({ request }) => {
