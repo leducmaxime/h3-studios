@@ -403,7 +403,7 @@ export function TimeSlotPicker({
                     <button
                       key={slot}
                       style={{ width: "72px" }}
-                      className={`flex items-end justify-start min-h-12 py-1 pl-0.5 rounded transition-colors
+                      className={`flex items-end justify-start h-12 py-1 pl-0.5 rounded transition-colors
                         ${getSegmentClass(segmentState)} ${cursorClass}
                         ${!isBlocked ? "hover:bg-white/[0.12]" : ""}`}
                       onClick={() => handleMarkerClick(slot)}
@@ -447,14 +447,14 @@ export function TimeSlotPicker({
                   const isOpeningStart = pendingStart === rulerLabels[0];
                   return (
                     <div
-                      className="flex flex-col items-center justify-end pb-1"
+                      className="flex flex-col items-start justify-end pb-1"
                       style={{ width: "0px", overflow: "visible" }}
                     >
                       <div className={`w-px h-4 ${isOpeningStart ? "bg-primary" : "bg-white/50"}`} />
                       <span
                         className={`text-xs whitespace-nowrap leading-none mt-0.5 ${
                           isOpeningStart
-                            ? "bg-primary/30 text-primary font-bold px-0.5 rounded"
+                            ? "bg-primary/30 text-black font-bold px-0.5 rounded"
                             : "text-white/40"
                         }`}
                       >
@@ -478,7 +478,7 @@ export function TimeSlotPicker({
                     <button
                       key={slot}
                       style={{ width: "72px" }}
-                      className={`flex items-end justify-end min-h-12 py-1 pr-0.5 rounded
+                      className={`flex items-end justify-end h-12 py-1 pr-0.5 rounded
                         ${getSegmentClass(segmentState)} ${cursorClass}`}
                       onClick={() => handleMarkerClick(rightLabel)}
                       onMouseEnter={() => setHoveredMarker(rightLabel)}
@@ -504,7 +504,7 @@ export function TimeSlotPicker({
                             <span
                               className={`text-xs font-medium ${
                                 isStartBoundary
-                                  ? "bg-primary/30 text-primary font-bold px-0.5 rounded"
+                                  ? "bg-primary/30 text-black font-bold px-0.5 rounded"
                                   : getMarkerTextClass(markerState)
                               }`}
                             >
@@ -515,7 +515,7 @@ export function TimeSlotPicker({
                           <span
                             className={`text-sm font-medium ${
                               isStartBoundary
-                                ? "bg-primary/30 text-primary font-bold px-1 rounded"
+                                ? "bg-primary/30 text-black font-bold px-1 rounded"
                                 : getMarkerTextClass(markerState)
                             }`}
                           >
