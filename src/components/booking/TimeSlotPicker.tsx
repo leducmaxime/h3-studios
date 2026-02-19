@@ -235,9 +235,9 @@ export function TimeSlotPicker({
   const getMarkerTextClass = useCallback((state: string): string => {
     switch (state) {
       case "start-selected":
-        return "text-black font-bold";
+        return "text-white/70";
       case "start-confirmed":
-        return "text-black font-semibold";
+        return "text-white/70";
       case "available-end":
         return "text-white/90";
       case "available":
@@ -397,6 +397,7 @@ export function TimeSlotPicker({
                   const segmentState = getSegmentState(slot, rulerLabels[i + 1]);
                   const markerState = getMarkerState(slot, i);
                   const isBlocked = markerState === "blocked";
+                  const isYellow = segmentState === "selected" || segmentState === "selected-peak";
                   const cursorClass = isBlocked ? "cursor-not-allowed" : "cursor-pointer";
                   return (
                     <button
@@ -404,7 +405,7 @@ export function TimeSlotPicker({
                       style={{ width: "72px" }}
                       className={`relative h-12 py-1 rounded transition-colors
                         ${getSegmentClass(segmentState)} ${cursorClass}
-                        ${!isBlocked ? "hover:bg-white/[0.12]" : ""}`}
+                        ${!isBlocked && !isYellow ? "hover:bg-white/[0.12]" : ""}`}
                       onClick={() => handleMarkerClick(slot)}
                       onMouseEnter={() => setHoveredMarker(slot)}
                       aria-label={isHalfHour ? `${hourNum}h30` : `${hourNum}h`}
@@ -413,7 +414,7 @@ export function TimeSlotPicker({
                         <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
                         {isHalfHour ? (
                           <div className={`flex flex-col items-center leading-none ${getMarkerTextClass(markerState)}`}>
-                            <span className="text-[9px] text-white/40">{hourNum}h</span>
+                            <span className="text-[9px]">{hourNum}h</span>
                             <span className="text-xs font-medium">30</span>
                           </div>
                         ) : (
@@ -451,6 +452,7 @@ export function TimeSlotPicker({
                   const bgClass = isPendingStartCell
                     ? getSegmentClass(slotIsPeak ? "selected-peak" : "selected")
                     : getSegmentClass(segmentState);
+                  const isYellow = isPendingStartCell || segmentState === "preview" || segmentState === "preview-peak" || segmentState === "selected" || segmentState === "selected-peak";
                   const cursorClass = markerState === "blocked" || markerState === "too-close"
                     ? "cursor-not-allowed"
                     : "cursor-pointer";
@@ -458,7 +460,7 @@ export function TimeSlotPicker({
                     <button
                       key={slot}
                       style={{ width: "72px" }}
-                      className={`relative h-12 py-1 rounded transition-colors ${bgClass} ${cursorClass} ${cursorClass === "cursor-pointer" ? "hover:bg-white/[0.12]" : ""}`}
+                      className={`relative h-12 py-1 rounded transition-colors ${bgClass} ${cursorClass} ${cursorClass === "cursor-pointer" && !isYellow ? "hover:bg-white/[0.12]" : ""}`}
                       onClick={() => handleMarkerClick(slot)}
                       onMouseEnter={() => setHoveredMarker(slot)}
                       aria-label={isHalfHour ? `${hourNum}h30` : `${hourNum}h`}
@@ -467,7 +469,7 @@ export function TimeSlotPicker({
                         <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
                         {isHalfHour ? (
                           <div className={`flex flex-col items-center leading-none ${getMarkerTextClass(markerState)}`}>
-                            <span className="text-[9px] text-white/40">{hourNum}h</span>
+                            <span className="text-[9px]">{hourNum}h</span>
                             <span className="text-xs font-medium">30</span>
                           </div>
                         ) : (
