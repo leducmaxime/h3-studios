@@ -343,6 +343,9 @@ export function useBookingWithRouter(urlStep?: string) {
       if (s.cart.length > 0 && !s.isAddingNew && step <= 1) {
         return { ...s, step: 5 as BookingState["step"] };
       }
+      if (step === 0 && (s.groupType === "solo" || s.groupType === "duo")) {
+        return { ...s, step: 0 as BookingState["step"], groupType: null, flow: null };
+      }
       return { ...s, step: step as BookingState["step"] };
     });
   }, []);

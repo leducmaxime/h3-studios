@@ -122,7 +122,12 @@ export function useBooking() {
   }, [state.step]);
 
   const setStep = useCallback((step: BookingState["step"]) => {
-    setState((s) => ({ ...s, step }));
+    setState((s) => {
+      if (step === 0 && (s.groupType === "solo" || s.groupType === "duo")) {
+        return { ...s, step, groupType: null, flow: null };
+      }
+      return { ...s, step };
+    });
   }, []);
 
   const selectFlow = useCallback((flow: BookingFlow) => {
