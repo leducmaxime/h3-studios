@@ -191,6 +191,9 @@ export interface PaginatedResult<T> {
 
 // --- Filter types ---
 
+export type BookingSortField = "date" | "start_time" | "total_price" | "status" | "payment_status" | "created_at";
+export type BookingSortOrder = "asc" | "desc";
+
 export interface BookingFilters {
   status?: BookingStatus;
   studioId?: string;
@@ -199,6 +202,8 @@ export interface BookingFilters {
   dateTo?: string;
   paymentStatus?: string;
   search?: string; // booking_ref or user name
+  sortBy?: BookingSortField;
+  sortOrder?: BookingSortOrder;
 }
 
 export interface UserFilters {

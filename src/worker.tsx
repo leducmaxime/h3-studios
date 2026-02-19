@@ -798,6 +798,10 @@ const app = defineApp([
         if (search) filters.search = search;
         const paymentStatus = url.searchParams.get("paymentStatus");
         if (paymentStatus) filters.paymentStatus = paymentStatus;
+        const sortBy = url.searchParams.get("sortBy");
+        if (sortBy) filters.sortBy = sortBy as BookingFilters["sortBy"];
+        const sortOrder = url.searchParams.get("sortOrder");
+        if (sortOrder) filters.sortOrder = sortOrder as BookingFilters["sortOrder"];
 
         const page = parseInt(url.searchParams.get("page") || "1", 10);
         const limit = parseInt(url.searchParams.get("limit") || "20", 10);

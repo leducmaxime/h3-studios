@@ -11,6 +11,8 @@ import {
   XCircle,
   AlertTriangle,
   Plus,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,7 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
-import { type DbBooking, type BookingStatus, type BookingWithUser } from "@/lib/db-types";
+import { type DbBooking, type BookingStatus, type BookingWithUser, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -102,6 +104,9 @@ export function AdminBookings() {
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
   const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "pending" | "pay-on-site">("all");
+  const [sortBy, setSortBy] = useState<BookingSortField>("date");
+  const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
   const [page, setPage] = useState(1);
   const perPage = 20;
 
@@ -136,7 +141,10 @@ export function AdminBookings() {
       params.set("limit", String(perPage));
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (studioFilter !== "all") params.set("studio", studioFilter);
+      if (paymentStatusFilter !== "all") params.set("paymentStatus", paymentStatusFilter);
       if (search) params.set("search", search);
+      params.set("sortBy", sortBy);
+      params.set("sortOrder", sortOrder);
 
       const dateParams = getDateFilterParams(dateFilter);
       if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
@@ -155,7 +163,7 @@ export function AdminBookings() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, studioFilter, dateFilter, search]);
+  }, [page, statusFilter, studioFilter, dateFilter, paymentStatusFilter, search, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchBookings();
@@ -268,6 +276,16 @@ export function AdminBookings() {
             <option value="no-show">No-show</option>
           </select>
           <select
+            value={paymentStatusFilter}
+            onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "pending" | "pay-on-site"); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="all">Tous les paiements</option>
+            <option value="paid">Payé</option>
+            <option value="pending">Reste à payer</option>
+            <option value="pay-on-site">Sur place</option>
+          </select>
+          <select
             value={studioFilter}
             onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
@@ -287,6 +305,28 @@ export function AdminBookings() {
             <option value="month">Ce mois</option>
           </select>
         </div>
+        <div className="flex flex-wrap gap-2 sm:mt-0">
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value as BookingSortField); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="date">Trier par date</option>
+            <option value="start_time">Trier par heure</option>
+            <option value="total_price">Trier par montant</option>
+            <option value="status">Trier par statut</option>
+            <option value="payment_status">Trier par paiement</option>
+            <option value="created_at">Trier par création</option>
+          </select>
+          <select
+            value={sortOrder}
+            onChange={(e) => { setSortOrder(e.target.value as BookingSortOrder); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="desc">Décroissant</option>
+            <option value="asc">Croissant</option>
+          </select>
+        </div>
       </div>
 
       {/* Table */}
@@ -297,12 +337,22 @@ export function AdminBookings() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Référence</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Client</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Date</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Créneau</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "date") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("date"); setPage(1); } }}>
+                  Date {sortBy === "date" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "start_time") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("start_time"); setPage(1); } }}>
+                  Créneau {sortBy === "start_time" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Studio</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Statut</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Paiement</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400">Montant</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "status") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("status"); setPage(1); } }}>
+                  Statut {sortBy === "status" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "payment_status") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("payment_status"); setPage(1); } }}>
+                  Paiement {sortBy === "payment_status" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                </th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "total_price") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("total_price"); setPage(1); } }}>
+                  Montant {sortBy === "total_price" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                </th>
                 <th className="w-10 px-4 py-3" />
               </tr>
             </thead>
