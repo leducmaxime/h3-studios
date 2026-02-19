@@ -403,14 +403,14 @@ export function TimeSlotPicker({
                     <button
                       key={slot}
                       style={{ width: "72px" }}
-                      className={`flex items-end justify-start h-12 py-1 pl-0.5 rounded transition-colors
+                      className={`relative h-12 py-1 rounded transition-colors
                         ${getSegmentClass(segmentState)} ${cursorClass}
                         ${!isBlocked ? "hover:bg-white/[0.12]" : ""}`}
                       onClick={() => handleMarkerClick(slot)}
                       onMouseEnter={() => setHoveredMarker(slot)}
                       aria-label={isHalfHour ? `${hourNum}h30` : `${hourNum}h`}
                     >
-                      <div className="flex flex-col items-center gap-0.5">
+                      <div className={`absolute bottom-1 left-0 flex flex-col items-center gap-0.5 ${i > 0 ? "-translate-x-1/2" : ""}`}>
                         <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
                         {isHalfHour ? (
                           <div className={`flex flex-col items-center leading-none ${getMarkerTextClass(markerState)}`}>
