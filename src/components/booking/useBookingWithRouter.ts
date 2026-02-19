@@ -344,7 +344,7 @@ export function useBookingWithRouter(urlStep?: string) {
         return { ...s, step: 5 as BookingState["step"] };
       }
       if (step === 0 && (s.groupType === "solo" || s.groupType === "duo")) {
-        return { ...s, step: 0 as BookingState["step"], groupType: null, flow: null };
+        return { ...s, step: 0 as BookingState["step"], groupType: null, flow: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
       }
       return { ...s, step: step as BookingState["step"] };
     });
@@ -688,7 +688,10 @@ export function useBookingWithRouter(urlStep?: string) {
           return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null };
         }
         const isSoloDuo = s.groupType === "solo" || s.groupType === "duo";
-        return { ...s, step: 0, flow: null, groupType: isSoloDuo ? null : s.groupType };
+        if (isSoloDuo) {
+          return { ...s, step: 0, flow: null, groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
+        }
+        return { ...s, step: 0, flow: null };
       }
 
       if (s.step === 3) return { ...s, step: 5 };

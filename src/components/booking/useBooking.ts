@@ -124,7 +124,7 @@ export function useBooking() {
   const setStep = useCallback((step: BookingState["step"]) => {
     setState((s) => {
       if (step === 0 && (s.groupType === "solo" || s.groupType === "duo")) {
-        return { ...s, step, groupType: null, flow: null };
+        return { ...s, step, groupType: null, flow: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
       }
       return { ...s, step };
     });
@@ -408,7 +408,10 @@ export function useBooking() {
           return { ...s, selectedDate: null, startTime: null, endTime: null };
         }
         const isSoloDuo = s.groupType === "solo" || s.groupType === "duo";
-        return { ...s, step: 0, flow: null, groupType: isSoloDuo ? null : s.groupType };
+        if (isSoloDuo) {
+          return { ...s, step: 0, flow: null, groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
+        }
+        return { ...s, step: 0, flow: null };
       }
 
       if (s.flow === "time-first") {
