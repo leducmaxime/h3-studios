@@ -435,7 +435,7 @@ export function TimeSlotPicker({
                           </span>
                         )}
                       </div>
-                      {hasPeakPricing && isPeakTime(date, slot) && (
+                      {hasPeakPricing && isPeakTime(date, slot) && !isSlotBooked(slot) && (
                         <span className="absolute inset-0 flex items-center justify-center text-xs text-primary pointer-events-none select-none">⚡</span>
                       )}
                     </button>
@@ -490,7 +490,7 @@ export function TimeSlotPicker({
                           </span>
                         )}
                       </div>
-                      {hasPeakPricing && isPeakTime(date, slot) && (
+                      {hasPeakPricing && isPeakTime(date, slot) && !isSlotBooked(slot) && (
                         <span className="absolute inset-0 flex items-center justify-center text-xs text-primary pointer-events-none select-none">⚡</span>
                       )}
                     </button>
