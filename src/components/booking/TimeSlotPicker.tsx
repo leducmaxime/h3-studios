@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { ChevronLeft } from "lucide-react";
 import {
   getStudioTimeSlots,
@@ -8,6 +8,8 @@ import {
   getStudioClosingTime,
   isPeakTime,
   formatDate,
+  formatPrice,
+  calculatePrice,
   PRICING,
   type GroupType,
   type StudioId,
@@ -29,41 +31,6 @@ interface TimeSlotPickerProps {
   groupType?: GroupType;
 }
 
-const DURATION_OPTIONS_MAIN = [
-  { label: "1h", slots: 2 },
-  { label: "1h30", slots: 3 },
-  { label: "2h", slots: 4 },
-  { label: "2h30", slots: 5 },
-  { label: "3h", slots: 6 },
-  { label: "3h30", slots: 7 },
-  { label: "4h", slots: 8 },
-  { label: "4h30", slots: 9 },
-  { label: "5h", slots: 10 },
-  { label: "5h30", slots: 11 },
-  { label: "6h", slots: 12 },
-];
-
-const DURATION_OPTIONS_EXTRA = [
-  { label: "6h30", slots: 13 },
-  { label: "7h", slots: 14 },
-  { label: "7h30", slots: 15 },
-  { label: "8h", slots: 16 },
-  { label: "8h30", slots: 17 },
-  { label: "9h", slots: 18 },
-  { label: "9h30", slots: 19 },
-  { label: "10h", slots: 20 },
-  { label: "10h30", slots: 21 },
-  { label: "11h", slots: 22 },
-  { label: "11h30", slots: 23 },
-  { label: "12h", slots: 24 },
-  { label: "12h30", slots: 25 },
-  { label: "13h", slots: 26 },
-  { label: "13h30", slots: 27 },
-  { label: "14h", slots: 28 },
-];
-
-const ALL_DURATION_OPTIONS = [...DURATION_OPTIONS_MAIN, ...DURATION_OPTIONS_EXTRA];
-
 export function TimeSlotPicker({
   date,
   availability,
@@ -78,8 +45,16 @@ export function TimeSlotPicker({
   hideHeader = false,
   groupType = "group",
 }: TimeSlotPickerProps) {
-  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
-  const [showMoreDurations, setShowMoreDurations] = useState(false);
+  // Timeline states
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
+  const [hoveredMarker, setHoveredMarker] = useState<string | null>(null);
+
+  // Sync pendingStart with parent state
+  useEffect(() => {
+    if (!startTime) {
+      setPendingStart(null);
+    }
+  }, [startTime]);
 
   // Solo/duo have flat pricing (no peak/off-peak distinction)
   const hasPeakPricing = groupType === "group";
@@ -151,86 +126,13 @@ export function TimeSlotPicker({
     [isOccupiedBy, studioFilter, groupType]
   );
 
-  const canStartAt = useCallback(
-    (startIdx: number): boolean => {
-      if (selectedDuration === null) return false;
-      const endIdx = startIdx + selectedDuration;
-      if (endIdx > visibleSlots.length) return false;
-      
-      for (let i = startIdx; i < endIdx; i++) {
-        if (isSlotBooked(visibleSlots[i])) return false;
-      }
-      return true;
-    },
-    [selectedDuration, isSlotBooked, visibleSlots]
-  );
-
-  const getEndTime = (startIdx: number): string => {
-    if (selectedDuration === null) return closingTime;
-    const endIdx = startIdx + selectedDuration;
-    if (endIdx >= visibleSlots.length) return closingTime;
-    return visibleSlots[endIdx];
-  };
-
-  const handleSlotClick = useCallback(
-    (time: string) => {
-      const startIdx = visibleSlots.indexOf(time);
-      if (!canStartAt(startIdx)) return;
-      
-      const endTimeSlot = getEndTime(startIdx);
-      onSelectRange(time, endTimeSlot);
-      // Auto-confirm immediately after selecting a time slot
-      onConfirm();
-    },
-    [selectedDuration, onSelectRange, onConfirm, canStartAt, getEndTime, visibleSlots]
-  );
-
-  const isWithinCurrentSelection = useCallback(
-    (index: number): boolean => {
-      if (!startTime || !endTime) return false;
-      const selectedStartIdx = visibleSlots.indexOf(startTime);
-      let selectedEndIdx = visibleSlots.indexOf(endTime);
-      if (selectedEndIdx === -1) selectedEndIdx = visibleSlots.length;
-      return index >= selectedStartIdx && index < selectedEndIdx;
-    },
-    [startTime, endTime, visibleSlots]
-  );
-
-  const getSlotState = useCallback(
-    (time: string, index: number) => {
-      const booked = isSlotBooked(time);
-      if (booked) return "booked";
-
-      const canStart = canStartAt(index);
-      const peak = hasPeakPricing && isPeakTime(date, time);
-      
-      if (startTime && endTime) {
-        const selectedStartIdx = visibleSlots.indexOf(startTime);
-        let selectedEndIdx = visibleSlots.indexOf(endTime);
-        if (selectedEndIdx === -1) selectedEndIdx = visibleSlots.length;
-        if (index >= selectedStartIdx && index < selectedEndIdx) {
-          return peak ? "selected-peak" : "selected";
-        }
-      }
-
-      if (!canStart) return "unavailable-duration";
-      return peak ? "available-peak" : "available";
-    },
-    [date, startTime, endTime, isSlotBooked, canStartAt, hasPeakPricing, visibleSlots]
-  );
-
-  const formatEndTime = (start: string): string => {
-    const startIdx = visibleSlots.indexOf(start);
-    return getEndTime(startIdx);
-  };
-
   const hourlyRates = useMemo(() => {
     if (studioFilter) {
       const offPeak = PRICING[studioFilter][groupType].offPeak;
       const peak = PRICING[studioFilter][groupType].peak;
       return { offPeakMin: offPeak, offPeakMax: offPeak, peakMin: peak, peakMax: peak };
     }
-    
+
     const offPeakMin = Math.min(
       PRICING["la-scene"][groupType].offPeak,
       PRICING["le-podium"][groupType].offPeak
@@ -250,14 +152,192 @@ export function TimeSlotPicker({
     return { offPeakMin, offPeakMax, peakMin, peakMax };
   }, [groupType, studioFilter]);
 
-  // Check if any visible slot is off-peak (to decide whether to show the off-peak legend)
-  const hasAnyOffPeakSlot = useMemo(() => {
-    return visibleSlots.some((time) => !isPeakTime(date, time));
-  }, [visibleSlots, date]);
+  // Labels = visibleSlots + closingTime (pour avoir le marqueur de fin)
+  const rulerLabels = useMemo(() => {
+    return [...visibleSlots, closingTime];
+  }, [visibleSlots, closingTime]);
 
-  const durationLabel = selectedDuration !== null
-    ? ALL_DURATION_OPTIONS.find(d => d.slots === selectedDuration)?.label || "2h"
-    : null;
+  // Format d'affichage des labels
+  const formatMarkerLabel = useCallback((label: string): string => {
+    if (label === "00:00") return "00h";
+    const [h, m] = label.split(":").map(Number);
+    if (m === 0) return `${h}h`;
+    return "·"; // demi-heure = point discret
+  }, []);
+
+  // Est-ce que ce label est atteignable comme endTime depuis pendingStart ?
+  const isReachableAsEnd = useCallback((label: string): boolean => {
+    if (!pendingStart) return false;
+    const startIdx = rulerLabels.indexOf(pendingStart);
+    const endIdx = rulerLabels.indexOf(label);
+    if (endIdx <= startIdx) return false; // avant ou au même niveau
+    if (endIdx - startIdx < 2) return false; // trop proche (< 1h = 2 slots)
+
+    // Vérifier qu'aucun slot entre pendingStart et label n'est booké
+    // On vérifie les SLOTS (visibleSlots), pas les labels
+    const startSlotIdx = visibleSlots.indexOf(pendingStart);
+    const endSlotIdx = label === closingTime
+      ? visibleSlots.length
+      : visibleSlots.indexOf(label);
+
+    for (let i = startSlotIdx; i < endSlotIdx; i++) {
+      if (isSlotBooked(visibleSlots[i])) return false;
+    }
+    return true;
+  }, [pendingStart, rulerLabels, visibleSlots, closingTime, isSlotBooked]);
+
+  // État d'un marqueur pour le style
+  const getMarkerState = useCallback((label: string, labelIdx: number): string => {
+    const isLast = labelIdx === rulerLabels.length - 1; // closingTime
+
+    // Le pendingStart sélectionné
+    if (label === pendingStart) return "start-selected";
+
+    // Si pendingStart est actif, calculer l'état par rapport à lui
+    if (pendingStart) {
+      const startIdx = rulerLabels.indexOf(pendingStart);
+      if (labelIdx <= startIdx) {
+        // Avant le start : potentiellement un nouveau start (sauf dernier label)
+        if (isLast) return "closing"; // on peut pas sélectionner closingTime comme start
+        if (isSlotBooked(label)) return "blocked";
+        return "available"; // peut être un nouveau start (reset)
+      }
+      if (!isReachableAsEnd(label)) return "too-close"; // < 1h ou bloqué
+      return "available-end"; // valid end time
+    }
+
+    // Pas de pendingStart
+    if (isLast) return "closing"; // dernier label = closingTime seulement (pas clickable comme start)
+    if (isSlotBooked(label)) return "blocked";
+    if (startTime === label) return "start-confirmed"; // sélection confirmée
+    return "available";
+  }, [pendingStart, rulerLabels, isSlotBooked, isReachableAsEnd, startTime]);
+
+  // Classe Tailwind d'un marqueur selon son état
+  const getMarkerClass = useCallback((state: string): string => {
+    switch (state) {
+      case "start-selected":
+        return "bg-primary text-black font-bold ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer";
+      case "start-confirmed":
+        return "bg-primary/80 text-black font-semibold cursor-pointer";
+      case "available-end":
+        return "text-white/90 hover:bg-white/20 cursor-pointer";
+      case "available":
+        return "text-white/70 hover:bg-white/10 cursor-pointer";
+      case "blocked":
+        return "text-red-400/50 cursor-not-allowed";
+      case "too-close":
+        return "text-white/20 cursor-not-allowed";
+      case "closing":
+        return "text-white/50";
+      default:
+        return "text-white/50";
+    }
+  }, []);
+
+  // État d'un segment (zone colorée entre deux marqueurs)
+  const getSegmentState = useCallback((prevLabel: string, nextLabel: string): string => {
+    // Le segment représente le SLOT qui commence à prevLabel
+    const slot = prevLabel; // slot "prevLabel → nextLabel"
+    const isBooked = isSlotBooked(slot);
+
+    if (isBooked) return "booked";
+
+    // Dans la sélection confirmée ?
+    if (startTime && endTime) {
+      const startIdx = visibleSlots.indexOf(startTime);
+      const endIdx = endTime === closingTime ? visibleSlots.length : visibleSlots.indexOf(endTime);
+      const slotIdx = visibleSlots.indexOf(slot);
+      if (slotIdx >= startIdx && slotIdx < endIdx) {
+        return isPeakTime(date, slot) ? "selected-peak" : "selected";
+      }
+    }
+
+    // Dans le preview hover ?
+    if (pendingStart && hoveredMarker) {
+      const pStartIdx = rulerLabels.indexOf(pendingStart);
+      const pEndIdx = rulerLabels.indexOf(hoveredMarker);
+      const labelIdx = rulerLabels.indexOf(prevLabel);
+      if (pEndIdx > pStartIdx && labelIdx >= pStartIdx && labelIdx < pEndIdx) {
+        if (isReachableAsEnd(hoveredMarker)) {
+          return isPeakTime(date, slot) ? "preview-peak" : "preview";
+        }
+      }
+    }
+
+    // Peak non sélectionné
+    if (hasPeakPricing && isPeakTime(date, slot)) return "peak";
+
+    return "neutral";
+  }, [isSlotBooked, startTime, endTime, visibleSlots, closingTime, date, pendingStart, hoveredMarker, rulerLabels, isReachableAsEnd, hasPeakPricing]);
+
+  // Classe Tailwind d'un segment
+  const getSegmentClass = useCallback((state: string): string => {
+    switch (state) {
+      case "booked":
+        return "bg-red-500/20 border-t-2 border-red-500/50";
+      case "selected":
+        return "bg-white/30 border-t-2 border-white/50";
+      case "selected-peak":
+        return "bg-primary/40 border-t-2 border-primary/70";
+      case "preview":
+        return "bg-white/15 border-t border-white/30";
+      case "preview-peak":
+        return "bg-primary/20 border-t border-primary/40";
+      case "peak":
+        return "bg-primary/5";
+      default:
+        return "bg-white/5";
+    }
+  }, []);
+
+  // Gestion du clic sur un marqueur
+  const handleMarkerClick = useCallback((label: string): void => {
+    const labelIdx = rulerLabels.indexOf(label);
+    const isLast = labelIdx === rulerLabels.length - 1;
+
+    if (!pendingStart) {
+      // Premier clic = sélection du start
+      if (isLast) return; // pas de start sur le dernier label
+      if (isSlotBooked(label)) return;
+      setPendingStart(label);
+      onClear();
+      return;
+    }
+
+    const pendingIdx = rulerLabels.indexOf(pendingStart);
+
+    // Clic sur le pendingStart lui-même = cancel
+    if (label === pendingStart) {
+      setPendingStart(null);
+      onClear();
+      return;
+    }
+
+    // Clic avant ou au même niveau que le start = reset, nouveau start
+    if (labelIdx <= pendingIdx) {
+      if (isLast) {
+        setPendingStart(null);
+        onClear();
+        return;
+      }
+      if (isSlotBooked(label)) {
+        setPendingStart(null);
+        onClear();
+        return;
+      }
+      setPendingStart(label);
+      onClear();
+      return;
+    }
+
+    // Clic après le start : vérifier si atteignable
+    if (!isReachableAsEnd(label)) return;
+
+    // Sélection valide !
+    onSelectRange(pendingStart, label);
+    onConfirm(); // auto-avance à l'étape suivante
+  }, [pendingStart, rulerLabels, isSlotBooked, isReachableAsEnd, onClear, onSelectRange, onConfirm]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -277,152 +357,132 @@ export function TimeSlotPicker({
       )}
 
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium text-white/70">Durée de la répétition</span>
-        <div className="flex flex-wrap gap-1.5 lg:gap-2">
-          {(showMoreDurations ? ALL_DURATION_OPTIONS : DURATION_OPTIONS_MAIN).map(({ label, slots }) => (
-            <button
-              key={slots}
-              onClick={() => {
-                setSelectedDuration(slots);
-                onClear();
-              }}
-              className={`
-                px-3 py-1.5 lg:px-4 lg:py-2 rounded-lg font-medium transition-all text-xs lg:text-sm
-                ${selectedDuration === slots
-                  ? "bg-primary text-black"
-                  : "bg-white/10 text-white hover:bg-white/20"
-                }
-              `}
-            >
-              {label}
-            </button>
-          ))}
-          <button
-            onClick={() => setShowMoreDurations(!showMoreDurations)}
-            className="flex items-center justify-center px-3 py-1.5 lg:px-4 lg:py-2 rounded-lg font-medium transition-all text-xs lg:text-sm bg-white/10 hover:bg-white/20"
-          >
-            <span className="text-base lg:text-lg font-bold text-primary">{showMoreDurations ? "−" : "+"}</span>
-          </button>
-        </div>
-      </div>
+        <span className="text-sm font-medium text-white/70">
+          {pendingStart ? "Heure de fin" : "Sélectionnez votre heure de début"}
+        </span>
 
-      {selectedDuration !== null && (
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-white/70">
-            Heure de début (pour {durationLabel})
-          </span>
-          <div className="flex flex-wrap gap-1.5 lg:gap-2">
-            {visibleSlots.map((time: string, index: number) => {
-              const state = getSlotState(time, index);
-              const canStart = canStartAt(index);
-              const withinSelection = isWithinCurrentSelection(index);
-              const isClickable = canStart || withinSelection;
-              const isSelected = state === "selected" || state === "selected-peak";
-              const isBooked = state === "booked";
-              const isUnavailableDuration = state === "unavailable-duration";
-              const peak = hasPeakPricing && isPeakTime(date, time);
-              
-              const getDisabledReason = (): string | null => {
-                if (isBooked) return "Ce créneau est déjà réservé";
-                if (isUnavailableDuration && selectedDuration !== null) {
-                  const endIdx = index + selectedDuration;
-                  if (endIdx > visibleSlots.length) {
-                    return `Ce créneau dépasse l'heure de fermeture (${closingTime})`;
-                  }
-                  for (let i = index; i < endIdx; i++) {
-                    if (isSlotBooked(visibleSlots[i])) {
-                      return "Un créneau dans cette plage est déjà réservé";
-                    }
-                  }
-                }
-                return null;
-              };
-              const disabledReason = getDisabledReason();
+        {/* Container principal scrollable horizontalement */}
+        <div
+          data-testid="timeline-ruler"
+          className="overflow-x-auto"
+          onMouseLeave={() => setHoveredMarker(null)}
+        >
+          <div className="flex min-w-max items-end pb-2 pt-4 relative">
+            {rulerLabels.map((label, i) => {
+              const isHalfHour = label.endsWith(":30");
+              const isClosingTime = i === rulerLabels.length - 1;
+              const markerState = getMarkerState(label, i);
+
+              // Segment coloré AVANT ce marqueur (sauf le premier)
+              const segmentState = i > 0 ? getSegmentState(rulerLabels[i - 1], label) : null;
 
               return (
-                <button
-                  key={time}
-                  onClick={() => isClickable && handleSlotClick(time)}
-                  disabled={!isClickable}
-                  title={disabledReason || undefined}
-                  aria-label={disabledReason ? `${time} — ${disabledReason}` : undefined}
-                  className={`
-                    relative rounded-lg px-2 py-1.5 lg:px-3 lg:py-2 text-xs lg:text-sm font-medium transition-all min-w-[60px] lg:min-w-[70px]
-                    ${isBooked
-                      ? "bg-red-500/10 text-red-400/50 cursor-not-allowed border border-red-500/20" 
-                      : ""
-                    }
-                    ${isUnavailableDuration
-                      ? "bg-white/5 text-white/30 cursor-not-allowed border border-dashed border-white/10" 
-                      : ""
-                    }
-                    ${canStart && !isSelected && !peak
-                      ? "bg-white/10 hover:bg-white/20 text-white border border-white/10 cursor-pointer" 
-                      : ""
-                    }
-                    ${canStart && !isSelected && peak
-                      ? "bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 cursor-pointer" 
-                      : ""
-                    }
-                    ${isSelected && !peak
-                      ? "bg-white text-black border-2 border-white cursor-pointer hover:bg-white/80" 
-                      : ""
-                    }
-                    ${isSelected && peak
-                      ? "bg-primary text-black border-2 border-primary cursor-pointer hover:bg-primary/80" 
-                      : ""
-                    }
-                  `}
-                >
-                  {isBooked ? (
-                    <span className="flex items-center justify-center gap-1">
-                      <span className="text-red-400 text-xs">×</span>
-                      <span className="line-through">{time}</span>
-                    </span>
-                  ) : (
-                    <>
-                      <span className="block">{time}</span>
-                      {canStart && !isSelected && (
-                        <span className={`block text-[9px] lg:text-[10px] mt-0.5 ${peak ? "text-primary/60" : "text-white/40"}`}>
-                          {peak && <span className="font-semibold">⚡ </span>}
-                          → {formatEndTime(time)}
-                        </span>
-                      )}
-                      {!canStart && isUnavailableDuration && (
-                        <span className="block text-[9px] mt-0.5 text-white/20">durée insuff.</span>
-                      )}
-                    </>
+                <div key={label} className="flex items-end">
+                  {/* Segment entre le marqueur précédent et celui-ci */}
+                  {segmentState && (
+                    <div className={`h-8 ${getSegmentClass(segmentState)}`} style={{ width: "56px" }} />
                   )}
-                </button>
+
+                  {/* Marqueur */}
+                  <div className="flex flex-col items-center" style={{ width: "0px", position: "relative" }}>
+                    <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
+                    {!isHalfHour && (
+                      <button
+                        className={`absolute bottom-0 -translate-x-1/2 flex flex-col items-center gap-0.5 px-1 py-0.5 rounded text-xs transition-all whitespace-nowrap ${getMarkerClass(markerState)}`}
+                        onClick={() => handleMarkerClick(label)}
+                        onMouseEnter={() => setHoveredMarker(label)}
+                        aria-label={`${formatMarkerLabel(label)}`}
+                      >
+                        <span>{formatMarkerLabel(label)}</span>
+                        {hasPeakPricing && isPeakTime(date, label) && !isClosingTime && (
+                          <span className="text-[8px] text-primary">⚡</span>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2 lg:gap-3 xl:gap-4 text-[10px] lg:text-xs text-white/60">
-            {hasPeakPricing ? (
-              <>
-                {hasAnyOffPeakSlot && (
-                  <div className="flex items-center gap-1 lg:gap-1.5">
-                    <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[8px] lg:text-[9px] text-white/50">18</div>
-                    <span>
-                      {hourlyRates.offPeakMin === hourlyRates.offPeakMax
-                        ? `${hourlyRates.offPeakMin}€/h`
-                        : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-1 lg:gap-1.5">
-                  <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-primary/20 bg-primary/10 flex items-center justify-center">
-                    <span className="text-[9px] lg:text-[10px] text-primary">⚡</span>
-                  </div>
-                  <span className="text-primary">
-                    {hourlyRates.peakMin === hourlyRates.peakMax
-                      ? `${hourlyRates.peakMin}€/h`
-                      : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
-                  </span>
-                </div>
-              </>
-            ) : (
+        {/* Récap live — preview ou confirmé */}
+        {(() => {
+          const displayStart = startTime || (pendingStart && hoveredMarker && isReachableAsEnd(hoveredMarker) ? pendingStart : null);
+          const displayEnd = endTime || (pendingStart && hoveredMarker && isReachableAsEnd(hoveredMarker) ? hoveredMarker : null);
+
+          if (!displayStart || !displayEnd) return null;
+
+          const startIdx = visibleSlots.indexOf(displayStart);
+          const endIdx = displayEnd === closingTime ? visibleSlots.length : visibleSlots.indexOf(displayEnd);
+          const durationSlots = endIdx - startIdx;
+          const durationHours = durationSlots * 0.5;
+          const durationLabel = durationHours % 1 === 0 ? `${durationHours}h` : `${Math.floor(durationHours)}h30`;
+
+          // Prix
+          let priceDisplay = "";
+          if (studioFilter) {
+            const price = calculatePrice(studioFilter, groupType, date, displayStart, displayEnd).total;
+            priceDisplay = `· ${formatPrice(price)}`;
+          } else {
+            const offPeakMin = Math.min(PRICING["la-scene"][groupType].offPeak, PRICING["le-podium"][groupType].offPeak);
+            const peakMin = Math.min(PRICING["la-scene"][groupType].peak, PRICING["le-podium"][groupType].peak);
+            // Calculer le prix estimé (min)
+            let estimatedPrice = 0;
+            for (let i = startIdx; i < endIdx; i++) {
+              const slot = visibleSlots[i] || closingTime;
+              const isPeak = hasPeakPricing && isPeakTime(date, slot);
+              estimatedPrice += (isPeak ? peakMin : offPeakMin) * 0.5;
+            }
+            const prefix = groupType === "solo" || groupType === "duo" ? "" : "à partir de ";
+            priceDisplay = `· ${prefix}${formatPrice(estimatedPrice)}`;
+          }
+
+          const isPreview = !startTime || !endTime;
+
+          return (
+            <div className={`mt-3 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${isPreview ? "bg-white/5 border border-white/10" : "bg-primary/10 border border-primary/30"}`}>
+              <span className={`font-semibold ${isPreview ? "text-white/70" : "text-primary"}`}>
+                {displayStart.replace(":00", "h").replace(":30", "h30")} → {displayEnd.replace(":00", "h").replace(":30", "h30")}
+              </span>
+              <span className="text-white/50">·</span>
+              <span className={isPreview ? "text-white/50" : "text-white/80"}>{durationLabel}</span>
+              {priceDisplay && (
+                <>
+                  <span className="text-white/50">·</span>
+                  <span className={isPreview ? "text-white/50" : "text-primary font-medium"}>{priceDisplay.replace("· ", "")}</span>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Légende */}
+        <div className="flex flex-wrap items-center gap-3 text-xs text-white/50 mt-2">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-6 h-3 bg-white/10 border border-white/20 rounded-sm" />
+            Disponible
+          </span>
+          {hasPeakPricing && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-6 h-3 bg-primary/10 border border-primary/30 rounded-sm" />
+              <span className="text-primary">⚡ Peak</span>
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-6 h-3 bg-red-500/20 border border-red-500/40 rounded-sm" />
+            Réservé
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-6 h-3 bg-primary/40 border border-primary/60 rounded-sm" />
+            Sélectionné
+          </span>
+        </div>
+
+        {/* Tarifs */}
+        <div className="flex flex-wrap items-center justify-center gap-2 lg:gap-3 xl:gap-4 text-[10px] lg:text-xs text-white/60">
+          {hasPeakPricing ? (
+            <>
               <div className="flex items-center gap-1 lg:gap-1.5">
                 <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[8px] lg:text-[9px] text-white/50">18</div>
                 <span>
@@ -431,26 +491,29 @@ export function TimeSlotPicker({
                     : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
                 </span>
               </div>
-            )}
-            <div className="flex items-center gap-1 lg:gap-1.5">
-              <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-red-500/20 bg-red-500/10 flex items-center justify-center gap-0.5 text-[7px] lg:text-[8px] text-red-400/50">
-                <span>×</span>
-                <span className="line-through">18</span>
+              <div className="flex items-center gap-1 lg:gap-1.5">
+                <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-primary/20 bg-primary/10 flex items-center justify-center">
+                  <span className="text-[9px] lg:text-[10px] text-primary">⚡</span>
+                </div>
+                <span className="text-primary">
+                  {hourlyRates.peakMin === hourlyRates.peakMax
+                    ? `${hourlyRates.peakMin}€/h`
+                    : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
+                </span>
               </div>
-              <span>Réservé</span>
-            </div>
+            </>
+          ) : (
             <div className="flex items-center gap-1 lg:gap-1.5">
-              <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center">
-                <span className="text-[7px] lg:text-[8px] text-white/30">18</span>
-                <span className="text-[5px] lg:text-[6px] text-white/20 leading-none">insuff.</span>
-              </div>
-              <span>Durée insuffisante</span>
+              <div className="h-4 w-4 lg:h-5 lg:w-5 rounded border border-white/10 bg-white/10 flex items-center justify-center text-[8px] lg:text-[9px] text-white/50">18</div>
+              <span>
+                {hourlyRates.offPeakMin === hourlyRates.offPeakMax
+                  ? `${hourlyRates.offPeakMin}€/h`
+                  : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
+              </span>
             </div>
-          </div>
+          )}
         </div>
-      )}
-
-
+      </div>
     </div>
   );
 }
