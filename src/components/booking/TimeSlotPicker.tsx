@@ -60,6 +60,12 @@ export function TimeSlotPicker({
     }
   }, [startTime]);
 
+  useEffect(() => {
+    if (startTime && endTime) {
+      setPendingStart(null);
+    }
+  }, [startTime, endTime]);
+
   // Solo/duo have flat pricing (no peak/off-peak distinction)
   const hasPeakPricing = groupType === "group";
 
