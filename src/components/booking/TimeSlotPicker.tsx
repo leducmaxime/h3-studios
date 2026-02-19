@@ -388,7 +388,7 @@ export function TimeSlotPicker({
           className="overflow-x-auto"
           onMouseLeave={() => setHoveredMarker(null)}
         >
-          <div className={`flex min-w-max items-end pt-6 pb-3 relative ${pendingStart === null ? "pl-9" : "pr-9"}`}>
+          <div className="flex min-w-max items-end pt-6 pb-3 relative pl-9 pr-9">
             {pendingStart === null ? (
               <>
                 {/* MODE DÉBUT — labels à gauche, toutes les cases 72px, fermeture à la fin */}
@@ -444,24 +444,59 @@ export function TimeSlotPicker({
               <>
                 {visibleSlots.map((slot, i) => {
                   const rightLabel = rulerLabels[i + 1];
+                  const segmentState = getSegmentState(slot, rightLabel);
+                  const isHighlighted = ["preview", "preview-peak", "selected", "selected-peak"].includes(segmentState);
+                  const cursorClass = (() => {
+                    if (i === 0) {
+                      const s0State = getMarkerState(slot, i);
+                      return s0State === "blocked" ? "cursor-not-allowed" : "cursor-pointer";
+                    }
+                    const s = getMarkerState(rightLabel, i + 1);
+                    return s === "blocked" || s === "too-close" || s === "closing" ? "cursor-not-allowed" : "cursor-pointer";
+                  })();
+
+                  if (i === 0) {
+                    const isHalfHour0 = slot.endsWith(":30");
+                    const hourNum0 = parseInt(slot.split(":")[0]);
+                    const markerState0 = getMarkerState(slot, 0);
+                    return (
+                      <button
+                        key={slot}
+                        style={{ width: "72px" }}
+                        className={`relative h-12 py-1 rounded transition-colors ${getSegmentClass(segmentState)} ${cursorClass} ${getMarkerState(slot, 0) !== "blocked" ? "hover:bg-white/[0.12]" : ""}`}
+                        onClick={() => handleMarkerClick(slot)}
+                        onMouseEnter={() => setHoveredMarker(slot)}
+                        aria-label={isHalfHour0 ? `${hourNum0}h30` : `${hourNum0}h`}
+                      >
+                        <div className="absolute bottom-1 left-0 flex flex-col items-center gap-0.5 -translate-x-1/2">
+                          <div className={`w-px ${isHalfHour0 ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
+                          {isHalfHour0 ? (
+                            <div className={`flex flex-col items-center leading-none ${getMarkerTextClass(markerState0)}`}>
+                              <span className="text-[9px] text-white/40">{hourNum0}h</span>
+                              <span className="text-xs font-medium">30</span>
+                            </div>
+                          ) : (
+                            <span className={`text-sm font-medium ${getMarkerTextClass(markerState0)}`}>
+                              {formatMarkerLabel(slot)}
+                            </span>
+                          )}
+                          {hasPeakPricing && isPeakTime(date, slot) && (
+                            <span className="text-[8px] text-primary">⚡</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  }
+
                   const isHalfHour = rightLabel.endsWith(":30");
                   const hourNum = rightLabel === "00:00" ? 0 : parseInt(rightLabel.split(":")[0]);
-                  const segmentState = getSegmentState(slot, rightLabel);
                   const markerState = getMarkerState(rightLabel, i + 1);
-                  const isPendingStartCell = slot === pendingStart;
-                  const slotIsPeak = hasPeakPricing && isPeakTime(date, slot);
-                  const bgClass = isPendingStartCell
-                    ? (slotIsPeak ? "bg-primary/40" : "bg-white/30")
-                    : getSegmentClass(segmentState);
-                  const cursorClass =
-                    markerState === "blocked" || markerState === "too-close" || markerState === "closing"
-                      ? "cursor-not-allowed"
-                      : "cursor-pointer";
+                  const labelTextClass = isHighlighted ? getMarkerTextClass("available-end") : getMarkerTextClass(markerState);
                   return (
                     <button
                       key={slot}
                       style={{ width: "72px" }}
-                      className={`relative h-12 py-1 rounded ${bgClass} ${cursorClass}`}
+                      className={`relative h-12 py-1 rounded ${getSegmentClass(segmentState)} ${cursorClass}`}
                       onClick={() => handleMarkerClick(rightLabel)}
                       onMouseEnter={() => setHoveredMarker(rightLabel)}
                       aria-label={
@@ -477,10 +512,10 @@ export function TimeSlotPicker({
                         {isHalfHour ? (
                           <div className="flex flex-col items-center leading-none">
                             <span className="text-[9px] text-white/40">{hourNum}h</span>
-                            <span className={`text-xs font-medium ${getMarkerTextClass(markerState)}`}>30</span>
+                            <span className={`text-xs font-medium ${labelTextClass}`}>30</span>
                           </div>
                         ) : (
-                          <span className={`text-sm font-medium ${getMarkerTextClass(markerState)}`}>
+                          <span className={`text-sm font-medium ${labelTextClass}`}>
                             {rightLabel === "00:00" ? "00h" : `${hourNum}h`}
                           </span>
                         )}
