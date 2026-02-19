@@ -491,12 +491,21 @@ export function TimeSlotPicker({
                   const isHalfHour = rightLabel.endsWith(":30");
                   const hourNum = rightLabel === "00:00" ? 0 : parseInt(rightLabel.split(":")[0]);
                   const markerState = getMarkerState(rightLabel, i + 1);
-                  const labelTextClass = isHighlighted ? getMarkerTextClass("available-end") : getMarkerTextClass(markerState);
+                  const isPendingStartCell = slot === pendingStart;
+                  const slotIsPeak = hasPeakPricing && isPeakTime(date, slot);
+                  const bgClass = isPendingStartCell
+                    ? (slotIsPeak ? "bg-primary/40" : "bg-white/30")
+                    : getSegmentClass(segmentState);
+                  const labelTextClass = isHighlighted
+                    ? getMarkerTextClass("available-end")
+                    : (markerState === "start-selected" || (isPendingStartCell && markerState === "too-close"))
+                      ? getMarkerTextClass("available")
+                      : getMarkerTextClass(markerState);
                   return (
                     <button
                       key={slot}
                       style={{ width: "72px" }}
-                      className={`relative h-12 py-1 rounded ${getSegmentClass(segmentState)} ${cursorClass}`}
+                      className={`relative h-12 py-1 rounded ${bgClass} ${cursorClass}`}
                       onClick={() => handleMarkerClick(rightLabel)}
                       onMouseEnter={() => setHoveredMarker(rightLabel)}
                       aria-label={
