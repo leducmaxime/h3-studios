@@ -462,7 +462,7 @@ export function TimeSlotPicker({
                     return (
                       <button
                         key={slot}
-                        style={{ width: "72px" }}
+                        style={{ width: "72px", zIndex: visibleSlots.length }}
                         className={`relative h-12 py-1 rounded transition-colors ${getSegmentClass(segmentState)} ${cursorClass} ${getMarkerState(slot, 0) !== "blocked" ? "hover:bg-white/[0.12]" : ""}`}
                         onClick={() => handleMarkerClick(slot)}
                         onMouseEnter={() => setHoveredMarker(slot)}
@@ -494,7 +494,7 @@ export function TimeSlotPicker({
                   const isPendingStartCell = slot === pendingStart;
                   const slotIsPeak = hasPeakPricing && isPeakTime(date, slot);
                   const bgClass = isPendingStartCell
-                    ? (slotIsPeak ? "bg-primary/40" : "bg-white/30")
+                    ? getSegmentClass(slotIsPeak ? "selected-peak" : "selected")
                     : getSegmentClass(segmentState);
                   const labelTextClass = isHighlighted
                     ? getMarkerTextClass("available-end")
@@ -504,7 +504,7 @@ export function TimeSlotPicker({
                   return (
                     <button
                       key={slot}
-                      style={{ width: "72px" }}
+                      style={{ width: "72px", zIndex: visibleSlots.length - i }}
                       className={`relative h-12 py-1 rounded ${bgClass} ${cursorClass}`}
                       onClick={() => handleMarkerClick(rightLabel)}
                       onMouseEnter={() => setHoveredMarker(rightLabel)}
