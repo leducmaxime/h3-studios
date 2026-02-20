@@ -54,6 +54,7 @@ interface ApiPayment {
   created_at: string;
   booking_ref: string | null;
   user_name: string | null;
+  user_band_name: string | null;
   user_id: string | null;
   booking_date: string | null;
 }
@@ -723,6 +724,9 @@ export function AdminPayments() {
                   Client
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">
+                  Nom du groupe
+                </th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">
                   Type paiement
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">
@@ -794,6 +798,13 @@ export function AdminPayments() {
                         <p className="font-medium">{payment.user_name}</p>
                       ) : (
                         "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {payment.user_band_name ? (
+                        <p className="text-sm text-zinc-200">{payment.user_band_name}</p>
+                      ) : (
+                        <span className="text-zinc-500">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -873,7 +884,7 @@ export function AdminPayments() {
               {payments.length === 0 && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-8 text-center text-zinc-500"
                   >
                     Aucun paiement trouvé
