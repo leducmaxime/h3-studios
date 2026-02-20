@@ -73,6 +73,16 @@ interface CalendarBooking {
   notes: string | null;
 }
 
+interface CalendarBlockedSlot {
+  id: string;
+  studio_id: StudioId | null;
+  date: string;
+  start_time: string;
+  end_time: string;
+  reason: string;
+  created_at: string;
+}
+
 type ViewType = "week" | "month";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -87,7 +97,7 @@ function formatDateHeader(date: Date): string {
 }
 
 function formatShortDate(date: Date): string {
-  return date.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
+  return date.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
 }
 
 function formatMonthHeader(date: Date): string {
@@ -136,7 +146,7 @@ const MAX_BOOKINGS_PER_DAY = 14;
 
 // ─── API fetch ──────────────────────────────────────────────────────────────
 
-async function fetchBookings(params: { date?: string; startDate?: string; endDate?: string }): Promise<CalendarBooking[]> {
+async function fetchCalendar(params: { date?: string; startDate?: string; endDate?: string }): Promise<{ bookings: CalendarBooking[]; blockedSlots: CalendarBlockedSlot[] }> {
   const searchParams = new URLSearchParams();
   if (params.date) searchParams.set("date", params.date);
   if (params.startDate) searchParams.set("startDate", params.startDate);
@@ -144,8 +154,8 @@ async function fetchBookings(params: { date?: string; startDate?: string; endDat
 
   const res = await fetch(`/api/admin/calendar?${searchParams.toString()}`);
   if (!res.ok) throw new Error("Failed to fetch calendar data");
-  const json = await res.json() as { success: boolean; data: CalendarBooking[] };
-  return json.data || [];
+  const json = await res.json() as { success: boolean; data: { bookings: CalendarBooking[]; blockedSlots: CalendarBlockedSlot[] } };
+  return json.data || { bookings: [], blockedSlots: [] };
 }
 
 // ─── Month grid helpers ─────────────────────────────────────────────────────
@@ -204,6 +214,7 @@ function hasOptions(equipment: string | null): boolean {
 
 export function AdminCalendar() {
   const [bookings, setBookings] = useState<CalendarBooking[]>([]);
+  const [blockedSlots, setBlockedSlots] = useState<CalendarBlockedSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(() => {
     const now = new Date();
@@ -213,7 +224,10 @@ export function AdminCalendar() {
   const [selectedBooking, setSelectedBooking] = useState<CalendarBooking | null>(null);
   const [bookingPayments, setBookingPayments] = useState<DbPayment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
-  const [newPayment, setNewPayment] = useState({ amount: "", method: "cash" });
+  const [newPayment, setNewPayment] = useState<{
+    amount: string;
+    method: "cash" | "card" | "transfer" | "check";
+  }>({ amount: "", method: "cash" });
 
   useEffect(() => {
     if (selectedBooking) {
@@ -227,8 +241,8 @@ export function AdminCalendar() {
         .finally(() => setLoadingPayments(false));
       
       setNewPayment({ 
-        amount: ((selectedBooking.total_price) / 100).toString(), 
-        method: selectedBooking.payment_method === "card" ? "card" : "cash" 
+        amount: String(selectedBooking.total_price),
+        method: selectedBooking.payment_method === "card" ? "card" : "cash",
       });
     } else {
       setBookingPayments([]);
@@ -237,8 +251,9 @@ export function AdminCalendar() {
 
   const handleAddPayment = async () => {
     if (!selectedBooking || !newPayment.amount) return;
-    const amountCents = Math.round(parseFloat(newPayment.amount) * 100);
-    if (isNaN(amountCents) || amountCents <= 0) {
+    const n = parseFloat(newPayment.amount.replace(/\s/g, "").replace(",", "."));
+    const amount = Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+    if (!Number.isFinite(amount) || amount <= 0) {
       toast.error("Montant invalide");
       return;
     }
@@ -248,7 +263,7 @@ export function AdminCalendar() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: amountCents,
+          amount,
           method: newPayment.method,
           status: "paid", // Direct payments from admin are usually already paid
         }),
@@ -300,19 +315,21 @@ export function AdminCalendar() {
   const loadBookings = useCallback(async () => {
     setLoading(true);
     try {
-      let data: CalendarBooking[];
+      let data: { bookings: CalendarBooking[]; blockedSlots: CalendarBlockedSlot[] };
       if (view === "week") {
-        data = await fetchBookings({
+        data = await fetchCalendar({
           startDate: toDateStr(weekDates[0]),
           endDate: toDateStr(weekDates[6]),
         });
       } else {
-        data = await fetchBookings(monthRange);
+        data = await fetchCalendar(monthRange);
       }
-      setBookings(data);
+      setBookings(data.bookings);
+      setBlockedSlots(data.blockedSlots);
     } catch (error) {
       console.error("Calendar fetch error:", error);
       setBookings([]);
+      setBlockedSlots([]);
     } finally {
       setLoading(false);
     }
@@ -392,6 +409,24 @@ export function AdminCalendar() {
     const studios: StudioId[] = ["la-scene", "le-podium"];
     const today = new Date();
 
+    const blockedByDate = new Map<string, CalendarBlockedSlot[]>();
+    for (const b of blockedSlots) {
+      const existing = blockedByDate.get(b.date) || [];
+      existing.push(b);
+      blockedByDate.set(b.date, existing);
+    }
+
+    const expandedBlocked = (dateStr: string, studioId: StudioId) => {
+      const day = blockedByDate.get(dateStr) || [];
+      return day.filter((s) => s.studio_id === null || s.studio_id === studioId);
+    };
+
+    const BLOCKED_COLORS = {
+      bg: "bg-zinc-800/60",
+      text: "text-zinc-200",
+      border: "border-zinc-700/70",
+    };
+
     return (
       <div className="overflow-x-auto">
         <div className="min-w-[1100px]">
@@ -448,43 +483,80 @@ export function AdminCalendar() {
                   ))}
 
                    {studios.map((studioId) => {
+                     const studioBlocked = expandedBlocked(dateStr, studioId);
                      const studioBookings = bookings.filter(
                        (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
                      );
 
-                     return studioBookings.map((booking) => {
-                       const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                       let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                       if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                       const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                       const height = (endIdx - startIdx) * 30;
-                       const paymentColors = getPaymentStatusColor(booking);
-                       const leftPos = studioId === "la-scene" ? "4px" : "50%";
-                      const width = studioId === "la-scene" ? "calc(50% - 8px)" : "calc(50% - 8px)";
+                     const leftPos = studioId === "la-scene" ? "4px" : "50%";
+                     const width = "calc(50% - 8px)";
 
-                       return (
-                        <button
-                          key={booking.id}
-                          type="button"
-                          onClick={() => setSelectedBooking(booking)}
-                          className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
-                          style={{
-                            top: `${top}px`,
-                            height: `${Math.max(height, 24)}px`,
-                            left: leftPos,
-                            width: width,
-                          }}
-                        >
-                          <p className="truncate text-[11px] font-medium leading-tight">
-                            {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                          </p>
-                          {hasOptions(booking.equipment) && (
-                            <span className="text-[9px] opacity-80">(opt)</span>
-                          )}
-                        </button>
-                      );
-                    });
-                  })}
+                     return (
+                       <div key={`${dateStr}-${studioId}`} className="contents">
+                         {studioBlocked.map((slot) => {
+                           const startIdx = ALL_TIME_SLOTS.indexOf(slot.start_time);
+                           let endIdx = ALL_TIME_SLOTS.indexOf(slot.end_time);
+                           if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                           if (startIdx === -1) return null;
+
+                           const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                           const height = (endIdx - startIdx) * 30;
+
+                           return (
+                             <div
+                               key={`${slot.id}-${studioId}`}
+                               title={`Bloqué: ${slot.reason}`}
+                               className={`absolute overflow-hidden rounded border px-1.5 py-1 ${BLOCKED_COLORS.bg} ${BLOCKED_COLORS.border} ${BLOCKED_COLORS.text}`}
+                               style={{
+                                 top: `${top}px`,
+                                 height: `${Math.max(height, 24)}px`,
+                                 left: leftPos,
+                                 width,
+                                 zIndex: 1,
+                                 backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 6px, rgba(255,255,255,0.0) 6px, rgba(255,255,255,0.0) 12px)",
+                               }}
+                             >
+                               <p className="truncate text-[11px] font-medium leading-tight">
+                                 {slot.start_time} Bloqué
+                               </p>
+                               <p className="truncate text-[9px] opacity-80">{slot.reason}</p>
+                             </div>
+                           );
+                         })}
+
+                         {studioBookings.map((booking) => {
+                           const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                           let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                           if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                           const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                           const height = (endIdx - startIdx) * 30;
+                           const paymentColors = getPaymentStatusColor(booking);
+
+                           return (
+                             <button
+                               key={booking.id}
+                               type="button"
+                               onClick={() => setSelectedBooking(booking)}
+                               className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
+                               style={{
+                                 top: `${top}px`,
+                                 height: `${Math.max(height, 24)}px`,
+                                 left: leftPos,
+                                 width,
+                               }}
+                             >
+                               <p className="truncate text-[11px] font-medium leading-tight">
+                                 {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                               </p>
+                               {hasOptions(booking.equipment) && (
+                                 <span className="text-[9px] opacity-80">(opt)</span>
+                               )}
+                             </button>
+                           );
+                         })}
+                       </div>
+                     );
+                   })}
 
                   {(() => {
                     const consultationBookings = bookings.filter(
@@ -540,6 +612,18 @@ export function AdminCalendar() {
       bookingsByDate.set(b.date, existing);
     }
 
+    const blockedByDate = new Map<string, CalendarBlockedSlot[]>();
+    for (const s of blockedSlots) {
+      const existing = blockedByDate.get(s.date) || [];
+      existing.push(s);
+      blockedByDate.set(s.date, existing);
+    }
+
+    const isAllStudiosWholeDay = (dateStr: string) => {
+      const day = blockedByDate.get(dateStr) || [];
+      return day.some((s) => s.studio_id === null && s.start_time === "09:00" && s.end_time === "00:00");
+    };
+
     return (
       <div className="overflow-x-auto">
         <div className="min-w-[700px]">
@@ -564,15 +648,17 @@ export function AdminCalendar() {
 
                 const dateStr = toDateStr(date);
                 const dayBookings = bookingsByDate.get(dateStr) || [];
+                const dayBlocked = blockedByDate.get(dateStr) || [];
                 const count = dayBookings.length;
                 const occupancyRate = count > 0 ? Math.min(count / MAX_BOOKINGS_PER_DAY, 1) : 0;
                 const { bg, text } = getOccupancyColor(occupancyRate);
                 const isToday = isSameDay(date, today);
+                const fullyBlocked = isAllStudiosWholeDay(dateStr);
 
                 return (
                   <div
                     key={dateStr}
-                    className={`group min-h-[100px] border-l border-zinc-800 p-2 text-left first:border-l-0 ${bg}`}
+                    className={`group min-h-[100px] border-l border-zinc-800 p-2 text-left first:border-l-0 ${bg} ${fullyBlocked ? "ring-1 ring-red-500/30" : ""}`}
                   >
                     {/* Day number */}
                     <div className="mb-1 flex items-center justify-between">
@@ -625,6 +711,20 @@ export function AdminCalendar() {
                         </div>
                       </div>
                     )}
+
+                    {(fullyBlocked || dayBlocked.length > 0) && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {fullyBlocked ? (
+                          <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-300">
+                            Bloqué
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
+                            {dayBlocked.length} blocage{dayBlocked.length > 1 ? "s" : ""}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -665,6 +765,7 @@ export function AdminCalendar() {
     const methodLabels: Record<string, string> = {
       card: "Carte bancaire",
       cash: "Espèces",
+      check: "Chèque",
       cheque: "Chèque",
       transfer: "Virement",
     };
@@ -815,7 +916,7 @@ export function AdminCalendar() {
                       <Label htmlFor="method" className="text-[9px] text-zinc-500 uppercase">Méthode</Label>
                       <Select
                         value={newPayment.method}
-                        onValueChange={(v) => setNewPayment({ ...newPayment, method: v })}
+                        onValueChange={(v) => setNewPayment({ ...newPayment, method: v as "cash" | "card" | "transfer" | "check" })}
                       >
                         <SelectTrigger className="h-8 text-xs bg-zinc-900 border-zinc-700">
                           <SelectValue />
@@ -823,8 +924,8 @@ export function AdminCalendar() {
                         <SelectContent className="bg-zinc-900 border-zinc-700">
                           <SelectItem value="card">Carte Bancaire</SelectItem>
                           <SelectItem value="cash">Espèces</SelectItem>
-                          <SelectItem value="cheque">Chèque</SelectItem>
                           <SelectItem value="transfer">Virement</SelectItem>
+                          <SelectItem value="check">Chèque</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
