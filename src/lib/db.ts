@@ -1222,6 +1222,17 @@ export interface DashboardStats {
   occupancyToday: number;
 }
 
+function getISOWeekStartUTCNoon(year: number, week: number): Date {
+  const jan4 = new Date(Date.UTC(year, 0, 4, 12, 0, 0));
+  const day = jan4.getUTCDay() || 7;
+  const mondayWeek1 = new Date(jan4);
+  mondayWeek1.setUTCDate(jan4.getUTCDate() - (day - 1));
+
+  const monday = new Date(mondayWeek1);
+  monday.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
+  return monday;
+}
+
 function parseDateISOToUTCNoon(dateISO: string): Date {
   const [y, m, d] = dateISO.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
@@ -1244,12 +1255,26 @@ function getStudioOpenSlotsCount(studioId: StudioId, dayOfWeek: number): number 
 
 export async function getDashboardStats(
   db: D1Database,
-  opts?: { month?: number; year?: number },
+  opts?: { month?: number; year?: number; week?: number },
 ): Promise<DashboardStats> {
   const today = getParisDateISO();
 
-  const weekFrom = minusDaysParisISO(today, 6);
+  let weekFrom = minusDaysParisISO(today, 6);
+  let weekTo = today;
   const monthFrom = minusDaysParisISO(today, 29);
+
+  if (opts?.year && opts?.week) {
+    const year = Math.round(opts.year);
+    const week = Math.round(opts.week);
+    if (year >= 2000 && year <= 2100 && week >= 1 && week <= 53) {
+      const monday = getISOWeekStartUTCNoon(year, week);
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+
+      weekFrom = getParisDateISO(monday);
+      weekTo = getParisDateISO(sunday);
+    }
+  }
 
   let reportMonthFrom: string | null = null;
   let reportMonthTo: string | null = null;
@@ -1279,7 +1304,7 @@ export async function getDashboardStats(
     ).bind(today),
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
-    ).bind(weekFrom, today),
+    ).bind(weekFrom, weekTo),
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(monthFrom, today),

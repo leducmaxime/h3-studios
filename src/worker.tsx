@@ -139,6 +139,17 @@ function jsonError(error: string, status = 400): Response {
   return jsonResponse({ success: false, error }, status);
 }
 
+function getISOWeekStartUTCNoon(year: number, week: number): Date {
+  const jan4 = new Date(Date.UTC(year, 0, 4, 12, 0, 0));
+  const day = jan4.getUTCDay() || 7;
+  const mondayWeek1 = new Date(jan4);
+  mondayWeek1.setUTCDate(jan4.getUTCDate() - (day - 1));
+
+  const monday = new Date(mondayWeek1);
+  monday.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
+  return monday;
+}
+
 // ─── Auth Middleware ──────────────────────────────────────────────────────────
 
 const SUPER_ADMIN_ROUTE_PREFIXES = [
@@ -2058,11 +2069,13 @@ const app = defineApp([
       const url = new URL(request.url);
       const monthRaw = url.searchParams.get("month");
       const yearRaw = url.searchParams.get("year");
+      const weekRaw = url.searchParams.get("week");
 
       const month = monthRaw ? parseInt(monthRaw, 10) : undefined;
       const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
+      const week = weekRaw ? parseInt(weekRaw, 10) : undefined;
 
-      const stats = await getDashboardStats(env.DB, { month, year });
+      const stats = await getDashboardStats(env.DB, { month, year, week });
       return jsonSuccess(stats);
     } catch (error) {
       console.error("GET /api/admin/stats error:", error);
@@ -2082,6 +2095,8 @@ const app = defineApp([
 
       const month = monthRaw ? parseInt(monthRaw, 10) : undefined;
       const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
+      const weekRaw = url.searchParams.get("week");
+      const week = weekRaw ? parseInt(weekRaw, 10) : undefined;
 
       const today = getParisDateISO();
       let fromStr = today;
@@ -2093,6 +2108,12 @@ const app = defineApp([
         const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
         fromStr = getParisDateISO(from);
         toStr = getParisDateISO(to);
+      } else if (mode === "week" && week && year) {
+        const monday = getISOWeekStartUTCNoon(year, week);
+        const sunday = new Date(monday);
+        sunday.setUTCDate(monday.getUTCDate() + 6);
+        fromStr = getParisDateISO(monday);
+        toStr = getParisDateISO(sunday);
       } else if (mode === "year" && year) {
         const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
         const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
@@ -2147,6 +2168,8 @@ const app = defineApp([
 
       const month = monthRaw ? parseInt(monthRaw, 10) : undefined;
       const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
+      const weekRaw = url.searchParams.get("week");
+      const week = weekRaw ? parseInt(weekRaw, 10) : undefined;
 
       const today = getParisDateISO();
       let fromStr = today;
@@ -2157,6 +2180,12 @@ const app = defineApp([
         const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
         fromStr = getParisDateISO(from);
         toStr = getParisDateISO(to);
+      } else if (mode === "week" && week && year) {
+        const monday = getISOWeekStartUTCNoon(year, week);
+        const sunday = new Date(monday);
+        sunday.setUTCDate(monday.getUTCDate() + 6);
+        fromStr = getParisDateISO(monday);
+        toStr = getParisDateISO(sunday);
       } else if (mode === "year" && year) {
         const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
         const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));

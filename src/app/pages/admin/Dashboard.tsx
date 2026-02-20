@@ -195,6 +195,32 @@ function renderPiePercentLabel(props: PieLabelProps): React.ReactNode {
   );
 }
 
+function getISOWeekYearAndNumber(date: Date): { year: number; week: number } {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+
+  const year = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
+  const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return { year, week };
+}
+
+function getISOWeeksInYear(year: number): number {
+  return getISOWeekYearAndNumber(new Date(Date.UTC(year, 11, 28, 12, 0, 0))).week;
+}
+
+function getISOWeekStartUTCNoon(year: number, week: number): Date {
+  const jan4 = new Date(Date.UTC(year, 0, 4, 12, 0, 0));
+  const day = jan4.getUTCDay() || 7;
+  const mondayWeek1 = new Date(jan4);
+  mondayWeek1.setUTCDate(jan4.getUTCDate() - (day - 1));
+
+  const monday = new Date(mondayWeek1);
+  monday.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
+  return monday;
+}
+
 function StatCard({
   title,
   value,
@@ -296,6 +322,7 @@ function PaymentPieTooltip({
 }
 
 export function AdminDashboard() {
+  const nowISO = getISOWeekYearAndNumber(new Date());
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [statsMeta, setStatsMeta] = useState<{ minYear: number | null; maxYear: number | null } | null>(null);
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
@@ -306,8 +333,9 @@ export function AdminDashboard() {
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [period, setPeriod] = useState<Period>("month");
   const [revenuePeriod, setRevenuePeriod] = useState<RevenuePeriod>("month");
-  const [rangeMode, setRangeMode] = useState<"rolling" | "month" | "year">("rolling");
-  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
+  const [rangeMode, setRangeMode] = useState<"rolling" | "week" | "month" | "year">("rolling");
+  const [selectedYear, setSelectedYear] = useState(() => String(nowISO.year));
+  const [selectedWeek, setSelectedWeek] = useState(() => String(nowISO.week));
   const [loading, setLoading] = useState(true);
   const [reportMonth, setReportMonth] = useState(() => {
     const d = new Date();
@@ -352,6 +380,20 @@ export function AdminDashboard() {
     }
   }, [rangeMode, selectedYear, reportMonth]);
 
+  useEffect(() => {
+    if (rangeMode !== "week") return;
+    const year = parseInt(selectedYear, 10);
+    if (!Number.isFinite(year)) return;
+    const maxWeeks = getISOWeeksInYear(year);
+    const current = parseInt(selectedWeek, 10);
+    if (!Number.isFinite(current)) {
+      setSelectedWeek("1");
+      return;
+    }
+    if (current < 1) setSelectedWeek("1");
+    if (current > maxWeeks) setSelectedWeek(String(maxWeeks));
+  }, [rangeMode, selectedYear, selectedWeek]);
+
 
   const fetchStats = useCallback(async () => {
     try {
@@ -360,6 +402,10 @@ export function AdminDashboard() {
         const [y, m] = reportMonth.split("-").map(Number);
         url.searchParams.set("year", String(y));
         url.searchParams.set("month", String(m));
+      }
+      if (rangeMode === "week") {
+        url.searchParams.set("year", selectedYear);
+        url.searchParams.set("week", selectedWeek);
       }
       if (rangeMode === "year") {
         url.searchParams.set("year", selectedYear);
@@ -371,7 +417,7 @@ export function AdminDashboard() {
     } catch (err) {
       console.error("Failed to fetch stats:", err);
     }
-  }, [rangeMode, reportMonth, selectedYear]);
+  }, [rangeMode, reportMonth, selectedYear, selectedWeek]);
 
   const fetchCharts = useCallback(async (p: Period, rp: RevenuePeriod) => {
     try {
@@ -386,6 +432,13 @@ export function AdminDashboard() {
         revenueUrl.searchParams.set("mode", "month");
         revenueUrl.searchParams.set("year", String(y));
         revenueUrl.searchParams.set("month", String(m));
+      } else if (rangeMode === "week") {
+        chartsUrl.searchParams.set("mode", "week");
+        chartsUrl.searchParams.set("year", selectedYear);
+        chartsUrl.searchParams.set("week", selectedWeek);
+        revenueUrl.searchParams.set("mode", "week");
+        revenueUrl.searchParams.set("year", selectedYear);
+        revenueUrl.searchParams.set("week", selectedWeek);
       } else if (rangeMode === "year") {
         chartsUrl.searchParams.set("mode", "year");
         chartsUrl.searchParams.set("year", selectedYear);
@@ -424,7 +477,7 @@ export function AdminDashboard() {
     } catch (err) {
       console.error("Failed to fetch chart data:", err);
     }
-  }, [rangeMode, reportMonth, selectedYear]);
+  }, [rangeMode, reportMonth, selectedYear, selectedWeek]);
 
   useEffect(() => {
     setLoading(true);
@@ -469,6 +522,23 @@ export function AdminDashboard() {
     return { value: `${selectedYear}-${month}`, label: `${label} ${selectedYear}` };
   });
 
+  const weekOptions = (() => {
+    const year = parseInt(selectedYear, 10);
+    if (!Number.isFinite(year)) return [] as Array<{ value: string; label: string }>;
+    const total = getISOWeeksInYear(year);
+    const items: Array<{ value: string; label: string }> = [];
+    for (let w = 1; w <= total; w++) {
+      const monday = getISOWeekStartUTCNoon(year, w);
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+      const start = monday.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      const end = sunday.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      const label = `Semaine ${String(w).padStart(2, "0")} (${start}–${end})`;
+      items.push({ value: String(w), label });
+    }
+    return items;
+  })();
+
   const yearOptions = (() => {
     const current = new Date().getFullYear();
     const min = statsMeta?.minYear ?? (current - 5);
@@ -498,12 +568,13 @@ export function AdminDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as "rolling" | "month" | "year")}>
+            <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as "rolling" | "week" | "month" | "year")}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="rolling">Période</SelectItem>
+                <SelectItem value="week">Semaine</SelectItem>
                 <SelectItem value="month">Mois</SelectItem>
                 <SelectItem value="year">Année</SelectItem>
               </SelectContent>
@@ -522,8 +593,21 @@ export function AdminDashboard() {
               </SelectContent>
             </Select>
 
+            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+              <SelectTrigger className="w-[210px]" disabled={rangeMode !== "week"}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {weekOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-[120px]" disabled={rangeMode !== "year"}>
+              <SelectTrigger className="w-[120px]" disabled={rangeMode === "rolling"}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
