@@ -69,6 +69,18 @@ interface PaymentsResponse {
   };
 }
 
+type BookingPaymentMethod = "card" | "cash" | null;
+
+interface CollectContext {
+  bookingId: string;
+  bookingRef: string | null;
+  userName: string | null;
+  totalPrice: number;
+  totalPaid: number;
+  remaining: number;
+  bookingPaymentMethod: BookingPaymentMethod;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatDate(dateStr: string): string {
@@ -303,14 +315,7 @@ export function AdminPayments() {
 
   const [collectOpen, setCollectOpen] = useState(false);
   const [collectLoading, setCollectLoading] = useState(false);
-  const [collectContext, setCollectContext] = useState<{
-    bookingId: string;
-    bookingRef: string | null;
-    userName: string | null;
-    totalPrice: number;
-    totalPaid: number;
-    remaining: number;
-  } | null>(null);
+  const [collectContext, setCollectContext] = useState<CollectContext | null>(null);
   const [collectEntries, setCollectEntries] = useState<Array<{ amount: string; method: "cash" | "card" | "transfer" | "check" }>>([
     { amount: "", method: "cash" },
   ]);
@@ -437,7 +442,13 @@ export function AdminPayments() {
       if (!bJson.success) throw new Error(bJson.error || "Booking fetch failed");
       if (!pJson.success) throw new Error(pJson.error || "Payments fetch failed");
 
-      const booking = bJson.data as { booking_ref: string; total_price: number; user_name?: string | null; user_band_name?: string | null };
+      const booking = bJson.data as {
+        booking_ref: string;
+        total_price: number;
+        payment_method: BookingPaymentMethod;
+        user_name?: string | null;
+        user_band_name?: string | null;
+      };
       const paymentsRows = pJson.data as Array<{ amount: number; status: string }>;
       const totalPaid = paymentsRows.reduce((acc, p) => (p.status === "paid" ? acc + p.amount : acc), 0);
       const remaining = Math.max(booking.total_price - totalPaid, 0);
@@ -454,10 +465,14 @@ export function AdminPayments() {
         totalPrice: booking.total_price,
         totalPaid,
         remaining,
+        bookingPaymentMethod: booking.payment_method || null,
       });
 
       setCollectEntries([
-        { amount: remaining > 0 ? remaining.toFixed(2).replace(".", ",") : "", method: "cash" },
+        {
+          amount: remaining > 0 ? remaining.toFixed(2).replace(".", ",") : "",
+          method: booking.payment_method === "card" ? "card" : "cash",
+        },
       ]);
       setCollectOpen(true);
     } catch (error) {
@@ -478,6 +493,14 @@ export function AdminPayments() {
 
   async function submitCollectPayments() {
     if (!collectContext) return;
+
+    if (collectContext.bookingPaymentMethod === "card") {
+      const hasNonCard = collectEntries.some((e) => e.method !== "card" && e.amount.trim() !== "");
+      if (hasNonCard) {
+        toast.error("En ligne, les paiements sont uniquement par CB");
+        return;
+      }
+    }
 
     const parsed = collectEntries
       .map((e) => {
@@ -1002,10 +1025,16 @@ export function AdminPayments() {
                     }}
                     className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
                   >
-                    <option value="cash">Espèces</option>
-                    <option value="card">CB</option>
-                    <option value="transfer">Virement</option>
-                    <option value="check">Chèque</option>
+                    {collectContext?.bookingPaymentMethod === "card" ? (
+                      <option value="card">CB</option>
+                    ) : (
+                      <>
+                        <option value="cash">Espèces</option>
+                        <option value="card">CB</option>
+                        <option value="transfer">Virement</option>
+                        <option value="check">Chèque</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
