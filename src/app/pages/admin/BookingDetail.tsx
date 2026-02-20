@@ -130,8 +130,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         setLoadingPayments(false);
 
         setNewPayment({
-          amount: (json.data.total_price / 100).toString(),
-          method: json.data.payment_method === "card" ? "card" : "cash"
+          amount: String(json.data.total_price),
+          method: json.data.payment_method === "card" ? "card" : "cash",
         });
       }
     } catch (error) {
@@ -222,23 +222,24 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const handleAddPayment = async () => {
     if (!booking || !newPayment.amount) return;
-    const amountCents = Math.round(parseFloat(newPayment.amount) * 100);
-    if (isNaN(amountCents) || amountCents <= 0) {
+    const n = parseFloat(newPayment.amount.replace(/\s/g, "").replace(",", "."));
+    const amount = Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+    if (!Number.isFinite(amount) || amount <= 0) {
       toast.error("Montant invalide");
       return;
     }
 
     setAddingPayment(true);
     try {
-      const res = await fetch(`/api/admin/bookings/${booking.id}/payments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: amountCents,
-          method: newPayment.method,
-          status: "paid",
-        }),
-      });
+        const res = await fetch(`/api/admin/bookings/${booking.id}/payments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount,
+            method: newPayment.method,
+            status: "paid",
+          }),
+        });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
         toast.success("Paiement enregistré");
@@ -272,6 +273,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const methodLabels: Record<string, string> = {
     card: "Carte bancaire",
     cash: "Espèces",
+    check: "Chèque",
     cheque: "Chèque",
     transfer: "Virement",
   };
@@ -490,8 +492,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <SelectContent className="bg-zinc-900 border-zinc-800">
                             <SelectItem value="card">Carte Bancaire</SelectItem>
                             <SelectItem value="cash">Espèces</SelectItem>
-                            <SelectItem value="cheque">Chèque</SelectItem>
                             <SelectItem value="transfer">Virement</SelectItem>
+                            <SelectItem value="check">Chèque</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
