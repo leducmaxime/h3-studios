@@ -98,6 +98,7 @@ export interface DbPayment {
 export interface AdminPaymentRow extends DbPayment {
   booking_ref: string | null;
   user_name: string | null;
+  user_band_name: string | null;
   user_id: string | null;
   booking_date: string | null;
   payment_type: "on-site" | "online";

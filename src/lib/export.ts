@@ -140,6 +140,7 @@ export function exportUsersCSV(users: DbUser[]): void {
 interface PaymentWithDetails extends DbPayment {
   booking_ref?: string | null;
   user_name?: string | null;
+  user_band_name?: string | null;
   payment_type?: "on-site" | "online" | null;
 }
 
@@ -147,6 +148,7 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
   const headers = [
     "Réf. réservation",
     "Client",
+    "Groupe",
     "Type paiement",
     "Méthode",
     "Statut",
@@ -179,6 +181,7 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
     return [
       escapeCSV(payment.booking_ref || "—"),
       escapeCSV(payment.user_name || "—"),
+      escapeCSV(payment.user_band_name || "—"),
       escapeCSV(payment.payment_type ? (paymentTypeLabels[payment.payment_type] || payment.payment_type) : "—"),
       escapeCSV(methodLabels[payment.method] || payment.method),
       escapeCSV(statusLabels[payment.status] || payment.status),

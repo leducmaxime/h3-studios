@@ -541,9 +541,9 @@ export async function getPayments(
   }
 
   if (filters.search) {
-    conditions.push("(booking_ref LIKE ? OR user_name LIKE ?)");
+    conditions.push("(booking_ref LIKE ? OR user_name LIKE ? OR user_band_name LIKE ?)");
     const term = `%${filters.search}%`;
-    params.push(term, term);
+    params.push(term, term, term);
   }
 
   if (filters.dateFrom) {
@@ -583,6 +583,7 @@ export async function getPayments(
           b.created_at as created_at,
           b.booking_ref as booking_ref,
           u.name as user_name,
+          u.band_name as user_band_name,
           u.id as user_id,
           b.date as booking_date,
           'on-site' as payment_type
@@ -609,6 +610,7 @@ export async function getPayments(
           p.created_at as created_at,
           b.booking_ref as booking_ref,
           u.name as user_name,
+          u.band_name as user_band_name,
           u.id as user_id,
           b.date as booking_date,
           CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' ELSE 'online' END as payment_type
@@ -646,6 +648,7 @@ export async function getPayments(
           b.created_at as created_at,
           b.booking_ref as booking_ref,
           u.name as user_name,
+          u.band_name as user_band_name,
           u.id as user_id,
           b.date as booking_date,
           'on-site' as payment_type
@@ -672,6 +675,7 @@ export async function getPayments(
           p.created_at as created_at,
           b.booking_ref as booking_ref,
           u.name as user_name,
+          u.band_name as user_band_name,
           u.id as user_id,
           b.date as booking_date,
           CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' ELSE 'online' END as payment_type
