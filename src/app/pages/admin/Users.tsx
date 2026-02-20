@@ -48,7 +48,11 @@ interface UsersApiResponse {
 export function AdminUsers() {
   const [users, setUsers] = useState<DbUser[]>([]);
   const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [blockedFilter, setBlockedFilter] = useState<"all" | "blocked" | "active">("all");
+  const [sortBy, setSortBy] = useState<"created_at" | "name" | "total_bookings" | "total_spent">("created_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -74,6 +78,10 @@ export function AdminUsers() {
       });
       if (search) params.set("search", search);
 
+      if (blockedFilter !== "all") params.set("blocked", blockedFilter === "blocked" ? "true" : "false");
+      params.set("sortBy", sortBy);
+      params.set("sortOrder", sortOrder);
+
       const res = await fetch(`/api/admin/users?${params}`);
       const json = (await res.json()) as { success: boolean; data: UsersApiResponse };
       if (json.success) {
@@ -86,11 +94,19 @@ export function AdminUsers() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, perPage, search, blockedFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const totalPages = Math.ceil(total / perPage);
 
@@ -287,20 +303,48 @@ export function AdminUsers() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-        <div className="relative">
+      <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <Input
             id="user-search"
             placeholder="Rechercher par nom, email, téléphone ou groupe..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="pl-10"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-10 border-zinc-700 bg-zinc-800"
           />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={blockedFilter}
+            onChange={(e) => { setBlockedFilter(e.target.value as typeof blockedFilter); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="all">Tous les clients</option>
+            <option value="active">Actifs</option>
+            <option value="blocked">Bloqués</option>
+          </select>
+
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="created_at">Trier par création</option>
+            <option value="name">Trier par nom</option>
+            <option value="total_bookings">Trier par réservations</option>
+            <option value="total_spent">Trier par total dépensé</option>
+          </select>
+
+          <select
+            value={sortOrder}
+            onChange={(e) => { setSortOrder(e.target.value as typeof sortOrder); setPage(1); }}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="desc">Décroissant</option>
+            <option value="asc">Croissant</option>
+          </select>
         </div>
       </div>
 
@@ -343,6 +387,9 @@ export function AdminUsers() {
                     <div className="flex-1">
                       <p className="font-medium">{user.name}</p>
                       <p className="text-sm text-zinc-400">{user.email || "Pas d'email"}</p>
+                      {user.band_name && (
+                        <p className="text-sm text-zinc-500">{user.band_name}</p>
+                      )}
                     </div>
                     <span className="text-sm text-zinc-500">
                       {user.total_bookings} résa.
