@@ -598,7 +598,11 @@ export async function getPayments(
           p.id as id,
           p.booking_id as booking_id,
           p.amount as amount,
-          CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
+          CASE
+            WHEN b.payment_status != 'pay-on-site' THEN 'card'
+            WHEN p.method IN ('cheque', 'check') THEN 'check'
+            ELSE p.method
+          END as method,
           p.status as status,
           p.refunded_amount as refunded_amount,
           p.paid_at as paid_at,
@@ -657,7 +661,11 @@ export async function getPayments(
           p.id as id,
           p.booking_id as booking_id,
           p.amount as amount,
-          CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
+          CASE
+            WHEN b.payment_status != 'pay-on-site' THEN 'card'
+            WHEN p.method IN ('cheque', 'check') THEN 'check'
+            ELSE p.method
+          END as method,
           p.status as status,
           p.refunded_amount as refunded_amount,
           p.paid_at as paid_at,
@@ -691,17 +699,22 @@ export async function getPaymentsByBookingId(
 ): Promise<DbPayment[]> {
   const result = await db.prepare(
     `SELECT
-      id,
-      booking_id,
-      amount,
-      CASE WHEN method IN ('cheque', 'check') THEN 'check' ELSE method END as method,
-      status,
-      refunded_amount,
-      paid_at,
-      created_at
-    FROM payments
-    WHERE booking_id = ?
-    ORDER BY created_at ASC`,
+      p.id as id,
+      p.booking_id as booking_id,
+      p.amount as amount,
+      CASE
+        WHEN b.payment_status != 'pay-on-site' THEN 'card'
+        WHEN p.method IN ('cheque', 'check') THEN 'check'
+        ELSE p.method
+      END as method,
+      p.status as status,
+      p.refunded_amount as refunded_amount,
+      p.paid_at as paid_at,
+      p.created_at as created_at
+    FROM payments p
+    JOIN bookings b ON b.id = p.booking_id
+    WHERE p.booking_id = ?
+    ORDER BY p.created_at ASC`,
   )
     .bind(bookingId)
     .all<DbPayment>();
@@ -714,17 +727,22 @@ export async function getPaymentByBookingId(
 ): Promise<DbPayment | null> {
   return db.prepare(
     `SELECT
-      id,
-      booking_id,
-      amount,
-      CASE WHEN method IN ('cheque', 'check') THEN 'check' ELSE method END as method,
-      status,
-      refunded_amount,
-      paid_at,
-      created_at
-    FROM payments
-    WHERE booking_id = ?
-    ORDER BY created_at DESC`,
+      p.id as id,
+      p.booking_id as booking_id,
+      p.amount as amount,
+      CASE
+        WHEN b.payment_status != 'pay-on-site' THEN 'card'
+        WHEN p.method IN ('cheque', 'check') THEN 'check'
+        ELSE p.method
+      END as method,
+      p.status as status,
+      p.refunded_amount as refunded_amount,
+      p.paid_at as paid_at,
+      p.created_at as created_at
+    FROM payments p
+    JOIN bookings b ON b.id = p.booking_id
+    WHERE p.booking_id = ?
+    ORDER BY p.created_at DESC`,
   ).bind(bookingId).first<DbPayment>();
 }
 
@@ -758,11 +776,20 @@ export async function addPayment(
     const payments = await getPaymentsByBookingId(db, data.booking_id);
     const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
     
-    const booking = await db.prepare("SELECT total_price FROM bookings WHERE id = ?").bind(data.booking_id).first<{ total_price: number }>();
+    const booking = await db.prepare("SELECT total_price, payment_status FROM bookings WHERE id = ?")
+      .bind(data.booking_id)
+      .first<{ total_price: number; payment_status: string | null }>();
+
     if (booking && totalPaid >= booking.total_price) {
-      await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
-        .bind(timestamp, data.booking_id)
-        .run();
+      if (booking.payment_status !== "pay-on-site") {
+        await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
+          .bind(timestamp, data.booking_id)
+          .run();
+      } else {
+        await db.prepare("UPDATE bookings SET updated_at = ? WHERE id = ?")
+          .bind(timestamp, data.booking_id)
+          .run();
+      }
     }
   }
 
@@ -778,12 +805,35 @@ export async function markPaymentPaid(
   const payment = await db.prepare("SELECT * FROM payments WHERE id = ?").bind(paymentId).first<DbPayment>();
   if (!payment) return { success: false, error: "Paiement introuvable" };
 
+  const booking = await db.prepare("SELECT total_price, payment_status FROM bookings WHERE id = ?")
+    .bind(payment.booking_id)
+    .first<{ total_price: number; payment_status: string | null }>();
+  if (!booking) return { success: false, error: "Réservation introuvable" };
+
   const timestamp = now();
 
-  await db.batch([
-    db.prepare("UPDATE payments SET status = 'paid', paid_at = ? WHERE id = ?").bind(timestamp, paymentId),
-    db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?").bind(timestamp, payment.booking_id),
-  ]);
+  await db.prepare("UPDATE payments SET status = 'paid', paid_at = ? WHERE id = ?")
+    .bind(timestamp, paymentId)
+    .run();
+
+  const payments = await getPaymentsByBookingId(db, payment.booking_id);
+  const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+
+  if (totalPaid >= booking.total_price) {
+    if (booking.payment_status !== "pay-on-site") {
+      await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
+        .bind(timestamp, payment.booking_id)
+        .run();
+    } else {
+      await db.prepare("UPDATE bookings SET updated_at = ? WHERE id = ?")
+        .bind(timestamp, payment.booking_id)
+        .run();
+    }
+  } else {
+    await db.prepare("UPDATE bookings SET updated_at = ? WHERE id = ?")
+      .bind(timestamp, payment.booking_id)
+      .run();
+  }
 
   await addAuditLog(db, "payment", paymentId, "mark-paid", { bookingId: payment.booking_id });
 

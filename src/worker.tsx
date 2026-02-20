@@ -875,7 +875,7 @@ const app = defineApp([
           total_price: basePrice,
           equipment: body.equipment || null,
           payment_method: body.payment_method || null,
-          payment_status: body.payment_method === "card" ? "paid" : "pending",
+          payment_status: body.payment_method === "card" ? "paid" : "pay-on-site",
           notes: body.notes || null,
           cancelled_at: null,
           cancel_reason: null,
@@ -1026,9 +1026,18 @@ const app = defineApp([
           return jsonError("Champs obligatoires manquants: amount, method, status", 400);
         }
 
+        const booking = await getBookingById(env.DB, params.id);
+        if (!booking) {
+          return jsonError("Réservation introuvable", 404);
+        }
+
         const validMethods = ["cash", "card", "transfer", "check"] as const;
         if (!validMethods.includes(body.method as (typeof validMethods)[number])) {
           return jsonError("Méthode de paiement invalide", 400);
+        }
+
+        if (booking.payment_method === "card" && body.method !== "card") {
+          return jsonError("En ligne, les paiements sont uniquement par CB", 400);
         }
 
         const validStatus = ["pending", "paid", "refunded", "partial-refund"] as const;
