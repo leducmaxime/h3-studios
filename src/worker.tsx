@@ -71,6 +71,7 @@ import {
   markPaymentPaid,
   refundPayment,
   getBlockedSlots,
+  getBlockedSlotsByDateRange,
   addBlockedSlot,
   removeBlockedSlot,
   getPricing,
@@ -1025,11 +1026,21 @@ const app = defineApp([
           return jsonError("Champs obligatoires manquants: amount, method, status", 400);
         }
 
+        const validMethods = ["cash", "card", "transfer", "check"] as const;
+        if (!validMethods.includes(body.method as (typeof validMethods)[number])) {
+          return jsonError("Méthode de paiement invalide", 400);
+        }
+
+        const validStatus = ["pending", "paid", "refunded", "partial-refund"] as const;
+        if (!validStatus.includes(body.status as (typeof validStatus)[number])) {
+          return jsonError("Statut de paiement invalide", 400);
+        }
+
         const result = await addPayment(env.DB, {
           booking_id: params.id,
           amount: body.amount,
-          method: body.method,
-          status: body.status as any,
+          method: body.method as (typeof validMethods)[number],
+          status: body.status as (typeof validStatus)[number],
         });
 
         return jsonSuccess(result);
@@ -1082,19 +1093,27 @@ const app = defineApp([
       const endDate = url.searchParams.get("endDate");
 
       if (date) {
-        const bookings = await getBookingsByDate(env.DB, date);
-        return jsonSuccess(bookings);
+        const [bookings, blockedSlots] = await Promise.all([
+          getBookingsByDate(env.DB, date),
+          getBlockedSlots(env.DB, undefined, date),
+        ]);
+        return jsonSuccess({ bookings, blockedSlots });
       }
 
       if (startDate && endDate) {
-        const bookings = await getBookingsByDateRange(env.DB, startDate, endDate);
-        return jsonSuccess(bookings);
+        const [bookings, blockedSlots] = await Promise.all([
+          getBookingsByDateRange(env.DB, startDate, endDate),
+          getBlockedSlotsByDateRange(env.DB, startDate, endDate),
+        ]);
+        return jsonSuccess({ bookings, blockedSlots });
       }
 
-      // Default: today
       const today = getParisDateISO();
-      const bookings = await getBookingsByDate(env.DB, today);
-      return jsonSuccess(bookings);
+      const [bookings, blockedSlots] = await Promise.all([
+        getBookingsByDate(env.DB, today),
+        getBlockedSlots(env.DB, undefined, today),
+      ]);
+      return jsonSuccess({ bookings, blockedSlots });
     } catch (error) {
       console.error("GET /api/admin/calendar error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch calendar", 500);
@@ -1113,7 +1132,28 @@ const app = defineApp([
         const blockedParam = url.searchParams.get("blocked");
         const isBlocked = blockedParam === "true" ? true : blockedParam === "false" ? false : undefined;
 
-        const result = await getUsers(env.DB, { search, isBlocked }, page, limit);
+        const hasBookingsParam = url.searchParams.get("hasBookings");
+        const hasBookings = hasBookingsParam === "true" ? true : hasBookingsParam === "false" ? false : undefined;
+
+        const sortByRaw = url.searchParams.get("sortBy") || undefined;
+        const sortOrderRaw = url.searchParams.get("sortOrder") || undefined;
+
+        const validSortBy = ["created_at", "name", "total_bookings", "total_spent"] as const;
+        const validSortOrder = ["asc", "desc"] as const;
+
+        const sortBy = sortByRaw && validSortBy.includes(sortByRaw as (typeof validSortBy)[number])
+          ? (sortByRaw as (typeof validSortBy)[number])
+          : undefined;
+        const sortOrder = sortOrderRaw && validSortOrder.includes(sortOrderRaw as (typeof validSortOrder)[number])
+          ? (sortOrderRaw as (typeof validSortOrder)[number])
+          : undefined;
+
+        const result = await getUsers(
+          env.DB,
+          { search, isBlocked, hasBookings, sortBy, sortOrder },
+          page,
+          limit,
+        );
         return jsonSuccess(result);
       } catch (error) {
         console.error("GET /api/admin/users error:", error);
@@ -1246,10 +1286,38 @@ const app = defineApp([
 
     try {
       const url = new URL(request.url);
+      const filters = {} as {
+        status?: "pending" | "paid" | "refunded" | "partial-refund";
+        method?: "card" | "cash" | "transfer" | "check";
+        paymentType?: "on-site" | "online";
+        search?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        sortBy?: "created_at" | "booking_date" | "amount" | "status" | "method" | "payment_type";
+        sortOrder?: "asc" | "desc";
+      };
+
       const page = parseInt(url.searchParams.get("page") || "1", 10);
       const limit = parseInt(url.searchParams.get("limit") || "20", 10);
 
-      const result = await getPayments(env.DB, page, limit);
+      const status = url.searchParams.get("status");
+      if (status) filters.status = status as typeof filters.status;
+      const method = url.searchParams.get("method");
+      if (method) filters.method = method as typeof filters.method;
+      const paymentType = url.searchParams.get("paymentType");
+      if (paymentType) filters.paymentType = paymentType as typeof filters.paymentType;
+      const search = url.searchParams.get("search");
+      if (search) filters.search = search;
+      const dateFrom = url.searchParams.get("dateFrom");
+      if (dateFrom) filters.dateFrom = dateFrom;
+      const dateTo = url.searchParams.get("dateTo");
+      if (dateTo) filters.dateTo = dateTo;
+      const sortBy = url.searchParams.get("sortBy");
+      if (sortBy) filters.sortBy = sortBy as typeof filters.sortBy;
+      const sortOrder = url.searchParams.get("sortOrder");
+      if (sortOrder) filters.sortOrder = sortOrder as typeof filters.sortOrder;
+
+      const result = await getPayments(env.DB, filters, page, limit);
       return jsonSuccess(result);
     } catch (error) {
       console.error("GET /api/admin/payments error:", error);
@@ -1316,32 +1384,84 @@ const app = defineApp([
         const body = await request.json() as {
           studioId?: string | null;
           date?: string;
+          dateFrom?: string;
+          dateTo?: string;
+          wholeDay?: boolean;
           startTime?: string;
           endTime?: string;
           reason?: string;
         };
 
-        if (!body.date || !body.startTime || !body.endTime || !body.reason) {
-          return jsonError("Champs obligatoires manquants: date, startTime, endTime, reason", 400);
+        const dateFrom = body.dateFrom ?? body.date;
+        const dateTo = body.dateTo ?? dateFrom;
+        const reason = body.reason?.trim() || "";
+        const wholeDay = body.wholeDay === true;
+
+        const startTime = wholeDay ? ALL_TIME_SLOTS[0] : body.startTime;
+        const endTime = wholeDay ? "00:00" : body.endTime;
+
+        if (!dateFrom || !dateTo || !reason) {
+          return jsonError("Champs obligatoires manquants: dateFrom/date, dateTo, reason", 400);
         }
 
-        const result = await addBlockedSlot(env.DB, {
-          studio_id: body.studioId ?? null,
-          date: body.date,
-          start_time: body.startTime,
-          end_time: body.endTime,
-          reason: body.reason,
-        });
+        const mFrom = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateFrom);
+        const mTo = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateTo);
+        if (!mFrom || !mTo) {
+          return jsonError("Format de date invalide (YYYY-MM-DD)", 400);
+        }
 
-        await addAuditLog(env.DB, "blocked_slot", result.id, "create", {
+        const fromMs = Date.UTC(Number(mFrom[1]), Number(mFrom[2]) - 1, Number(mFrom[3]));
+        const toMs = Date.UTC(Number(mTo[1]), Number(mTo[2]) - 1, Number(mTo[3]));
+        if (toMs < fromMs) {
+          return jsonError("La date de fin doit être après la date de début", 400);
+        }
+
+        const totalDays = Math.floor((toMs - fromMs) / (24 * 60 * 60 * 1000)) + 1;
+        if (totalDays > 90) {
+          return jsonError("La période ne peut pas dépasser 90 jours", 400);
+        }
+
+        if (!wholeDay) {
+          if (!startTime || !endTime) {
+            return jsonError("Champs obligatoires manquants: startTime, endTime", 400);
+          }
+
+          const validStart = ALL_TIME_SLOTS.includes(startTime);
+          const validEnd = endTime === "00:00" || ALL_TIME_SLOTS.includes(endTime);
+          if (!validStart || !validEnd) {
+            return jsonError("Heures invalides", 400);
+          }
+
+          if (startTime >= endTime && endTime !== "00:00") {
+            return jsonError("L'heure de fin doit être après l'heure de début", 400);
+          }
+        }
+
+        const createdIds: string[] = [];
+        for (let i = 0; i < totalDays; i++) {
+          const date = new Date(fromMs + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const result = await addBlockedSlot(env.DB, {
+            studio_id: body.studioId ?? null,
+            date,
+            start_time: startTime!,
+            end_time: endTime!,
+            reason,
+          });
+          createdIds.push(result.id);
+        }
+
+        await addAuditLog(env.DB, "blocked_slot", createdIds[0], totalDays > 1 ? "create-range" : "create", {
           studio_id: body.studioId,
-          date: body.date,
-          start_time: body.startTime,
-          end_time: body.endTime,
-          reason: body.reason,
+          date_from: dateFrom,
+          date_to: dateTo,
+          whole_day: wholeDay,
+          start_time: startTime,
+          end_time: endTime,
+          count: createdIds.length,
+          reason,
         });
 
-        return jsonSuccess(result);
+        return jsonSuccess({ success: true, count: createdIds.length });
       } catch (error) {
         console.error("POST /api/admin/blocked-slots error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to add blocked slot", 500);

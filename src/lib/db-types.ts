@@ -95,6 +95,28 @@ export interface DbPayment {
   created_at: string;
 }
 
+export interface AdminPaymentRow extends DbPayment {
+  booking_ref: string | null;
+  user_name: string | null;
+  user_id: string | null;
+  booking_date: string | null;
+  payment_type: "on-site" | "online";
+}
+
+export type AdminPaymentSortField = "created_at" | "booking_date" | "amount" | "status" | "method" | "payment_type";
+export type AdminPaymentSortOrder = "asc" | "desc";
+
+export interface AdminPaymentFilters {
+  status?: "pending" | "paid" | "refunded" | "partial-refund";
+  method?: "card" | "cash" | "transfer" | "check";
+  paymentType?: "on-site" | "online";
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: AdminPaymentSortField;
+  sortOrder?: AdminPaymentSortOrder;
+}
+
 // --- Blocked Slots ---
 
 export interface DbBlockedSlot {
@@ -209,7 +231,13 @@ export interface BookingFilters {
 export interface UserFilters {
   search?: string; // name, email, band_name
   isBlocked?: boolean;
+  hasBookings?: boolean;
+  sortBy?: UserSortField;
+  sortOrder?: UserSortOrder;
 }
+
+export type UserSortField = "created_at" | "name" | "total_bookings" | "total_spent";
+export type UserSortOrder = "asc" | "desc";
 
 export interface AuditLogFilters {
   entityType?: string;

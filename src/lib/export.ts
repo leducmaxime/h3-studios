@@ -36,8 +36,8 @@ function formatDateForCSV(dateStr: string): string {
   });
 }
 
-function formatPriceForCSV(cents: number): string {
-  return (cents / 100).toFixed(2);
+function formatPriceForCSV(amount: number): string {
+  return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
 }
 
 // ─── Bookings Export ─────────────────────────────────────────────────────────
@@ -140,12 +140,14 @@ export function exportUsersCSV(users: DbUser[]): void {
 interface PaymentWithDetails extends DbPayment {
   booking_ref?: string | null;
   user_name?: string | null;
+  payment_type?: "on-site" | "online" | null;
 }
 
 export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
   const headers = [
     "Réf. réservation",
     "Client",
+    "Type paiement",
     "Méthode",
     "Statut",
     "Montant (EUR)",
@@ -155,8 +157,16 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
 
   const rows = payments.map((payment) => {
     const methodLabels: Record<string, string> = {
-      card: "Carte",
+      card: "CB",
       cash: "Espèces",
+      transfer: "Virement",
+      check: "Chèque",
+      cheque: "Chèque",
+    };
+
+    const paymentTypeLabels: Record<string, string> = {
+      "on-site": "Sur place",
+      online: "En ligne",
     };
 
     const statusLabels: Record<string, string> = {
@@ -169,6 +179,7 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
     return [
       escapeCSV(payment.booking_ref || "—"),
       escapeCSV(payment.user_name || "—"),
+      escapeCSV(payment.payment_type ? (paymentTypeLabels[payment.payment_type] || payment.payment_type) : "—"),
       escapeCSV(methodLabels[payment.method] || payment.method),
       escapeCSV(statusLabels[payment.status] || payment.status),
       escapeCSV(formatPriceForCSV(payment.amount)),

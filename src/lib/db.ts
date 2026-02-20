@@ -2,6 +2,8 @@ import {
   type DbBooking,
   type DbUser,
   type DbPayment,
+  type AdminPaymentRow,
+  type AdminPaymentFilters,
   type DbBlockedSlot,
   type DbPricing,
   type DbEquipment,
@@ -276,24 +278,92 @@ export async function getUsers(
   const conditions: string[] = [];
   const params: unknown[] = [];
 
+  const hasBookings = filters.hasBookings;
+
   if (filters.search) {
-    conditions.push("(name LIKE ? OR email LIKE ? OR band_name LIKE ?)");
+    conditions.push("(u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.band_name LIKE ?)");
     const term = `%${filters.search}%`;
-    params.push(term, term, term);
+    params.push(term, term, term, term);
   }
   if (filters.isBlocked !== undefined) {
-    conditions.push("is_blocked = ?");
+    conditions.push("u.is_blocked = ?");
     params.push(filters.isBlocked ? 1 : 0);
+  }
+
+  if (hasBookings !== undefined) {
+    conditions.push(hasBookings ? "COALESCE(s.total_bookings, 0) > 0" : "COALESCE(s.total_bookings, 0) = 0");
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  const countResult = await db.prepare(`SELECT COUNT(*) as total FROM users ${where}`).bind(...params).first<{ total: number }>();
+  const sortBy = filters.sortBy || "created_at";
+  const sortOrder = filters.sortOrder || "desc";
+  const validSortFields = ["created_at", "name", "total_bookings", "total_spent"];
+  const safeSortBy = validSortFields.includes(sortBy) ? sortBy : "created_at";
+  const safeSortOrder = sortOrder === "asc" ? "ASC" : "DESC";
+
+  const sortExpr = (() => {
+    switch (safeSortBy) {
+      case "name":
+        return "u.name";
+      case "total_bookings":
+        return "COALESCE(s.total_bookings, 0)";
+      case "total_spent":
+        return "COALESCE(s.total_spent, 0)";
+      case "created_at":
+      default:
+        return "u.created_at";
+    }
+  })();
+
+  const countResult = await db.prepare(
+    `
+      SELECT COUNT(*) as total
+      FROM users u
+      LEFT JOIN (
+        SELECT
+          user_id,
+          COUNT(*) as total_bookings,
+          COALESCE(SUM(total_price), 0) as total_spent
+        FROM bookings
+        WHERE status != 'cancelled'
+        GROUP BY user_id
+      ) s ON u.id = s.user_id
+      ${where}
+    `,
+  ).bind(...params).first<{ total: number }>();
   const total = countResult?.total ?? 0;
 
   const offset = (page - 1) * limit;
+
   const result = await db.prepare(
-    `SELECT * FROM users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    `
+      SELECT
+        u.id,
+        u.email,
+        u.name,
+        u.phone,
+        u.band_name,
+        u.notes,
+        u.is_blocked,
+        COALESCE(s.total_bookings, 0) as total_bookings,
+        COALESCE(s.total_spent, 0) as total_spent,
+        u.created_at,
+        u.updated_at
+      FROM users u
+      LEFT JOIN (
+        SELECT
+          user_id,
+          COUNT(*) as total_bookings,
+          COALESCE(SUM(total_price), 0) as total_spent
+        FROM bookings
+        WHERE status != 'cancelled'
+        GROUP BY user_id
+      ) s ON u.id = s.user_id
+      ${where}
+      ORDER BY ${sortExpr} ${safeSortOrder}, u.created_at DESC
+      LIMIT ? OFFSET ?
+    `,
   ).bind(...params, limit, offset).all<DbUser>();
 
   return { data: result.results, total, page, limit };
@@ -303,7 +373,33 @@ export async function getUserById(
   db: D1Database,
   id: string,
 ): Promise<DbUser | null> {
-  return db.prepare("SELECT * FROM users WHERE id = ?").bind(id).first<DbUser>();
+  return db.prepare(
+    `
+      SELECT
+        u.id,
+        u.email,
+        u.name,
+        u.phone,
+        u.band_name,
+        u.notes,
+        u.is_blocked,
+        COALESCE(s.total_bookings, 0) as total_bookings,
+        COALESCE(s.total_spent, 0) as total_spent,
+        u.created_at,
+        u.updated_at
+      FROM users u
+      LEFT JOIN (
+        SELECT
+          user_id,
+          COUNT(*) as total_bookings,
+          COALESCE(SUM(total_price), 0) as total_spent
+        FROM bookings
+        WHERE status != 'cancelled'
+        GROUP BY user_id
+      ) s ON u.id = s.user_id
+      WHERE u.id = ?
+    `,
+  ).bind(id).first<DbUser>();
 }
 
 export async function getUserByEmail(
@@ -370,64 +466,45 @@ export async function mergeUsers(
   primaryId: string,
   duplicateIds: string[],
 ): Promise<{ success: boolean; error?: string }> {
+  const uniqueDuplicateIds = Array.from(new Set(duplicateIds)).filter((id) => id !== primaryId);
+  if (uniqueDuplicateIds.length === 0) return { success: true };
+
   const primary = await getUserById(db, primaryId);
   if (!primary) return { success: false, error: "Utilisateur principal introuvable" };
 
-  const placeholders = duplicateIds.map(() => "?").join(", ");
+  const placeholders = uniqueDuplicateIds.map(() => "?").join(", ");
   const duplicates = await db.prepare(
     `SELECT * FROM users WHERE id IN (${placeholders})`,
-  ).bind(...duplicateIds).all<DbUser>();
+  ).bind(...uniqueDuplicateIds).all<DbUser>();
 
-  if (duplicates.results.length !== duplicateIds.length) {
+  if (duplicates.results.length !== uniqueDuplicateIds.length) {
     return { success: false, error: "Certains utilisateurs sont introuvables" };
   }
 
   const statements: D1PreparedStatement[] = [];
 
   statements.push(
-    db.prepare(`UPDATE bookings SET user_id = ?, updated_at = ? WHERE user_id IN (${placeholders})`).bind(primaryId, now(), ...duplicateIds),
+    db.prepare(`UPDATE bookings SET user_id = ?, updated_at = ? WHERE user_id IN (${placeholders})`).bind(primaryId, now(), ...uniqueDuplicateIds),
   );
 
-  let mergedBookings = 0;
-  let mergedSpent = 0;
-  for (const dup of duplicates.results) {
-    mergedBookings += dup.total_bookings;
-    mergedSpent += dup.total_spent;
-  }
-
-  const mergedEmails = duplicates.results.map(d => d.email).join(", ");
-  const newNotes = primary.notes ? `${primary.notes}\nFusionné avec: ${mergedEmails}` : `Fusionné avec: ${mergedEmails}`;
+  const mergedEmails = duplicates.results.map((d) => d.email).filter(Boolean).join(", ") || "(sans email)";
+  const newNotes = primary.notes
+    ? `${primary.notes}\nFusionné avec: ${mergedEmails}`
+    : `Fusionné avec: ${mergedEmails}`;
 
   statements.push(
-    db.prepare(
-      "UPDATE users SET total_bookings = ?, total_spent = ?, notes = ?, updated_at = ? WHERE id = ?",
-    ).bind(
-      primary.total_bookings + mergedBookings,
-      primary.total_spent + mergedSpent,
-      newNotes,
-      now(),
-      primaryId,
-    ),
+    db.prepare("UPDATE users SET notes = ?, updated_at = ? WHERE id = ?").bind(newNotes, now(), primaryId),
   );
 
-  for (const dup of duplicates.results) {
-    statements.push(
-      db.prepare(
-        "UPDATE users SET email = ?, is_blocked = 1, notes = ?, updated_at = ? WHERE id = ?",
-      ).bind(
-        `${dup.email}_merged_${dup.id.slice(0, 8)}`,
-        `Fusionné vers ${primary.email}`,
-        now(),
-        dup.id,
-      ),
-    );
-  }
+  statements.push(
+    db.prepare(`DELETE FROM users WHERE id IN (${placeholders})`).bind(...uniqueDuplicateIds),
+  );
 
   await db.batch(statements);
 
   await addAuditLog(db, "user", primaryId, "merge", {
-    mergedIds: duplicateIds,
-    mergedEmails: duplicates.results.map(d => d.email),
+    mergedIds: uniqueDuplicateIds,
+    mergedEmails: duplicates.results.map((d) => d.email),
   });
 
   return { success: true };
@@ -437,16 +514,173 @@ export async function mergeUsers(
 
 export async function getPayments(
   db: D1Database,
+  filters: AdminPaymentFilters = {},
   page = 1,
   limit = 20,
-): Promise<PaginatedResult<DbPayment>> {
-  const countResult = await db.prepare("SELECT COUNT(*) as total FROM payments").first<{ total: number }>();
+): Promise<PaginatedResult<AdminPaymentRow>> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (filters.status) {
+    if (filters.status === "refunded") {
+      conditions.push("status IN ('refunded', 'partial-refund')");
+    } else {
+      conditions.push("status = ?");
+      params.push(filters.status);
+    }
+  }
+
+  if (filters.method) {
+    conditions.push("method = ?");
+    params.push(filters.method);
+  }
+
+  if (filters.paymentType) {
+    conditions.push("payment_type = ?");
+    params.push(filters.paymentType);
+  }
+
+  if (filters.search) {
+    conditions.push("(booking_ref LIKE ? OR user_name LIKE ?)");
+    const term = `%${filters.search}%`;
+    params.push(term, term);
+  }
+
+  if (filters.dateFrom) {
+    conditions.push("booking_date >= ?");
+    params.push(filters.dateFrom);
+  }
+
+  if (filters.dateTo) {
+    conditions.push("booking_date <= ?");
+    params.push(filters.dateTo);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const sortBy = filters.sortBy || "created_at";
+  const sortOrder = filters.sortOrder || "desc";
+  const validSortFields = ["created_at", "booking_date", "amount", "status", "method", "payment_type"];
+  const safeSortBy = validSortFields.includes(sortBy) ? sortBy : "created_at";
+  const safeSortOrder = sortOrder === "asc" ? "ASC" : "DESC";
+
+  const countResult = await db.prepare(
+    `
+      WITH paid_by_booking AS (
+        SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+        FROM payments
+        GROUP BY booking_id
+      ),
+      pay_on_site_pending AS (
+        SELECT
+          'on-site:' || b.id as id,
+          b.id as booking_id,
+          (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+          '' as method,
+          'pending' as status,
+          0 as refunded_amount,
+          NULL as paid_at,
+          b.created_at as created_at,
+          b.booking_ref as booking_ref,
+          u.name as user_name,
+          u.id as user_id,
+          b.date as booking_date,
+          'on-site' as payment_type
+        FROM bookings b
+        LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+        LEFT JOIN users u ON u.id = b.user_id
+        WHERE b.status != 'cancelled'
+          AND b.payment_status = 'pay-on-site'
+          AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
+      ),
+      payments_enriched AS (
+        SELECT
+          p.id as id,
+          p.booking_id as booking_id,
+          p.amount as amount,
+          CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
+          p.status as status,
+          p.refunded_amount as refunded_amount,
+          p.paid_at as paid_at,
+          p.created_at as created_at,
+          b.booking_ref as booking_ref,
+          u.name as user_name,
+          u.id as user_id,
+          b.date as booking_date,
+          CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' ELSE 'online' END as payment_type
+        FROM payments p
+        JOIN bookings b ON b.id = p.booking_id
+        LEFT JOIN users u ON u.id = b.user_id
+      )
+      SELECT COUNT(*) as total FROM (
+        SELECT * FROM payments_enriched
+        UNION ALL
+        SELECT * FROM pay_on_site_pending
+      )
+      ${where}
+    `,
+  ).bind(...params).first<{ total: number }>();
   const total = countResult?.total ?? 0;
 
   const offset = (page - 1) * limit;
   const result = await db.prepare(
-    "SELECT * FROM payments ORDER BY created_at DESC LIMIT ? OFFSET ?",
-  ).bind(limit, offset).all<DbPayment>();
+    `
+      WITH paid_by_booking AS (
+        SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+        FROM payments
+        GROUP BY booking_id
+      ),
+      pay_on_site_pending AS (
+        SELECT
+          'on-site:' || b.id as id,
+          b.id as booking_id,
+          (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+          '' as method,
+          'pending' as status,
+          0 as refunded_amount,
+          NULL as paid_at,
+          b.created_at as created_at,
+          b.booking_ref as booking_ref,
+          u.name as user_name,
+          u.id as user_id,
+          b.date as booking_date,
+          'on-site' as payment_type
+        FROM bookings b
+        LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+        LEFT JOIN users u ON u.id = b.user_id
+        WHERE b.status != 'cancelled'
+          AND b.payment_status = 'pay-on-site'
+          AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
+      ),
+      payments_enriched AS (
+        SELECT
+          p.id as id,
+          p.booking_id as booking_id,
+          p.amount as amount,
+          CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
+          p.status as status,
+          p.refunded_amount as refunded_amount,
+          p.paid_at as paid_at,
+          p.created_at as created_at,
+          b.booking_ref as booking_ref,
+          u.name as user_name,
+          u.id as user_id,
+          b.date as booking_date,
+          CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' ELSE 'online' END as payment_type
+        FROM payments p
+        JOIN bookings b ON b.id = p.booking_id
+        LEFT JOIN users u ON u.id = b.user_id
+      )
+      SELECT * FROM (
+        SELECT * FROM payments_enriched
+        UNION ALL
+        SELECT * FROM pay_on_site_pending
+      )
+      ${where}
+      ORDER BY ${safeSortBy} ${safeSortOrder}, created_at DESC
+      LIMIT ? OFFSET ?
+    `,
+  ).bind(...params, limit, offset).all<AdminPaymentRow>();
 
   return { data: result.results, total, page, limit };
 }
@@ -455,7 +689,20 @@ export async function getPaymentsByBookingId(
   db: D1Database,
   bookingId: string,
 ): Promise<DbPayment[]> {
-  const result = await db.prepare("SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at ASC")
+  const result = await db.prepare(
+    `SELECT
+      id,
+      booking_id,
+      amount,
+      CASE WHEN method IN ('cheque', 'check') THEN 'check' ELSE method END as method,
+      status,
+      refunded_amount,
+      paid_at,
+      created_at
+    FROM payments
+    WHERE booking_id = ?
+    ORDER BY created_at ASC`,
+  )
     .bind(bookingId)
     .all<DbPayment>();
   return result.results;
@@ -465,7 +712,20 @@ export async function getPaymentByBookingId(
   db: D1Database,
   bookingId: string,
 ): Promise<DbPayment | null> {
-  return db.prepare("SELECT * FROM payments WHERE booking_id = ? ORDER BY created_at DESC").bind(bookingId).first<DbPayment>();
+  return db.prepare(
+    `SELECT
+      id,
+      booking_id,
+      amount,
+      CASE WHEN method IN ('cheque', 'check') THEN 'check' ELSE method END as method,
+      status,
+      refunded_amount,
+      paid_at,
+      created_at
+    FROM payments
+    WHERE booking_id = ?
+    ORDER BY created_at DESC`,
+  ).bind(bookingId).first<DbPayment>();
 }
 
 export async function addPayment(
@@ -574,6 +834,28 @@ export async function getBlockedSlots(
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const result = await db.prepare(
+    `SELECT * FROM blocked_slots ${where} ORDER BY date ASC, start_time ASC`,
+  ).bind(...params).all<DbBlockedSlot>();
+
+  return result.results;
+}
+
+export async function getBlockedSlotsByDateRange(
+  db: D1Database,
+  startDate: string,
+  endDate: string,
+  studioId?: string,
+): Promise<DbBlockedSlot[]> {
+  const conditions: string[] = ["date >= ?", "date <= ?"];
+  const params: unknown[] = [startDate, endDate];
+
+  if (studioId) {
+    conditions.push("(studio_id = ? OR studio_id IS NULL)");
+    params.push(studioId);
+  }
+
+  const where = `WHERE ${conditions.join(" AND ")}`;
   const result = await db.prepare(
     `SELECT * FROM blocked_slots ${where} ORDER BY date ASC, start_time ASC`,
   ).bind(...params).all<DbBlockedSlot>();
