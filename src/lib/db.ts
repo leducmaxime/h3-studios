@@ -20,6 +20,7 @@ import {
   type CreateBooking,
 } from "./db-types";
 import { getParisDateISO } from "./utils";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -1221,69 +1222,116 @@ export interface DashboardStats {
   occupancyToday: number;
 }
 
-export async function getDashboardStats(db: D1Database): Promise<DashboardStats> {
+function parseDateISOToUTCNoon(dateISO: string): Date {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+}
+
+function minusDaysParisISO(todayISO: string, days: number): string {
+  const d = parseDateISOToUTCNoon(todayISO);
+  d.setUTCDate(d.getUTCDate() - days);
+  return getParisDateISO(d);
+}
+
+function getStudioOpenSlotsCount(studioId: StudioId, dayOfWeek: number): number {
+  const hours = STUDIO_HOURS[studioId][dayOfWeek];
+  const openIdx = ALL_TIME_SLOTS.indexOf(hours.open);
+  const closeIdx = hours.close === "00:00" ? ALL_TIME_SLOTS.length : ALL_TIME_SLOTS.indexOf(hours.close);
+  if (openIdx === -1) return 0;
+  const safeClose = closeIdx === -1 ? ALL_TIME_SLOTS.length : closeIdx;
+  return Math.max(0, safeClose - openIdx);
+}
+
+export async function getDashboardStats(
+  db: D1Database,
+  opts?: { month?: number; year?: number },
+): Promise<DashboardStats> {
   const today = getParisDateISO();
 
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-  const weekStartStr = getParisDateISO(weekStart);
+  const weekFrom = minusDaysParisISO(today, 6);
+  const monthFrom = minusDaysParisISO(today, 29);
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const monthStartStr = getParisDateISO(monthStart);
+  let reportMonthFrom: string | null = null;
+  let reportMonthTo: string | null = null;
+  if (opts?.month && opts?.year) {
+    const month = Math.round(opts.month);
+    const year = Math.round(opts.year);
+    if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
+      const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+      const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
+      reportMonthFrom = getParisDateISO(from);
+      reportMonthTo = getParisDateISO(to);
+    }
+  }
 
-  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult] = await db.batch([
+  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult] = await db.batch([
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
-    ).bind(weekStartStr, today),
+    ).bind(weekFrom, today),
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
-    ).bind(monthStartStr, today),
+    ).bind(monthFrom, today),
     db.prepare(
-      "SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'pending'",
+      `WITH paid_by_booking AS (
+        SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+        FROM payments
+        GROUP BY booking_id
+      )
+      SELECT
+        COUNT(*) as count,
+        COALESCE(SUM(b.total_price - COALESCE(paid.paid_amount, 0)), 0) as total
+      FROM bookings b
+      LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+      WHERE b.status != 'cancelled'
+        AND b.payment_status = 'pay-on-site'
+        AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0`,
     ),
     db.prepare(
-      "SELECT start_time, end_time FROM bookings WHERE date = ? AND status != 'cancelled'",
+      "SELECT studio_id, start_time, end_time FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
+    db.prepare(
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+    ).bind(reportMonthFrom || monthFrom, reportMonthTo || today),
   ]);
 
   type CountRevenue = { count: number; revenue: number };
   type CountTotal = { count: number; total: number };
-  type TimeRange = { start_time: string; end_time: string };
+  type TimeRange = { studio_id: string; start_time: string; end_time: string };
 
   const todayRow = (todayResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
   const weekRow = (weekResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
   const monthRow = (monthResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
   const pendingRow = (pendingResult.results as unknown as CountTotal[])[0] ?? { count: 0, total: 0 };
+  const reportMonthRow = (reportMonthResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
   const todaySlots = occupancyResult.results as unknown as TimeRange[];
 
-  const ALL_SLOTS = [
-    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-    "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
-    "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
-    "18:00", "18:30", "19:00", "19:30", "20:00", "20:30",
-    "21:00", "21:30", "22:00", "22:30", "23:00", "23:30",
-  ];
-
-  const totalSlots = ALL_SLOTS.length * 2;
+  const dayOfWeek = parseDateISOToUTCNoon(today).getUTCDay();
+  const totalSlots =
+    getStudioOpenSlotsCount("la-scene", dayOfWeek) +
+    getStudioOpenSlotsCount("le-podium", dayOfWeek);
   let usedSlots = 0;
   for (const row of todaySlots) {
-    const startIdx = ALL_SLOTS.indexOf(row.start_time);
-    let endIdx = ALL_SLOTS.indexOf(row.end_time);
-    if (endIdx === -1) endIdx = ALL_SLOTS.length;
-    if (startIdx !== -1) usedSlots += endIdx - startIdx;
+    const startIdx = ALL_TIME_SLOTS.indexOf(row.start_time);
+    let endIdx = ALL_TIME_SLOTS.indexOf(row.end_time);
+    if (endIdx === -1 && row.end_time === "00:00") endIdx = ALL_TIME_SLOTS.length;
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      usedSlots += endIdx - startIdx;
+    }
   }
+
+  const monthCount = reportMonthFrom && reportMonthTo ? reportMonthRow.count : monthRow.count;
+  const monthRevenue = reportMonthFrom && reportMonthTo ? reportMonthRow.revenue : monthRow.revenue;
 
   return {
     todayBookings: todayRow.count,
     todayRevenue: todayRow.revenue,
     weekBookings: weekRow.count,
     weekRevenue: weekRow.revenue,
-    monthBookings: monthRow.count,
-    monthRevenue: monthRow.revenue,
+    monthBookings: monthCount,
+    monthRevenue,
     pendingPayments: pendingRow.count,
     pendingAmount: pendingRow.total,
     occupancyToday: totalSlots > 0 ? Math.round((usedSlots / totalSlots) * 100) : 0,

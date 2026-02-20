@@ -2034,7 +2034,14 @@ const app = defineApp([
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
 
     try {
-      const stats = await getDashboardStats(env.DB);
+      const url = new URL(request.url);
+      const monthRaw = url.searchParams.get("month");
+      const yearRaw = url.searchParams.get("year");
+
+      const month = monthRaw ? parseInt(monthRaw, 10) : undefined;
+      const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
+
+      const stats = await getDashboardStats(env.DB, { month, year });
       return jsonSuccess(stats);
     } catch (error) {
       console.error("GET /api/admin/stats error:", error);
@@ -2097,7 +2104,7 @@ const app = defineApp([
       const fromStr = getParisDateISO(fromDate);
       const toStr = getParisDateISO();
 
-      const [occupancyResult, studioResult, paymentResult, upcomingResult, pendingPayResult] = await env.DB.batch([
+      const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult, pendingPayResult] = await env.DB.batch([
         // Occupation by day of week (0=Sunday..6=Saturday)
         env.DB.prepare(
           `SELECT CAST(strftime('%w', date) AS INTEGER) as day_of_week, COUNT(*) as count
@@ -2110,11 +2117,27 @@ const app = defineApp([
            FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
            GROUP BY studio_id`,
         ).bind(fromStr, toStr),
-        // Payment method distribution
         env.DB.prepare(
-          `SELECT payment_method, COUNT(*) as count, SUM(total_price) as revenue
-           FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
-           GROUP BY payment_method`,
+          `SELECT
+            p.method as method,
+            COUNT(*) as count,
+            COALESCE(SUM(p.amount), 0) as revenue
+          FROM payments p
+          JOIN bookings b ON b.id = p.booking_id
+          WHERE b.date >= ? AND b.date <= ?
+            AND b.status != 'cancelled'
+            AND b.payment_status = 'pay-on-site'
+            AND p.status = 'paid'
+          GROUP BY p.method`,
+        ).bind(fromStr, toStr),
+        env.DB.prepare(
+          `SELECT
+            COUNT(*) as count,
+            COALESCE(SUM(total_price), 0) as revenue
+          FROM bookings
+          WHERE date >= ? AND date <= ?
+            AND status != 'cancelled'
+            AND payment_status != 'pay-on-site'`,
         ).bind(fromStr, toStr),
         // Upcoming bookings (next 5)
         env.DB.prepare(
@@ -2123,20 +2146,34 @@ const app = defineApp([
            WHERE b.date >= ? AND b.status != 'cancelled'
            ORDER BY b.date ASC, b.start_time ASC LIMIT 5`,
         ).bind(toStr),
-        // Pending payments (next 5)
         env.DB.prepare(
-          `SELECT p.*, b.date as booking_date, b.start_time, b.studio_id, u.name as user_name
-           FROM payments p
-           LEFT JOIN bookings b ON p.booking_id = b.id
-           LEFT JOIN users u ON b.user_id = u.id
-           WHERE p.status = 'pending'
-           ORDER BY p.created_at DESC LIMIT 5`,
+          `WITH paid_by_booking AS (
+            SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+            FROM payments
+            GROUP BY booking_id
+          )
+          SELECT
+            'on-site:' || b.id as id,
+            (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+            u.name as user_name,
+            b.date as booking_date,
+            b.start_time as start_time,
+            b.studio_id as studio_id
+          FROM bookings b
+          LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+          LEFT JOIN users u ON u.id = b.user_id
+          WHERE b.status != 'cancelled'
+            AND b.payment_status = 'pay-on-site'
+            AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
+          ORDER BY b.date ASC, b.start_time ASC
+          LIMIT 5`,
         ),
       ]);
 
       type OccRow = { day_of_week: number; count: number };
       type StudioRow = { studio_id: string; count: number; revenue: number };
-      type PaymentRow = { payment_method: string; count: number; revenue: number };
+      type PaymentRow = { method: string; count: number; revenue: number };
+      type OnlineCardRow = { count: number; revenue: number };
 
       const DAY_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
       const occupancyData = DAY_NAMES.map((name, i) => {
@@ -2150,11 +2187,36 @@ const app = defineApp([
         revenue: row.revenue,
       }));
 
-      const paymentData = (paymentResult.results as unknown as PaymentRow[]).map(row => ({
-        method: row.payment_method === "card" ? "Carte" : row.payment_method === "cash" ? "Espèces" : (row.payment_method || "Non défini"),
-        count: row.count,
-        revenue: row.revenue,
-      }));
+      const onSitePayments = (onSitePaidResult.results as unknown as PaymentRow[]);
+      const onlineCard = (onlineCardResult.results as unknown as OnlineCardRow[])[0] ?? { count: 0, revenue: 0 };
+      const merged: Record<string, { count: number; revenue: number }> = {};
+      for (const row of onSitePayments) {
+        const method = row.method === "cheque" ? "check" : row.method;
+        merged[method] = {
+          count: (merged[method]?.count ?? 0) + (row.count ?? 0),
+          revenue: (merged[method]?.revenue ?? 0) + (row.revenue ?? 0),
+        };
+      }
+      merged.card = {
+        count: (merged.card?.count ?? 0) + onlineCard.count,
+        revenue: (merged.card?.revenue ?? 0) + onlineCard.revenue,
+      };
+
+      const methodLabels: Record<string, string> = {
+        cash: "Espèces",
+        card: "CB",
+        transfer: "Virement",
+        check: "Chèque",
+      };
+
+      const paymentData = Object.entries(merged)
+        .filter(([, v]) => (v.count ?? 0) > 0)
+        .map(([method, v]) => ({
+          method: methodLabels[method] || method,
+          count: v.count,
+          revenue: v.revenue,
+        }))
+        .sort((a, b) => b.count - a.count);
 
       return jsonSuccess({
         occupancy: occupancyData,

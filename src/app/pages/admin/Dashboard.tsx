@@ -378,21 +378,21 @@ export function AdminDashboard() {
           color="primary"
         />
         <StatCard
-          title="Revenu du jour"
+          title="CA réservé (jour)"
           value={formatPrice(stats?.todayRevenue ?? 0)}
-          subValue={`${stats?.weekBookings ?? 0} résa. cette semaine`}
+          subValue={`${stats?.weekBookings ?? 0} résa. (7j)`}
           icon={TrendingUp}
           color="green"
         />
         <StatCard
-          title="Paiements en attente"
+          title="Sur place à encaisser"
           value={stats?.pendingPayments ?? 0}
           subValue={formatPrice(stats?.pendingAmount ?? 0)}
           icon={CreditCard}
           color={(stats?.pendingPayments ?? 0) > 0 ? "red" : "blue"}
         />
         <StatCard
-          title="Revenu mensuel"
+          title="CA réservé (30j)"
           value={formatPrice(stats?.monthRevenue ?? 0)}
           subValue={`${stats?.monthBookings ?? 0} réservations`}
           icon={Users}
@@ -650,7 +650,7 @@ export function AdminDashboard() {
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-yellow-500">{formatPrice(payment.amount)}</p>
-                          <p className="text-xs text-zinc-500">Espèces</p>
+                          <p className="text-xs text-zinc-500">Sur place</p>
                         </div>
                       </div>
                     );
