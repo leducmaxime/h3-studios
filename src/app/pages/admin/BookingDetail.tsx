@@ -83,7 +83,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [payments, setPayments] = useState<DbPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(false);
-  const [newPayment, setNewPayment] = useState({ amount: "", method: "cash" });
+  const [newPayment, setNewPayment] = useState<{
+    amount: string;
+    method: "cash" | "card" | "transfer" | "check";
+  }>({ amount: "", method: "cash" });
   const [addingPayment, setAddingPayment] = useState(false);
 
   // Reschedule dialog
@@ -231,6 +234,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
     setAddingPayment(true);
     try {
+      if (booking.payment_method === "card" && newPayment.method !== "card") {
+        toast.error("En ligne, les paiements sont uniquement par CB");
+        return;
+      }
+
         const res = await fetch(`/api/admin/bookings/${booking.id}/payments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -484,7 +492,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                         <Label htmlFor="method" className="text-[10px] uppercase font-bold text-zinc-500 ml-1">Mode de règlement</Label>
                         <Select
                           value={newPayment.method}
-                          onValueChange={(v) => setNewPayment({ ...newPayment, method: v })}
+                          onValueChange={(v) => setNewPayment({ ...newPayment, method: v as "cash" | "card" | "transfer" | "check" })}
                         >
                           <SelectTrigger className="bg-zinc-900 border-zinc-700 h-11 text-sm focus:ring-primary">
                             <SelectValue />

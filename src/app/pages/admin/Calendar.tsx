@@ -240,7 +240,7 @@ export function AdminCalendar() {
         .catch(console.error)
         .finally(() => setLoadingPayments(false));
       
-      setNewPayment({ 
+      setNewPayment({
         amount: String(selectedBooking.total_price),
         method: selectedBooking.payment_method === "card" ? "card" : "cash",
       });
@@ -255,6 +255,11 @@ export function AdminCalendar() {
     const amount = Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error("Montant invalide");
+      return;
+    }
+
+    if (selectedBooking.payment_method === "card" && newPayment.method !== "card") {
+      toast.error("En ligne, les paiements sont uniquement par CB");
       return;
     }
 
