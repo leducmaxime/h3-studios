@@ -1253,14 +1253,23 @@ export async function getDashboardStats(
 
   let reportMonthFrom: string | null = null;
   let reportMonthTo: string | null = null;
-  if (opts?.month && opts?.year) {
-    const month = Math.round(opts.month);
+  if (opts?.year) {
     const year = Math.round(opts.year);
-    if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
-      const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
-      const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
-      reportMonthFrom = getParisDateISO(from);
-      reportMonthTo = getParisDateISO(to);
+    if (year >= 2000 && year <= 2100) {
+      if (opts?.month) {
+        const month = Math.round(opts.month);
+        if (month >= 1 && month <= 12) {
+          const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+          const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
+          reportMonthFrom = getParisDateISO(from);
+          reportMonthTo = getParisDateISO(to);
+        }
+      } else {
+        const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
+        const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
+        reportMonthFrom = getParisDateISO(from);
+        reportMonthTo = getParisDateISO(to);
+      }
     }
   }
 

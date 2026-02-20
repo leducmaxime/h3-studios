@@ -2030,6 +2030,27 @@ const app = defineApp([
 
   // ─── Admin Stats API ────────────────────────────────────────────────────────
 
+  route("/api/admin/stats/meta", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const row = await env.DB.prepare(
+        "SELECT MIN(date) as min_date, MAX(date) as max_date FROM bookings",
+      ).first<{ min_date: string | null; max_date: string | null }>();
+
+      const minYear = row?.min_date ? parseInt(row.min_date.slice(0, 4), 10) : null;
+      const maxYear = row?.max_date ? parseInt(row.max_date.slice(0, 4), 10) : null;
+
+      return jsonSuccess({
+        minYear: Number.isFinite(minYear) ? minYear : null,
+        maxYear: Number.isFinite(maxYear) ? maxYear : null,
+      });
+    } catch (error) {
+      console.error("GET /api/admin/stats/meta error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch stats meta", 500);
+    }
+  }),
+
   route("/api/admin/stats", async ({ request }) => {
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
 
@@ -2054,30 +2075,60 @@ const app = defineApp([
 
     try {
       const url = new URL(request.url);
+      const mode = url.searchParams.get("mode") || "rolling";
       const period = url.searchParams.get("period") || "month";
+      const monthRaw = url.searchParams.get("month");
+      const yearRaw = url.searchParams.get("year");
 
-      let days: number;
-      switch (period) {
-        case "week": days = 7; break;
-        case "year": days = 365; break;
-        default: days = 30; break;
+      const month = monthRaw ? parseInt(monthRaw, 10) : undefined;
+      const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
+
+      const today = getParisDateISO();
+      let fromStr = today;
+      let toStr = today;
+      let groupByMonth = false;
+
+      if (mode === "month" && month && year) {
+        const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+        const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
+        fromStr = getParisDateISO(from);
+        toStr = getParisDateISO(to);
+      } else if (mode === "year" && year) {
+        const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
+        const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
+        fromStr = getParisDateISO(from);
+        toStr = getParisDateISO(to);
+        groupByMonth = true;
+      } else {
+        let days: number;
+        switch (period) {
+          case "week": days = 7; break;
+          case "year": days = 365; break;
+          default: days = 30; break;
+        }
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - days);
+        fromStr = getParisDateISO(fromDate);
+        toStr = today;
       }
 
-      const fromDate = new Date();
-      fromDate.setDate(fromDate.getDate() - days);
-      const fromStr = getParisDateISO(fromDate);
-      const toStr = getParisDateISO();
+      if (groupByMonth) {
+        const rows = await env.DB.prepare(
+          `SELECT substr(date, 1, 7) as date, COALESCE(SUM(total_price), 0) as revenue
+           FROM bookings
+           WHERE date >= ? AND date <= ? AND status != 'cancelled'
+           GROUP BY substr(date, 1, 7)
+           ORDER BY substr(date, 1, 7) ASC`,
+        ).bind(fromStr, toStr).all<{ date: string; revenue: number }>();
+
+        return jsonSuccess(rows.results.map((row) => ({ date: row.date, revenue: row.revenue })));
+      }
 
       const bookings = await env.DB.prepare(
-        "SELECT date, SUM(total_price) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date ORDER BY date ASC",
+        "SELECT date, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date ORDER BY date ASC",
       ).bind(fromStr, toStr).all<{ date: string; revenue: number }>();
 
-      const chartData = bookings.results.map(row => ({
-        date: row.date,
-        revenue: row.revenue,
-      }));
-
-      return jsonSuccess(chartData);
+      return jsonSuccess(bookings.results.map((row) => ({ date: row.date, revenue: row.revenue })));
     } catch (error) {
       console.error("GET /api/admin/stats/revenue error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch revenue stats", 500);
@@ -2089,20 +2140,42 @@ const app = defineApp([
 
     try {
       const url = new URL(request.url);
+      const mode = url.searchParams.get("mode") || "rolling";
       const period = url.searchParams.get("period") || "month";
+      const monthRaw = url.searchParams.get("month");
+      const yearRaw = url.searchParams.get("year");
 
-      let days: number;
-      switch (period) {
-        case "week": days = 7; break;
-        case "quarter": days = 90; break;
-        case "year": days = 365; break;
-        default: days = 30; break;
+      const month = monthRaw ? parseInt(monthRaw, 10) : undefined;
+      const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
+
+      const today = getParisDateISO();
+      let fromStr = today;
+      let toStr = today;
+
+      if (mode === "month" && month && year) {
+        const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+        const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
+        fromStr = getParisDateISO(from);
+        toStr = getParisDateISO(to);
+      } else if (mode === "year" && year) {
+        const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
+        const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
+        fromStr = getParisDateISO(from);
+        toStr = getParisDateISO(to);
+      } else {
+        let days: number;
+        switch (period) {
+          case "week": days = 7; break;
+          case "quarter": days = 90; break;
+          case "year": days = 365; break;
+          default: days = 30; break;
+        }
+
+        const fromDate = new Date();
+        fromDate.setDate(fromDate.getDate() - days);
+        fromStr = getParisDateISO(fromDate);
+        toStr = today;
       }
-
-      const fromDate = new Date();
-      fromDate.setDate(fromDate.getDate() - days);
-      const fromStr = getParisDateISO(fromDate);
-      const toStr = getParisDateISO();
 
       const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult, pendingPayResult] = await env.DB.batch([
         // Occupation by day of week (0=Sunday..6=Saturday)
@@ -2209,14 +2282,12 @@ const app = defineApp([
         check: "Chèque",
       };
 
-      const paymentData = Object.entries(merged)
-        .filter(([, v]) => (v.count ?? 0) > 0)
-        .map(([method, v]) => ({
-          method: methodLabels[method] || method,
-          count: v.count,
-          revenue: v.revenue,
-        }))
-        .sort((a, b) => b.count - a.count);
+      const paymentMethods = ["cash", "card", "transfer", "check"] as const;
+      const paymentData = paymentMethods.map((method) => ({
+        method: methodLabels[method],
+        count: merged[method]?.count ?? 0,
+        revenue: merged[method]?.revenue ?? 0,
+      }));
 
       return jsonSuccess({
         occupancy: occupancyData,
