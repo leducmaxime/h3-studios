@@ -6,13 +6,24 @@ import {
   Search,
   UserPlus,
   AlertCircle,
-  Check,
+  Plus,
+  Minus,
+  Gift,
 } from "lucide-react";
+
+interface ApiEquipment {
+  id: string;
+  name: string;
+  maxPerSession: number;
+  pricingType: "hourly" | "session";
+  sessionPricing: number[] | null;
+  pricePerHour: number;
+}
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatDateISO } from "@/lib/utils";
+
 import { STUDIOS, TIME_SLOTS, generateBookingRef, formatPrice, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 
@@ -22,10 +33,13 @@ interface UserSearchResult {
 }
 
 interface EquipmentSelection {
-  equipment_id: string;
+  id: string;
   name: string;
   quantity: number;
   maxPerSession: number;
+  pricingType: "hourly" | "session";
+  sessionPricing: number[] | null;
+  pricePerHour: number;
 }
 
 const GROUP_TYPES: { value: GroupType; label: string }[] = [
@@ -34,10 +48,7 @@ const GROUP_TYPES: { value: GroupType; label: string }[] = [
   { value: "group", label: "Groupe" },
 ];
 
-const PAYMENT_METHODS = [
-  { value: "card", label: "Carte bancaire" },
-  { value: "cash", label: "Espèces" },
-];
+
 
 export function AdminBookingNew() {
   // User selection
@@ -49,23 +60,30 @@ export function AdminBookingNew() {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPhone, setNewUserPhone] = useState("");
   const [newUserBand, setNewUserBand] = useState("");
+  const [newUserNotes, setNewUserNotes] = useState("");
+  const [newUserAddressLine1, setNewUserAddressLine1] = useState("");
+  const [newUserAddressLine2, setNewUserAddressLine2] = useState("");
+  const [newUserPostalCode, setNewUserPostalCode] = useState("");
+  const [newUserCity, setNewUserCity] = useState("");
+  const [newUserCountry, setNewUserCountry] = useState("France");
   const [creatingUser, setCreatingUser] = useState(false);
 
   // Booking fields
-  const [studioId, setStudioId] = useState<StudioId>("la-scene");
+  const [studioId, setStudioId] = useState<StudioId | undefined>(undefined);
   const [date, setDate] = useState("");
-  const [startTime, setStartTime] = useState("14:00");
-  const [endTime, setEndTime] = useState("16:00");
-  const [groupType, setGroupType] = useState<GroupType>("group");
-  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [groupType, setGroupType] = useState<GroupType | undefined>(undefined);
   const [notes, setNotes] = useState("");
 
   // Equipment
-  const [availableEquipment, setAvailableEquipment] = useState<DbEquipment[]>([]);
+  const [availableEquipment, setAvailableEquipment] = useState<ApiEquipment[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentSelection[]>([]);
 
   // Pricing
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+  const [basePrice, setBasePrice] = useState<number | null>(null);
+  const [equipmentPrices, setEquipmentPrices] = useState<{name: string; price: number}[]>([]);
   const [pricingLoading, setPricingLoading] = useState(false);
 
   // Conflict check
@@ -75,19 +93,14 @@ export function AdminBookingNew() {
   // Submission
   const [submitting, setSubmitting] = useState(false);
 
-  // Set default date to tomorrow
-  useEffect(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    setDate(formatDateISO(tomorrow));
-  }, []);
+
 
   // Fetch equipment
   useEffect(() => {
-    fetch("/api/admin/equipment")
-      .then((r) => r.json() as Promise<{ success: boolean; data?: DbEquipment[] }>)
+    fetch("/api/equipment")
+      .then((r) => r.json() as Promise<{ success: boolean; equipment?: ApiEquipment[] }>)
       .then((json) => {
-        if (json.success && json.data) setAvailableEquipment(json.data);
+        if (json.success && json.equipment) setAvailableEquipment(json.equipment);
       })
       .catch(() => {});
   }, []);
@@ -146,6 +159,8 @@ export function AdminBookingNew() {
   useEffect(() => {
     if (!date || !startTime || !endTime || !studioId || !groupType) {
       setEstimatedPrice(null);
+      setBasePrice(null);
+      setEquipmentPrices([]);
       return;
     }
 
@@ -168,26 +183,28 @@ export function AdminBookingNew() {
             const endParts = endTime.split(":").map(Number);
             const halfHours = ((endParts[0] * 60 + endParts[1]) - (startParts[0] * 60 + startParts[1])) / 30;
             if (halfHours > 0) {
+              const studioPrice = (rule.price_per_half_hour * halfHours) / 100;
               let eqPrice = 0;
+              const eqPrices: {name: string; price: number}[] = [];
               for (const eq of selectedEquipment) {
-                const dbEq = availableEquipment.find((e) => e.equipment_id === eq.equipment_id);
-                if (dbEq?.session_pricing) {
-                  try {
-                    const prices = JSON.parse(dbEq.session_pricing) as number[];
-                    eqPrice += prices[eq.quantity - 1] || 0;
-                  } catch {
-                    // skip
+                if (eq.pricingType === "session" && eq.sessionPricing) {
+                  const price = eq.sessionPricing[eq.quantity - 1] || 0;
+                  eqPrice += price;
+                  if (price > 0) {
+                    eqPrices.push({ name: eq.name, price });
                   }
                 }
               }
-              setEstimatedPrice(rule.price_per_half_hour * halfHours + eqPrice);
+              setBasePrice(studioPrice);
+              setEquipmentPrices(eqPrices);
+              setEstimatedPrice(studioPrice + eqPrice);
             }
           }
         }
       })
       .catch(() => {})
       .finally(() => setPricingLoading(false));
-  }, [date, startTime, endTime, studioId, groupType, selectedEquipment, availableEquipment]);
+  }, [date, startTime, endTime, studioId, groupType, selectedEquipment]);
 
   const handleCreateUser = async () => {
     if (!newUserName.trim()) {
@@ -204,6 +221,12 @@ export function AdminBookingNew() {
           email: newUserEmail.trim() || undefined,
           phone: newUserPhone.trim() || undefined,
           band_name: newUserBand.trim() || undefined,
+          notes: newUserNotes.trim() || undefined,
+          address_line1: newUserAddressLine1.trim() || undefined,
+          address_line2: newUserAddressLine2.trim() || undefined,
+          postal_code: newUserPostalCode.trim() || undefined,
+          city: newUserCity.trim() || undefined,
+          country: newUserCountry.trim() || undefined,
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
@@ -214,6 +237,12 @@ export function AdminBookingNew() {
         setNewUserEmail("");
         setNewUserPhone("");
         setNewUserBand("");
+        setNewUserNotes("");
+        setNewUserAddressLine1("");
+        setNewUserAddressLine2("");
+        setNewUserPostalCode("");
+        setNewUserCity("");
+        setNewUserCountry("France");
         toast.success("Client créé");
       } else {
         toast.error(json.error || "Erreur lors de la création");
@@ -225,20 +254,41 @@ export function AdminBookingNew() {
     }
   };
 
-  const toggleEquipment = (eq: DbEquipment) => {
+  const getQuantity = (id: string): number => {
+    const item = selectedEquipment.find((e) => e.id === id);
+    return item?.quantity ?? 0;
+  };
+
+  const updateQuantity = (eq: ApiEquipment, quantity: number) => {
     setSelectedEquipment((prev) => {
-      const existing = prev.find((s) => s.equipment_id === eq.equipment_id);
-      if (existing) {
-        return prev.filter((s) => s.equipment_id !== eq.equipment_id);
+      const existing = prev.filter((e) => e.id !== eq.id);
+      if (quantity > 0) {
+        return [...existing, { 
+          id: eq.id, 
+          name: eq.name, 
+          quantity, 
+          maxPerSession: eq.maxPerSession,
+          pricingType: eq.pricingType,
+          sessionPricing: eq.sessionPricing,
+          pricePerHour: eq.pricePerHour
+        }];
       }
-      return [...prev, { equipment_id: eq.equipment_id, name: eq.name, quantity: 1, maxPerSession: eq.max_per_session }];
+      return existing;
     });
   };
 
-  const updateEquipmentQuantity = (equipmentId: string, qty: number) => {
-    setSelectedEquipment((prev) =>
-      prev.map((s) => s.equipment_id === equipmentId ? { ...s, quantity: qty } : s)
-    );
+  const handleIncrement = (eq: ApiEquipment) => {
+    const current = getQuantity(eq.id);
+    if (current < eq.maxPerSession) {
+      updateQuantity(eq, current + 1);
+    }
+  };
+
+  const handleDecrement = (eq: ApiEquipment) => {
+    const current = getQuantity(eq.id);
+    if (current > 0) {
+      updateQuantity(eq, current - 1);
+    }
   };
 
   const handleSubmit = async () => {
@@ -258,7 +308,7 @@ export function AdminBookingNew() {
     setSubmitting(true);
     try {
       const equipmentJson = selectedEquipment.length > 0
-        ? JSON.stringify(selectedEquipment.map((s) => ({ id: s.equipment_id, quantity: s.quantity })))
+        ? JSON.stringify(selectedEquipment.map((s) => ({ id: s.id, quantity: s.quantity })))
         : null;
 
       const res = await fetch("/api/admin/bookings", {
@@ -273,7 +323,6 @@ export function AdminBookingNew() {
           end_time: endTime,
           group_type: groupType,
           equipment: equipmentJson,
-          payment_method: paymentMethod,
           notes: notes.trim() || null,
         }),
       });
@@ -337,13 +386,16 @@ export function AdminBookingNew() {
                   <div className="divide-y divide-zinc-800 rounded-lg border border-zinc-700 bg-zinc-800">
                     {userResults.map((u) => (
                       <button
+                        type="button"
                         key={u.id}
                         onClick={() => { setSelectedUser(u); setUserSearch(""); setUserResults([]); }}
                         className="flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-zinc-700"
                       >
                         <div>
                           <p className="text-sm font-medium">{u.name}</p>
-                          <p className="text-xs text-zinc-400">{u.email || "—"}</p>
+                          <p className="text-xs text-zinc-400">
+                            {u.band_name ? `${u.band_name}` : (u.email || "—")}
+                          </p>
                         </div>
                         <Badge variant="secondary" className="text-xs">{u.total_bookings} résa</Badge>
                       </button>
@@ -360,8 +412,9 @@ export function AdminBookingNew() {
                   <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-800 p-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-xs text-zinc-400">Nom *</label>
+                        <label htmlFor="newUserName" className="mb-1 block text-xs text-zinc-400">Nom *</label>
                         <input
+                          id="newUserName"
                           type="text"
                           value={newUserName}
                           onChange={(e) => setNewUserName(e.target.value)}
@@ -369,8 +422,9 @@ export function AdminBookingNew() {
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs text-zinc-400">Email</label>
+                        <label htmlFor="newUserEmail" className="mb-1 block text-xs text-zinc-400">Email</label>
                         <input
+                          id="newUserEmail"
                           type="email"
                           value={newUserEmail}
                           onChange={(e) => setNewUserEmail(e.target.value)}
@@ -378,8 +432,9 @@ export function AdminBookingNew() {
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs text-zinc-400">Téléphone</label>
+                        <label htmlFor="newUserPhone" className="mb-1 block text-xs text-zinc-400">Téléphone</label>
                         <input
+                          id="newUserPhone"
                           type="tel"
                           value={newUserPhone}
                           onChange={(e) => setNewUserPhone(e.target.value)}
@@ -387,8 +442,9 @@ export function AdminBookingNew() {
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs text-zinc-400">Groupe / Projet</label>
+                        <label htmlFor="newUserBand" className="mb-1 block text-xs text-zinc-400">Groupe / Projet</label>
                         <input
+                          id="newUserBand"
                           type="text"
                           value={newUserBand}
                           onChange={(e) => setNewUserBand(e.target.value)}
@@ -396,6 +452,77 @@ export function AdminBookingNew() {
                         />
                       </div>
                     </div>
+                    <div>
+                      <label htmlFor="newUserNotes" className="mb-1 block text-xs text-zinc-400">Notes</label>
+                      <textarea
+                        id="newUserNotes"
+                        value={newUserNotes}
+                        onChange={(e) => setNewUserNotes(e.target.value)}
+                        rows={2}
+                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
+                      />
+                    </div>
+
+                    <div className="border-t border-zinc-700 pt-3">
+                      <p className="mb-2 text-xs font-medium text-zinc-400">Adresse</p>
+                      <div className="grid gap-3">
+                        <div>
+                          <label htmlFor="newUserAddressLine1" className="mb-1 block text-xs text-zinc-500">Adresse ligne 1</label>
+                          <input
+                            id="newUserAddressLine1"
+                            type="text"
+                            value={newUserAddressLine1}
+                            onChange={(e) => setNewUserAddressLine1(e.target.value)}
+                            placeholder="Rue, numéro"
+                            className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="newUserAddressLine2" className="mb-1 block text-xs text-zinc-500">Adresse ligne 2 (optionnel)</label>
+                          <input
+                            id="newUserAddressLine2"
+                            type="text"
+                            value={newUserAddressLine2}
+                            onChange={(e) => setNewUserAddressLine2(e.target.value)}
+                            placeholder="Appartement, bâtiment, etc."
+                            className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label htmlFor="newUserPostalCode" className="mb-1 block text-xs text-zinc-500">Code postal</label>
+                            <input
+                              id="newUserPostalCode"
+                              type="text"
+                              value={newUserPostalCode}
+                              onChange={(e) => setNewUserPostalCode(e.target.value)}
+                              className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="newUserCity" className="mb-1 block text-xs text-zinc-500">Ville</label>
+                            <input
+                              id="newUserCity"
+                              type="text"
+                              value={newUserCity}
+                              onChange={(e) => setNewUserCity(e.target.value)}
+                              className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label htmlFor="newUserCountry" className="mb-1 block text-xs text-zinc-500">Pays</label>
+                          <input
+                            id="newUserCountry"
+                            type="text"
+                            value={newUserCountry}
+                            onChange={(e) => setNewUserCountry(e.target.value)}
+                            className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleCreateUser} disabled={creatingUser}>
                         {creatingUser ? "Création..." : "Créer le client"}
@@ -415,51 +542,88 @@ export function AdminBookingNew() {
             <h2 className="mb-4 font-semibold">Créneau</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm text-zinc-400">Studio</label>
+                <label htmlFor="groupType" className="mb-1 block text-sm text-zinc-400">Type de groupe *</label>
                 <select
+                  id="groupType"
+                  value={groupType}
+                  onChange={(e) => setGroupType(e.target.value as GroupType)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                  required
+                >
+                  <option value="">Sélectionner...</option>
+                  {GROUP_TYPES.map((g) => (
+                    <option key={g.value} value={g.value}>{g.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="studioId" className="mb-1 block text-sm text-zinc-400">Studio *</label>
+                <select
+                  id="studioId"
                   value={studioId}
                   onChange={(e) => setStudioId(e.target.value as StudioId)}
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                  required
                 >
+                  <option value="">Sélectionner...</option>
                   {Object.values(STUDIOS).map((s) => (
                     <option key={s.id} value={s.id}>{s.name} ({s.size})</option>
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="mb-1 block text-sm text-zinc-400">Date</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-zinc-400">Début</label>
-                <select
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                >
-                  {TIME_SLOTS.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-zinc-400">Fin</label>
-                <select
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                >
-                  {[...TIME_SLOTS.slice(1), "00:00"].map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+              <div className="sm:col-span-2">
+                <div className="grid gap-4 grid-cols-3">
+                  <div>
+                    <label htmlFor="bookingDate" className="mb-1 block text-sm text-zinc-400">Date *</label>
+                    <input
+                      id="bookingDate"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="startTime" className="mb-1 block text-sm text-zinc-400">Début *</label>
+                    <select
+                      id="startTime"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      required
+                    >
+                      <option value="">Sélectionner...</option>
+                      {TIME_SLOTS.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="endTime" className="mb-1 block text-sm text-zinc-400">Fin *</label>
+                    <select
+                      id="endTime"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      required
+                    >
+                      <option value="">Sélectionner...</option>
+                      {[...TIME_SLOTS.slice(1), "00:00"].map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
+
+            {startTime && endTime && startTime >= endTime && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                L'heure de fin doit être supérieure à l'heure de début.
+              </div>
+            )}
 
             {conflict && (
               <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
@@ -469,39 +633,12 @@ export function AdminBookingNew() {
             )}
           </div>
 
-          {/* Type + Payment */}
+          {/* Notes */}
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Options</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm text-zinc-400">Type de groupe</label>
-                <select
-                  value={groupType}
-                  onChange={(e) => setGroupType(e.target.value as GroupType)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                >
-                  {GROUP_TYPES.map((g) => (
-                    <option key={g.value} value={g.value}>{g.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-zinc-400">Méthode de paiement</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <label className="mb-1 block text-sm text-zinc-400">Notes (optionnel)</label>
+            <div>
+              <label htmlFor="bookingNotes" className="mb-1 block text-sm text-zinc-400">Notes (optionnel)</label>
               <textarea
+                id="bookingNotes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
@@ -514,31 +651,80 @@ export function AdminBookingNew() {
           {availableEquipment.length > 0 && (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
               <h2 className="mb-4 font-semibold">Équipements optionnels</h2>
-              <div className="space-y-2">
+              <div className="flex flex-col gap-3">
                 {availableEquipment.map((eq) => {
-                  const selected = selectedEquipment.find((s) => s.equipment_id === eq.equipment_id);
+                  const quantity = getQuantity(eq.id);
+                  let priceDisplay = "";
+                  let subtotal = 0;
+                  
+                  if (eq.pricingType === "session" && eq.sessionPricing) {
+                    const unitPrice = eq.sessionPricing[0];
+                    subtotal = quantity > 0 ? eq.sessionPricing[quantity - 1] || 0 : 0;
+                    const isDegressive = eq.id === "cymbal" || eq.id === "mic";
+                    if (quantity === 0) {
+                      priceDisplay = `${unitPrice}€/séance${isDegressive ? " (tarif dégressif)" : ""}`;
+                    } else {
+                      priceDisplay = `${subtotal}€/séance${isDegressive ? " (tarif dégressif)" : ""}`;
+                    }
+                  } else {
+                    priceDisplay = `+${eq.pricePerHour}€/h`;
+                  }
+
+                  const isFourthMicFree = eq.id === "mic" && quantity === 4;
+
                   return (
-                    <div key={eq.id} className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => toggleEquipment(eq)}
-                          className={`flex h-5 w-5 items-center justify-center rounded border ${selected ? "border-primary bg-primary text-black" : "border-zinc-600"}`}
-                        >
-                          {selected && <Check className="h-3 w-3" />}
-                        </button>
-                        <span className="text-sm">{eq.name}</span>
+                    <div
+                      key={eq.id}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-white">
+                          {eq.name}
+                        </span>
+                        <span className="text-xs text-zinc-400">
+                          {priceDisplay}
+                        </span>
+                        {isFourthMicFree && (
+                          <span className="flex items-center gap-1 text-xs text-green-400">
+                            <Gift className="h-3 w-3" />
+                            Cadeau ! Le 4ème micro est offert
+                          </span>
+                        )}
                       </div>
-                      {selected && eq.max_per_session > 1 && (
-                        <select
-                          value={selected.quantity}
-                          onChange={(e) => updateEquipmentQuantity(eq.equipment_id, parseInt(e.target.value, 10))}
-                          className="rounded border border-zinc-600 bg-zinc-700 px-2 py-1 text-xs"
-                        >
-                          {Array.from({ length: eq.max_per_session }, (_, i) => (
-                            <option key={i + 1} value={i + 1}>×{i + 1}</option>
-                          ))}
-                        </select>
-                      )}
+
+                      <div className="flex items-center gap-2">
+                        {quantity > 0 && subtotal > 0 && (
+                          <span className="text-xs text-primary">
+                            {formatPrice(subtotal)}
+                          </span>
+                        )}
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDecrement(eq)}
+                            disabled={quantity === 0}
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10"
+                            aria-label={`Retirer ${eq.name}`}
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+
+                          <span className="w-6 text-center text-sm font-medium tabular-nums">
+                            {quantity}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleIncrement(eq)}
+                            disabled={quantity >= eq.maxPerSession}
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10"
+                            aria-label={`Ajouter ${eq.name}`}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -554,7 +740,7 @@ export function AdminBookingNew() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">Studio</span>
-                <span>{STUDIOS[studioId].name}</span>
+                <span>{studioId ? STUDIOS[studioId].name : "—"}</span>
               </div>
               {date && (
                 <div className="flex justify-between text-sm">
@@ -576,20 +762,25 @@ export function AdminBookingNew() {
                   <span className="truncate ml-2">{selectedUser.name}</span>
                 </div>
               )}
-              {selectedEquipment.length > 0 && (
-                <div className="border-t border-zinc-800 pt-3">
-                  <p className="mb-1 text-xs text-zinc-400">Équipements</p>
-                  {selectedEquipment.map((eq) => (
-                    <div key={eq.equipment_id} className="flex justify-between text-sm">
+              {(basePrice !== null || equipmentPrices.length > 0) && (
+                <div className="border-t border-zinc-800 pt-3 space-y-1">
+                  {basePrice !== null && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-zinc-400">Studio</span>
+                      <span>{formatPrice(basePrice)}</span>
+                    </div>
+                  )}
+                  {equipmentPrices.map((eq) => (
+                    <div key={eq.name} className="flex justify-between text-sm">
                       <span className="text-zinc-400">{eq.name}</span>
-                      <span>×{eq.quantity}</span>
+                      <span>{formatPrice(eq.price)}</span>
                     </div>
                   ))}
                 </div>
               )}
               <div className="border-t border-zinc-800 pt-3">
                 <div className="flex items-center justify-between text-lg font-semibold">
-                  <span>Total estimé</span>
+                  <span>Total</span>
                   <span className="text-primary">
                     {pricingLoading ? "..." : estimatedPrice !== null ? formatPrice(estimatedPrice) : "—"}
                   </span>
@@ -599,16 +790,16 @@ export function AdminBookingNew() {
 
             <Button
               onClick={handleSubmit}
-              disabled={submitting || !selectedUser || !date || conflict}
+              disabled={submitting || !selectedUser || !date || !studioId || !startTime || !endTime || !groupType || conflict || !!(startTime && endTime && startTime >= endTime)}
               className="mt-6 w-full"
               size="lg"
             >
               {submitting ? "Création..." : "Créer la réservation"}
             </Button>
 
-            {conflict && (
+            {(!selectedUser || !studioId || !date || !startTime || !endTime || !groupType || (startTime && endTime && startTime >= endTime)) && (
               <p className="mt-2 text-center text-xs text-red-400">
-                Impossible : conflit de créneau
+                Saisir les champs obligatoire correctement
               </p>
             )}
           </div>

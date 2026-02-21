@@ -66,9 +66,9 @@ export async function getBookings(
     params.push(filters.paymentStatus);
   }
   if (filters.search) {
-    conditions.push("(b.booking_ref LIKE ? OR u.name LIKE ?)");
+    conditions.push("(b.booking_ref LIKE ? OR u.name LIKE ? OR u.band_name LIKE ? OR b.band_name LIKE ?)");
     const term = `%${filters.search}%`;
-    params.push(term, term);
+    params.push(term, term, term, term);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -115,12 +115,12 @@ export async function createBooking(
   const timestamp = now();
 
   await db.prepare(`
-    INSERT INTO bookings (id, booking_ref, user_id, studio_id, date, start_time, end_time,
+    INSERT INTO bookings (id, booking_ref, user_id, band_name, studio_id, date, start_time, end_time,
       group_type, status, base_price, equipment_price, total_price, equipment,
       payment_method, payment_status, notes, created_at, updated_at, cancelled_at, cancel_reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
-    id, data.booking_ref, data.user_id, data.studio_id, data.date,
+    id, data.booking_ref, data.user_id, data.band_name, data.studio_id, data.date,
     data.start_time, data.end_time, data.group_type, data.status,
     data.base_price, data.equipment_price, data.total_price,
     data.equipment, data.payment_method, data.payment_status,
@@ -412,17 +412,39 @@ export async function getUserByEmail(
 
 export async function createUser(
   db: D1Database,
-  data: { name: string; email?: string; phone?: string; band_name?: string; notes?: string },
+  data: {
+    name: string;
+    email?: string;
+    phone?: string;
+    band_name?: string;
+    notes?: string;
+    address_line1?: string;
+    address_line2?: string;
+    postal_code?: string;
+    city?: string;
+    country?: string;
+  },
 ): Promise<DbUser> {
   const id = generateId();
   const timestamp = now();
 
   await db.prepare(`
-    INSERT INTO users (id, email, name, phone, band_name, notes, is_blocked, total_bookings, total_spent, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
+    INSERT INTO users (id, email, name, phone, band_name, notes, address_line1, address_line2, postal_code, city, country, is_blocked, total_bookings, total_spent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
   `).bind(
-    id, data.email ?? null, data.name, data.phone ?? null,
-    data.band_name ?? null, data.notes ?? null, timestamp, timestamp,
+    id,
+    data.email ?? null,
+    data.name,
+    data.phone ?? null,
+    data.band_name ?? null,
+    data.notes ?? null,
+    data.address_line1 ?? null,
+    data.address_line2 ?? null,
+    data.postal_code ?? null,
+    data.city ?? null,
+    data.country ?? null,
+    timestamp,
+    timestamp,
   ).run();
 
   return (await getUserById(db, id))!;
@@ -969,7 +991,7 @@ export async function getPricingForBooking(
   const result = await db.prepare(
     "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ?",
   ).bind(studioId, groupType, isPeak ? 1 : 0).first<{ price_per_half_hour: number }>();
-  return result?.price_per_half_hour ?? 0;
+  return (result?.price_per_half_hour ?? 0) / 100;
 }
 
 // ─── Equipment ───────────────────────────────────────────────────────────────
@@ -1220,6 +1242,15 @@ export interface DashboardStats {
   pendingPayments: number;
   pendingAmount: number;
   occupancyToday: number;
+
+  rangeFrom: string;
+  rangeTo: string;
+  rangeDays: number;
+  rangeBookings: number;
+  rangeRevenue: number;
+  rangeBookedMinutes: number;
+  rangePendingPayments: number;
+  rangePendingAmount: number;
 }
 
 function getISOWeekStartUTCNoon(year: number, week: number): Date {
@@ -1255,9 +1286,77 @@ function getStudioOpenSlotsCount(studioId: StudioId, dayOfWeek: number): number 
 
 export async function getDashboardStats(
   db: D1Database,
-  opts?: { month?: number; year?: number; week?: number },
+  opts?: {
+    month?: number;
+    year?: number;
+    week?: number;
+    mode?: "today" | "rolling" | "week" | "month" | "year";
+    period?: "week" | "month" | "quarter" | "year";
+  },
 ): Promise<DashboardStats> {
   const today = getParisDateISO();
+
+  const inferredMode: "today" | "rolling" | "week" | "month" | "year" = (() => {
+    if (opts?.mode) return opts.mode;
+    if (opts?.year && opts?.week) return "week";
+    if (opts?.year && opts?.month) return "month";
+    if (opts?.year) return "year";
+    return "rolling";
+  })();
+  const inferredPeriod: "week" | "month" | "quarter" | "year" = opts?.period || "month";
+
+  let rangeFrom = today;
+  let rangeTo = today;
+  if (inferredMode === "today") {
+    rangeFrom = today;
+    rangeTo = today;
+  } else if (inferredMode === "month" && opts?.year && opts?.month) {
+    const year = Math.round(opts.year);
+    const month = Math.round(opts.month);
+    if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12) {
+      const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+      const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
+      rangeFrom = getParisDateISO(from);
+      rangeTo = getParisDateISO(to);
+    }
+  } else if (inferredMode === "week" && opts?.year && opts?.week) {
+    const year = Math.round(opts.year);
+    const week = Math.round(opts.week);
+    if (year >= 2000 && year <= 2100 && week >= 1 && week <= 53) {
+      const monday = getISOWeekStartUTCNoon(year, week);
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+      rangeFrom = getParisDateISO(monday);
+      rangeTo = getParisDateISO(sunday);
+    }
+  } else if (inferredMode === "year" && opts?.year) {
+    const year = Math.round(opts.year);
+    if (year >= 2000 && year <= 2100) {
+      const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
+      const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
+      rangeFrom = getParisDateISO(from);
+      rangeTo = getParisDateISO(to);
+    }
+  } else {
+    const days = (() => {
+      switch (inferredPeriod) {
+        case "week": return 7;
+        case "quarter": return 90;
+        case "year": return 365;
+        default: return 30;
+      }
+    })();
+
+    rangeFrom = minusDaysParisISO(today, days - 1);
+    rangeTo = today;
+  }
+
+  const rangeDays = (() => {
+    const from = parseDateISOToUTCNoon(rangeFrom);
+    const to = parseDateISOToUTCNoon(rangeTo);
+    const diff = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
+    return diff > 0 ? diff : 1;
+  })();
 
   let weekFrom = minusDaysParisISO(today, 6);
   let weekTo = today;
@@ -1298,7 +1397,7 @@ export async function getDashboardStats(
     }
   }
 
-  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult] = await db.batch([
+  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult] = await db.batch([
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
@@ -1329,10 +1428,54 @@ export async function getDashboardStats(
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(reportMonthFrom || monthFrom, reportMonthTo || today),
+
+    db.prepare(
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+    ).bind(rangeFrom, rangeTo),
+
+    db.prepare(
+      `SELECT
+        COALESCE(SUM(
+          (
+            CASE WHEN end_time = '00:00'
+              THEN 1440
+              ELSE (CAST(substr(end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(end_time, 4, 2) AS INTEGER))
+            END
+          )
+          -
+          (
+            CASE WHEN start_time = '00:00'
+              THEN 1440
+              ELSE (CAST(substr(start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(start_time, 4, 2) AS INTEGER))
+            END
+          )
+        ), 0) as minutes
+      FROM bookings
+      WHERE date >= ? AND date <= ?
+        AND status != 'cancelled'`,
+    ).bind(rangeFrom, rangeTo),
+
+    db.prepare(
+      `WITH paid_by_booking AS (
+        SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+        FROM payments
+        GROUP BY booking_id
+      )
+      SELECT
+        COUNT(*) as count,
+        COALESCE(SUM(b.total_price - COALESCE(paid.paid_amount, 0)), 0) as total
+      FROM bookings b
+      LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+      WHERE b.status != 'cancelled'
+        AND b.payment_status = 'pay-on-site'
+        AND b.date >= ? AND b.date <= ?
+        AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0`,
+    ).bind(rangeFrom, rangeTo),
   ]);
 
   type CountRevenue = { count: number; revenue: number };
   type CountTotal = { count: number; total: number };
+  type MinutesRow = { minutes: number | string };
   type TimeRange = { studio_id: string; start_time: string; end_time: string };
 
   const todayRow = (todayResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
@@ -1340,7 +1483,16 @@ export async function getDashboardStats(
   const monthRow = (monthResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
   const pendingRow = (pendingResult.results as unknown as CountTotal[])[0] ?? { count: 0, total: 0 };
   const reportMonthRow = (reportMonthResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
+  const rangeRow = (rangeResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
+  const rangeDurationRow = (rangeDurationResult.results as unknown as MinutesRow[])[0] ?? { minutes: 0 };
+  const rangePendingRow = (rangePendingResult.results as unknown as CountTotal[])[0] ?? { count: 0, total: 0 };
   const todaySlots = occupancyResult.results as unknown as TimeRange[];
+
+  const rangeBookedMinutes = (() => {
+    const v = rangeDurationRow.minutes;
+    const n = typeof v === "string" ? parseInt(v, 10) : v;
+    return Number.isFinite(n) ? n : 0;
+  })();
 
   const dayOfWeek = parseDateISOToUTCNoon(today).getUTCDay();
   const totalSlots =
@@ -1369,6 +1521,15 @@ export async function getDashboardStats(
     pendingPayments: pendingRow.count,
     pendingAmount: pendingRow.total,
     occupancyToday: totalSlots > 0 ? Math.round((usedSlots / totalSlots) * 100) : 0,
+
+    rangeFrom,
+    rangeTo,
+    rangeDays,
+    rangeBookings: rangeRow.count,
+    rangeRevenue: rangeRow.revenue,
+    rangeBookedMinutes,
+    rangePendingPayments: rangePendingRow.count,
+    rangePendingAmount: rangePendingRow.total,
   };
 }
 

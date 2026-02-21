@@ -258,8 +258,8 @@ export function generateInvoicePDF(
     doc.text(user.phone, 45, y);
     y += 6;
   }
-  if (user.band_name) {
-    doc.text(`Groupe: ${user.band_name}`, 45, y);
+  if (booking.band_name) {
+    doc.text(`Groupe: ${booking.band_name}`, 45, y);
     y += 6;
   }
   y += 10;

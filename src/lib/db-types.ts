@@ -35,7 +35,12 @@ export interface DbUser {
   phone: string | null;
   band_name: string | null;
   notes: string | null;
-  is_blocked: number; // 0 | 1
+  address_line1: string | null;
+  address_line2: string | null;
+  postal_code: string | null;
+  city: string | null;
+  country: string | null;
+  is_blocked: number;
   total_bookings: number;
   total_spent: number;
   created_at: string;
@@ -54,6 +59,7 @@ export interface DbBooking {
   id: string;
   booking_ref: string;
   user_id: string;
+  band_name: string | null;
   studio_id: string;
   date: string;
   start_time: string;

@@ -77,10 +77,17 @@ interface BookingDetailProps {
   bookingId: string;
 }
 
+interface EquipmentInfo {
+  id: string;
+  name: string;
+  quantity: number;
+}
+
 export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [booking, setBooking] = useState<DbBooking | null>(null);
   const [user, setUser] = useState<DbUser | null>(null);
   const [payments, setPayments] = useState<DbPayment[]>([]);
+  const [equipment, setEquipment] = useState<EquipmentInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [newPayment, setNewPayment] = useState<{
@@ -131,6 +138,20 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           setPayments(paymentJson.data);
         }
         setLoadingPayments(false);
+
+        // Fetch equipment and match with booking equipment
+        if (json.data.equipment) {
+          const equipmentRes = await fetch("/api/equipment");
+          const equipmentJson = await equipmentRes.json() as { success: boolean; equipment?: Array<{ id: string; name: string }> };
+          if (equipmentJson.success && equipmentJson.equipment) {
+            const bookingEquipment = JSON.parse(json.data.equipment) as Array<{ id: string; quantity: number }>;
+            const matchedEquipment = bookingEquipment.map((eq) => {
+              const eqData = equipmentJson.equipment!.find((e) => e.id === eq.id);
+              return { id: eq.id, name: eqData?.name || eq.id, quantity: eq.quantity };
+            });
+            setEquipment(matchedEquipment);
+          }
+        }
 
         setNewPayment({
           amount: String(json.data.total_price),
@@ -271,9 +292,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   }
 
   const studio = STUDIOS[booking.studio_id as StudioId];
-  const equipmentList: Array<{ id: string; quantity: number; name?: string }> = booking.equipment
-    ? (() => { try { return JSON.parse(booking.equipment); } catch { return []; } })()
-    : [];
 
   const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
   const balance = booking.total_price - totalPaid;
@@ -348,16 +366,23 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               </div>
             </div>
 
-            {equipmentList.length > 0 && (
+            {equipment.length > 0 && (
               <div className="mt-6 border-t border-zinc-800 pt-4">
                 <p className="mb-2 text-sm text-zinc-400">Équipements</p>
                 <div className="flex flex-wrap gap-2">
-                  {equipmentList.map((eq: { id: string; quantity: number; name?: string }) => (
+                  {equipment.map((eq) => (
                     <span key={eq.id} className="rounded-full bg-zinc-800 px-3 py-1 text-sm">
-                      {eq.name || eq.id} ×{eq.quantity}
+                      {eq.name} ×{eq.quantity}
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {booking.notes && (
+              <div className="mt-6 border-t border-zinc-800 pt-4">
+                <p className="mb-2 text-sm text-zinc-400">Notes</p>
+                <p className="text-sm whitespace-pre-wrap">{booking.notes}</p>
               </div>
             )}
 
@@ -524,25 +549,56 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
         <div className="space-y-6">
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Client</h2>
+            <h2 className="mb-4 font-semibold">Coordonnées du client</h2>
             {user ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <User className="h-5 w-5" />
                   </div>
                   <div>
                     <p className="font-medium">{user.name}</p>
-                    {user.band_name && <p className="text-sm text-zinc-400">{user.band_name}</p>}
+                    {user.band_name && (
+                      <p className="text-sm text-zinc-400">{user.band_name}</p>
+                    )}
                   </div>
                 </div>
-                <div className="text-sm text-zinc-400">
-                  <p>{user.email || "—"}</p>
-                  <p>{user.phone || "—"}</p>
+
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <p className="text-zinc-500">Email</p>
+                    <p className="text-zinc-300">{user.email || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500">Téléphone</p>
+                    <p className="text-zinc-300">{user.phone || "—"}</p>
+                  </div>
                 </div>
+
+                {(user.address_line1 || user.postal_code || user.city) && (
+                  <div className="space-y-1 text-sm">
+                    <p className="text-zinc-500">Adresse</p>
+                    {user.address_line1 && <p className="text-zinc-300">{user.address_line1}</p>}
+                    {user.address_line2 && <p className="text-zinc-300">{user.address_line2}</p>}
+                    {(user.postal_code || user.city) && (
+                      <p className="text-zinc-300">
+                        {user.postal_code} {user.city}
+                      </p>
+                    )}
+                    {user.country && <p className="text-zinc-300">{user.country}</p>}
+                  </div>
+                )}
+
+                {user.notes && (
+                  <div className="space-y-1 text-sm">
+                    <p className="text-zinc-500">Notes client</p>
+                    <p className="text-zinc-300 whitespace-pre-wrap">{user.notes}</p>
+                  </div>
+                )}
+
                 <a
                   href={`/admin/users/${user.id}`}
-                  className="inline-block text-sm text-primary hover:underline"
+                  className="inline-block text-sm text-primary hover:underline pt-2"
                 >
                   Voir le profil →
                 </a>

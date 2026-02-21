@@ -14,7 +14,8 @@ import { PaymentChoice } from "./PaymentChoice";
 import { StripeRedirect } from "./StripeRedirect";
 import { ProgressIndicator } from "./ProgressIndicator";
 import { EquipmentSelector } from "./EquipmentSelector";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, EQUIPMENT, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
+import { useEquipment } from "./useEquipment";
 
 export function BookingWidget() {
   const {
@@ -46,6 +47,8 @@ export function BookingWidget() {
     goBack,
     setStep,
   } = useBooking();
+
+  const { getEquipmentName } = useEquipment();
 
   const durationHours = state.startTime && state.endTime
     ? ((() => {
@@ -360,7 +363,7 @@ export function BookingWidget() {
                           <div className="space-y-0.5 pl-2 text-xs text-white/50">
                             {state.equipment.filter(e => e.quantity > 0).map(e => (
                               <div key={e.id} className="flex justify-between">
-                                <span>{EQUIPMENT[e.id]?.name || e.id} x{e.quantity}</span>
+                                <span>{getEquipmentName(e.id)} x{e.quantity}</span>
                                 <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))}</span>
                               </div>
                             ))}
@@ -439,7 +442,7 @@ export function BookingWidget() {
                             {booking.equipmentPrice > 0 && (
                               <div className="mt-1 text-xs text-white/40">
                                 Options : {booking.equipment.filter(e => e.quantity > 0).map(e =>
-                                  `${EQUIPMENT[e.id]?.name || e.id} x${e.quantity}`
+                                  `${getEquipmentName(e.id)} x${e.quantity}`
                                 ).join(", ")}
                               </div>
                             )}

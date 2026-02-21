@@ -56,6 +56,7 @@ interface CalendarBooking {
   id: string;
   booking_ref: string;
   user_id: string;
+  band_name?: string | null;
   user_name?: string;
   user_band_name?: string;
   studio_id: string;
@@ -160,34 +161,25 @@ async function fetchCalendar(params: { date?: string; startDate?: string; endDat
 
 // ─── Month grid helpers ─────────────────────────────────────────────────────
 
-function getMonthGrid(year: number, month: number): (Date | null)[][] {
+function getMonthGrid(year: number, month: number): Date[][] {
   const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
 
   // Monday = 0, Sunday = 6 in our grid
   let startWeekday = firstDay.getDay() - 1;
   if (startWeekday < 0) startWeekday = 6;
 
-  const weeks: (Date | null)[][] = [];
-  let currentWeek: (Date | null)[] = [];
+  const start = new Date(year, month, 1);
+  start.setDate(start.getDate() - startWeekday);
 
-  for (let i = 0; i < startWeekday; i++) {
-    currentWeek.push(null);
-  }
-
-  for (let d = 1; d <= lastDay.getDate(); d++) {
-    currentWeek.push(new Date(year, month, d));
-    if (currentWeek.length === 7) {
-      weeks.push(currentWeek);
-      currentWeek = [];
+  const weeks: Date[][] = [];
+  for (let w = 0; w < 6; w++) {
+    const week: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + w * 7 + i);
+      week.push(d);
     }
-  }
-
-  if (currentWeek.length > 0) {
-    while (currentWeek.length < 7) {
-      currentWeek.push(null);
-    }
-    weeks.push(currentWeek);
+    weeks.push(week);
   }
 
   return weeks;
@@ -338,7 +330,7 @@ export function AdminCalendar() {
     } finally {
       setLoading(false);
     }
-  }, [view, currentDate, weekDates, monthRange]);
+  }, [view, weekDates, monthRange]);
 
   useEffect(() => {
     loadBookings();
@@ -551,7 +543,7 @@ export function AdminCalendar() {
                                }}
                              >
                                <p className="truncate text-[11px] font-medium leading-tight">
-                                 {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+            {booking.start_time} {booking.band_name || booking.user_name || booking.booking_ref.slice(-4)}
                                </p>
                                {hasOptions(booking.equipment) && (
                                  <span className="text-[9px] opacity-80">(opt)</span>
@@ -563,36 +555,40 @@ export function AdminCalendar() {
                      );
                    })}
 
-                  {(() => {
-                    const consultationBookings = bookings.filter(
-                      (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
-                    );
+                   {(() => {
+                     const consultationBookings = bookings.filter(
+                       (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
+                     );
 
-                    return consultationBookings.map((booking) => {
-                      const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                      let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                      const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                      const height = (endIdx - startIdx) * 30;
+                     return consultationBookings.map((booking) => {
+                       const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                       let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                       if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                       const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                       const height = (endIdx - startIdx) * 30;
 
-                      return (
-                        <button
-                          key={booking.id}
-                          type="button"
-                          onClick={() => setSelectedBooking(booking)}
-                          className={`absolute left-1 right-1 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
-                          style={{ top: `${top}px`, height: `${Math.max(height, 24)}px` }}
-                        >
-                          <p className="truncate text-[11px] font-medium leading-tight">
-                            {booking.start_time} {booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                          </p>
-                          <p className="text-[9px] opacity-80">
-                            {GROUP_LABELS[booking.group_type]}
-                          </p>
-                        </button>
-                      );
-                    });
-                  })()}
+                       const studioId = booking.studio_id as StudioId;
+                       const leftPos = studioId === "la-scene" ? "4px" : studioId === "le-podium" ? "50%" : "4px";
+                       const width = studioId === "la-scene" || studioId === "le-podium" ? "calc(50% - 8px)" : "calc(100% - 8px)";
+
+                       return (
+                         <button
+                           key={booking.id}
+                           type="button"
+                           onClick={() => setSelectedBooking(booking)}
+                           className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
+                           style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
+                         >
+                           <p className="truncate text-[11px] font-medium leading-tight">
+            {booking.start_time} {booking.band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                           </p>
+                           <p className="text-[9px] opacity-80">
+                             {GROUP_LABELS[booking.group_type]}
+                           </p>
+                         </button>
+                       );
+                     });
+                   })()}
                 </div>
               );
             })}
@@ -642,16 +638,11 @@ export function AdminCalendar() {
           </div>
 
           {/* Weeks */}
-          {monthGrid.map((week, weekIdx) => (
-            <div key={weekIdx} className="grid grid-cols-7 border-b border-zinc-800 last:border-b-0">
-              {week.map((date, dayIdx) => {
-                if (!date) {
-                  return (
-                    <div key={`empty-${dayIdx}`} className="min-h-[100px] border-l border-zinc-800 bg-zinc-950/50 first:border-l-0" />
-                  );
-                }
-
+          {monthGrid.map((week) => (
+            <div key={toDateStr(week[0])} className="grid grid-cols-7 border-b border-zinc-800 last:border-b-0">
+              {week.map((date) => {
                 const dateStr = toDateStr(date);
+                const inMonth = date.getMonth() === currentDate.getMonth();
                 const dayBookings = bookingsByDate.get(dateStr) || [];
                 const dayBlocked = blockedByDate.get(dateStr) || [];
                 const count = dayBookings.length;
@@ -663,7 +654,7 @@ export function AdminCalendar() {
                 return (
                   <div
                     key={dateStr}
-                    className={`group min-h-[100px] border-l border-zinc-800 p-2 text-left first:border-l-0 ${bg} ${fullyBlocked ? "ring-1 ring-red-500/30" : ""}`}
+                    className={`group min-h-[100px] border-l border-zinc-800 p-2 text-left first:border-l-0 ${inMonth ? bg : "bg-zinc-950/50"} ${fullyBlocked ? "ring-1 ring-red-500/30" : ""}`}
                   >
                     {/* Day number */}
                     <div className="mb-1 flex items-center justify-between">
@@ -671,7 +662,7 @@ export function AdminCalendar() {
                         className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm transition-colors ${
                           isToday
                             ? "bg-primary font-bold text-primary-foreground"
-                            : "text-zinc-300 group-hover:bg-zinc-700"
+                            : inMonth ? "text-zinc-300 group-hover:bg-zinc-700" : "text-zinc-600"
                         }`}
                       >
                         {date.getDate()}
@@ -782,7 +773,7 @@ export function AdminCalendar() {
             <DialogTitle className="flex items-center justify-between gap-2 text-xl font-bold">
               <div className="flex items-center gap-2">
                 <CalendarDays className="h-6 w-6 text-primary" />
-                {b.user_band_name || b.user_name || b.booking_ref}
+                        {b.band_name || b.user_name || b.booking_ref}
               </div>
               <Badge className={`${STATUS_COLORS[b.status] || ""} border px-3 py-1 text-xs uppercase tracking-wider`}>
                 {STATUS_LABELS[b.status] || b.status}
@@ -989,6 +980,7 @@ export function AdminCalendar() {
           <p className="text-zinc-400">{subtitle}</p>
         </div>
         <button
+          type="button"
           onClick={goToToday}
           className="rounded-lg border border-zinc-700 px-3 py-2 text-sm transition-colors hover:bg-zinc-800"
         >
@@ -999,10 +991,10 @@ export function AdminCalendar() {
       {/* Navigation + Tabs */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <button onClick={goToPrev} className="rounded-lg p-2 transition-colors hover:bg-zinc-800">
+          <button type="button" onClick={goToPrev} className="rounded-lg p-2 transition-colors hover:bg-zinc-800">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <button onClick={goToNext} className="rounded-lg p-2 transition-colors hover:bg-zinc-800">
+          <button type="button" onClick={goToNext} className="rounded-lg p-2 transition-colors hover:bg-zinc-800">
             <ChevronRight className="h-5 w-5" />
           </button>
           {loading && (

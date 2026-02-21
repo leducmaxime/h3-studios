@@ -383,7 +383,7 @@ export function AdminBookings() {
                     paymentBadge = <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Reste à payer</Badge>;
                   }
 
-                  const displayName = booking.user_band_name || booking.user_name || "—";
+                  const displayName = booking.band_name || booking.user_name || "—";
 
                   return (
                     <tr key={booking.id} className="bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors">
@@ -425,7 +425,7 @@ export function AdminBookings() {
                       <td className="px-4 py-3">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="rounded-lg p-1.5 hover:bg-zinc-700 focus:outline-none">
+                            <button type="button" className="rounded-lg p-1.5 hover:bg-zinc-700 focus:outline-none">
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                           </DropdownMenuTrigger>
@@ -475,6 +475,7 @@ export function AdminBookings() {
           </p>
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page === 1}
               className="rounded-lg border border-zinc-700 p-2 hover:bg-zinc-800 disabled:opacity-50"
@@ -482,6 +483,7 @@ export function AdminBookings() {
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
+              type="button"
               onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
               className="rounded-lg border border-zinc-700 p-2 hover:bg-zinc-800 disabled:opacity-50"
@@ -506,8 +508,9 @@ export function AdminBookings() {
             </DialogDescription>
           </DialogHeader>
           <div>
-            <label className="mb-1.5 block text-sm text-zinc-400">Raison (optionnel)</label>
+            <label htmlFor="cancelReason" className="mb-1.5 block text-sm text-zinc-400">Raison (optionnel)</label>
             <input
+              id="cancelReason"
               type="text"
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}

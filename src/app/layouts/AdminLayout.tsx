@@ -58,7 +58,7 @@ const ALL_NAV_ITEMS = [
   { href: "/admin/blocked-slots", label: "Blocages d'agenda", icon: Ban, superAdminOnly: false },
   { href: "/admin/users", label: "Clients", icon: Users, superAdminOnly: false },
   { href: "/admin/payments", label: "Paiements", icon: CreditCard, superAdminOnly: false },
-  { href: "/admin/studios", label: "Équipements", icon: Package, superAdminOnly: true },
+  { href: "/admin/equipements", label: "Équipements", icon: Package, superAdminOnly: true },
   { href: "/admin/pricing", label: "Tarifs", icon: Euro, superAdminOnly: true },
   { href: "/admin/settings", label: "Paramètres", icon: Settings, superAdminOnly: true },
   { href: "/admin/audit-log", label: "Journal d'audit", icon: FileText, superAdminOnly: true },
@@ -91,11 +91,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="flex min-h-screen bg-zinc-950">
-      <div
+      <button
+        type="button"
         className={`fixed inset-0 z-40 bg-black/50 transition-opacity lg:hidden ${
           sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={() => setSidebarOpen(false)}
+        aria-label="Fermer le menu"
       />
 
       <aside
@@ -111,6 +113,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <span className="font-blanka text-lg">ADMIN</span>
           </a>
           <button
+            type="button"
             onClick={() => setSidebarOpen(false)}
             className="rounded-lg p-2 hover:bg-zinc-800 lg:hidden"
           >
@@ -166,6 +169,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
         <div className="space-y-1 border-t border-zinc-800 p-4">
           <button
+            type="button"
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
           >
@@ -185,6 +189,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       <div className="flex flex-1 flex-col">
         <header className="flex h-16 items-center gap-4 border-b border-zinc-800 bg-zinc-900/50 px-4 backdrop-blur lg:px-6">
           <button
+            type="button"
             onClick={() => setSidebarOpen(true)}
             className="rounded-lg p-2 hover:bg-zinc-800 lg:hidden"
           >

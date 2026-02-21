@@ -16,6 +16,7 @@ import {
   Instagram,
   RefreshCw,
   ExternalLink,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +32,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface SettingValue {
   key: string;
@@ -270,6 +278,11 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; user: AdminUserRow | null }>({ open: false, user: null });
+  const [deleting, setDeleting] = useState(false);
+
+  const canManage = currentUser?.role === "super-admin";
 
   const fetchAdminUsers = useCallback(async () => {
     try {
@@ -316,6 +329,64 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
     }
   };
 
+  const handleRoleChange = async (userId: string, role: AdminUserRow["role"]) => {
+    if (!canManage) return;
+    if (userId === currentUser?.id) {
+      toast.error("Vous ne pouvez pas modifier votre propre rôle");
+      return;
+    }
+
+    setUpdatingRole(userId);
+    try {
+      const res = await fetch(`/api/admin/admin-users/${userId}/role`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const json = (await res.json()) as { success: boolean; data?: { id: string; role: AdminUserRow["role"] }; error?: string };
+      if (json.success && json.data) {
+        setAdminUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: json.data!.role } : u)));
+        toast.success("Droits mis à jour");
+      } else {
+        toast.error(json.error || "Erreur lors de la mise à jour des droits");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setUpdatingRole(null);
+    }
+  };
+
+  const openDelete = (user: AdminUserRow) => {
+    if (!canManage) return;
+    if (user.id === currentUser?.id) {
+      toast.error("Vous ne pouvez pas supprimer votre propre compte");
+      return;
+    }
+    setDeleteDialog({ open: true, user });
+  };
+
+  const handleDelete = async () => {
+    const user = deleteDialog.user;
+    if (!user) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/admin-users/${user.id}`, { method: "DELETE" });
+      const json = (await res.json()) as { success: boolean; data?: { id: string; deleted: boolean }; error?: string };
+      if (json.success) {
+        setAdminUsers((prev) => prev.filter((u) => u.id !== user.id));
+        toast.success("Compte supprimé");
+        setDeleteDialog({ open: false, user: null });
+      } else {
+        toast.error(json.error || "Erreur lors de la suppression");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleCreated = (newUser: AdminUserRow) => {
     setAdminUsers((prev) => [...prev, newUser]);
     setShowCreateDialog(false);
@@ -337,7 +408,7 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
           <h3 className="text-sm font-semibold">Comptes administrateurs</h3>
           <p className="text-xs text-zinc-500">{adminUsers.length} compte(s) au total</p>
         </div>
-        <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+        <Button size="sm" onClick={() => setShowCreateDialog(true)} disabled={!canManage}>
           <UserPlus className="mr-2 h-4 w-4" />
           Nouvel opérateur
         </Button>
@@ -372,31 +443,89 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
               <p className="truncate text-xs text-zinc-500">{user.email}</p>
             </div>
 
-            {user.id !== currentUser?.id && (
-              <Button
-                size="sm"
-                variant={user.is_active ? "outline" : "default"}
-                onClick={() => handleToggle(user.id)}
-                disabled={toggling === user.id}
-              >
-                {toggling === user.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : user.is_active ? (
-                  <>
-                    <UserX className="mr-1.5 h-3.5 w-3.5" />
-                    Désactiver
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-                    Activer
-                  </>
-                )}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {user.id !== currentUser?.id && (
+                <Select
+                  value={user.role}
+                  onValueChange={(v) => handleRoleChange(user.id, v as AdminUserRow["role"])}
+                  disabled={!canManage || updatingRole === user.id}
+                >
+                  <SelectTrigger className="h-9 w-[150px] border-zinc-700 bg-zinc-800 text-zinc-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-zinc-800 bg-zinc-900">
+                    <SelectItem value="operator">Opérateur</SelectItem>
+                    <SelectItem value="super-admin">Super Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+
+              {user.id !== currentUser?.id && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => openDelete(user)}
+                  disabled={!canManage}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Supprimer
+                </Button>
+              )}
+
+              {user.id !== currentUser?.id && (
+                <Button
+                  size="sm"
+                  variant={user.is_active ? "outline" : "default"}
+                  onClick={() => handleToggle(user.id)}
+                  disabled={toggling === user.id || !canManage}
+                >
+                  {toggling === user.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : user.is_active ? (
+                    <>
+                      <UserX className="mr-1.5 h-3.5 w-3.5" />
+                      Désactiver
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="mr-1.5 h-3.5 w-3.5" />
+                      Activer
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         ))}
       </div>
+
+      <Dialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog((prev) => ({ open, user: open ? prev.user : null }))}
+      >
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle>Supprimer le compte</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-zinc-400">
+            Confirmez la suppression de <span className="font-semibold text-zinc-100">{deleteDialog.user?.name}</span>.
+            Cette action est irréversible.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, user: null })} disabled={deleting}>
+              Annuler
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <CreateOperatorDialog
         open={showCreateDialog}

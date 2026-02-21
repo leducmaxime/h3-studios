@@ -68,3 +68,5 @@ coverage
 
 # Sisyphus session data
 .sisyphus/
+
+AGENTS_LOCAL.md

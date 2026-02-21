@@ -99,16 +99,24 @@ function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: stri
   switch (filter) {
     case "today":
       return { dateFrom: todayStr, dateTo: todayStr };
-    case "week":
+    case "week": {
       const weekStart = new Date(today);
       weekStart.setDate(today.getDate() - today.getDay() + 1);
       return { dateFrom: weekStart.toLocaleDateString("en-CA") };
-    case "month":
+    }
+    case "month": {
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
       return { dateFrom: monthStart.toLocaleDateString("en-CA") };
+    }
     default:
       return {};
   }
+}
+
+interface CollectEntry {
+  id: string;
+  amount: string;
+  method: "cash" | "card" | "transfer" | "check";
 }
 
 const STATUS_CONFIG: Record<
@@ -316,8 +324,8 @@ export function AdminPayments() {
   const [collectOpen, setCollectOpen] = useState(false);
   const [collectLoading, setCollectLoading] = useState(false);
   const [collectContext, setCollectContext] = useState<CollectContext | null>(null);
-  const [collectEntries, setCollectEntries] = useState<Array<{ amount: string; method: "cash" | "card" | "transfer" | "check" }>>([
-    { amount: "", method: "cash" },
+  const [collectEntries, setCollectEntries] = useState<CollectEntry[]>([
+    { id: crypto.randomUUID(), amount: "", method: "cash" },
   ]);
 
   const collectTotals = useMemo(() => {
@@ -446,6 +454,7 @@ export function AdminPayments() {
         booking_ref: string;
         total_price: number;
         payment_method: BookingPaymentMethod;
+        band_name?: string | null;
         user_name?: string | null;
         user_band_name?: string | null;
       };
@@ -461,7 +470,7 @@ export function AdminPayments() {
       setCollectContext({
         bookingId,
         bookingRef: booking.booking_ref,
-        userName: booking.user_band_name || booking.user_name || null,
+        userName: booking.band_name || booking.user_name || null,
         totalPrice: booking.total_price,
         totalPaid,
         remaining,
@@ -470,6 +479,7 @@ export function AdminPayments() {
 
       setCollectEntries([
         {
+          id: crypto.randomUUID(),
           amount: remaining > 0 ? remaining.toFixed(2).replace(".", ",") : "",
           method: booking.payment_method === "card" ? "card" : "cash",
         },
@@ -484,7 +494,7 @@ export function AdminPayments() {
   }
 
   function addCollectEntry() {
-    setCollectEntries((prev) => [...prev, { amount: "", method: "cash" }]);
+    setCollectEntries((prev) => [...prev, { id: crypto.randomUUID(), amount: "", method: "cash" }]);
   }
 
   function removeCollectEntry(idx: number) {
@@ -543,7 +553,7 @@ export function AdminPayments() {
       toast.success("Paiement(s) enregistré(s)");
       setCollectOpen(false);
       setCollectContext(null);
-      setCollectEntries([{ amount: "", method: "cash" }]);
+      setCollectEntries([{ id: crypto.randomUUID(), amount: "", method: "cash" }]);
       fetchPayments();
     } catch (error) {
       console.error("Submit collect payments error:", error);
@@ -927,6 +937,7 @@ export function AdminPayments() {
           </p>
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setPage(Math.max(1, page - 1))}
               disabled={page === 1}
               className="rounded-lg border border-zinc-700 p-2 hover:bg-zinc-800 disabled:opacity-50"
@@ -934,6 +945,7 @@ export function AdminPayments() {
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
+              type="button"
               onClick={() => setPage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
               className="rounded-lg border border-zinc-700 p-2 hover:bg-zinc-800 disabled:opacity-50"
@@ -958,7 +970,7 @@ export function AdminPayments() {
           if (!open) {
             setCollectOpen(false);
             setCollectContext(null);
-            setCollectEntries([{ amount: "", method: "cash" }]);
+            setCollectEntries([{ id: crypto.randomUUID(), amount: "", method: "cash" }]);
           }
         }}
       >
@@ -1000,7 +1012,7 @@ export function AdminPayments() {
             )}
 
             {collectEntries.map((entry, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2">
+              <div key={entry.id} className="grid grid-cols-12 gap-2">
                 <div className="col-span-5">
                   <Label className="text-xs text-zinc-400">Montant (EUR)</Label>
                   <Input

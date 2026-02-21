@@ -16,51 +16,24 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const studioEquipment = {
-  laScene: {
-    name: "La Scène",
-    size: "42m²",
-    items: [
-      { icon: Drum, category: "Batterie", equipment: "YAMAHA recording 9000 6 fûts (caisse claire Premier série pro XPK)" },
-      { icon: Guitar, category: "Amplis Basse", equipment: "Trace Eliot GP7 SM 250w (rms) + Boomer Fender 300w (rms)" },
-      { icon: Radio, category: "Amplis Guitare", equipment: "Marshall Valvestate VS 265, Fender performer 1000, Laney GC 120c, Marshall acoustic AS 50D, Hugues & Kettner Warp 7" },
-      { icon: Volume2, category: "Table de mixage", equipment: "Mackie SR 24.4, Compresseur Boss CL-50, Reverb TC Electronic M-2000, EQ Alesis M-EQ230" },
-      { icon: Headphones, category: "Amplification", equipment: "Dynacord L2800 FD, Montarbo 402, Enceintes DAS 2x400w, caisson basse 2x500w" },
-      { icon: Mic2, category: "Retours", equipment: "Ampli ROSS méga Amp 800, Enceintes DAS 2x300w, Laney amplifiés 2x200w" },
-    ],
-  },
-  lePodium: {
-    name: "Le Podium",
-    size: "35m²",
-    items: [
-      { icon: Drum, category: "Batterie", equipment: "Pearl DLX pro 6 fûts (Cymbale ride + Charlé Sabian)" },
-      { icon: Guitar, category: "Amplis Basse", equipment: "AMPEQ Rocket bass RB210 500w" },
-      { icon: Radio, category: "Amplis Guitare", equipment: "Marshall Valvestate 80V, Fender Superamp, Roland acoustic Chorus AC-60, Vox DA5" },
-      { icon: Volume2, category: "Table de mixage", equipment: "YAMAHA EMX 2000 effets intégrés" },
-      { icon: Headphones, category: "Amplification", equipment: "Dynacord PAA 300, Bose 802 série II / DAS / Ross (2x450w en tout), caisson 502B" },
-      { icon: Mic2, category: "Retours", equipment: "Ampli aeq 301, Enceintes ROSS" },
-    ],
-  },
+import { DEFAULT_MATERIEL, type MaterielData, type MaterielIconKey, type MaterielItem, type MaterielListItem } from "@/lib/materiel";
+
+const ICONS: Record<MaterielIconKey, React.ElementType> = {
+  drum: Drum,
+  guitar: Guitar,
+  volume2: Volume2,
+  mic2: Mic2,
+  headphones: Headphones,
+  laptop: Laptop,
+  music: Music,
+  piano: Piano,
+  component: Component,
+  cpu: Cpu,
+  radio: Radio,
 };
 
-const recordingEquipment = [
-  { icon: Mic2, category: "Micros Chant", equipment: ["SHURE SM58 x 2", "SM58 beta x 3", "Sennheiser MD 425", "BF811 x2"] },
-  { icon: Drum, category: "Micros Batterie", equipment: ["AKG D112 x2", "Sennheiser e 602", "SM 57", "Fûts e604, Blackfire 504/604/521 x3", "Overhead Sennheiser x2, Shure SM 81"] },
-  { icon: Guitar, category: "Micros Instruments", equipment: ["AKG D112", "Sennheiser e609 x2"] },
-  { icon: Cpu, category: "Carte son", equipment: ["Focusrite Scarlett 20 pistes"] },
-  { icon: Laptop, category: "Logiciels", equipment: ["Reaper", "FL Studio"] },
-];
-
-const rentalEquipment = [
-  { icon: Guitar, category: "Basses / Guitares", equipment: ["TUNE 5 cordes", "Eagle", "Greg Bi"] },
-  { icon: Piano, category: "Claviers", equipment: ["Roland RD-300 SX", "Ensoniq VFX", "Korg M1"] },
-  { icon: Component, category: "Percussions", equipment: ["Cajon SELA", "Darbouka Meinl"] },
-  { icon: Music, category: "Cymbales", equipment: ["Istanbul agop 16'' + 18''", "ZILDJIAN Série K 18''", "Meinl Rakes 14''", "TOSCO 18''", "ZILDJIAN Flashsplash 8''"] },
-  { icon: Cpu, category: "Effets & Numérique", equipment: ["V-AMP 2 Behringer", "Native machine+ et M32"] },
-];
-
-function EquipmentCard({ item, index, isVisible }: { item: { icon: React.ElementType; category: string; equipment: string }; index: number; isVisible: boolean }) {
-  const Icon = item.icon;
+function EquipmentCard({ item, index, isVisible }: { item: MaterielItem; index: number; isVisible: boolean }) {
+  const Icon = ICONS[item.icon];
   return (
     <div
       className={`group rounded-xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-4 transition-all duration-500 hover:border-primary/30 hover:bg-white/[0.07] ${
@@ -81,8 +54,8 @@ function EquipmentCard({ item, index, isVisible }: { item: { icon: React.Element
   );
 }
 
-function RecordingCard({ item, index, isVisible }: { item: { icon: React.ElementType; category: string; equipment: string[] }; index: number; isVisible: boolean }) {
-  const Icon = item.icon;
+function RecordingCard({ item, index, isVisible }: { item: MaterielListItem; index: number; isVisible: boolean }) {
+  const Icon = ICONS[item.icon];
   return (
     <div
       className={`group rounded-xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-4 transition-all duration-500 hover:border-primary/30 hover:bg-white/[0.07] ${
@@ -97,8 +70,8 @@ function RecordingCard({ item, index, isVisible }: { item: { icon: React.Element
         <h4 className="text-sm font-semibold text-primary">{item.category}</h4>
       </div>
       <ul className="space-y-1">
-        {item.equipment.map((eq, i) => (
-          <li key={i} className="text-xs text-white/60 flex items-center gap-2">
+        {item.equipment.map((eq) => (
+          <li key={eq} className="text-xs text-white/60 flex items-center gap-2">
             <span className="h-1 w-1 rounded-full bg-primary/50" />
             {eq}
           </li>
@@ -110,9 +83,19 @@ function RecordingCard({ item, index, isVisible }: { item: { icon: React.Element
 
 export function LeMateriel() {
   const [isVisible, setIsVisible] = useState(false);
+  const [materiel, setMateriel] = useState<MaterielData>(DEFAULT_MATERIEL);
 
   useEffect(() => {
     setIsVisible(true);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/materiel")
+      .then((r) => r.json() as Promise<{ success: boolean; data?: MaterielData }>)
+      .then((json) => {
+        if (json.success && json.data) setMateriel(json.data);
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -129,9 +112,11 @@ export function LeMateriel() {
         </div>
 
         <div className="grid gap-12 lg:grid-cols-2">
-          {[studioEquipment.laScene, studioEquipment.lePodium].map((studio, studioIndex) => (
+          {(["laScene", "lePodium"] as const).map((studioKey, studioIndex) => {
+            const studio = materiel.studios[studioKey];
+            return (
             <div
-              key={studio.name}
+              key={studioKey}
               className={`transition-all duration-700 ${
                 isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
               }`}
@@ -148,11 +133,12 @@ export function LeMateriel() {
               </div>
               <div className="grid gap-3">
                 {studio.items.map((item, i) => (
-                  <EquipmentCard key={i} item={item} index={i} isVisible={isVisible} />
+                  <EquipmentCard key={item.id} item={item} index={i} isVisible={isVisible} />
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-20">
@@ -161,8 +147,8 @@ export function LeMateriel() {
             <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-primary/50" />
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {recordingEquipment.map((item, i) => (
-              <RecordingCard key={i} item={item} index={i} isVisible={isVisible} />
+            {materiel.recording.map((item, i) => (
+              <RecordingCard key={item.id} item={item} index={i} isVisible={isVisible} />
             ))}
           </div>
         </div>
@@ -174,8 +160,8 @@ export function LeMateriel() {
             <p className="mt-3 text-sm text-white/50">Disponibles sur demande lors de votre réservation</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {rentalEquipment.map((item, i) => (
-              <RecordingCard key={i} item={item} index={i} isVisible={isVisible} />
+            {materiel.rental.map((item, i) => (
+              <RecordingCard key={item.id} item={item} index={i} isVisible={isVisible} />
             ))}
           </div>
         </div>

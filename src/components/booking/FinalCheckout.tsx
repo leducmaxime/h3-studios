@@ -3,7 +3,6 @@
 import { CheckCircle2, Calendar, Download, ExternalLink, ChevronLeft, CreditCard, Banknote } from "lucide-react";
 import {
   STUDIOS,
-  EQUIPMENT,
   formatDate,
   formatDuration,
   formatPrice,
@@ -11,6 +10,7 @@ import {
   downloadICS,
   type CompletedBooking,
 } from "@/lib/booking";
+import { useEquipment } from "./useEquipment";
 
 interface FinalCheckoutProps {
   cart: CompletedBooking[];
@@ -22,6 +22,7 @@ interface FinalCheckoutProps {
 }
 
 export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPayment, showPaymentButton }: FinalCheckoutProps) {
+  const { getEquipmentName } = useEquipment();
   const isPending = cart[0]?.paymentStatus === "pending";
   const isPaid = cart[0]?.paymentStatus === "paid";
   const handleDownloadAll = () => {
@@ -108,7 +109,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
             {booking.equipmentPrice > 0 && (
               <div className="mb-3 text-xs text-white/60">
                 Options suppl. : {booking.equipment.filter(e => e.quantity > 0).map(e => 
-                  `${EQUIPMENT[e.id]?.name || e.id} ×${e.quantity}`
+                  `${getEquipmentName(e.id)} ×${e.quantity}`
                 ).join(", ")} ({formatPrice(booking.equipmentPrice)})
               </div>
             )}

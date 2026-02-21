@@ -1,20 +1,27 @@
 "use client";
 
-import { Plus, Minus, Gift } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Minus, Gift, Loader2 } from "lucide-react";
 import {
-  EQUIPMENT,
   type EquipmentSelection,
   type EquipmentId,
   formatPrice,
 } from "@/lib/booking";
+
+interface ApiEquipment {
+  id: string;
+  name: string;
+  maxPerSession: number;
+  pricingType: "hourly" | "session";
+  sessionPricing: number[] | null;
+  pricePerHour: number;
+}
 
 interface EquipmentSelectorProps {
   equipment: EquipmentSelection[];
   onChange: (equipment: EquipmentSelection[]) => void;
   durationHours: number;
 }
-
-const EQUIPMENT_LIST = Object.values(EQUIPMENT);
 
 function getQuantity(equipment: EquipmentSelection[], id: EquipmentId): number {
   const item = equipment.find((e) => e.id === id);
@@ -38,6 +45,31 @@ export function EquipmentSelector({
   onChange,
   durationHours,
 }: EquipmentSelectorProps) {
+  const [availableEquipment, setAvailableEquipment] = useState<ApiEquipment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchEquipment = async () => {
+      try {
+        const res = await fetch("/api/equipment");
+        if (!res.ok) throw new Error("Failed to fetch equipment");
+        const data = await res.json() as { success: boolean; equipment?: ApiEquipment[]; error?: string };
+        if (data.success && data.equipment) {
+          setAvailableEquipment(data.equipment);
+        } else {
+          throw new Error(data.error || "Failed to fetch equipment");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Erreur de chargement");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEquipment();
+  }, []);
+
   const handleIncrement = (id: EquipmentId, max: number) => {
     const current = getQuantity(equipment, id);
     if (current < max) {
@@ -52,15 +84,38 @@ export function EquipmentSelector({
     }
   };
 
-  const totalCost = equipment.reduce((sum, item) => {
-    const eq = EQUIPMENT[item.id];
+  const calculateSubtotal = (eq: ApiEquipment, quantity: number): number => {
+    if (quantity === 0) return 0;
     if (eq.pricingType === "session" && eq.sessionPricing) {
-      const price = eq.sessionPricing[item.quantity - 1] || 0;
-      return sum + price;
+      return eq.sessionPricing[quantity - 1] || 0;
     } else {
-      return sum + eq.pricePerHour * item.quantity * durationHours;
+      return eq.pricePerHour * quantity * durationHours;
     }
+  };
+
+  const totalCost = equipment.reduce((sum, item) => {
+    const eq = availableEquipment.find((e) => e.id === item.id);
+    if (!eq) return sum;
+    return sum + calculateSubtotal(eq, item.quantity);
   }, 0);
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-white/20 bg-white/5 p-4">
+        <div className="flex h-20 items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-white/20 bg-white/5 p-4">
+        <p className="text-sm text-red-400">Erreur: {error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-white/20 bg-white/5 p-4">
@@ -69,14 +124,12 @@ export function EquipmentSelector({
       </p>
 
       <div className="flex flex-col gap-3">
-        {EQUIPMENT_LIST.map((eq) => {
+        {availableEquipment.map((eq) => {
           const quantity = getQuantity(equipment, eq.id);
-          let subtotal = 0;
+          const subtotal = calculateSubtotal(eq, quantity);
           let priceDisplay = "";
 
           if (eq.pricingType === "session" && eq.sessionPricing) {
-            subtotal = quantity > 0 ? eq.sessionPricing[quantity - 1] : 0;
-            // Affichage spécial pour les micros
             if (eq.id === "mic") {
               if (quantity === 0) {
                 priceDisplay = "à partir de 3€ par séance (tarif dégressif)";
@@ -93,7 +146,6 @@ export function EquipmentSelector({
                 : `${subtotal}€/séance${isDegressive && quantity > 0 ? " (tarif dégressif)" : ""}`;
             }
           } else {
-            subtotal = eq.pricePerHour * quantity * durationHours;
             priceDisplay = `+${eq.pricePerHour}€/h`;
           }
 

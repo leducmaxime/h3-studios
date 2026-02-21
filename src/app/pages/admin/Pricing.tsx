@@ -92,7 +92,7 @@ function transformPricing(rows: DbPricing[]): PricingRow[] {
     studioId: row.studio_id,
     groupType: row.group_type,
     isPeak: row.is_peak === 1,
-    price: row.price_per_half_hour,
+    price: row.price_per_half_hour / 100,
   }));
 }
 
@@ -510,6 +510,7 @@ function PricingTab() {
 
     setEditedPrices((prev) => {
       const next = new Map(prev);
+      // Stocker la valeur saisie en €/h (conversion en demi-heure à la sauvegarde)
       next.set(id, numValue);
       return next;
     });
@@ -526,12 +527,12 @@ function PricingTab() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const [id, price] of editedPrices.entries()) {
+    for (const [id, pricePerHour] of editedPrices.entries()) {
       try {
         const res = await fetch(`/api/admin/pricing/${id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ price }),
+          body: JSON.stringify({ price: Math.round(pricePerHour * 100 / 2) }),
         });
 
         const json = (await res.json()) as { success: boolean; error?: string };
@@ -568,9 +569,11 @@ function PricingTab() {
   const getDisplayPrice = (row: PricingRow | undefined): number => {
     if (!row) return 0;
     if (editing && editedPrices.has(row.id)) {
+      // La valeur stockée est déjà en €/h
       return editedPrices.get(row.id)!;
     }
-    return row.price;
+    // Afficher en heure (multiplier par 2 car stocké en demi-heure)
+    return row.price * 2;
   };
 
   const studioEntries = Object.entries(STUDIOS) as [StudioId, (typeof STUDIOS)[StudioId]][];
@@ -587,7 +590,7 @@ function PricingTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-zinc-400">Prix par studio, groupe et créneau</p>
+        <p className="text-zinc-400">Prix par heure selon studio, groupe et créneau</p>
         <div className="flex items-center gap-2">
           {editing ? (
             <>
@@ -631,7 +634,7 @@ function PricingTab() {
               </div>
               <div>
                 <h2 className="text-lg font-bold">{studio.name}</h2>
-                <p className="text-sm text-zinc-400">{studio.size} — Prix par demi-heure</p>
+                <p className="text-sm text-zinc-400">{studio.size} — Prix par heure</p>
               </div>
             </div>
           </div>
@@ -679,11 +682,11 @@ function PricingTab() {
                               onChange={(e) => handlePriceChange(offPeakRow.id, e.target.value)}
                               className="w-24 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm font-medium tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                             />
-                            <span className="text-sm text-zinc-500">€/½h</span>
+                            <span className="text-sm text-zinc-500">€/h</span>
                           </div>
                         ) : (
                           <span className="text-sm font-medium tabular-nums">
-                            {formatPriceLocal(getDisplayPrice(offPeakRow))}/½h
+                            {formatPriceLocal(getDisplayPrice(offPeakRow))}/h
                           </span>
                         )}
                       </td>
@@ -698,11 +701,11 @@ function PricingTab() {
                               onChange={(e) => handlePriceChange(peakRow.id, e.target.value)}
                               className="w-24 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm font-medium tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                             />
-                            <span className="text-sm text-zinc-500">€/½h</span>
+                            <span className="text-sm text-zinc-500">€/h</span>
                           </div>
                         ) : (
                           <span className="text-sm font-medium tabular-nums">
-                            {formatPriceLocal(getDisplayPrice(peakRow))}/½h
+                            {formatPriceLocal(getDisplayPrice(peakRow))}/h
                           </span>
                         )}
                       </td>

@@ -26,6 +26,7 @@ import { AdminUsers } from "@/app/pages/admin/Users";
 import { AdminUserDetail } from "@/app/pages/admin/UserDetail";
 import { AdminPayments } from "@/app/pages/admin/Payments";
 import { AdminStudios } from "@/app/pages/admin/Studios";
+import { AdminEquipements } from "@/app/pages/admin/Equipements";
 import { AdminPricing } from "@/app/pages/admin/Pricing";
 import { AdminSettings } from "@/app/pages/admin/Settings";
 import { AdminAuditLog } from "@/app/pages/admin/AuditLog";
@@ -34,6 +35,7 @@ import { Login } from "@/app/pages/admin/Login";
 import { PaymentSuccess } from "@/app/pages/PaymentSuccess";
 import { PaymentCancel } from "@/app/pages/PaymentCancel";
 import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
+import { DEFAULT_MATERIEL, parseMaterielSetting, type MaterielData } from "@/lib/materiel";
 import {
   type AdminRole,
   verifyPassword,
@@ -96,7 +98,7 @@ import {
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "@/lib/booking";
 import {
   formatDateISO,
   getParisDateISO,
@@ -112,8 +114,18 @@ import {
   syncInstagram,
 } from "@/lib/instagram";
 
-const DocumentWithPath = ({ children, path }: { children: React.ReactNode; path: string }) => (
-  <Document path={path}>{children}</Document>
+const DocumentWithPath = ({
+  children,
+  path,
+  nonce,
+}: {
+  children: React.ReactNode;
+  path: string;
+  nonce?: string;
+}) => (
+  <Document path={path} nonce={nonce}>
+    {children}
+  </Document>
 );
 
 function getSlotsForBooking(start: string, end: string): string[] {
@@ -155,12 +167,14 @@ function getISOWeekStartUTCNoon(year: number, week: number): Date {
 const SUPER_ADMIN_ROUTE_PREFIXES = [
   "/api/admin/pricing",
   "/api/admin/equipment",
+  "/api/admin/materiel",
   "/api/admin/promo-codes",
   "/api/admin/settings",
   "/api/admin/admin-users",
   "/api/admin/opening-hours",
   "/api/admin/public-holidays",
   "/admin/studios",
+  "/admin/equipements",
   "/admin/pricing",
   "/admin/settings",
   "/admin/audit-log",
@@ -236,6 +250,13 @@ const adminAuthMiddleware = (): RouteMiddleware =>
     }
 
     if (isSuperAdminRoute(pathname) && user.role !== "super-admin") {
+      if (isApiRoute(pathname)) {
+        return new Response(JSON.stringify({ success: false, error: "Forbidden" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return Response.redirect(new URL("/admin", request.url).toString(), 302);
     }
 
     const modifiedHeaders = new Headers(request.headers);
@@ -268,19 +289,19 @@ const app = defineApp([
     });
   }),
 
-  render(({ children }) => <DocumentWithPath path="/">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/", Home),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/les-studios">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/les-studios" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/les-studios", LesStudios),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/le-materiel">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/le-materiel" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/le-materiel", LeMateriel),
     ]),
@@ -293,48 +314,48 @@ const app = defineApp([
     });
   }),
 
-  render(({ children }) => <DocumentWithPath path="/tarifs">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/tarifs" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/tarifs", Tarifs),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/reservation">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/reservation" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/reservation", () => <Reservation />),
       route("/reservation/:step", ({ params }) => <Reservation step={params.step} />),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/a-propos">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/a-propos" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/a-propos", APropos),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/avis">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/avis" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/avis", Avis),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/equipe">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/equipe" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/equipe", Equipe),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/actualites">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/actualites" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/actualites", Actualites),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/admin/login">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/admin/login" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     route("/admin/login", Login),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/admin">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/admin" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(AdminLayout, [
       route("/admin", AdminDashboard),
       route("/admin/calendar", AdminCalendar),
@@ -345,14 +366,15 @@ const app = defineApp([
       route("/admin/users", AdminUsers),
       route("/admin/users/:id", ({ params }) => <AdminUserDetail userId={params.id} />),
       route("/admin/payments", AdminPayments),
-      route("/admin/studios", AdminStudios),
+      route("/admin/equipements", AdminEquipements),
+      route("/admin/studios", () => new Response(null, { status: 301, headers: { Location: "/admin/equipements" } })),
       route("/admin/pricing", AdminPricing),
       route("/admin/settings", AdminSettings),
       route("/admin/audit-log", AdminAuditLog),
     ]),
   ]),
 
-  render(({ children }) => <DocumentWithPath path="/payment">{children}</DocumentWithPath>, [
+  render(({ children, rw }) => <DocumentWithPath path="/payment" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/payment/success", () => <PaymentSuccess />),
       route("/payment/cancel", () => <PaymentCancel />),
@@ -490,22 +512,26 @@ const app = defineApp([
 
       for (const b of bookings) {
         const slots = getSlotsForBooking(b.start_time, b.end_time);
-        slots.forEach(time => bookedSlots.push({
-          studioId: b.studio_id,
-          time,
-          groupType: b.group_type,
-          bookingId: b.id
-        }));
+        slots.forEach((time) => {
+          bookedSlots.push({
+            studioId: b.studio_id,
+            time,
+            groupType: b.group_type,
+            bookingId: b.id,
+          });
+        });
       }
 
       for (const s of blockedSlots) {
         const slots = getSlotsForBooking(s.start_time, s.end_time);
         if (s.studio_id) {
-          slots.forEach(time => bookedSlots.push({
-            studioId: s.studio_id as string,
-            time,
-            groupType: "blocked"
-          }));
+          slots.forEach((time) => {
+            bookedSlots.push({
+              studioId: s.studio_id as string,
+              time,
+              groupType: "blocked",
+            });
+          });
         } else {
           slots.forEach(time => {
             bookedSlots.push({ studioId: "la-scene", time, groupType: "blocked" });
@@ -566,7 +592,8 @@ const app = defineApp([
       const name = body.user?.name?.trim() || "";
       const email = body.user?.email?.trim() || "";
       const phone = body.user?.phone?.trim() || "";
-      const bandName = body.user?.bandName?.trim() || "";
+      const bandNameRaw = body.user?.bandName?.trim() || "";
+      const bookingBandName = bandNameRaw ? bandNameRaw : null;
 
       if (!name || !email || !phone) {
         return jsonError("Merci de renseigner nom, email et téléphone.", 400);
@@ -579,13 +606,13 @@ const app = defineApp([
           name,
           email,
           phone,
-          band_name: bandName,
+          band_name: bookingBandName ?? undefined,
         });
       } else {
         await updateUser(env.DB, user.id, {
           name,
           phone,
-          band_name: bandName,
+          ...(bandNameRaw ? { band_name: bandNameRaw } : {}),
         });
       }
 
@@ -640,6 +667,7 @@ const app = defineApp([
       const booking = await createBooking(env.DB, {
         booking_ref: body.bookingRef,
         user_id: user.id,
+        band_name: bookingBandName,
         studio_id: body.studioId,
         date: body.date,
         start_time: body.startTime,
@@ -694,6 +722,18 @@ const app = defineApp([
     }
   }),
 
+  route("/api/materiel", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+    try {
+      const raw = await getSetting(env.DB, "materiel.v1");
+      const materiel = parseMaterielSetting(raw) ?? DEFAULT_MATERIEL;
+      return jsonSuccess(materiel);
+    } catch (error) {
+      console.error("GET /api/materiel error:", error);
+      return jsonError("Failed to fetch materiel", 500);
+    }
+  }),
+
   route("/api/promo-codes/validate", async ({ request }) => {
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
     try {
@@ -716,6 +756,40 @@ const app = defineApp([
     } catch (error) {
       console.error("POST /api/promo-codes/validate error:", error);
       return jsonError(error instanceof Error ? error.message : "Validation failed", 500);
+    }
+  }),
+
+  // ─── Public Equipment API ─────────────────────────────────────────────────
+
+  route("/api/equipment", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+    try {
+      const { results } = await env.DB
+        .prepare("SELECT equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour FROM equipment ORDER BY name")
+        .all<{
+          equipment_id: string;
+          name: string;
+          max_per_session: number;
+          pricing_type: string;
+          session_pricing: string;
+          price_per_hour: number;
+        }>();
+
+      const equipment = results.map((eq) => ({
+        id: eq.equipment_id,
+        name: eq.name,
+        maxPerSession: eq.max_per_session,
+        pricingType: eq.pricing_type,
+        sessionPricing: eq.session_pricing ? JSON.parse(eq.session_pricing) : null,
+        pricePerHour: eq.price_per_hour,
+      }));
+
+      return new Response(JSON.stringify({ success: true, equipment }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("GET /api/equipment error:", error);
+      return jsonError("Failed to fetch equipment", 500);
     }
   }),
 
@@ -864,17 +938,40 @@ const app = defineApp([
           return jsonError("Conflit avec une autre réservation", 409);
         }
 
+        const user = await env.DB.prepare("SELECT band_name FROM users WHERE id = ?").bind(body.user_id).first<{ band_name: string | null }>();
+        const bookingBandName = user?.band_name ?? null;
+
         const isPeak = body.start_time >= "18:00" || new Date(body.date).getDay() === 0 || new Date(body.date).getDay() === 6;
         const pricePerHalfHour = await getPricingForBooking(env.DB, body.studio_id, body.group_type, isPeak);
 
         const startParts = body.start_time.split(":").map(Number);
         const endParts = body.end_time.split(":").map(Number);
         const halfHours = ((endParts[0] * 60 + endParts[1]) - (startParts[0] * 60 + startParts[1])) / 30;
-        const basePrice = pricePerHalfHour * halfHours;
+        const durationHours = halfHours * 0.5;
+        const basePrice = (pricePerHalfHour * halfHours) / 100;
+
+        // Calculate equipment price
+        let equipmentPrice = 0;
+        if (body.equipment) {
+          const equipmentList = JSON.parse(body.equipment) as Array<{ id: string; quantity: number }>;
+          const allEquipment = await getEquipment(env.DB);
+          for (const eq of equipmentList) {
+            const eqData = allEquipment.find((e) => e.equipment_id === eq.id);
+            if (eqData && eq.quantity > 0) {
+              if (eqData.pricing_type === "session" && eqData.session_pricing) {
+                const prices = JSON.parse(eqData.session_pricing) as number[];
+                equipmentPrice += prices[eq.quantity - 1] || 0;
+              } else {
+                equipmentPrice += eqData.price_per_hour * eq.quantity * durationHours;
+              }
+            }
+          }
+        }
 
         const booking = await createBooking(env.DB, {
           booking_ref: body.booking_ref,
           user_id: body.user_id,
+          band_name: bookingBandName,
           studio_id: body.studio_id,
           date: body.date,
           start_time: body.start_time,
@@ -882,8 +979,8 @@ const app = defineApp([
           group_type: body.group_type,
           status: "confirmed",
           base_price: basePrice,
-          equipment_price: 0,
-          total_price: basePrice,
+          equipment_price: equipmentPrice,
+          total_price: basePrice + equipmentPrice,
           equipment: body.equipment || null,
           payment_method: body.payment_method || null,
           payment_status: body.payment_method === "card" ? "paid" : "pay-on-site",
@@ -1111,6 +1208,51 @@ const app = defineApp([
       const date = url.searchParams.get("date");
       const startDate = url.searchParams.get("startDate");
       const endDate = url.searchParams.get("endDate");
+      const summary = url.searchParams.get("summary") === "1";
+
+      if (summary) {
+        const select = `SELECT
+          b.id,
+          b.booking_ref,
+          b.user_id,
+          b.band_name,
+          u.name as user_name,
+          u.band_name as user_band_name,
+          b.studio_id,
+          b.date,
+          b.start_time,
+          b.end_time,
+          b.status,
+          b.total_price
+        FROM bookings b
+        LEFT JOIN users u ON u.id = b.user_id`;
+
+        if (date) {
+          const bookings = await env.DB.prepare(
+            `${select}
+             WHERE b.date = ?
+             ORDER BY b.start_time ASC`,
+          ).bind(date).all();
+          return jsonSuccess({ bookings: bookings.results, blockedSlots: [] });
+        }
+
+        if (startDate && endDate) {
+          const bookings = await env.DB.prepare(
+            `${select}
+             WHERE b.date >= ? AND b.date <= ?
+             ORDER BY b.date ASC, b.start_time ASC`,
+          ).bind(startDate, endDate).all();
+          return jsonSuccess({ bookings: bookings.results, blockedSlots: [] });
+        }
+
+        const today = getParisDateISO();
+        const bookings = await env.DB.prepare(
+          `${select}
+           WHERE b.date = ?
+           ORDER BY b.start_time ASC`,
+        ).bind(today).all();
+        return jsonSuccess({ bookings: bookings.results, blockedSlots: [] });
+      }
 
       if (date) {
         const [bookings, blockedSlots] = await Promise.all([
@@ -1183,7 +1325,18 @@ const app = defineApp([
 
     if (request.method === "POST") {
       try {
-        const body = await request.json() as { name?: string; email?: string; phone?: string; band_name?: string; notes?: string };
+        const body = await request.json() as {
+          name?: string;
+          email?: string;
+          phone?: string;
+          band_name?: string;
+          notes?: string;
+          address_line1?: string;
+          address_line2?: string;
+          postal_code?: string;
+          city?: string;
+          country?: string;
+        };
         if (!body.name) {
           return jsonError("Champ obligatoire manquant: name", 400);
         }
@@ -1194,6 +1347,11 @@ const app = defineApp([
           phone: body.phone,
           band_name: body.band_name,
           notes: body.notes,
+          address_line1: body.address_line1,
+          address_line2: body.address_line2,
+          postal_code: body.postal_code,
+          city: body.city,
+          country: body.country,
         });
 
         await addAuditLog(env.DB, "user", user.id, "create", {
@@ -1549,6 +1707,40 @@ const app = defineApp([
     }
   }),
 
+  route("/api/admin/materiel", async ({ request }) => {
+    if (request.method === "GET") {
+      try {
+        const raw = await getSetting(env.DB, "materiel.v1");
+        const materiel = parseMaterielSetting(raw) ?? DEFAULT_MATERIEL;
+        return jsonSuccess(materiel);
+      } catch (error) {
+        console.error("GET /api/admin/materiel error:", error);
+        return jsonError(error instanceof Error ? error.message : "Failed to fetch materiel", 500);
+      }
+    }
+
+    if (request.method === "PUT") {
+      try {
+        const body = await request.json() as { materiel?: unknown };
+        const input = body.materiel ?? body;
+        const normalized = parseMaterielSetting(JSON.stringify(input));
+        if (!normalized) {
+          return jsonError("Données matériel invalides", 400);
+        }
+
+        await setSetting(env.DB, "materiel.v1", JSON.stringify(normalized));
+        await addAuditLog(env.DB, "setting", "materiel.v1", "update", { key: "materiel.v1" });
+
+        return jsonSuccess(normalized);
+      } catch (error) {
+        console.error("PUT /api/admin/materiel error:", error);
+        return jsonError(error instanceof Error ? error.message : "Failed to update materiel", 500);
+      }
+    }
+
+    return jsonError("Method not allowed", 405);
+  }),
+
   // ─── Admin Users (operators) API ───────────────────────────────────────────
 
   route("/api/admin/admin-users", async ({ request }) => {
@@ -1618,10 +1810,101 @@ const app = defineApp([
     return jsonError("Method not allowed", 405);
   }),
 
+  route("/api/admin/admin-users/:id/role", async ({ request, params }) => {
+    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
+
+    try {
+      const currentUserId = request.headers.get("X-Admin-User-Id");
+      if (!currentUserId) return jsonError("Unauthorized", 401);
+      if (params.id === currentUserId) return jsonError("Vous ne pouvez pas modifier votre propre rôle", 400);
+
+      const body = await request.json() as { role?: AdminRole };
+      if (!body.role || (body.role !== "super-admin" && body.role !== "operator")) {
+        return jsonError("Rôle invalide", 400);
+      }
+
+      const target = await env.DB
+        .prepare("SELECT id, role, is_active FROM admin_users WHERE id = ?")
+        .bind(params.id)
+        .first<{ id: string; role: AdminRole; is_active: number }>();
+
+      if (!target) return jsonError("Utilisateur admin introuvable", 404);
+
+      if (target.role === "super-admin" && body.role !== "super-admin" && target.is_active) {
+        const countRow = await env.DB
+          .prepare("SELECT COUNT(*) as count FROM admin_users WHERE role = 'super-admin' AND is_active = 1")
+          .first<{ count: number | string }>();
+        const count = typeof countRow?.count === "string" ? parseInt(countRow.count, 10) : (countRow?.count ?? 0);
+
+        if (count <= 1) {
+          return jsonError("Impossible : vous devez conserver au moins un super-admin actif", 400);
+        }
+      }
+
+      const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+      await env.DB.prepare(
+        "UPDATE admin_users SET role = ?, updated_at = ? WHERE id = ?",
+      ).bind(body.role, timestamp, params.id).run();
+
+      await addAuditLog(env.DB, "admin_user", params.id, "role_update", {
+        role: body.role,
+      });
+
+      return jsonSuccess({ id: params.id, role: body.role });
+    } catch (error) {
+      console.error("PUT /api/admin/admin-users/:id/role error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to update admin user role", 500);
+    }
+  }),
+
+  route("/api/admin/admin-users/:id", async ({ request, params }) => {
+    if (request.method !== "DELETE") return jsonError("Method not allowed", 405);
+
+    try {
+      const currentUserId = request.headers.get("X-Admin-User-Id");
+      if (!currentUserId) return jsonError("Unauthorized", 401);
+      if (params.id === currentUserId) return jsonError("Vous ne pouvez pas supprimer votre propre compte", 400);
+
+      const target = await env.DB
+        .prepare("SELECT id, role, is_active FROM admin_users WHERE id = ?")
+        .bind(params.id)
+        .first<{ id: string; role: AdminRole; is_active: number }>();
+
+      if (!target) return jsonError("Utilisateur admin introuvable", 404);
+
+      if (target.role === "super-admin" && target.is_active) {
+        const countRow = await env.DB
+          .prepare("SELECT COUNT(*) as count FROM admin_users WHERE role = 'super-admin' AND is_active = 1")
+          .first<{ count: number | string }>();
+        const count = typeof countRow?.count === "string" ? parseInt(countRow.count, 10) : (countRow?.count ?? 0);
+
+        if (count <= 1) {
+          return jsonError("Impossible : vous devez conserver au moins un super-admin actif", 400);
+        }
+      }
+
+      await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(params.id).run();
+      const result = await env.DB.prepare("DELETE FROM admin_users WHERE id = ?").bind(params.id).run();
+      if (result.meta.changes === 0) return jsonError("Utilisateur admin introuvable", 404);
+
+      await addAuditLog(env.DB, "admin_user", params.id, "delete", {});
+
+      return jsonSuccess({ id: params.id, deleted: true });
+    } catch (error) {
+      console.error("DELETE /api/admin/admin-users/:id error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to delete admin user", 500);
+    }
+  }),
+
   route("/api/admin/admin-users/:id/toggle", async ({ request, params }) => {
     if (request.method !== "PUT") return jsonError("Method not allowed", 405);
 
     try {
+      const currentUserId = request.headers.get("X-Admin-User-Id");
+      if (!currentUserId) return jsonError("Unauthorized", 401);
+      if (params.id === currentUserId) return jsonError("Vous ne pouvez pas désactiver votre propre compte", 400);
+
       const user = await env.DB
         .prepare("SELECT id, is_active FROM admin_users WHERE id = ?")
         .bind(params.id)
@@ -1630,6 +1913,23 @@ const app = defineApp([
       if (!user) return jsonError("Utilisateur admin introuvable", 404);
 
       const newStatus = user.is_active ? 0 : 1;
+
+      if (newStatus === 0) {
+        const roleRow = await env.DB
+          .prepare("SELECT role FROM admin_users WHERE id = ?")
+          .bind(params.id)
+          .first<{ role: AdminRole }>();
+        if (roleRow?.role === "super-admin") {
+          const countRow = await env.DB
+            .prepare("SELECT COUNT(*) as count FROM admin_users WHERE role = 'super-admin' AND is_active = 1")
+            .first<{ count: number | string }>();
+          const count = typeof countRow?.count === "string" ? parseInt(countRow.count, 10) : (countRow?.count ?? 0);
+          if (count <= 1) {
+            return jsonError("Impossible : vous devez conserver au moins un super-admin actif", 400);
+          }
+        }
+      }
+
       const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
 
       await env.DB.prepare(
@@ -2070,12 +2370,21 @@ const app = defineApp([
       const monthRaw = url.searchParams.get("month");
       const yearRaw = url.searchParams.get("year");
       const weekRaw = url.searchParams.get("week");
+      const modeRaw = url.searchParams.get("mode");
+      const periodRaw = url.searchParams.get("period");
 
       const month = monthRaw ? parseInt(monthRaw, 10) : undefined;
       const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
       const week = weekRaw ? parseInt(weekRaw, 10) : undefined;
 
-      const stats = await getDashboardStats(env.DB, { month, year, week });
+      const mode = (modeRaw === "today" || modeRaw === "rolling" || modeRaw === "week" || modeRaw === "month" || modeRaw === "year")
+        ? modeRaw
+        : undefined;
+      const period = (periodRaw === "week" || periodRaw === "month" || periodRaw === "quarter" || periodRaw === "year")
+        ? periodRaw
+        : undefined;
+
+      const stats = await getDashboardStats(env.DB, { month, year, week, mode, period });
       return jsonSuccess(stats);
     } catch (error) {
       console.error("GET /api/admin/stats error:", error);
@@ -2103,7 +2412,10 @@ const app = defineApp([
       let toStr = today;
       let groupByMonth = false;
 
-      if (mode === "month" && month && year) {
+      if (mode === "today") {
+        fromStr = today;
+        toStr = today;
+      } else if (mode === "month" && month && year) {
         const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
         const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
         fromStr = getParisDateISO(from);
@@ -2124,11 +2436,17 @@ const app = defineApp([
         let days: number;
         switch (period) {
           case "week": days = 7; break;
+          case "month": days = 30; break;
+          case "quarter": days = 90; break;
           case "year": days = 365; break;
           default: days = 30; break;
         }
+
+        if (period === "year") {
+          groupByMonth = true;
+        }
         const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - days);
+        fromDate.setDate(fromDate.getDate() - Math.max(days - 1, 0));
         fromStr = getParisDateISO(fromDate);
         toStr = today;
       }
@@ -2175,7 +2493,10 @@ const app = defineApp([
       let fromStr = today;
       let toStr = today;
 
-      if (mode === "month" && month && year) {
+      if (mode === "today") {
+        fromStr = today;
+        toStr = today;
+      } else if (mode === "month" && month && year) {
         const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
         const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
         fromStr = getParisDateISO(from);
@@ -2201,18 +2522,20 @@ const app = defineApp([
         }
 
         const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - days);
+        fromDate.setDate(fromDate.getDate() - Math.max(days - 1, 0));
         fromStr = getParisDateISO(fromDate);
         toStr = today;
       }
 
-      const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult, pendingPayResult] = await env.DB.batch([
-        // Occupation by day of week (0=Sunday..6=Saturday)
-        env.DB.prepare(
-          `SELECT CAST(strftime('%w', date) AS INTEGER) as day_of_week, COUNT(*) as count
-           FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
-           GROUP BY day_of_week ORDER BY day_of_week`,
-        ).bind(fromStr, toStr),
+      const occupancyStmt = env.DB.prepare(
+        `SELECT date, studio_id, start_time, end_time
+         FROM bookings
+         WHERE date >= ? AND date <= ? AND status != 'cancelled'
+         ORDER BY date ASC, start_time ASC`,
+      ).bind(fromStr, toStr);
+
+       const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult, pendingPayResult] = await env.DB.batch([
+         occupancyStmt,
         // Studio distribution
         env.DB.prepare(
           `SELECT studio_id, COUNT(*) as count, SUM(total_price) as revenue
@@ -2240,48 +2563,188 @@ const app = defineApp([
           WHERE date >= ? AND date <= ?
             AND status != 'cancelled'
             AND payment_status != 'pay-on-site'`,
-        ).bind(fromStr, toStr),
-        // Upcoming bookings (next 5)
-        env.DB.prepare(
-          `SELECT b.*, u.name as user_name FROM bookings b
-           LEFT JOIN users u ON b.user_id = u.id
-           WHERE b.date >= ? AND b.status != 'cancelled'
-           ORDER BY b.date ASC, b.start_time ASC LIMIT 5`,
-        ).bind(toStr),
-        env.DB.prepare(
-          `WITH paid_by_booking AS (
-            SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
-            FROM payments
-            GROUP BY booking_id
-          )
-          SELECT
-            'on-site:' || b.id as id,
-            (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
-            u.name as user_name,
-            b.date as booking_date,
-            b.start_time as start_time,
-            b.studio_id as studio_id
-          FROM bookings b
-          LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-          LEFT JOIN users u ON u.id = b.user_id
-          WHERE b.status != 'cancelled'
-            AND b.payment_status = 'pay-on-site'
-            AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
-          ORDER BY b.date ASC, b.start_time ASC
-          LIMIT 5`,
-        ),
-      ]);
+         ).bind(fromStr, toStr),
+         env.DB.prepare(
+           `SELECT
+              b.id,
+              b.booking_ref,
+              b.user_id,
+              b.studio_id,
+              b.date,
+              b.start_time,
+              b.end_time,
+              b.total_price,
+              u.name as user_name
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled'
+            ORDER BY b.date DESC, b.start_time DESC
+            LIMIT 10`,
+         ).bind(fromStr, toStr),
+         env.DB.prepare(
+           `WITH paid_by_booking AS (
+             SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+             FROM payments
+             GROUP BY booking_id
+           )
+           SELECT
+             id,
+             booking_id,
+             amount,
+             user_name,
+             booking_date,
+             start_time,
+             studio_id,
+             kind
+           FROM (
+             SELECT
+               'on-site:' || b.id as id,
+               b.id as booking_id,
+               (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+               u.name as user_name,
+               b.date as booking_date,
+               b.start_time as start_time,
+               b.studio_id as studio_id,
+               'on-site' as kind
+             FROM bookings b
+             LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+             LEFT JOIN users u ON u.id = b.user_id
+             WHERE b.status != 'cancelled'
+               AND b.payment_status = 'pay-on-site'
+               AND b.date >= ? AND b.date <= ?
+               AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
 
-      type OccRow = { day_of_week: number; count: number };
+             UNION ALL
+
+             SELECT
+               'card:' || b.id as id,
+               b.id as booking_id,
+               (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+               u.name as user_name,
+               b.date as booking_date,
+               b.start_time as start_time,
+               b.studio_id as studio_id,
+               'card' as kind
+             FROM bookings b
+             LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+             LEFT JOIN users u ON u.id = b.user_id
+             WHERE b.status != 'cancelled'
+               AND b.payment_method = 'card'
+               AND b.payment_status = 'pending'
+               AND b.date >= ? AND b.date <= ?
+               AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
+           )
+           ORDER BY booking_date ASC, start_time ASC
+           LIMIT 5`,
+         ).bind(fromStr, toStr, fromStr, toStr),
+       ]);
+
+      type BookingSlotRow = { date: string; studio_id: string; start_time: string; end_time: string };
       type StudioRow = { studio_id: string; count: number; revenue: number };
       type PaymentRow = { method: string; count: number; revenue: number };
       type OnlineCardRow = { count: number; revenue: number };
 
-      const DAY_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
-      const occupancyData = DAY_NAMES.map((name, i) => {
-        const row = (occupancyResult.results as unknown as OccRow[]).find(r => r.day_of_week === i);
-        return { day: name, bookings: row?.count ?? 0 };
-      });
+      function parseDateISOToUTCNoon(dateISO: string): Date {
+        const [y, m, d] = dateISO.split("-").map(Number);
+        return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      }
+
+      function getStudioOpenSlotsCount(studioId: StudioId, dayOfWeek: number): number {
+        const hours = STUDIO_HOURS[studioId][dayOfWeek];
+        const openIdx = ALL_TIME_SLOTS.indexOf(hours.open);
+        const closeIdx = hours.close === "00:00" ? ALL_TIME_SLOTS.length : ALL_TIME_SLOTS.indexOf(hours.close);
+        if (openIdx === -1) return 0;
+        const safeClose = closeIdx === -1 ? ALL_TIME_SLOTS.length : closeIdx;
+        return Math.max(0, safeClose - openIdx);
+      }
+
+      const occupancyData = (() => {
+        const bookings = occupancyResult.results as unknown as BookingSlotRow[];
+
+        const bucketForDate = (dateISO: string): string => {
+          if (mode === "year") return dateISO.slice(0, 7);
+
+          if (mode === "month") {
+            const d = parseDateISOToUTCNoon(dateISO);
+            const mondayOffset = (d.getUTCDay() + 6) % 7;
+            const monday = new Date(d);
+            monday.setUTCDate(d.getUTCDate() - mondayOffset);
+            const weekStartISO = getParisDateISO(monday);
+            return weekStartISO < fromStr ? fromStr : weekStartISO;
+          }
+
+          return dateISO;
+        };
+
+        const bookedSlotsByBucket = new Map<string, number>();
+        for (const row of bookings) {
+          const bucket = bucketForDate(row.date);
+          const startIdx = ALL_TIME_SLOTS.indexOf(row.start_time);
+          let endIdx = ALL_TIME_SLOTS.indexOf(row.end_time);
+          if (endIdx === -1 && row.end_time === "00:00") endIdx = ALL_TIME_SLOTS.length;
+          if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) continue;
+
+          bookedSlotsByBucket.set(bucket, (bookedSlotsByBucket.get(bucket) ?? 0) + (endIdx - startIdx));
+        }
+
+        const openSlotsByBucket = new Map<string, number>();
+        const dayBucketsInOrder: string[] = [];
+        const weekBucketsInOrder: string[] = [];
+
+        const from = parseDateISOToUTCNoon(fromStr);
+        const to = parseDateISOToUTCNoon(toStr);
+        for (let d = new Date(from); d.getTime() <= to.getTime(); d.setUTCDate(d.getUTCDate() + 1)) {
+          const dateISO = getParisDateISO(d);
+          const bucket = bucketForDate(dateISO);
+          const dayOfWeek = d.getUTCDay();
+          const openSlots =
+            getStudioOpenSlotsCount("la-scene", dayOfWeek) +
+            getStudioOpenSlotsCount("le-podium", dayOfWeek);
+
+          openSlotsByBucket.set(bucket, (openSlotsByBucket.get(bucket) ?? 0) + openSlots);
+
+          if (mode === "month") {
+            if (weekBucketsInOrder.length === 0 || weekBucketsInOrder[weekBucketsInOrder.length - 1] !== bucket) {
+              weekBucketsInOrder.push(bucket);
+            }
+          } else if (mode !== "year") {
+            dayBucketsInOrder.push(bucket);
+          }
+        }
+
+        const pct = (bookedSlots: number, openSlots: number): number => {
+          if (openSlots <= 0) return 0;
+          const raw = (bookedSlots / openSlots) * 100;
+          const clamped = Math.max(0, Math.min(raw, 100));
+          return Math.round(clamped * 10) / 10;
+        };
+
+        if (mode === "year") {
+          const yr = year ?? parseInt(fromStr.slice(0, 4), 10);
+          const items: Array<{ day: string; occupancyPct: number; bookedSlots: number; openSlots: number }> = [];
+          for (let m = 1; m <= 12; m++) {
+            const key = `${String(yr).padStart(4, "0")}-${String(m).padStart(2, "0")}`;
+            const openSlots = openSlotsByBucket.get(key) ?? 0;
+            const bookedSlots = bookedSlotsByBucket.get(key) ?? 0;
+            items.push({ day: key, occupancyPct: pct(bookedSlots, openSlots), bookedSlots, openSlots });
+          }
+          return items;
+        }
+
+        if (mode === "month") {
+          return weekBucketsInOrder.map((bucket) => {
+            const openSlots = openSlotsByBucket.get(bucket) ?? 0;
+            const bookedSlots = bookedSlotsByBucket.get(bucket) ?? 0;
+            return { day: bucket, occupancyPct: pct(bookedSlots, openSlots), bookedSlots, openSlots };
+          });
+        }
+
+        return dayBucketsInOrder.map((bucket) => {
+          const openSlots = openSlotsByBucket.get(bucket) ?? 0;
+          const bookedSlots = bookedSlotsByBucket.get(bucket) ?? 0;
+          return { day: bucket, occupancyPct: pct(bookedSlots, openSlots), bookedSlots, openSlots };
+        });
+      })();
 
       const studioData = (studioResult.results as unknown as StudioRow[]).map(row => ({
         studio: row.studio_id === "la-scene" ? "La Scène" : row.studio_id === "le-podium" ? "Le Podium" : row.studio_id,

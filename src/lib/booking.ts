@@ -3,7 +3,7 @@ import { formatDateISO, getParisDateISO } from "./utils";
 export type StudioId = "la-scene" | "le-podium";
 export type GroupType = "solo" | "duo" | "group";
 export type BookingFlow = "time-first" | "studio-first";
-export type EquipmentId = "cymbal" | "mic" | "guitar" | "bass" | "piano";
+export type EquipmentId = string;
 export type PaymentMethod = "card" | "cash";
 export type PaymentStatus = "pending" | "paid" | "pay-on-site";
 
@@ -720,10 +720,13 @@ export function loadUserPreferences(): UserPreferences | null {
 // Equipment price calculation
 export function calculateEquipmentPrice(
   equipment: EquipmentSelection[],
-  durationHours: number
+  durationHours: number,
+  equipmentList?: { id: string; pricingType: string; sessionPricing: number[] | null; pricePerHour: number }[]
 ): number {
   return equipment.reduce((total, item) => {
-    const eq = EQUIPMENT[item.id];
+    // Try to find in provided list first, fallback to hardcoded EQUIPMENT
+    const eq = equipmentList?.find(e => e.id === item.id) || EQUIPMENT[item.id];
+    if (!eq) return total;
     if (eq.pricingType === "session" && eq.sessionPricing) {
       // Tarif par séance : utiliser le tableau de tarifs
       const price = eq.sessionPricing[item.quantity - 1] || 0;

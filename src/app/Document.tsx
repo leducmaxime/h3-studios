@@ -4,9 +4,10 @@ import { SITE_URL, SITE_NAME, pageSEO, generateJsonLd, type PageSEO } from "./se
 interface DocumentProps {
   children: React.ReactNode;
   path?: string;
+  nonce?: string;
 }
 
-export const Document: React.FC<DocumentProps> = ({ children, path = "/" }) => {
+export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce }) => {
   const seo: PageSEO = pageSEO[path] || pageSEO["/"];
   const canonicalUrl = `${SITE_URL}${seo.path}`;
   const ogImageUrl = `${SITE_URL}/images/opengraph.png`;
@@ -54,6 +55,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/" }) => {
         
         <script
           type="application/ld+json"
+          nonce={nonce}
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
 
@@ -67,6 +69,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/" }) => {
         <meta name="theme-color" content="#ffde59" />
 
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -94,7 +97,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/" }) => {
         >
           {children}
         </div>
-        <script type="module" src="/src/client.tsx" />
+        <script type="module" src="/src/client.tsx" nonce={nonce} />
       </body>
     </html>
   );

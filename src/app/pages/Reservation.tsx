@@ -20,7 +20,8 @@ import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, EQUIPMENT, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
+import { useEquipment } from "@/components/booking/useEquipment";
 
 const GROUP_LABELS: Record<GroupType, string> = {
   solo: "Solo/Prof particulier",
@@ -79,6 +80,8 @@ export function Reservation({ step }: ReservationProps) {
     selectPaymentMethod,
     processPayment,
   } = useBookingWithRouter(step);
+
+  const { getEquipmentName } = useEquipment();
 
   const [isVisible, setIsVisible] = useState(false);
 
@@ -251,7 +254,7 @@ export function Reservation({ step }: ReservationProps) {
             {state.equipment.filter(e => e.quantity > 0).map(e => (
               <div key={e.id} className="flex items-center justify-between">
                 <span className="text-white/60">
-                  {EQUIPMENT[e.id]?.name || e.id} x{e.quantity}
+                  {getEquipmentName(e.id)} x{e.quantity}
                 </span>
                 <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))}</span>
               </div>
@@ -664,7 +667,7 @@ export function Reservation({ step }: ReservationProps) {
                                 const eqPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH);
                                 return (
                                   <p key={e.id} className="text-xs text-white/40">
-                                    + {EQUIPMENT[e.id]?.name || e.id} ×{e.quantity} : {formatPrice(eqPrice)}
+                                    + {getEquipmentName(e.id)} ×{e.quantity} : {formatPrice(eqPrice)}
                                   </p>
                                 );
                               })}
