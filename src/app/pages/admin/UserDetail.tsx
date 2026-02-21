@@ -347,41 +347,69 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex items-center gap-3">
-                      <Mail className="h-5 w-5 text-zinc-400" />
-                      <span>{user.email || "—"}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Phone className="h-5 w-5 text-zinc-400" />
-                      <span>{user.phone || "—"}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Music className="h-5 w-5 text-zinc-400" />
-                      <span>{user.band_name || "—"}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Calendar className="h-5 w-5 text-zinc-400" />
-                      <span>Inscrit le {formatDate(user.created_at)}</span>
-                    </div>
-                    {user.notes && (
-                      <div className="rounded-lg bg-zinc-800 p-3 sm:col-span-2">
-                        <p className="text-sm text-zinc-400">Notes :</p>
-                        <p className="text-sm">{user.notes}</p>
+                  <div className="space-y-6">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="flex items-center gap-3">
+                        <Mail className="h-5 w-5 text-zinc-400" />
+                        <div>
+                          <p className="text-xs text-zinc-500">Email</p>
+                          <p>{user.email || "—"}</p>
+                        </div>
                       </div>
-                    )}
-                    {(user.address_line1 || user.postal_code || user.city) && (
-                      <div className="sm:col-span-2">
-                        <p className="text-sm text-zinc-400 mb-1">Adresse :</p>
-                        <div className="space-y-0.5">
-                          {user.address_line1 && <p className="text-sm">{user.address_line1}</p>}
-                          {user.address_line2 && <p className="text-sm">{user.address_line2}</p>}
-                          {(user.postal_code || user.city) && (
-                            <p className="text-sm">
-                              {user.postal_code} {user.city}
-                            </p>
-                          )}
-                          {user.country && <p className="text-sm">{user.country}</p>}
+                      <div className="flex items-center gap-3">
+                        <Phone className="h-5 w-5 text-zinc-400" />
+                        <div>
+                          <p className="text-xs text-zinc-500">Téléphone</p>
+                          <p>{user.phone || "—"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Music className="h-5 w-5 text-zinc-400" />
+                        <div>
+                          <p className="text-xs text-zinc-500">Groupe / Artiste</p>
+                          <p>{user.band_name || "—"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Calendar className="h-5 w-5 text-zinc-400" />
+                        <div>
+                          <p className="text-xs text-zinc-500">Inscrit le</p>
+                          <p>{formatDate(user.created_at)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-zinc-800 pt-4">
+                      <p className="text-sm font-medium text-zinc-400 mb-3">Adresse</p>
+                      <div className="grid gap-2 text-sm">
+                        <div className="grid grid-cols-3 gap-2">
+                          <span className="text-zinc-500">Ligne 1</span>
+                          <span className="col-span-2">{user.address_line1 || "—"}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <span className="text-zinc-500">Ligne 2</span>
+                          <span className="col-span-2">{user.address_line2 || "—"}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <span className="text-zinc-500">Code postal</span>
+                          <span className="col-span-2">{user.postal_code || "—"}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <span className="text-zinc-500">Ville</span>
+                          <span className="col-span-2">{user.city || "—"}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <span className="text-zinc-500">Pays</span>
+                          <span className="col-span-2">{user.country || "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {user.notes && (
+                      <div className="border-t border-zinc-800 pt-4">
+                        <p className="text-sm font-medium text-zinc-400 mb-2">Notes internes</p>
+                        <div className="rounded-lg bg-zinc-800 p-3">
+                          <p className="text-sm whitespace-pre-wrap">{user.notes}</p>
                         </div>
                       </div>
                     )}
