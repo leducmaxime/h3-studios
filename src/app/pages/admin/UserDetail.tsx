@@ -56,6 +56,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     phone: "",
     band_name: "",
     notes: "",
+    address_line1: "",
+    address_line2: "",
+    postal_code: "",
+    city: "",
+    country: "",
   });
 
   const fetchUser = useCallback(async () => {
@@ -70,6 +75,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           phone: json.data.phone || "",
           band_name: json.data.band_name || "",
           notes: json.data.notes || "",
+          address_line1: json.data.address_line1 || "",
+          address_line2: json.data.address_line2 || "",
+          postal_code: json.data.postal_code || "",
+          city: json.data.city || "",
+          country: json.data.country || "",
         });
       }
     } catch (error) {
@@ -140,6 +150,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           phone: editForm.phone.trim() || null,
           band_name: editForm.band_name.trim() || null,
           notes: editForm.notes.trim() || null,
+          address_line1: editForm.address_line1.trim() || null,
+          address_line2: editForm.address_line2.trim() || null,
+          postal_code: editForm.postal_code.trim() || null,
+          city: editForm.city.trim() || null,
+          country: editForm.country.trim() || null,
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
@@ -282,6 +297,54 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] dark:bg-input/30"
                       />
                     </div>
+                    <div className="grid gap-2 sm:col-span-2">
+                      <p className="text-sm font-medium text-zinc-400">Adresse</p>
+                    </div>
+                    <div className="grid gap-2 sm:col-span-2">
+                      <Label htmlFor="edit-address-line1">Ligne 1</Label>
+                      <Input
+                        id="edit-address-line1"
+                        value={editForm.address_line1}
+                        onChange={(e) => setEditForm({ ...editForm, address_line1: e.target.value })}
+                        placeholder="123 rue de la Musique"
+                      />
+                    </div>
+                    <div className="grid gap-2 sm:col-span-2">
+                      <Label htmlFor="edit-address-line2">Ligne 2 (optionnel)</Label>
+                      <Input
+                        id="edit-address-line2"
+                        value={editForm.address_line2}
+                        onChange={(e) => setEditForm({ ...editForm, address_line2: e.target.value })}
+                        placeholder="Appartement, étage, bâtiment..."
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-postal-code">Code postal</Label>
+                      <Input
+                        id="edit-postal-code"
+                        value={editForm.postal_code}
+                        onChange={(e) => setEditForm({ ...editForm, postal_code: e.target.value })}
+                        placeholder="94370"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-city">Ville</Label>
+                      <Input
+                        id="edit-city"
+                        value={editForm.city}
+                        onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                        placeholder="Sucy-en-Brie"
+                      />
+                    </div>
+                    <div className="grid gap-2 sm:col-span-2">
+                      <Label htmlFor="edit-country">Pays</Label>
+                      <Input
+                        id="edit-country"
+                        value={editForm.country}
+                        onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
+                        placeholder="France"
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -305,6 +368,21 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       <div className="rounded-lg bg-zinc-800 p-3 sm:col-span-2">
                         <p className="text-sm text-zinc-400">Notes :</p>
                         <p className="text-sm">{user.notes}</p>
+                      </div>
+                    )}
+                    {(user.address_line1 || user.postal_code || user.city) && (
+                      <div className="sm:col-span-2">
+                        <p className="text-sm text-zinc-400 mb-1">Adresse :</p>
+                        <div className="space-y-0.5">
+                          {user.address_line1 && <p className="text-sm">{user.address_line1}</p>}
+                          {user.address_line2 && <p className="text-sm">{user.address_line2}</p>}
+                          {(user.postal_code || user.city) && (
+                            <p className="text-sm">
+                              {user.postal_code} {user.city}
+                            </p>
+                          )}
+                          {user.country && <p className="text-sm">{user.country}</p>}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -453,7 +453,7 @@ export async function createUser(
 export async function updateUser(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbUser, "email" | "name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent">>,
+  data: Partial<Pick<DbUser, "email" | "name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];

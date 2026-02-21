@@ -1437,6 +1437,11 @@ const app = defineApp([
           phone?: string;
           band_name?: string;
           notes?: string;
+          address_line1?: string;
+          address_line2?: string;
+          postal_code?: string;
+          city?: string;
+          country?: string;
         };
 
         const result = await updateUser(env.DB, id, body);
