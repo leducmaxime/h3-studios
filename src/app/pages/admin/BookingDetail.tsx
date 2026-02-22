@@ -305,417 +305,348 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <a href="/admin/bookings" className="rounded-lg p-2 hover:bg-zinc-800">
-          <ChevronLeft className="h-5 w-5" />
-        </a>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">{booking.booking_ref}</h1>
-          <p className="text-zinc-400">Détails de la réservation</p>
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <a 
+            href="/admin/bookings" 
+            className="flex items-center justify-center h-10 w-10 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </a>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{booking.booking_ref}</h1>
+            <p className="text-sm text-zinc-400 mt-0.5">{formatDate(booking.date)}</p>
+          </div>
         </div>
-        <Badge variant="outline" className={STATUS_CLASSES[booking.status]}>
+        <Badge className={`${STATUS_CLASSES[booking.status]} px-4 py-1.5 text-sm font-medium`}>
           {STATUS_LABELS[booking.status]}
         </Badge>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Informations de réservation</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/10 p-2">
-                  <Calendar className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Date</p>
-                  <p className="font-medium">{formatDate(booking.date)}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/10 p-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Horaire</p>
-                  <p className="font-medium">
-                    {booking.start_time} - {booking.end_time}
-                    <span className="ml-2 text-zinc-400">({formatDuration(booking.start_time, booking.end_time)})</span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/10 p-2">
-                  <MapPin className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Studio</p>
-                  <p className="font-medium">{studio?.name || booking.studio_id}</p>
+      <div className="grid gap-8 lg:grid-cols-12">
+        {/* Colonne principale */}
+        <div className="lg:col-span-8 space-y-8">
+          
+          {/* Section Session */}
+          <section className="bg-zinc-900 rounded-2xl border border-zinc-800/50 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800/50 bg-zinc-800/20">
+              <h2 className="font-semibold text-lg flex items-center gap-2">
+                <Music className="h-5 w-5 text-primary" />
+                Session
+              </h2>
+            </div>
+            <div className="p-6">
+              {/* Infos principales */}
+              <div className="grid grid-cols-3 gap-6 mb-8">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Studio</p>
+                  <p className="text-lg font-semibold">{studio?.name || booking.studio_id}</p>
                   {studio && <p className="text-sm text-zinc-400">{studio.size}</p>}
                 </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/10 p-2">
-                  <Music className="h-5 w-5 text-primary" />
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Horaire</p>
+                  <p className="text-lg font-semibold">{booking.start_time} - {booking.end_time}</p>
+                  <p className="text-sm text-zinc-400">{formatDuration(booking.start_time, booking.end_time)}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Type</p>
-                  <p className="font-medium">{booking.group_type === "solo" ? "Solo" : booking.group_type === "duo" ? "Duo" : "Groupe"}</p>
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</p>
+                  <p className="text-lg font-semibold">{booking.group_type === "solo" ? "Solo" : booking.group_type === "duo" ? "Duo" : "Groupe"}</p>
                 </div>
               </div>
-            </div>
 
-            {/* Récap du panier */}
-            <div className="mt-6 border-t border-zinc-800 pt-4">
-              <p className="mb-3 text-sm text-zinc-400">Récapitulatif</p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">Studio ({formatDuration(booking.start_time, booking.end_time)})</span>
-                  <span>{formatPrice(booking.base_price)}</span>
-                </div>
-                {booking.equipment_price > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-zinc-400">Équipements</span>
-                    <span>{formatPrice(booking.equipment_price)}</span>
+              {/* Équipements */}
+              {equipment.length > 0 && (
+                <div className="mb-6">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Équipements</p>
+                  <div className="flex flex-wrap gap-2">
+                    {equipment.map((eq) => (
+                      <span 
+                        key={eq.id} 
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 text-sm"
+                      >
+                        <span className="text-zinc-300">{eq.name}</span>
+                        <span className="text-zinc-500">×{eq.quantity}</span>
+                      </span>
+                    ))}
                   </div>
-                )}
-                {booking.promo_discount > 0 && (
-                  <div className="flex justify-between text-primary">
-                    <span>Réduction {booking.promo_code && <span className="text-zinc-500">({booking.promo_code})</span>}</span>
-                    <span>-{formatPrice(booking.promo_discount)}</span>
-                  </div>
-                )}
-                <div className="border-t border-zinc-800 pt-2 flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span className="text-primary">{formatPrice(booking.total_price)}</span>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {equipment.length > 0 && (
-              <div className="mt-6 border-t border-zinc-800 pt-4">
-                <p className="mb-2 text-sm text-zinc-400">Équipements</p>
-                <div className="flex flex-wrap gap-2">
-                  {equipment.map((eq) => (
-                    <span key={eq.id} className="rounded-full bg-zinc-800 px-3 py-1 text-sm">
-                      {eq.name} ×{eq.quantity}
-                    </span>
-                  ))}
+              {/* Notes */}
+              {booking.notes && (
+                <div className="bg-zinc-800/30 rounded-xl p-4">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Informations supplémentaires</p>
+                  <p className="text-sm text-zinc-300 whitespace-pre-wrap">{booking.notes}</p>
                 </div>
-              </div>
-            )}
-
-            {booking.promo_code && (
-              <div className="mt-6 border-t border-zinc-800 pt-4">
-                <p className="mb-2 text-sm text-zinc-400">Code promo utilisé</p>
-                <p className="text-sm font-medium text-primary">{booking.promo_code}</p>
-                {booking.promo_type && (
-                  <p className="text-sm text-zinc-500 mt-1">
-                    {booking.promo_type === "percentage" 
-                      ? `-${booking.promo_discount}%` 
-                      : `-${formatPrice(booking.promo_discount)}`}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {booking.notes && (
-              <div className="mt-6 border-t border-zinc-800 pt-4">
-                <p className="mb-2 text-sm text-zinc-400">Informations supplémentaires</p>
-                <p className="text-sm whitespace-pre-wrap">{booking.notes}</p>
-              </div>
-            )}
-
-            {booking.status === "confirmed" && (
-              <div className="mt-6 flex flex-wrap gap-2 border-t border-zinc-800 pt-4">
-                <Button variant="outline" size="sm" onClick={() => setRescheduleOpen(true)}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Déplacer
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setNoShowOpen(true)}
-                  className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
-                >
-                  <AlertTriangle className="mr-2 h-4 w-4" />
-                  No-show
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCancelOpen(true)}
-                  className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                >
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Annuler
-                </Button>
-              </div>
-            )}
-
-            {booking.status !== "cancelled" && user && (
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-800 pt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => generateInvoicePDF(booking, payments[0] || null, user)}
-                  className="border-primary/30 text-primary hover:bg-primary/10"
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Facture PDF
-                </Button>
-              </div>
-            )}
-
-            {booking.status === "cancelled" && booking.cancel_reason && (
-              <div className="mt-6 rounded-lg bg-red-500/10 p-4 border-t border-zinc-800">
-                <p className="text-sm text-red-400">
-                  <strong>Raison :</strong> {booking.cancel_reason}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-semibold">Historique des paiements</h2>
-              {balance <= 0 ? (
-                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50 px-3 py-1">Soldé</Badge>
-              ) : (
-                <Badge variant="outline" className="border-amber-500/50 text-amber-500 font-bold">Reste: {formatPrice(balance)}</Badge>
               )}
             </div>
+          </section>
 
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-zinc-800/20 border border-zinc-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-zinc-400">Studio</span>
-                  <span className="text-sm font-medium">{formatPrice(booking.base_price)}</span>
+          {/* Section Paiement */}
+          <section className="bg-zinc-900 rounded-2xl border border-zinc-800/50 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800/50 bg-zinc-800/20 flex items-center justify-between">
+              <h2 className="font-semibold text-lg flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-primary" />
+                Paiement
+              </h2>
+              {balance <= 0 ? (
+                <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                  Soldé
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="border-amber-500/50 text-amber-400">
+                  Reste: {formatPrice(balance)}
+                </Badge>
+              )}
+            </div>
+            <div className="p-6">
+              {/* Récapitulatif panier */}
+              <div className="bg-zinc-800/30 rounded-xl p-5 mb-6">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-4">Récapitulatif</p>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-400">Studio ({formatDuration(booking.start_time, booking.end_time)})</span>
+                    <span className="font-medium">{formatPrice(booking.base_price)}</span>
+                  </div>
+                  {booking.equipment_price > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-zinc-400">Équipements</span>
+                      <span className="font-medium">{formatPrice(booking.equipment_price)}</span>
+                    </div>
+                  )}
+                  {booking.promo_discount > 0 && (
+                    <div className="flex justify-between items-center text-primary">
+                      <span className="text-sm flex items-center gap-2">
+                        Réduction
+                        {booking.promo_code && (
+                          <span className="px-2 py-0.5 rounded bg-primary/10 text-xs">{booking.promo_code}</span>
+                        )}
+                      </span>
+                      <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
+                    <span className="font-semibold">Total</span>
+                    <span className="text-xl font-bold text-primary">{formatPrice(booking.total_price)}</span>
+                  </div>
+                  {totalPaid > 0 && (
+                    <div className="flex justify-between items-center text-emerald-400 text-sm">
+                      <span>Déjà payé</span>
+                      <span className="font-medium">{formatPrice(totalPaid)}</span>
+                    </div>
+                  )}
                 </div>
-                {booking.equipment_price > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-zinc-400">Équipements</span>
-                    <span className="text-sm font-medium">{formatPrice(booking.equipment_price)}</span>
-                  </div>
-                )}
-                {booking.promo_discount > 0 && (
-                  <div className="flex items-center justify-between text-primary">
-                    <span className="text-sm">
-                      Réduction ({booking.promo_code})
-                      {booking.promo_type && (
-                        <span className="text-zinc-500 ml-1">
-                          {booking.promo_type === "percentage" 
-                            ? `-${booking.promo_discount}%` 
-                            : `-${formatPrice(booking.promo_discount)}`}
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-sm font-medium">-{formatPrice(booking.promo_discount)}</span>
-                  </div>
-                )}
-                <div className="border-t border-zinc-800 pt-3 flex items-center justify-between">
-                  <span className="text-sm font-medium text-zinc-300">Total</span>
-                  <span className="font-bold text-xl text-primary">{formatPrice(booking.total_price)}</span>
-                </div>
-                {totalPaid > 0 && totalPaid < booking.total_price && (
-                  <div className="flex items-center justify-between text-emerald-500">
-                    <span className="text-xs font-bold uppercase tracking-wider">Payé</span>
-                    <span className="text-sm font-bold">{formatPrice(totalPaid)}</span>
-                  </div>
-                )}
               </div>
 
-              <div className="grid gap-3">
+              {/* Historique des paiements */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historique</p>
                 {loadingPayments ? (
                   <div className="flex justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
                   </div>
                 ) : payments.length === 0 ? (
-                  <div className="text-center py-8 px-4 rounded-lg border border-dashed border-zinc-800">
-                    <p className="text-sm text-zinc-500 italic">Aucun paiement enregistré pour le moment.</p>
-                  </div>
+                  <p className="text-sm text-zinc-500 text-center py-6">Aucun paiement enregistré</p>
                 ) : (
-                  payments.map((p) => (
-                    <div key={p.id} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-800/40 p-4 transition-colors hover:bg-zinc-800/60">
-                      <div className="flex items-center gap-4">
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${p.status === "paid" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
-                          {p.method === "card" ? <CreditCard className="h-5 w-5" /> : p.method === "cash" ? <Banknote className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                  <div className="space-y-2">
+                    {payments.map((p) => (
+                      <div 
+                        key={p.id} 
+                        className="flex items-center justify-between p-4 rounded-xl bg-zinc-800/20 hover:bg-zinc-800/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${p.status === "paid" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
+                            {p.method === "card" ? <CreditCard className="h-5 w-5" /> : p.method === "cash" ? <Banknote className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                          </div>
+                          <div>
+                            <p className="font-semibold">{formatPrice(p.amount)}</p>
+                            <p className="text-xs text-zinc-500">
+                              {methodLabels[p.method] || p.method} · {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-zinc-100">{formatPrice(p.amount)}</p>
-                          <p className="text-xs text-zinc-500 font-medium">
-                            {methodLabels[p.method] || p.method} · {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                        </div>
+                        <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
+                          {p.status === "paid" ? "Validé" : "En attente"}
+                        </Badge>
                       </div>
-                      <Badge variant={p.status === "paid" ? "default" : "secondary"} className={`text-[10px] uppercase font-bold tracking-tight ${p.status === "paid" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : ""}`}>
-                        {p.status === "paid" ? "Validé" : "En attente"}
-                      </Badge>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </div>
 
+              {/* Nouvel encaissement */}
               {balance > 0 && (
-                <div className="mt-8 pt-6 border-t border-zinc-800">
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 space-y-5">
-                    <div className="flex items-center gap-2">
-                      <Plus className="h-4 w-4 text-primary" />
-                      <h3 className="text-xs font-bold uppercase tracking-widest text-primary">Nouvel encaissement</h3>
+                <div className="mt-6 pt-6 border-t border-zinc-800">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-4">Nouvel encaissement</p>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <Label className="text-xs text-zinc-500 mb-1.5 block">Montant (€)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={newPayment.amount}
+                        onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
+                        className="bg-zinc-800 border-zinc-700 h-11"
+                      />
                     </div>
-                    
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="amount" className="text-[10px] uppercase font-bold text-zinc-500 ml-1">Montant à ajouter (€)</Label>
-                        <Input
-                          id="amount"
-                          type="number"
-                          step="0.01"
-                          value={newPayment.amount}
-                          onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
-                          className="bg-zinc-900 border-zinc-700 h-11 text-base font-semibold focus:ring-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="method" className="text-[10px] uppercase font-bold text-zinc-500 ml-1">Mode de règlement</Label>
-                        <Select
-                          value={newPayment.method}
-                          onValueChange={(v) => setNewPayment({ ...newPayment, method: v as "cash" | "card" | "transfer" | "check" })}
-                        >
-                          <SelectTrigger className="bg-zinc-900 border-zinc-700 h-11 text-sm focus:ring-primary">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-zinc-800">
-                            <SelectItem value="card">Carte Bancaire</SelectItem>
-                            <SelectItem value="cash">Espèces</SelectItem>
-                            <SelectItem value="transfer">Virement</SelectItem>
-                            <SelectItem value="check">Chèque</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    <div>
+                      <Label className="text-xs text-zinc-500 mb-1.5 block">Mode</Label>
+                      <Select
+                        value={newPayment.method}
+                        onValueChange={(v) => setNewPayment({ ...newPayment, method: v as "cash" | "card" | "transfer" | "check" })}
+                      >
+                        <SelectTrigger className="bg-zinc-800 border-zinc-700 h-11">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                          <SelectItem value="card">Carte Bancaire</SelectItem>
+                          <SelectItem value="cash">Espèces</SelectItem>
+                          <SelectItem value="transfer">Virement</SelectItem>
+                          <SelectItem value="check">Chèque</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    
-                    <Button
-                      onClick={handleAddPayment}
-                      className="w-full h-12 font-bold text-sm gap-2 shadow-lg shadow-primary/10"
-                      disabled={addingPayment}
-                    >
-                      {addingPayment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
-                      Valider l&apos;encaissement
-                    </Button>
                   </div>
+                  <Button
+                    onClick={handleAddPayment}
+                    disabled={addingPayment}
+                    className="w-full h-11"
+                  >
+                    {addingPayment ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                    Valider l&apos;encaissement
+                  </Button>
                 </div>
               )}
             </div>
-          </div>
+          </section>
         </div>
 
-        <div className="space-y-6">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Coordonnées du client</h2>
-            {user ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <User className="h-5 w-5" />
+        {/* Colonne latérale */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* Client */}
+          <section className="bg-zinc-900 rounded-2xl border border-zinc-800/50 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800/50 bg-zinc-800/20">
+              <h2 className="font-semibold text-lg flex items-center gap-2">
+                <User className="h-5 w-5 text-primary" />
+                Client
+              </h2>
+            </div>
+            <div className="p-6">
+              {user ? (
+                <div className="space-y-6">
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <User className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg">{user.name}</p>
+                      {user.band_name && <p className="text-sm text-zinc-400">{user.band_name}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">{user.name}</p>
-                    {user.band_name && (
-                      <p className="text-sm text-zinc-400">{user.band_name}</p>
-                    )}
+
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <p className="text-zinc-500 text-xs mb-1">Email</p>
+                      <p className="text-zinc-200">{user.email || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-500 text-xs mb-1">Téléphone</p>
+                      <p className="text-zinc-200">{user.phone || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-500 text-xs mb-1">Adresse</p>
+                      <div className="text-zinc-200">
+                        {user.address_line1 ? (
+                          <>
+                            <p>{user.address_line1}</p>
+                            <p>{user.postal_code} {user.city}</p>
+                          </>
+                        ) : (
+                          <p>—</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
+
+                  {user.notes && (
+                    <div className="bg-zinc-800/30 rounded-lg p-3">
+                      <p className="text-xs text-zinc-500 mb-1">Notes</p>
+                      <p className="text-sm text-zinc-300">{user.notes}</p>
+                    </div>
+                  )}
+
+                  <a
+                    href={`/admin/users/${user.id}`}
+                    className="inline-flex items-center text-sm text-primary hover:underline"
+                  >
+                    Voir le profil
+                    <ChevronLeft className="h-4 w-4 ml-1 rotate-180" />
+                  </a>
                 </div>
+              ) : (
+                <p className="text-zinc-400 text-center py-4">Client inconnu</p>
+              )}
+            </div>
+          </section>
 
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <p className="text-zinc-500">Email</p>
-                    <p className="text-zinc-300">{user.email || "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Téléphone</p>
-                    <p className="text-zinc-300">{user.phone || "—"}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <p className="text-zinc-500">Adresse</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-zinc-500">Nom et numéro de rue</span>
-                    <span className="text-zinc-300">{user.address_line1 || "—"}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-zinc-500">Code postal</span>
-                    <span className="text-zinc-300">{user.postal_code || "—"}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <span className="text-zinc-500">Ville</span>
-                    <span className="text-zinc-300">{user.city || "—"}</span>
-                  </div>
-                </div>
-
-                {user.notes && (
-                  <div className="space-y-1 text-sm">
-                    <p className="text-zinc-500">Notes client</p>
-                    <p className="text-zinc-300 whitespace-pre-wrap">{user.notes}</p>
-                  </div>
-                )}
-
-                <a
-                  href={`/admin/users/${user.id}`}
-                  className="inline-block text-sm text-primary hover:underline pt-2"
-                >
-                  Voir le profil →
-                </a>
-              </div>
-            ) : (
-              <p className="text-zinc-400">Client inconnu</p>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Actions globales</h2>
-            <div className="grid gap-3">
+          {/* Actions */}
+          <section className="bg-zinc-900 rounded-2xl border border-zinc-800/50 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800/50 bg-zinc-800/20">
+              <h2 className="font-semibold text-lg">Actions</h2>
+            </div>
+            <div className="p-4 space-y-2">
               <Button
                 variant="outline"
-                className="justify-start border-primary/30 text-primary hover:bg-primary/10 h-12"
+                className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
                 onClick={() => generateInvoicePDF(booking, payments[0] || null, user || ({} as DbUser))}
                 disabled={!user}
               >
-                <FileText className="mr-3 h-5 w-5" />
+                <FileText className="mr-3 h-4 w-4 text-zinc-400" />
                 Générer la facture PDF
               </Button>
+              
               {booking.status === "confirmed" && (
                 <>
                   <Button
                     variant="outline"
-                    className="justify-start h-12 transition-all hover:bg-zinc-800"
+                    className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
                     onClick={() => setRescheduleOpen(true)}
                   >
-                    <RefreshCw className="mr-3 h-5 w-5 text-zinc-400" />
+                    <RefreshCw className="mr-3 h-4 w-4 text-zinc-400" />
                     Déplacer la session
                   </Button>
                   <Button
                     variant="outline"
-                    className="justify-start border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 h-12"
+                    className="w-full justify-start h-11 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
                     onClick={() => setNoShowOpen(true)}
                   >
-                    <AlertTriangle className="mr-3 h-5 w-5" />
-                    Marquer absent (No-show)
+                    <AlertTriangle className="mr-3 h-4 w-4" />
+                    Marquer absent
                   </Button>
                   <Button
                     variant="outline"
-                    className="justify-start border-red-500/30 text-red-400 hover:bg-red-500/10 h-12"
+                    className="w-full justify-start h-11 border-red-500/30 text-red-400 hover:bg-red-500/10"
                     onClick={() => setCancelOpen(true)}
                   >
-                    <XCircle className="mr-3 h-5 w-5" />
+                    <XCircle className="mr-3 h-4 w-4" />
                     Annuler la réservation
                   </Button>
                 </>
               )}
             </div>
-          </div>
+          </section>
+
+          {/* Raison d'annulation si applicable */}
+          {booking.status === "cancelled" && booking.cancel_reason && (
+            <section className="bg-red-500/5 rounded-2xl border border-red-500/20 p-4">
+              <p className="text-xs text-red-400 font-medium mb-1">Raison de l&apos;annulation</p>
+              <p className="text-sm text-red-300">{booking.cancel_reason}</p>
+            </section>
+          )}
         </div>
       </div>
 

@@ -18,7 +18,7 @@
     "clean:vite": "rm -rf ./node_modules/.vite",
     "release": "rw-scripts ensure-deploy-env && npm run clean && npm run build && wrangler deploy",
     "release:staging": "npm run clean && npm run build && wrangler deploy --config dist/worker/wrangler.json --env staging",
-    "release:prod": "npm run clean && npm run build && wrangler deploy --config dist/worker/wrangler.json --env production",
+    "release:prod": "npm run clean && npm run build && wrangler deploy --config dist/worker/wrangler.json",
     "generate": "rw-scripts ensure-env && wrangler types --include-runtime false",
     "check": "npm run generate && npm run types",
     "types": "tsc",
