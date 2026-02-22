@@ -808,15 +808,9 @@ export async function addPayment(
       .first<{ total_price: number; payment_status: string | null }>();
 
     if (booking && totalPaid >= booking.total_price) {
-      if (booking.payment_status !== "pay-on-site") {
-        await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
-          .bind(timestamp, data.booking_id)
-          .run();
-      } else {
-        await db.prepare("UPDATE bookings SET updated_at = ? WHERE id = ?")
-          .bind(timestamp, data.booking_id)
-          .run();
-      }
+      await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
+        .bind(timestamp, data.booking_id)
+        .run();
     }
   }
 
