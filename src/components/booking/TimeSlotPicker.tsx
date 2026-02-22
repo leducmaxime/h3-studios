@@ -134,7 +134,7 @@ export function TimeSlotPicker({
         const occupant = isOccupiedBy(studioFilter, time);
         if (!occupant) return false;
         if (groupType !== "group") {
-          return occupant.groupType === "group" || occupant.groupType === "blocked";
+          return occupant.groupType === "group" || occupant.groupType === "blocked" || occupant.groupType === "solo" || occupant.groupType === "duo";
         }
         return true;
       }
@@ -142,8 +142,8 @@ export function TimeSlotPicker({
       const podiumOccupant = isOccupiedBy("le-podium", time);
 
       if (groupType !== "group") {
-        const sceneBlocked = sceneOccupant && (sceneOccupant.groupType === "group" || sceneOccupant.groupType === "blocked");
-        const podiumBlocked = podiumOccupant && (podiumOccupant.groupType === "group" || podiumOccupant.groupType === "blocked");
+        const sceneBlocked = sceneOccupant && (sceneOccupant.groupType === "group" || sceneOccupant.groupType === "blocked" || sceneOccupant.groupType === "solo" || sceneOccupant.groupType === "duo");
+        const podiumBlocked = podiumOccupant && (podiumOccupant.groupType === "group" || podiumOccupant.groupType === "blocked" || podiumOccupant.groupType === "solo" || podiumOccupant.groupType === "duo");
         return !!(sceneBlocked && podiumBlocked);
       }
       const sceneBooked = !!sceneOccupant;
