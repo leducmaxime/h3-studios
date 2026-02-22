@@ -431,6 +431,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
                     </div>
                   )}
+                  {booking.promo_code && booking.promo_discount === 0 && (
+                    <div className="flex justify-between items-center text-primary">
+                      <span className="text-sm flex items-center gap-2">
+                        Code promo
+                        <span className="px-2 py-0.5 rounded bg-primary/10 text-xs">{booking.promo_code}</span>
+                      </span>
+                      <span className="font-medium text-zinc-500">-</span>
+                    </div>
+                  )}
                   <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
                     <span className="font-semibold">Total</span>
                     <span className="text-xl font-bold text-primary">{formatPrice(finalTotal)}</span>
