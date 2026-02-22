@@ -294,7 +294,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const studio = STUDIOS[booking.studio_id as StudioId];
 
   const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
-  const balance = booking.total_price - totalPaid;
+  const finalTotal = booking.total_price - booking.promo_discount;
+  const balance = finalTotal - totalPaid;
 
   const methodLabels: Record<string, string> = {
     card: "Carte bancaire",
@@ -430,7 +431,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   )}
                   <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
                     <span className="font-semibold">Total</span>
-                    <span className="text-xl font-bold text-primary">{formatPrice(booking.total_price)}</span>
+                    <span className="text-xl font-bold text-primary">{formatPrice(finalTotal)}</span>
                   </div>
                   {totalPaid > 0 && (
                     <div className="flex justify-between items-center text-emerald-400 text-sm">

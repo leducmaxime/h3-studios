@@ -31,6 +31,13 @@
       "vars": {
         "ENVIRONMENT": "staging"
       },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "h3-studios-db-staging",
+          "database_id": "278d9c61-3c04-4107-9470-cd1c71ed43ef"
+        }
+      ],
       "triggers": {
         "crons": ["0 6 * * *"]
       }

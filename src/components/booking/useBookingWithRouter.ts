@@ -561,10 +561,69 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, step: 3 }));
   }, []);
 
-  /** From coordonnées: proceed to payment choice (step 6) */
-  const goToPaymentFromCoordonnees = useCallback(() => {
-    setState((s) => ({ ...s, step: 6 }));
-  }, []);
+  /** From coordonnées: proceed to payment choice (step 6) or skip if free */
+  const goToPaymentFromCoordonnees = useCallback(async () => {
+    const currentCart = state.cart;
+    const cartTotal = currentCart.reduce((sum, b) => sum + b.price, 0);
+    const promoDiscount = appliedPromoRef.current ? 
+      currentCart.reduce((sum, b) => sum + (b.promoDiscount || 0), 0) : 0;
+    const finalTotal = Math.max(0, cartTotal - promoDiscount);
+    
+    // If total is 0€ (100% discount), skip payment and create booking directly
+    if (finalTotal === 0) {
+      if (isSubmitting) return;
+      setIsSubmitting(true);
+      try {
+        const promoCodeToApply = appliedPromoRef.current?.code ?? null;
+        for (let i = 0; i < state.cart.length; i++) {
+          const booking = state.cart[i];
+          const res = await fetch("/api/bookings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              bookingRef: booking.bookingRef,
+              user: {
+                name: state.userName,
+                email: state.userEmail,
+                phone: state.userPhone,
+                bandName: state.bandName,
+              },
+              studioId: booking.studioId,
+              date: formatDateISO(booking.date),
+              startTime: booking.startTime,
+              endTime: booking.endTime,
+              groupType: booking.groupType,
+              equipment: booking.equipment,
+              equipmentPrice: booking.equipmentPrice,
+              price: booking.price,
+              paymentMethod: "cash",
+              paymentStatus: "pay-on-site",
+              promoCode: i === 0 ? promoCodeToApply : null,
+              promoType: i === 0 ? appliedPromoRef.current?.type ?? null : null,
+              promoDiscount: booking.promoDiscount,
+              notes: state.additionalInfo,
+            }),
+          });
+          const json = await res.json() as { success: boolean; error?: string };
+          if (!json.success) throw new Error(json.error);
+        }
+        setState((s) => {
+          const updatedCart = s.cart.map((booking) => ({
+            ...booking,
+            paymentMethod: "cash" as PaymentMethod,
+            paymentStatus: "pay-on-site" as const,
+          }));
+          return { ...s, paymentMethod: "cash", cart: updatedCart, step: 8 };
+        });
+      } catch (err) {
+        alert("Erreur lors de la réservation: " + err);
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      setState((s) => ({ ...s, step: 6 }));
+    }
+  }, [state.cart, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
 
   /** Cancel current new booking and go back to cart */
   const goToCart = useCallback(() => {
