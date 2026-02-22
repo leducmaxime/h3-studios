@@ -574,6 +574,9 @@ const app = defineApp([
           email: string;
           phone: string;
           bandName: string;
+          addressLine1?: string;
+          postalCode?: string;
+          city?: string;
         };
         studioId: string;
         date: string;
@@ -596,6 +599,9 @@ const app = defineApp([
       const phone = body.user?.phone?.trim() || "";
       const bandNameRaw = body.user?.bandName?.trim() || "";
       const bookingBandName = bandNameRaw ? bandNameRaw : null;
+      const addressLine1 = body.user?.addressLine1?.trim() || "";
+      const postalCode = body.user?.postalCode?.trim() || "";
+      const city = body.user?.city?.trim() || "";
 
       if (!name || !email || !phone) {
         return jsonError("Merci de renseigner nom, email et téléphone.", 400);
@@ -609,12 +615,18 @@ const app = defineApp([
           email,
           phone,
           band_name: bookingBandName ?? undefined,
+          address_line1: addressLine1 || undefined,
+          postal_code: postalCode || undefined,
+          city: city || undefined,
         });
       } else {
         await updateUser(env.DB, user.id, {
           name,
           phone,
           ...(bandNameRaw ? { band_name: bandNameRaw } : {}),
+          ...(addressLine1 ? { address_line1: addressLine1 } : {}),
+          ...(postalCode ? { postal_code: postalCode } : {}),
+          ...(city ? { city: city } : {}),
         });
       }
 
