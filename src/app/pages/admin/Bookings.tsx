@@ -420,7 +420,7 @@ export function AdminBookings() {
                         {paymentBadge}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
-                        {formatPrice(booking.total_price)}
+                        {formatPrice(Math.max(0, booking.total_price - (booking.promo_discount || 0)))}
                       </td>
                       <td className="px-4 py-3">
                         <DropdownMenu>

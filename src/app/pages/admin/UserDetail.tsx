@@ -446,8 +446,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       </p>
                     </div>
                     <span className="font-medium text-primary">
-                      {formatPrice(b.total_price)}
+                      {formatPrice((b.total_price || 0) - (b.promo_discount || 0))}
                     </span>
+                    {b.promo_discount > 0 && (
+                      <span className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</span>
+                    )}
                   </a>
                 ))}
               </div>
@@ -477,7 +480,12 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       </p>
                     </div>
                     <div className="text-right">
-                      <span className="font-medium">{formatPrice(b.total_price)}</span>
+                      <span className="font-medium">
+                        {formatPrice((b.total_price || 0) - (b.promo_discount || 0))}
+                      </span>
+                      {b.promo_discount > 0 && (
+                        <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
+                      )}
                       <p className="text-xs text-zinc-500">
                         {STATUS_LABELS[b.status] || b.status}
                       </p>

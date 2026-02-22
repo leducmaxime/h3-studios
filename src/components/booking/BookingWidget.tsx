@@ -14,6 +14,7 @@ import { PaymentChoice } from "./PaymentChoice";
 import { StripeRedirect } from "./StripeRedirect";
 import { ProgressIndicator } from "./ProgressIndicator";
 import { EquipmentSelector } from "./EquipmentSelector";
+import { PromoCodeInput } from "./PromoCodeInput";
 import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
 import { useEquipment } from "./useEquipment";
 
@@ -46,6 +47,8 @@ export function BookingWidget() {
     resetBooking,
     goBack,
     setStep,
+    applyPromo,
+    removePromo,
   } = useBooking();
 
   const { getEquipmentName } = useEquipment();
@@ -466,10 +469,33 @@ export function BookingWidget() {
                     ))}
                   </div>
 
+                  <PromoCodeInput
+                    total={cartTotal}
+                    appliedPromo={state.appliedPromo}
+                    onApply={applyPromo}
+                    onRemove={removePromo}
+                  />
+
                   <div className="rounded-xl bg-primary/10 p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-semibold">Total</span>
-                      <span className="text-2xl font-bold text-primary">{formatPrice(cartTotal)}</span>
+                    <div className="space-y-2">
+                      {state.promoDiscount > 0 && (
+                        <>
+                          <div className="flex items-center justify-between text-sm text-white/70">
+                            <span>Sous-total</span>
+                            <span>{formatPrice(cartTotal)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm text-green-400">
+                            <span>Réduction ({state.appliedPromo?.code})</span>
+                            <span>-{formatPrice(state.promoDiscount)}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-lg font-semibold">Total</span>
+                        <span className="text-2xl font-bold text-primary">
+                          {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -478,7 +504,7 @@ export function BookingWidget() {
                       onClick={goToPaymentChoice}
                       className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
                     >
-                      Valider et payer - {formatPrice(cartTotal)}
+                      Valider et payer - {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
                     </button>
                     <button
                       onClick={addAnotherBooking}
@@ -497,7 +523,7 @@ export function BookingWidget() {
           {state.step === 6 && (
             <PaymentChoice
               cart={state.cart}
-              total={cartTotal}
+              total={Math.max(0, cartTotal - state.promoDiscount)}
               onSelectMethod={selectPaymentMethod}
               onBack={goBack}
             />
@@ -507,7 +533,7 @@ export function BookingWidget() {
           {state.step === 7 && (
             <StripeRedirect
               cart={state.cart}
-              total={cartTotal}
+              total={Math.max(0, cartTotal - state.promoDiscount)}
               userName={state.userName}
               userEmail={state.userEmail}
               onBack={goBack}
@@ -518,7 +544,7 @@ export function BookingWidget() {
           {state.step === 8 && (
             <FinalCheckout
               cart={state.cart}
-              total={cartTotal}
+              total={Math.max(0, cartTotal - state.promoDiscount)}
               onNewBooking={resetBooking}
               onBack={goBack}
             />

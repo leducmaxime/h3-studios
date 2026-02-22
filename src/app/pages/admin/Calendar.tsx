@@ -68,6 +68,7 @@ interface CalendarBooking {
   base_price: number;
   equipment_price: number;
   total_price: number;
+  promo_discount?: number;
   equipment: string | null;
   payment_method: string | null;
   payment_status: string | null;
@@ -762,7 +763,8 @@ export function AdminCalendar() {
     const studioName = b.studio_id === "la-scene" ? "La Scène" : b.studio_id === "le-podium" ? "Le Podium" : b.studio_id;
 
     const totalPaid = bookingPayments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
-    const balance = b.total_price - totalPaid;
+    const finalTotal = (b.total_price || 0) - (b.promo_discount || 0);
+    const balance = finalTotal - totalPaid;
 
     const methodLabels: Record<string, string> = {
       card: "Carte bancaire",
@@ -831,8 +833,11 @@ export function AdminCalendar() {
                 <div>
                   <p className="text-[10px] uppercase text-zinc-500 font-bold">Total à payer</p>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-sm font-bold text-primary">{formatPrice(b.total_price)}</p>
-                    {totalPaid > 0 && totalPaid < b.total_price && (
+                    <p className="text-sm font-bold text-primary">{formatPrice(finalTotal)}</p>
+                    {(b.promo_discount || 0) > 0 && (
+                      <p className="text-[10px] text-emerald-500 font-medium">(Promo: -{formatPrice(b.promo_discount || 0)})</p>
+                    )}
+                    {totalPaid > 0 && totalPaid < finalTotal && (
                       <p className="text-[10px] text-emerald-500 font-medium">(Déjà payé: {formatPrice(totalPaid)})</p>
                     )}
                   </div>

@@ -453,6 +453,7 @@ export function AdminPayments() {
       const booking = bJson.data as {
         booking_ref: string;
         total_price: number;
+        promo_discount: number;
         payment_method: BookingPaymentMethod;
         band_name?: string | null;
         user_name?: string | null;
@@ -460,7 +461,8 @@ export function AdminPayments() {
       };
       const paymentsRows = pJson.data as Array<{ amount: number; status: string }>;
       const totalPaid = paymentsRows.reduce((acc, p) => (p.status === "paid" ? acc + p.amount : acc), 0);
-      const remaining = Math.max(booking.total_price - totalPaid, 0);
+      const finalTotal = Math.max(booking.total_price - (booking.promo_discount || 0), 0);
+      const remaining = Math.max(finalTotal - totalPaid, 0);
 
       if (remaining <= 0) {
         toast.success("La réservation est déjà soldée");
@@ -471,7 +473,7 @@ export function AdminPayments() {
         bookingId,
         bookingRef: booking.booking_ref,
         userName: booking.band_name || booking.user_name || null,
-        totalPrice: booking.total_price,
+        totalPrice: finalTotal,
         totalPaid,
         remaining,
         bookingPaymentMethod: booking.payment_method || null,

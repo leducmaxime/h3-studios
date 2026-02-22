@@ -10,6 +10,7 @@ import {
   type CompletedBooking,
   type EquipmentSelection,
   type PaymentMethod,
+  type PromoCode,
   calculatePrice,
   calculateEquipmentPrice,
   generateBookingRef,
@@ -23,6 +24,8 @@ interface ExtendedBookingState extends BookingState {
   equipment: EquipmentSelection[];
   /** Tracks whether we're adding a new booking (vs reviewing cart) */
   isAddingNew: boolean;
+  appliedPromo: PromoCode | null;
+  promoDiscount: number;
 }
 
 const initialState: ExtendedBookingState = {
@@ -46,6 +49,8 @@ const initialState: ExtendedBookingState = {
   equipment: [],
   paymentMethod: null,
   isAddingNew: false,
+  appliedPromo: null,
+  promoDiscount: 0,
 };
 
 /**
@@ -379,10 +384,14 @@ export function useBooking() {
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
-    setState((s) => ({
-      ...s,
-      cart: s.cart.filter((b) => b.id !== bookingId),
-    }));
+    setState((s) => {
+      const newCart = s.cart.filter((b) => b.id !== bookingId);
+      // Clear promo if cart becomes empty
+      if (newCart.length === 0) {
+        return { ...s, cart: newCart, appliedPromo: null, promoDiscount: 0 };
+      }
+      return { ...s, cart: newCart };
+    });
   }, []);
 
   const resetBooking = useCallback(() => {
@@ -438,6 +447,14 @@ export function useBooking() {
       if (s.step === 8) return { ...s, step: 6 };
       return s;
     });
+  }, []);
+
+  const applyPromo = useCallback((promo: PromoCode, discount: number) => {
+    setState((s) => ({ ...s, appliedPromo: promo, promoDiscount: discount }));
+  }, []);
+
+  const removePromo = useCallback(() => {
+    setState((s) => ({ ...s, appliedPromo: null, promoDiscount: 0 }));
   }, []);
 
   const pricing = useMemo(() => {
@@ -507,6 +524,8 @@ export function useBooking() {
     removeFromCart,
     resetBooking,
     goBack,
+    applyPromo,
+    removePromo,
   };
 }
 

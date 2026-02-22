@@ -98,6 +98,7 @@ interface UpcomingBooking {
   start_time: string;
   end_time: string;
   total_price: number;
+  promo_discount?: number;
 }
 
 interface CalendarBooking {
@@ -113,6 +114,7 @@ interface CalendarBooking {
   end_time: string;
   status: string;
   total_price: number;
+  promo_discount?: number;
 }
 
 interface PendingPayment {
@@ -308,7 +310,12 @@ function ActivityCalendarDay({
                   <p className="truncate text-xs text-zinc-500">{displayName}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-semibold text-primary">{formatPrice(b.total_price)}</p>
+                  <p className="text-sm font-semibold text-primary">
+                    {formatPrice((b.total_price || 0) - (b.promo_discount || 0))}
+                  </p>
+                  {(b.promo_discount || 0) > 0 && (
+                    <p className="text-[10px] text-emerald-500">-{formatPrice(b.promo_discount || 0)}</p>
+                  )}
                 </div>
               </a>
             );
