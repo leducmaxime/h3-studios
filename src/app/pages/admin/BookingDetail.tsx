@@ -361,7 +361,34 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 </div>
                 <div>
                   <p className="text-sm text-zinc-400">Type</p>
-                  <p className="font-medium capitalize">{booking.group_type}</p>
+                  <p className="font-medium">{booking.group_type === "solo" ? "Solo" : booking.group_type === "duo" ? "Duo" : "Groupe"}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Récap du panier */}
+            <div className="mt-6 border-t border-zinc-800 pt-4">
+              <p className="mb-3 text-sm text-zinc-400">Récapitulatif</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-zinc-400">Studio ({formatDuration(booking.start_time, booking.end_time)})</span>
+                  <span>{formatPrice(booking.base_price)}</span>
+                </div>
+                {booking.equipment_price > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Équipements</span>
+                    <span>{formatPrice(booking.equipment_price)}</span>
+                  </div>
+                )}
+                {booking.promo_discount > 0 && (
+                  <div className="flex justify-between text-primary">
+                    <span>Réduction {booking.promo_code && <span className="text-zinc-500">({booking.promo_code})</span>}</span>
+                    <span>-{formatPrice(booking.promo_discount)}</span>
+                  </div>
+                )}
+                <div className="border-t border-zinc-800 pt-2 flex justify-between font-semibold">
+                  <span>Total</span>
+                  <span className="text-primary">{formatPrice(booking.total_price)}</span>
                 </div>
               </div>
             </div>
