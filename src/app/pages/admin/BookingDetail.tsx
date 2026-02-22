@@ -376,12 +376,14 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               )}
 
               {/* Notes */}
-              {booking.notes && (
-                <div className="bg-zinc-800/30 rounded-xl p-4">
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Informations supplémentaires</p>
+              <div className="bg-zinc-800/30 rounded-xl p-4">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Informations supplémentaires</p>
+                {booking.notes ? (
                   <p className="text-sm text-zinc-300 whitespace-pre-wrap">{booking.notes}</p>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm text-zinc-500 italic">Aucune information supplémentaire</p>
+                )}
+              </div>
             </div>
           </section>
 
