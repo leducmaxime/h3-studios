@@ -907,7 +907,28 @@ const app = defineApp([
         const limit = parseInt(url.searchParams.get("limit") || "20", 10);
 
         const result = await getBookings(env.DB, filters, page, limit);
-        return jsonSuccess(result);
+        
+        // Calculate actual payment status for each booking
+        const bookingsWithPaymentStatus = await Promise.all(
+          result.data.map(async (booking) => {
+            const payments = await getPaymentsByBookingId(env.DB, booking.id);
+            const totalPaid = payments
+              .filter((p) => p.status === "paid")
+              .reduce((acc, p) => acc + p.amount, 0);
+            const isFullyPaid = totalPaid >= booking.total_price;
+            
+            return {
+              ...booking,
+              payment_status: isFullyPaid ? "paid" : booking.payment_status,
+              total_paid: totalPaid,
+            };
+          })
+        );
+        
+        return jsonSuccess({
+          ...result,
+          data: bookingsWithPaymentStatus,
+        });
       } catch (error) {
         console.error("GET /api/admin/bookings error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to fetch bookings", 500);
