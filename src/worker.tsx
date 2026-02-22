@@ -586,6 +586,7 @@ const app = defineApp([
         paymentMethod: string;
         paymentStatus: string;
         promoCode?: string;
+        promoType?: "percentage" | "fixed";
         promoDiscount?: number;
         notes?: string;
       };
@@ -683,6 +684,7 @@ const app = defineApp([
         payment_status: body.paymentStatus,
         notes: body.notes || null,
         promo_code: body.promoCode || null,
+        promo_type: body.promoType || null,
         promo_discount: body.promoDiscount || 0,
         cancelled_at: null,
         cancel_reason: null,
@@ -1010,6 +1012,7 @@ const app = defineApp([
           payment_status: body.payment_method === "card" ? "paid" : "pay-on-site",
           notes: body.notes || null,
           promo_code: null,
+          promo_type: null,
           promo_discount: 0,
           cancelled_at: null,
           cancel_reason: null,

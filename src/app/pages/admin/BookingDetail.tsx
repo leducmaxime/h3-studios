@@ -383,9 +383,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               <div className="mt-6 border-t border-zinc-800 pt-4">
                 <p className="mb-2 text-sm text-zinc-400">Code promo utilisé</p>
                 <p className="text-sm font-medium text-primary">{booking.promo_code}</p>
-                {booking.promo_discount > 0 && (
-                  <p className="text-sm text-zinc-400 mt-1">
-                    Réduction: -{formatPrice(booking.promo_discount)}
+                {booking.promo_type && (
+                  <p className="text-sm text-zinc-500 mt-1">
+                    {booking.promo_type === "percentage" 
+                      ? `-${booking.promo_discount}%` 
+                      : `-${formatPrice(booking.promo_discount)}`}
                   </p>
                 )}
               </div>
@@ -472,7 +474,16 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 )}
                 {booking.promo_discount > 0 && (
                   <div className="flex items-center justify-between text-primary">
-                    <span className="text-sm">Réduction ({booking.promo_code})</span>
+                    <span className="text-sm">
+                      Réduction ({booking.promo_code})
+                      {booking.promo_type && (
+                        <span className="text-zinc-500 ml-1">
+                          {booking.promo_type === "percentage" 
+                            ? `-${booking.promo_discount}%` 
+                            : `-${formatPrice(booking.promo_discount)}`}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-sm font-medium">-{formatPrice(booking.promo_discount)}</span>
                   </div>
                 )}

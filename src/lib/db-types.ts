@@ -74,6 +74,7 @@ export interface DbBooking {
   payment_status: string | null;
   notes: string | null;
   promo_code: string | null;
+  promo_type: "percentage" | "fixed" | null;
   promo_discount: number;
   created_at: string;
   updated_at: string;

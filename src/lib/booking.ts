@@ -60,6 +60,7 @@ export interface CompletedBooking {
   equipment: EquipmentSelection[];
   equipmentPrice: number;
   promoCode: string | null;
+  promoType: "percentage" | "fixed" | null;
   promoDiscount: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
