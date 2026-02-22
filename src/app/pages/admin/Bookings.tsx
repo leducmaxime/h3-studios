@@ -379,9 +379,7 @@ export function AdminBookings() {
 
                   if (paymentStatus === "paid") {
                     paymentBadge = <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Payé</Badge>;
-                  } else if (paymentStatus === "pay-on-site") {
-                    paymentBadge = <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">À payer sur place</Badge>;
-                  } else if (paymentStatus === "pending") {
+                  } else {
                     paymentBadge = <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Reste à payer</Badge>;
                   }
 
