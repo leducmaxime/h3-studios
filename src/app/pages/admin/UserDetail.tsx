@@ -301,21 +301,12 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       <p className="text-sm font-medium text-zinc-400">Adresse</p>
                     </div>
                     <div className="grid gap-2 sm:col-span-2">
-                      <Label htmlFor="edit-address-line1">Ligne 1</Label>
+                      <Label htmlFor="edit-address-line1">Nom et numéro de rue</Label>
                       <Input
                         id="edit-address-line1"
                         value={editForm.address_line1}
                         onChange={(e) => setEditForm({ ...editForm, address_line1: e.target.value })}
                         placeholder="123 rue de la Musique"
-                      />
-                    </div>
-                    <div className="grid gap-2 sm:col-span-2">
-                      <Label htmlFor="edit-address-line2">Ligne 2 (optionnel)</Label>
-                      <Input
-                        id="edit-address-line2"
-                        value={editForm.address_line2}
-                        onChange={(e) => setEditForm({ ...editForm, address_line2: e.target.value })}
-                        placeholder="Appartement, étage, bâtiment..."
                       />
                     </div>
                     <div className="grid gap-2">
@@ -334,15 +325,6 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         value={editForm.city}
                         onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
                         placeholder="Sucy-en-Brie"
-                      />
-                    </div>
-                    <div className="grid gap-2 sm:col-span-2">
-                      <Label htmlFor="edit-country">Pays</Label>
-                      <Input
-                        id="edit-country"
-                        value={editForm.country}
-                        onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
-                        placeholder="France"
                       />
                     </div>
                   </div>
@@ -383,12 +365,8 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       <p className="text-sm font-medium text-zinc-400 mb-3">Adresse</p>
                       <div className="grid gap-2 text-sm">
                         <div className="grid grid-cols-3 gap-2">
-                          <span className="text-zinc-500">Ligne 1</span>
+                          <span className="text-zinc-500">Nom et numéro de rue</span>
                           <span className="col-span-2">{user.address_line1 || "—"}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <span className="text-zinc-500">Ligne 2</span>
-                          <span className="col-span-2">{user.address_line2 || "—"}</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                           <span className="text-zinc-500">Code postal</span>
@@ -397,10 +375,6 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         <div className="grid grid-cols-3 gap-2">
                           <span className="text-zinc-500">Ville</span>
                           <span className="col-span-2">{user.city || "—"}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <span className="text-zinc-500">Pays</span>
-                          <span className="col-span-2">{user.country || "—"}</span>
                         </div>
                       </div>
                     </div>

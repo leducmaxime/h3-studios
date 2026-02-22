@@ -575,19 +575,21 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   </div>
                 </div>
 
-                {(user.address_line1 || user.postal_code || user.city) && (
-                  <div className="space-y-1 text-sm">
-                    <p className="text-zinc-500">Adresse</p>
-                    {user.address_line1 && <p className="text-zinc-300">{user.address_line1}</p>}
-                    {user.address_line2 && <p className="text-zinc-300">{user.address_line2}</p>}
-                    {(user.postal_code || user.city) && (
-                      <p className="text-zinc-300">
-                        {user.postal_code} {user.city}
-                      </p>
-                    )}
-                    {user.country && <p className="text-zinc-300">{user.country}</p>}
+                <div className="space-y-2 text-sm">
+                  <p className="text-zinc-500">Adresse</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-zinc-500">Nom et numéro de rue</span>
+                    <span className="text-zinc-300">{user.address_line1 || "—"}</span>
                   </div>
-                )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-zinc-500">Code postal</span>
+                    <span className="text-zinc-300">{user.postal_code || "—"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <span className="text-zinc-500">Ville</span>
+                    <span className="text-zinc-300">{user.city || "—"}</span>
+                  </div>
+                </div>
 
                 {user.notes && (
                   <div className="space-y-1 text-sm">
