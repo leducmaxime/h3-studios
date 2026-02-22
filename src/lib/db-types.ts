@@ -73,6 +73,8 @@ export interface DbBooking {
   payment_method: string | null;
   payment_status: string | null;
   notes: string | null;
+  promo_code: string | null;
+  promo_discount: number;
   created_at: string;
   updated_at: string;
   cancelled_at: string | null;

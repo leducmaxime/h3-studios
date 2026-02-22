@@ -379,9 +379,21 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               </div>
             )}
 
+            {booking.promo_code && (
+              <div className="mt-6 border-t border-zinc-800 pt-4">
+                <p className="mb-2 text-sm text-zinc-400">Code promo utilisé</p>
+                <p className="text-sm font-medium text-primary">{booking.promo_code}</p>
+                {booking.promo_discount > 0 && (
+                  <p className="text-sm text-zinc-400 mt-1">
+                    Réduction: -{formatPrice(booking.promo_discount)}
+                  </p>
+                )}
+              </div>
+            )}
+
             {booking.notes && (
               <div className="mt-6 border-t border-zinc-800 pt-4">
-                <p className="mb-2 text-sm text-zinc-400">Notes</p>
+                <p className="mb-2 text-sm text-zinc-400">Informations supplémentaires</p>
                 <p className="text-sm whitespace-pre-wrap">{booking.notes}</p>
               </div>
             )}
@@ -447,19 +459,33 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-lg bg-zinc-800/20 border border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                    <CreditCard className="h-5 w-5" />
+              <div className="p-4 rounded-lg bg-zinc-800/20 border border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-zinc-400">Studio</span>
+                  <span className="text-sm font-medium">{formatPrice(booking.base_price)}</span>
+                </div>
+                {booking.equipment_price > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-400">Équipements</span>
+                    <span className="text-sm font-medium">{formatPrice(booking.equipment_price)}</span>
                   </div>
-                  <span className="text-sm font-medium text-zinc-300">Total session</span>
+                )}
+                {booking.promo_discount > 0 && (
+                  <div className="flex items-center justify-between text-primary">
+                    <span className="text-sm">Réduction ({booking.promo_code})</span>
+                    <span className="text-sm font-medium">-{formatPrice(booking.promo_discount)}</span>
+                  </div>
+                )}
+                <div className="border-t border-zinc-800 pt-3 flex items-center justify-between">
+                  <span className="text-sm font-medium text-zinc-300">Total</span>
+                  <span className="font-bold text-xl text-primary">{formatPrice(booking.total_price)}</span>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-xl text-primary">{formatPrice(booking.total_price)}</p>
-                  {totalPaid > 0 && totalPaid < booking.total_price && (
-                    <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">Payé: {formatPrice(totalPaid)}</p>
-                  )}
-                </div>
+                {totalPaid > 0 && totalPaid < booking.total_price && (
+                  <div className="flex items-center justify-between text-emerald-500">
+                    <span className="text-xs font-bold uppercase tracking-wider">Payé</span>
+                    <span className="text-sm font-bold">{formatPrice(totalPaid)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-3">

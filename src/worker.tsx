@@ -587,6 +587,7 @@ const app = defineApp([
         paymentStatus: string;
         promoCode?: string;
         promoDiscount?: number;
+        notes?: string;
       };
 
       const name = body.user?.name?.trim() || "";
@@ -680,7 +681,9 @@ const app = defineApp([
         equipment: JSON.stringify(body.equipment),
         payment_method: body.paymentMethod,
         payment_status: body.paymentStatus,
-        notes: body.promoCode ? `Code promo: ${body.promoCode}` : null,
+        notes: body.notes || null,
+        promo_code: body.promoCode || null,
+        promo_discount: body.promoDiscount || 0,
         cancelled_at: null,
         cancel_reason: null,
       });
@@ -1006,6 +1009,8 @@ const app = defineApp([
           payment_method: body.payment_method || null,
           payment_status: body.payment_method === "card" ? "paid" : "pay-on-site",
           notes: body.notes || null,
+          promo_code: null,
+          promo_discount: 0,
           cancelled_at: null,
           cancel_reason: null,
         });
