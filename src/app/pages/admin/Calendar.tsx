@@ -542,9 +542,9 @@ export function AdminCalendar() {
                                  width,
                                }}
                              >
-                               <p className="truncate text-[11px] font-medium leading-tight">
-            {booking.start_time} {booking.band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                               </p>
+                                <p className="truncate text-[11px] font-medium leading-tight">
+             {booking.start_time} {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                                </p>
                                {hasOptions(booking.equipment) && (
                                  <span className="text-[9px] opacity-80">(opt)</span>
                                )}
@@ -579,9 +579,9 @@ export function AdminCalendar() {
                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
                            style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
                          >
-                           <p className="truncate text-[11px] font-medium leading-tight">
-            {booking.start_time} {booking.band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                           </p>
+                            <p className="truncate text-[11px] font-medium leading-tight">
+             {booking.start_time} {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                            </p>
                            <p className="text-[9px] opacity-80">
                              {GROUP_LABELS[booking.group_type]}
                            </p>
