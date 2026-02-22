@@ -337,6 +337,7 @@ export function useBooking() {
             paymentStatus: method === "card" ? "pending" : "pay-on-site",
             promoCode: booking.promoCode,
             promoDiscount: booking.promoDiscount,
+            notes: state.additionalInfo,
           }),
         });
         const json = await res.json() as { success: boolean; error?: string };
@@ -359,7 +360,7 @@ export function useBooking() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.cart, state.userName, state.userEmail, state.userPhone, state.bandName, isSubmitting]);
+  }, [state.cart, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
 
   const processPayment = useCallback(() => {
     setState((s) => {
