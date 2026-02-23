@@ -294,7 +294,9 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const studio = STUDIOS[booking.studio_id as StudioId];
 
   const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
-  const finalTotal = booking.total_price - booking.promo_discount;
+  const totalPrice = Number(booking.total_price) || 0;
+  const promoDiscount = Number(booking.promo_discount) || 0;
+  const finalTotal = Math.max(0, totalPrice - promoDiscount);
   const balance = finalTotal - totalPaid;
 
   const methodLabels: Record<string, string> = {
