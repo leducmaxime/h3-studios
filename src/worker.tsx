@@ -763,7 +763,7 @@ const app = defineApp([
       const p = result.promo;
       const description = p.type === "percentage" ? `${p.value}% de réduction` : `${p.value}€ de réduction`;
       const discount = p.type === "percentage"
-        ? Math.round(body.total * p.value / 100)
+        ? body.total * p.value / 100
         : Math.min(p.value, body.total);
       return jsonSuccess({
         valid: true,

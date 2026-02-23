@@ -94,7 +94,7 @@ export function validatePromoCode(code: string, total: number): { valid: boolean
 
 export function calculatePromoDiscount(promo: PromoCode, total: number): number {
   if (promo.type === "percentage") {
-    return Math.round(total * promo.value / 100);
+    return total * promo.value / 100;
   }
   return Math.min(promo.value, total);
 }
