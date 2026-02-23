@@ -153,8 +153,9 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           }
         }
 
+        // Reset payment form - amount will be set by useEffect with remaining balance
         setNewPayment({
-          amount: String(json.data.total_price),
+          amount: "",
           method: json.data.payment_method === "card" ? "card" : "cash",
         });
       }
@@ -169,6 +170,24 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   useEffect(() => {
     fetchBooking();
   }, [fetchBooking]);
+
+  // Update default payment amount when payments change (show remaining balance)
+  useEffect(() => {
+    if (booking && payments.length >= 0) {
+      const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+      const totalPrice = Number(booking.total_price) || 0;
+      const promoDiscount = Number(booking.promo_discount) || 0;
+      const finalTotal = Math.max(0, totalPrice - promoDiscount);
+      const balance = finalTotal - totalPaid;
+      
+      if (balance > 0) {
+        setNewPayment(prev => ({
+          ...prev,
+          amount: balance.toFixed(2)
+        }));
+      }
+    }
+  }, [payments, booking]);
 
   const handleCancel = async () => {
     if (!booking) return;
