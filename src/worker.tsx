@@ -986,7 +986,7 @@ const app = defineApp([
         const endParts = body.end_time.split(":").map(Number);
         const halfHours = ((endParts[0] * 60 + endParts[1]) - (startParts[0] * 60 + startParts[1])) / 30;
         const durationHours = halfHours * 0.5;
-        const basePrice = (pricePerHalfHour * halfHours) / 100;
+        const basePrice = pricePerHalfHour * halfHours;
 
         // Calculate equipment price
         let equipmentPrice = 0;

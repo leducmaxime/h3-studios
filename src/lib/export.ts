@@ -311,7 +311,7 @@ export function generateInvoicePDF(
           equipmentTotal += eqPrice;
           doc.text(`  • ${eq.name || eq.id} ×${eq.quantity}`, 30, y);
           if (eqPrice > 0) {
-            doc.text(`${(eqPrice / 100).toFixed(2)} €`, 140, y);
+            doc.text(`${eqPrice.toFixed(2)} €`, 140, y);
           }
           y += 5;
         });
@@ -333,12 +333,12 @@ export function generateInvoicePDF(
 
   doc.setFont("helvetica", "normal");
   doc.text("Sous-total répétition:", 100, y);
-  doc.text(`${(basePrice / 100).toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+  doc.text(`${basePrice.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
   y += 6;
 
   if (equipmentTotal > 0) {
     doc.text("Équipements:", 100, y);
-    doc.text(`${(equipmentTotal / 100).toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+    doc.text(`${equipmentTotal.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
     y += 6;
   }
 
@@ -350,7 +350,7 @@ export function generateInvoicePDF(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text("Total TTC:", 100, y);
-  doc.text(`${(totalPrice / 100).toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+  doc.text(`${totalPrice.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
   y += 15;
 
   // Payment info
@@ -426,7 +426,7 @@ export function generateMonthlyReportPDF(
   doc.setFontSize(11);
 
   const kpis = [
-    ["Revenu total:", `${(stats.revenue / 100).toFixed(2)} €`],
+    ["Revenu total:", `${stats.revenue.toFixed(2)} €`],
     ["Nombre de réservations:", `${stats.bookingCount}`],
     ["Taux d'occupation:", `${stats.occupancyRate.toFixed(1)}%`],
     ["Taux de no-show:", `${stats.noShowRate.toFixed(1)}%`],
@@ -456,7 +456,7 @@ export function generateMonthlyReportPDF(
   stats.studioStats.forEach((studio) => {
     const studioName = STUDIOS[studio.studio_id as StudioId]?.name || studio.studio_id;
     doc.text(`${studioName}:`, 25, y);
-    doc.text(`${studio.count} réservation${studio.count > 1 ? "s" : ""}, ${(studio.revenue / 100).toFixed(2)} €`, 80, y);
+    doc.text(`${studio.count} réservation${studio.count > 1 ? "s" : ""}, ${studio.revenue.toFixed(2)} €`, 80, y);
     y += 7;
   });
 
