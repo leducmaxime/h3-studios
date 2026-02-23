@@ -85,7 +85,7 @@ interface CalendarBlockedSlot {
   created_at: string;
 }
 
-type ViewType = "week" | "month";
+type ViewType = "day" | "week" | "month";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -214,6 +214,25 @@ export function AdminCalendar() {
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   });
   const [view, setView] = useState<ViewType>("week");
+
+  // Detect mobile viewport
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Switch to day view on mobile by default, and week on desktop
+  useEffect(() => {
+    if (isMobile && view === "week") {
+      setView("day");
+    } else if (!isMobile && view === "day") {
+      setView("week");
+    }
+  }, [isMobile]);
+
   const [selectedBooking, setSelectedBooking] = useState<CalendarBooking | null>(null);
   const [bookingPayments, setBookingPayments] = useState<DbPayment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -319,6 +338,10 @@ export function AdminCalendar() {
           startDate: toDateStr(weekDates[0]),
           endDate: toDateStr(weekDates[6]),
         });
+      } else if (view === "day") {
+        data = await fetchCalendar({
+          date: toDateStr(currentDate),
+        });
       } else {
         data = await fetchCalendar(monthRange);
       }
@@ -331,7 +354,7 @@ export function AdminCalendar() {
     } finally {
       setLoading(false);
     }
-  }, [view, weekDates, monthRange]);
+  }, [view, weekDates, monthRange, currentDate]);
 
   useEffect(() => {
     loadBookings();
@@ -344,8 +367,10 @@ export function AdminCalendar() {
       const newDate = new Date(d);
       if (view === "month") {
         newDate.setMonth(d.getMonth() - 1);
+      } else if (view === "week") {
+        newDate.setDate(d.getDate() - 7);
       } else {
-        newDate.setDate(d.getDate() - (view === "week" ? 7 : 1));
+        newDate.setDate(d.getDate() - 1);
       }
       return newDate;
     });
@@ -356,8 +381,10 @@ export function AdminCalendar() {
       const newDate = new Date(d);
       if (view === "month") {
         newDate.setMonth(d.getMonth() + 1);
+      } else if (view === "week") {
+        newDate.setDate(d.getDate() + 7);
       } else {
-        newDate.setDate(d.getDate() + (view === "week" ? 7 : 1));
+        newDate.setDate(d.getDate() + 1);
       }
       return newDate;
     });
@@ -371,6 +398,7 @@ export function AdminCalendar() {
   // ─── View subtitle ─────────────────────────────────────────────────────
 
   const subtitle = useMemo(() => {
+    if (view === "day") return formatDateHeader(currentDate);
     if (view === "week") return `Semaine du ${formatShortDate(weekDates[0])}`;
     return formatMonthHeader(currentDate);
   }, [view, currentDate, weekDates]);
@@ -596,6 +624,183 @@ export function AdminCalendar() {
                        );
                      });
                    })()}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Day view ───────────────────────────────────────────────────────────
+  const renderDayView = () => {
+    const studios: StudioId[] = ["la-scene", "le-podium"];
+    const today = new Date();
+    const dateStr = toDateStr(currentDate);
+    const isToday = isSameDay(currentDate, today);
+
+    const blockedByDate = new Map<string, CalendarBlockedSlot[]>();
+    for (const b of blockedSlots) {
+      const existing = blockedByDate.get(b.date) || [];
+      existing.push(b);
+      blockedByDate.set(b.date, existing);
+    }
+
+    const expandedBlocked = (studioId: StudioId) => {
+      const day = blockedByDate.get(dateStr) || [];
+      return day.filter((s) => s.studio_id === null || s.studio_id === studioId);
+    };
+
+    const BLOCKED_COLORS = {
+      bg: "bg-zinc-800/60",
+      text: "text-zinc-200",
+      border: "border-zinc-700/70",
+    };
+
+    return (
+      <div className="overflow-x-auto">
+        <div className="min-w-[350px]">
+          {/* Header with date */}
+          <div className={`border-b border-zinc-800 p-4 text-center ${isToday ? "bg-primary/5" : ""}`}>
+            <h3 className={`text-lg ${isToday ? "font-medium text-primary" : "text-zinc-200"}`}>
+              {formatDateHeader(currentDate)}
+            </h3>
+            {isToday && <span className="text-xs text-primary/70">Aujourd&apos;hui</span>}
+          </div>
+
+          {/* Studios side by side */}
+          <div className="grid grid-cols-2 divide-x divide-zinc-800">
+            {studios.map((studioId) => {
+              const studio = STUDIOS[studioId];
+              const studioBlocked = expandedBlocked(studioId);
+              const studioBookings = bookings.filter(
+                (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
+              );
+              const studioColors = STUDIO_COLORS[studioId];
+
+              return (
+                <div key={studioId} className="relative">
+                  {/* Studio header */}
+                  <div className={`border-b border-zinc-800 p-3 text-center ${studioColors.bg}`}>
+                    <p className={`font-medium ${studioColors.text}`}>{studio.name}</p>
+                    <p className="text-xs text-zinc-500">{studio.size}</p>
+                  </div>
+
+                  {/* Time grid */}
+                  <div className="relative">
+                    {VISIBLE_HOURS.map((hour) => (
+                      <div
+                        key={hour}
+                        className="h-[60px] border-b border-zinc-800/50 px-3 pt-1 text-xs text-zinc-600"
+                      >
+                        {hour}
+                      </div>
+                    ))}
+
+                    {/* Blocked slots */}
+                    {studioBlocked.map((slot) => {
+                      const startIdx = ALL_TIME_SLOTS.indexOf(slot.start_time);
+                      let endIdx = ALL_TIME_SLOTS.indexOf(slot.end_time);
+                      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                      if (startIdx === -1) return null;
+
+                      const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                      const height = (endIdx - startIdx) * 30;
+
+                      return (
+                        <div
+                          key={slot.id}
+                          title={`Bloqué: ${slot.reason}`}
+                          className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 ${BLOCKED_COLORS.bg} ${BLOCKED_COLORS.border} ${BLOCKED_COLORS.text}`}
+                          style={{
+                            top: `${top}px`,
+                            height: `${Math.max(height, 24)}px`,
+                            zIndex: 1,
+                            backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 6px, rgba(255,255,255,0.0) 6px, rgba(255,255,255,0.0) 12px)",
+                          }}
+                        >
+                          <p className="truncate text-[11px] font-medium leading-tight">
+                            {slot.start_time} Bloqué
+                          </p>
+                          <p className="truncate text-[9px] opacity-80">{slot.reason}</p>
+                        </div>
+                      );
+                    })}
+
+                    {/* Bookings */}
+                    {studioBookings.map((booking) => {
+                      const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                      let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                      const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                      const height = (endIdx - startIdx) * 30;
+                      const paymentColors = getPaymentStatusColor(booking);
+
+                      return (
+                        <button
+                          key={booking.id}
+                          type="button"
+                          onClick={() => setSelectedBooking(booking)}
+                          className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
+                          style={{
+                            top: `${top}px`,
+                            height: `${Math.max(height, 28)}px`,
+                          }}
+                        >
+                          <p className="truncate text-[12px] font-medium leading-tight">
+                            {booking.start_time} · {GROUP_LABELS[booking.group_type]}
+                          </p>
+                          <p className="truncate text-[11px] leading-tight opacity-90">
+                            {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                          </p>
+                          {hasOptions(booking.equipment) && (
+                            <p className="text-[9px] opacity-70">Options</p>
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    {/* Consultations (solo/duo) */}
+                    {bookings
+                      .filter(
+                        (b) =>
+                          b.date === dateStr &&
+                          b.studio_id === studioId &&
+                          (b.group_type === "solo" || b.group_type === "duo") &&
+                          b.status !== "cancelled",
+                      )
+                      .map((booking) => {
+                        const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                        let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                        if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                        const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                        const height = (endIdx - startIdx) * 30;
+
+                        return (
+                          <button
+                            key={booking.id}
+                            type="button"
+                            onClick={() => setSelectedBooking(booking)}
+                            className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
+                            style={{
+                              top: `${top}px`,
+                              height: `${Math.max(height, 28)}px`,
+                            }}
+                          >
+                            <p className="truncate text-[12px] font-medium leading-tight">
+                              {booking.start_time} · {GROUP_LABELS[booking.group_type]}
+                            </p>
+                            <p className="truncate text-[11px] leading-tight opacity-90">
+                              {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                            </p>
+                            {hasOptions(booking.equipment) && (
+                              <p className="text-[9px] opacity-70">Options</p>
+                            )}
+                          </button>
+                        );
+                      })}
+                  </div>
                 </div>
               );
             })}
@@ -1015,14 +1220,24 @@ export function AdminCalendar() {
 
         <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
           <TabsList>
-            <TabsTrigger value="week">Semaine</TabsTrigger>
-            <TabsTrigger value="month">Mois</TabsTrigger>
+            {isMobile ? (
+              <>
+                <TabsTrigger value="day">Jour</TabsTrigger>
+                <TabsTrigger value="month">Mois</TabsTrigger>
+              </>
+            ) : (
+              <>
+                <TabsTrigger value="week">Semaine</TabsTrigger>
+                <TabsTrigger value="month">Mois</TabsTrigger>
+              </>
+            )}
           </TabsList>
         </Tabs>
       </div>
 
       {/* Calendar content */}
       <div className="rounded-xl border border-zinc-800 bg-zinc-900">
+        {view === "day" && renderDayView()}
         {view === "week" && renderWeekView()}
         {view === "month" && renderMonthView()}
       </div>
