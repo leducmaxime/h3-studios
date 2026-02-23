@@ -27,6 +27,9 @@ import { Badge } from "@/components/ui/badge";
 import { STUDIOS, TIME_SLOTS, generateBookingRef, formatPrice, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 
+import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
+import { type PromoCode } from "@/lib/booking";
+
 interface UserSearchResult {
   data: DbUser[];
   total: number;
@@ -92,6 +95,9 @@ export function AdminBookingNew() {
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
+  // Promo code
+  const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
+  const [promoDiscount, setPromoDiscount] = useState<number>(0);
 
 
 
@@ -195,16 +201,19 @@ export function AdminBookingNew() {
                   }
                 }
               }
+              const subtotal = studioPrice + eqPrice;
               setBasePrice(studioPrice);
               setEquipmentPrices(eqPrices);
-              setEstimatedPrice(studioPrice + eqPrice);
+              // Apply promo discount if any
+              const finalPrice = Math.max(0, subtotal - promoDiscount);
+              setEstimatedPrice(finalPrice);
             }
           }
         }
       })
       .catch(() => {})
       .finally(() => setPricingLoading(false));
-  }, [date, startTime, endTime, studioId, groupType, selectedEquipment]);
+  }, [date, startTime, endTime, studioId, groupType, selectedEquipment, promoDiscount]);
 
   const handleCreateUser = async () => {
     if (!newUserName.trim()) {
@@ -324,6 +333,8 @@ export function AdminBookingNew() {
           group_type: groupType,
           equipment: equipmentJson,
           notes: notes.trim() || null,
+          promo_code: appliedPromo?.code || null,
+          promo_discount: promoDiscount > 0 ? promoDiscount : null,
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: { id: string }; error?: string };
@@ -776,6 +787,28 @@ export function AdminBookingNew() {
                       <span>{formatPrice(eq.price)}</span>
                     </div>
                   ))}
+                </div>
+              )}
+              {estimatedPrice !== null && estimatedPrice > 0 && (
+                <div className="border-t border-zinc-800 pt-3">
+                  <PromoCodeInput
+                    total={estimatedPrice + promoDiscount}
+                    appliedPromo={appliedPromo}
+                    onApply={(promo, discount) => {
+                      setAppliedPromo(promo);
+                      setPromoDiscount(discount);
+                    }}
+                    onRemove={() => {
+                      setAppliedPromo(null);
+                      setPromoDiscount(0);
+                    }}
+                  />
+                </div>
+              )}
+              {promoDiscount > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Réduction</span>
+                  <span>-{formatPrice(promoDiscount)}</span>
                 </div>
               )}
               <div className="border-t border-zinc-800 pt-3">
