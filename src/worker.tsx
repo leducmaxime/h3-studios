@@ -1006,6 +1006,11 @@ const app = defineApp([
           }
         }
 
+        const promoDiscount = (body as { promo_discount?: number }).promo_discount || 0;
+        const promoCode = (body as { promo_code?: string }).promo_code || null;
+        const subtotal = basePrice + equipmentPrice;
+        const totalPrice = Math.max(0, subtotal - promoDiscount);
+
         const booking = await createBooking(env.DB, {
           booking_ref: body.booking_ref,
           user_id: body.user_id,
@@ -1018,14 +1023,14 @@ const app = defineApp([
           status: "confirmed",
           base_price: basePrice,
           equipment_price: equipmentPrice,
-          total_price: basePrice + equipmentPrice,
+          total_price: totalPrice,
           equipment: body.equipment || null,
           payment_method: body.payment_method || null,
           payment_status: body.payment_method === "card" ? "paid" : "pay-on-site",
           notes: body.notes || null,
-          promo_code: null,
-          promo_type: null,
-          promo_discount: 0,
+          promo_code: promoCode,
+          promo_type: promoCode ? "percentage" : null,
+          promo_discount: promoDiscount,
           cancelled_at: null,
           cancel_reason: null,
         });
