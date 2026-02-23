@@ -203,24 +203,30 @@ function hasOptions(equipment: string | null): boolean {
   }
 }
 
-// Helper to format equipment for tooltip
-function getEquipmentTooltip(equipment: string | null): string {
-  if (!equipment) return "";
+// Helper to format equipment lines for tooltip
+function getEquipmentLines(equipment: string | null): string[] {
+  if (!equipment) return [];
   try {
     const parsed = JSON.parse(equipment) as Array<{ id: string; quantity: number; name?: string }>;
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return "\nOptions: " + parsed.map(eq => `${eq.quantity}× ${eq.name || eq.id}`).join(", ");
+      return ["Options : " + parsed.map(eq => `${eq.quantity}× ${eq.name || eq.id}`).join(", ")];
     }
   } catch {
     // ignore
   }
-  return "";
+  return [];
 }
 
-function getBookingTooltip(booking: CalendarBooking): string {
+function getBookingTooltipLines(booking: CalendarBooking): string[] {
   const clientName = booking.band_name || booking.user_band_name || booking.user_name || "Client";
-  const options = getEquipmentTooltip(booking.equipment);
-  return `${clientName}\n${booking.start_time} – ${booking.end_time}${options}`;
+  const lines = [clientName, `${booking.start_time} – ${booking.end_time}`];
+  return lines.concat(getEquipmentLines(booking.equipment));
+}
+
+interface TooltipInfo {
+  lines: string[];
+  x: number;
+  y: number;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -234,6 +240,7 @@ export function AdminCalendar() {
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   });
   const [view, setView] = useState<ViewType>("week");
+  const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
 
   // Detect mobile viewport
   const [isMobile, setIsMobile] = useState(false);
@@ -582,7 +589,8 @@ export function AdminCalendar() {
                              <button
                                key={booking.id}
                                type="button"
-                                title={getBookingTooltip(booking)}
+                                onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                                onMouseLeave={() => setTooltip(null)}
                                onClick={() => setSelectedBooking(booking)}
                                className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
                                style={{
@@ -629,7 +637,8 @@ export function AdminCalendar() {
                            key={booking.id}
                            type="button"
                            onClick={() => setSelectedBooking(booking)}
-                            title={getBookingTooltip(booking)}
+                            onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                            onMouseLeave={() => setTooltip(null)}
                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
                            style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
                            >
@@ -764,7 +773,8 @@ export function AdminCalendar() {
                           key={booking.id}
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
-                          title={getBookingTooltip(booking)}
+                          onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                          onMouseLeave={() => setTooltip(null)}
                           className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
                           style={{
                             top: `${top}px`,
@@ -805,7 +815,8 @@ export function AdminCalendar() {
                             key={booking.id}
                             type="button"
                             onClick={() => setSelectedBooking(booking)}
-                            title={getBookingTooltip(booking)}
+                            onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                            onMouseLeave={() => setTooltip(null)}
                             className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
                             style={{
                               top: `${top}px`,
@@ -1212,7 +1223,18 @@ export function AdminCalendar() {
   // ─── Main render ────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onMouseLeave={() => setTooltip(null)}>
+      {/* Floating tooltip */}
+      {tooltip && (
+        <div
+          className="pointer-events-none fixed z-[9999] rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 shadow-xl text-sm text-white"
+          style={{ left: tooltip.x + 12, top: tooltip.y - 8, transform: "translateY(-100%)" }}
+        >
+          {tooltip.lines.map((line, i) => (
+            <p key={i} className={i === 0 ? "font-semibold" : "text-zinc-300 text-xs mt-0.5"}>{line}</p>
+          ))}
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
