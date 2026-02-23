@@ -432,27 +432,50 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
             {upcomingBookings.length === 0 ? (
               <p className="text-zinc-400">Aucune réservation à venir</p>
             ) : (
-              <div className="space-y-2">
-                {upcomingBookings.map((b) => (
-                  <a
-                    key={b.id}
-                    href={`/admin/bookings/${b.id}`}
-                    className="flex items-center justify-between rounded-lg border border-zinc-800 p-3 transition-colors hover:bg-zinc-800/50"
-                  >
-                    <div>
-                      <p className="font-medium">{getStudioName(b.studio_id)}</p>
-                      <p className="text-sm text-zinc-400">
-                        {formatDate(b.date)} &bull; {b.start_time}-{b.end_time}
-                      </p>
-                    </div>
-                    <span className="font-medium text-primary">
-                      {formatPrice((b.total_price || 0) - (b.promo_discount || 0))}
-                    </span>
-                    {b.promo_discount > 0 && (
-                      <span className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</span>
-                    )}
-                  </a>
-                ))}
+              <div className="overflow-hidden rounded-lg border border-zinc-800">
+                <table className="w-full">
+                  <thead className="border-b border-zinc-800 bg-zinc-900/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Référence</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Créneau</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Studio</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Paiement</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {upcomingBookings.map((b) => (
+                      <tr key={b.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline">
+                            {b.booking_ref}
+                          </a>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{formatDate(b.date)}</td>
+                        <td className="px-4 py-3 text-sm">{b.start_time} - {b.end_time}</td>
+                        <td className="px-4 py-3 text-sm">{getStudioName(b.studio_id)}</td>
+                        <td className="px-4 py-3 text-sm capitalize">{b.group_type}</td>
+                        <td className="px-4 py-3">
+                          {b.payment_status === "paid" ? (
+                            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>
+                          ) : b.payment_status === "pay-on-site" ? (
+                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>
+                          ) : (
+                            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Reste à payer</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="font-medium">{formatPrice((b.total_price || 0) - (b.promo_discount || 0))}</span>
+                          {b.promo_discount > 0 && (
+                            <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -466,34 +489,63 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
             {pastBookings.length === 0 ? (
               <p className="text-zinc-400">Aucun historique</p>
             ) : (
-              <div className="space-y-2">
-                {pastBookings.slice(0, 20).map((b) => (
-                  <a
-                    key={b.id}
-                    href={`/admin/bookings/${b.id}`}
-                    className="flex items-center justify-between rounded-lg border border-zinc-800 p-3 transition-colors hover:bg-zinc-800/50"
-                  >
-                    <div>
-                      <p className="font-medium">{getStudioName(b.studio_id)}</p>
-                      <p className="text-sm text-zinc-400">
-                        {formatDate(b.date)} &bull; {b.start_time}-{b.end_time}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-medium">
-                        {formatPrice((b.total_price || 0) - (b.promo_discount || 0))}
-                      </span>
-                      {b.promo_discount > 0 && (
-                        <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
-                      )}
-                      <p className="text-xs text-zinc-500">
-                        {STATUS_LABELS[b.status] || b.status}
-                      </p>
-                    </div>
-                  </a>
-                ))}
+              <div className="overflow-hidden rounded-lg border border-zinc-800">
+                <table className="w-full">
+                  <thead className="border-b border-zinc-800 bg-zinc-900/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Référence</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Créneau</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Studio</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Statut</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Paiement</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {pastBookings.slice(0, 20).map((b) => (
+                      <tr key={b.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline">
+                            {b.booking_ref}
+                          </a>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{formatDate(b.date)}</td>
+                        <td className="px-4 py-3 text-sm">{b.start_time} - {b.end_time}</td>
+                        <td className="px-4 py-3 text-sm">{getStudioName(b.studio_id)}</td>
+                        <td className="px-4 py-3 text-sm capitalize">{b.group_type}</td>
+                        <td className="px-4 py-3">
+                          <Badge className={`text-xs ${
+                            b.status === 'confirmed' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                            b.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                            b.status === 'cancelled' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                            'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                          }`}>
+                            {STATUS_LABELS[b.status] || b.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          {b.payment_status === "paid" ? (
+                            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>
+                          ) : b.payment_status === "pay-on-site" ? (
+                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>
+                          ) : (
+                            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Reste à payer</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="font-medium">{formatPrice((b.total_price || 0) - (b.promo_discount || 0))}</span>
+                          {b.promo_discount > 0 && (
+                            <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
                 {pastBookings.length > 20 && (
-                  <p className="text-center text-sm text-zinc-400">
+                  <p className="text-center text-sm text-zinc-400 py-3 border-t border-zinc-800">
                     + {pastBookings.length - 20} autres réservations
                   </p>
                 )}
