@@ -90,7 +90,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
 
   const fetchBookings = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ search: userId, limit: "100" });
+      const params = new URLSearchParams({ userId: userId, limit: "100" });
       const res = await fetch(`/api/admin/bookings?${params}`);
       const json = (await res.json()) as {
         success: boolean;
