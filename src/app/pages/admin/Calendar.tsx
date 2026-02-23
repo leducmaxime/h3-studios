@@ -281,7 +281,7 @@ export function AdminCalendar() {
       
       setNewPayment({
         amount: String(selectedBooking.total_price),
-        method: selectedBooking.payment_method === "card" ? "card" : "cash",
+        method: "cash",
       });
     } else {
       setBookingPayments([]);

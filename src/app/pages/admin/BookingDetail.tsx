@@ -153,12 +153,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           }
         }
 
-        // Reset payment method only - amount will be set by useEffect with remaining balance
-        const bookingData = json.data;
-        setNewPayment(prev => ({
-          ...prev,
-          method: bookingData.payment_method === "card" ? "card" : "cash",
-        }));
+        // Ne pas réinitialiser la méthode ici — l'état initial (cash) est correct.
+        // La méthode choisie par l'utilisateur ne doit pas être écrasée par fetchBooking.
       }
     } catch (error) {
       console.error("Failed to fetch booking:", error);
@@ -503,7 +499,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           </div>
                         </div>
                         <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
-                          {p.status === "paid" ? "Validé" : "En attente"}
+                          {p.status === "paid" ? "Payé" : "En attente"}
                         </Badge>
                       </div>
                     ))}
