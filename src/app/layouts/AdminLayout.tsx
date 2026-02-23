@@ -197,7 +197,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </button>
           <div className="flex-1" />
           {user && (
-            <span className="text-sm text-zinc-500">
+            <span className="hidden text-sm text-zinc-500 sm:inline">
               {user.name} — {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
             </span>
           )}

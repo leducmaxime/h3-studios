@@ -252,8 +252,8 @@ export function AdminBookings() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
@@ -267,7 +267,7 @@ export function AdminBookings() {
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all"); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="all">Tous les statuts</option>
             <option value="confirmed">Confirmé</option>
@@ -278,7 +278,7 @@ export function AdminBookings() {
           <select
             value={paymentStatusFilter}
             onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "pending" | "pay-on-site"); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="all">Tous les paiements</option>
             <option value="paid">Payé</option>
@@ -288,7 +288,7 @@ export function AdminBookings() {
           <select
             value={studioFilter}
             onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="all">Tous les studios</option>
             <option value="la-scene">La Scène</option>
@@ -297,19 +297,17 @@ export function AdminBookings() {
           <select
             value={dateFilter}
             onChange={(e) => { setDateFilter(e.target.value as "all" | "today" | "week" | "month"); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="all">Toutes les dates</option>
             <option value="today">Aujourd&apos;hui</option>
             <option value="week">Cette semaine</option>
             <option value="month">Ce mois</option>
           </select>
-        </div>
-        <div className="flex flex-wrap gap-2 sm:mt-0">
           <select
             value={sortBy}
             onChange={(e) => { setSortBy(e.target.value as BookingSortField); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="date">Trier par date</option>
             <option value="start_time">Trier par heure</option>
@@ -321,7 +319,7 @@ export function AdminBookings() {
           <select
             value={sortOrder}
             onChange={(e) => { setSortOrder(e.target.value as BookingSortOrder); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="desc">Décroissant</option>
             <option value="asc">Croissant</option>

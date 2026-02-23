@@ -1244,15 +1244,15 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Tableau de bord</h1>
           <p className="text-zinc-400">Vue d&apos;ensemble de votre activité</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as "today" | "rolling" | "week" | "month" | "year")}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-[130px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1265,7 +1265,7 @@ export function AdminDashboard() {
             </Select>
 
             <Select value={reportMonth} onValueChange={setReportMonth}>
-              <SelectTrigger className="w-[160px]" disabled={rangeMode !== "month"}>
+              <SelectTrigger className="w-[140px]" disabled={rangeMode !== "month"}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1278,7 +1278,7 @@ export function AdminDashboard() {
             </Select>
 
             <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-              <SelectTrigger className="w-[210px]" disabled={rangeMode !== "week"}>
+              <SelectTrigger className="w-[160px]" disabled={rangeMode !== "week"}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1291,9 +1291,9 @@ export function AdminDashboard() {
             </Select>
 
             <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-[120px]" disabled={rangeMode === "rolling" || rangeMode === "today"}>
-              <SelectValue />
-            </SelectTrigger>
+              <SelectTrigger className="w-[100px]" disabled={rangeMode === "rolling" || rangeMode === "today"}>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {yearOptions.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
@@ -1310,15 +1310,17 @@ export function AdminDashboard() {
               className="border-primary/30 text-primary hover:bg-primary/10"
             >
               <FileText className="mr-2 h-4 w-4" />
-              Rapport PDF
+              <span className="hidden sm:inline">Rapport PDF</span>
+              <span className="sm:hidden">PDF</span>
             </Button>
           </div>
           <a
             href="/admin/bookings/new"
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-black transition-colors hover:bg-primary/90"
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-black transition-colors hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
-            Nouvelle réservation
+            <span className="hidden sm:inline">Nouvelle réservation</span>
+            <span className="sm:hidden">Nouvelle</span>
           </a>
         </div>
       </div>

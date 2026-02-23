@@ -427,8 +427,8 @@ export function AdminCalendar() {
 
     return (
       <div className="overflow-x-auto">
-        <div className="min-w-[1100px]">
-          <div className="grid grid-cols-[100px_repeat(7,_minmax(0,1fr))] border-b border-zinc-800">
+        <div className="min-w-[900px] lg:min-w-[1100px]">
+          <div className="grid grid-cols-[80px_repeat(7,_minmax(0,1fr))] lg:grid-cols-[100px_repeat(7,_minmax(0,1fr))] border-b border-zinc-800">
             <div className="p-3 text-sm font-medium text-zinc-400">Studio</div>
             {weekDates.map((date) => {
               const isToday = isSameDay(date, today);
@@ -445,7 +445,7 @@ export function AdminCalendar() {
             })}
           </div>
 
-          <div className="grid grid-cols-[100px_repeat(7,_minmax(0,1fr))]">
+          <div className="grid grid-cols-[80px_repeat(7,_minmax(0,1fr))] lg:grid-cols-[100px_repeat(7,_minmax(0,1fr))]">
             <div className="border-r border-zinc-800 bg-zinc-950/30">
               {VISIBLE_HOURS.map((hour) => (
                 <div key={hour} className="h-[60px] border-b border-zinc-800 pr-3 pt-1 text-right text-xs text-zinc-500">
@@ -634,7 +634,7 @@ export function AdminCalendar() {
 
     return (
       <div className="overflow-x-auto">
-        <div className="min-w-[700px]">
+        <div className="min-w-[350px] md:min-w-[700px]">
           {/* Day names header */}
           <div className="grid grid-cols-7 border-b border-zinc-800">
             {dayNames.map((name) => (
@@ -776,7 +776,7 @@ export function AdminCalendar() {
 
     return (
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
-        <DialogContent className="max-w-2xl border-zinc-800 bg-zinc-900 text-zinc-100">
+        <DialogContent className="max-w-2xl w-[95vw] border-zinc-800 bg-zinc-900 text-zinc-100">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-2 text-xl font-bold">
               <div className="flex items-center gap-2">
