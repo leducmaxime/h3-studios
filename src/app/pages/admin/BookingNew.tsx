@@ -98,6 +98,28 @@ export function AdminBookingNew() {
   // Promo code
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [promoDiscount, setPromoDiscount] = useState<number>(0);
+  // Recalculate promo discount when cart changes
+  const recalculatePromo = useCallback(async (currentSubtotal: number) => {
+    if (!appliedPromo) return;
+    try {
+      const res = await fetch("/api/promo-codes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: appliedPromo.code, total: currentSubtotal }),
+      });
+      const json = await res.json() as { success: boolean; data?: { valid: boolean; discount?: number; error?: string } };
+      if (json.data?.valid && json.data.discount !== undefined) {
+        setPromoDiscount(json.data.discount);
+      } else {
+        // Promo no longer valid (e.g., min_total not met)
+        toast.error(`Code promo ${appliedPromo.code} retiré : ${json.data?.error || "Montant minimum non atteint"}`);
+        setAppliedPromo(null);
+        setPromoDiscount(0);
+      }
+    } catch {
+      // Silent error - keep current discount on network error
+    }
+  }, [appliedPromo]);
 
 
 
@@ -207,13 +229,15 @@ export function AdminBookingNew() {
               // Apply promo discount if any
               const finalPrice = Math.max(0, subtotal - promoDiscount);
               setEstimatedPrice(finalPrice);
+              // Recalculate promo if applied (cart changed)
+              recalculatePromo(subtotal);
             }
           }
         }
       })
       .catch(() => {})
       .finally(() => setPricingLoading(false));
-  }, [date, startTime, endTime, studioId, groupType, selectedEquipment, promoDiscount]);
+  }, [date, startTime, endTime, studioId, groupType, selectedEquipment, promoDiscount, recalculatePromo]);
 
   const handleCreateUser = async () => {
     if (!newUserName.trim()) {
