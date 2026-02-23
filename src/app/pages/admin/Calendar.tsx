@@ -203,6 +203,26 @@ function hasOptions(equipment: string | null): boolean {
   }
 }
 
+// Helper to format equipment for tooltip
+function getEquipmentTooltip(equipment: string | null): string {
+  if (!equipment) return "";
+  try {
+    const parsed = JSON.parse(equipment) as Array<{ id: string; quantity: number; name?: string }>;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return "\nOptions: " + parsed.map(eq => `${eq.quantity}× ${eq.name || eq.id}`).join(", ");
+    }
+  } catch {
+    // ignore
+  }
+  return "";
+}
+
+function getBookingTooltip(booking: CalendarBooking): string {
+  const clientName = booking.band_name || booking.user_band_name || booking.user_name || "Client";
+  const options = getEquipmentTooltip(booking.equipment);
+  return `${clientName}\n${booking.start_time} – ${booking.end_time}${options}`;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function AdminCalendar() {
@@ -562,6 +582,7 @@ export function AdminCalendar() {
                              <button
                                key={booking.id}
                                type="button"
+                                title={getBookingTooltip(booking)}
                                onClick={() => setSelectedBooking(booking)}
                                className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
                                style={{
@@ -608,6 +629,7 @@ export function AdminCalendar() {
                            key={booking.id}
                            type="button"
                            onClick={() => setSelectedBooking(booking)}
+                            title={getBookingTooltip(booking)}
                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
                            style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
                            >
@@ -742,6 +764,7 @@ export function AdminCalendar() {
                           key={booking.id}
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
+                          title={getBookingTooltip(booking)}
                           className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
                           style={{
                             top: `${top}px`,
@@ -782,6 +805,7 @@ export function AdminCalendar() {
                             key={booking.id}
                             type="button"
                             onClick={() => setSelectedBooking(booking)}
+                            title={getBookingTooltip(booking)}
                             className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
                             style={{
                               top: `${top}px`,

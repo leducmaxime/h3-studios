@@ -153,11 +153,12 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           }
         }
 
-        // Reset payment form - amount will be set by useEffect with remaining balance
-        setNewPayment({
-          amount: "",
-          method: json.data.payment_method === "card" ? "card" : "cash",
-        });
+        // Reset payment method only - amount will be set by useEffect with remaining balance
+        const bookingData = json.data;
+        setNewPayment(prev => ({
+          ...prev,
+          method: bookingData.payment_method === "card" ? "card" : "cash",
+        }));
       }
     } catch (error) {
       console.error("Failed to fetch booking:", error);
