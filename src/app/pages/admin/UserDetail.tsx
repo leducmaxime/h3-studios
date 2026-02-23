@@ -40,6 +40,71 @@ const STATUS_LABELS: Record<string, string> = {
   "no-show": "No-show",
 };
 
+// ─── Studio Pie Chart ─────────────────────────────────────────────────────
+function StudioPieChart({ sceneCount, podiumCount }: { sceneCount: number; podiumCount: number }) {
+  const total = sceneCount + podiumCount;
+  if (total === 0) return <p className="text-sm text-zinc-400">Aucune donnée</p>;
+
+  const r = 40;
+  const cx = 56;
+  const cy = 56;
+  const circumference = 2 * Math.PI * r;
+  const scenePct = sceneCount / total;
+  const podiumPct = podiumCount / total;
+  const sceneDash = scenePct * circumference;
+  const podiumDash = podiumPct * circumference;
+  const podiumRotation = -90 + scenePct * 360;
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <svg width="112" height="112" viewBox="0 0 112 112">
+        {/* Fond gris */}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#27272a" strokeWidth="18" />
+        {/* Le Podium */}
+        {podiumCount > 0 && (
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke="#a78bfa"
+            strokeWidth="18"
+            strokeDasharray={`${podiumDash} ${circumference}`}
+            strokeLinecap="butt"
+            transform={`rotate(${podiumRotation} ${cx} ${cy})`}
+          />
+        )}
+        {/* La Scène */}
+        {sceneCount > 0 && (
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke="#ffde59"
+            strokeWidth="18"
+            strokeDasharray={`${sceneDash} ${circumference}`}
+            strokeLinecap="butt"
+            transform={`rotate(-90 ${cx} ${cy})`}
+          />
+        )}
+      </svg>
+      <div className="w-full space-y-2 text-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#ffde59] shrink-0" />
+            <span className="text-zinc-300">La Scène</span>
+          </div>
+          <span className="font-semibold">{Math.round(scenePct * 100)}%</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#a78bfa] shrink-0" />
+            <span className="text-zinc-300">Le Podium</span>
+          </div>
+          <span className="font-semibold">{Math.round(podiumPct * 100)}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface UserDetailProps {
   userId: string;
 }
@@ -188,6 +253,13 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
   const pastBookings = bookings.filter(
     (b) => b.status !== "confirmed" || b.date < today,
   );
+
+  const nonCancelledBookings = bookings.filter((b) => b.status !== "cancelled");
+  const lastBooking = nonCancelledBookings.length > 0
+    ? nonCancelledBookings.reduce((a, b) => (a.date > b.date ? a : b))
+    : null;
+  const sceneCount = nonCancelledBookings.filter((b) => b.studio_id === "la-scene").length;
+  const podiumCount = nonCancelledBookings.filter((b) => b.studio_id === "le-podium").length;
 
   return (
     <div className="space-y-6">
@@ -406,7 +478,17 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       {formatPrice(user.total_spent)}
                     </span>
                   </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400">Dernière réservation</span>
+                    <span className="text-sm font-medium">
+                      {lastBooking ? formatDate(lastBooking.date) : "—"}
+                    </span>
+                  </div>
                 </div>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+                <h2 className="mb-4 font-semibold">Répartition studios</h2>
+                <StudioPieChart sceneCount={sceneCount} podiumCount={podiumCount} />
               </div>
 
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
