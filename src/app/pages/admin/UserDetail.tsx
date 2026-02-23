@@ -33,6 +33,15 @@ function getStudioName(studioId: string): string {
   return studio?.name ?? studioId;
 }
 
+function slotDurationHours(startTime: string, endTime: string): number {
+  const [sh, sm] = startTime.split(":").map(Number);
+  const [eh, em] = endTime.split(":").map(Number);
+  const start = sh * 60 + sm;
+  let end = eh * 60 + em;
+  if (end <= start) end += 24 * 60;
+  return (end - start) / 60;
+}
+
 const STATUS_LABELS: Record<string, string> = {
   confirmed: "Confirmée",
   cancelled: "Annulée",
@@ -258,8 +267,31 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
   const lastBooking = nonCancelledBookings.length > 0
     ? nonCancelledBookings.reduce((a, b) => (a.date > b.date ? a : b))
     : null;
+  const firstBooking = nonCancelledBookings.length > 0
+    ? nonCancelledBookings.reduce((a, b) => (a.date < b.date ? a : b))
+    : null;
   const sceneCount = nonCancelledBookings.filter((b) => b.studio_id === "la-scene").length;
   const podiumCount = nonCancelledBookings.filter((b) => b.studio_id === "le-podium").length;
+  // Panier moyen
+  const totalSpentCalc = nonCancelledBookings.reduce(
+    (acc, b) => acc + Math.max(0, (b.total_price || 0) - (b.promo_discount || 0)), 0,
+  );
+  const panierMoyen = nonCancelledBookings.length > 0 ? totalSpentCalc / nonCancelledBookings.length : 0;
+
+  // Durée totale
+  const totalHours = nonCancelledBookings.reduce(
+    (acc, b) => acc + slotDurationHours(b.start_time, b.end_time), 0,
+  );
+
+  // Ancienneté
+  const monthsSinceFirst = firstBooking
+    ? Math.max(1, Math.round((Date.now() - new Date(firstBooking.date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
+    : 0;
+
+  // Fréquence mensuelle
+  const freqMensuelle = monthsSinceFirst > 1
+    ? (nonCancelledBookings.length / monthsSinceFirst).toFixed(1)
+    : nonCancelledBookings.length.toString();
 
   return (
     <div className="space-y-6">
@@ -467,22 +499,40 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
             <div className="space-y-6">
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
                 <h2 className="mb-4 font-semibold">Statistiques</h2>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-400">Total réservations</span>
-                    <span className="text-lg font-semibold">{user.total_bookings}</span>
+                    <span className="text-zinc-400 text-sm">Total réservations</span>
+                    <span className="font-semibold">{user.total_bookings}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-400">Total dépensé</span>
-                    <span className="text-lg font-semibold text-primary">
-                      {formatPrice(user.total_spent)}
+                    <span className="text-zinc-400 text-sm">Total dépensé</span>
+                    <span className="font-semibold text-primary">{formatPrice(user.total_spent)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Panier moyen</span>
+                    <span className="font-semibold">{nonCancelledBookings.length > 0 ? formatPrice(panierMoyen) : "—"}</span>
+                  </div>
+                  <div className="border-t border-zinc-800 pt-3 flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Durée totale</span>
+                    <span className="font-semibold">
+                      {totalHours >= 1
+                        ? `${Math.floor(totalHours)}h${totalHours % 1 > 0 ? String(Math.round((totalHours % 1) * 60)).padStart(2, "0") : ""}`
+                        : totalHours > 0 ? `${Math.round(totalHours * 60)}min` : "—"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-400">Dernière réservation</span>
-                    <span className="text-sm font-medium">
-                      {lastBooking ? formatDate(lastBooking.date) : "—"}
+                    <span className="text-zinc-400 text-sm">Ancienneté</span>
+                    <span className="font-semibold">{firstBooking ? `${monthsSinceFirst} mois` : "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Fréquence</span>
+                    <span className="font-semibold">
+                      {nonCancelledBookings.length > 0 ? `${freqMensuelle} / mois` : "—"}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Dernière réservation</span>
+                    <span className="text-sm font-medium">{lastBooking ? formatDate(lastBooking.date) : "—"}</span>
                   </div>
                 </div>
               </div>
