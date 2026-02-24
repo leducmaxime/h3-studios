@@ -1356,29 +1356,21 @@ export function AdminDashboard() {
         />
       </div>
 
-      <Tabs defaultValue="charts" className="space-y-4">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="charts">Statistiques</TabsTrigger>
-          </TabsList>
-
-          {rangeMode === "rolling" && (
-            <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PERIOD_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        <TabsContent value="charts">
+      <div className="space-y-4">
+        {rangeMode === "rolling" && (
+          <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIOD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
               <div className="mb-4 flex items-center justify-between">
@@ -1575,9 +1567,7 @@ export function AdminDashboard() {
               </div>
             </ChartCard>
           </div>
-        </TabsContent>
-
-      </Tabs>
+      </div>
     </div>
   );
 }
