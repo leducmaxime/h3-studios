@@ -127,23 +127,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </button>
         </div>
 
-        {user && (
-          <div className="border-b border-zinc-800 p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20">
-                <span className="font-semibold text-primary">
-                  {user.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-zinc-100">{user.name}</p>
-                <p className="text-xs text-zinc-400">
-                  {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         <nav className="flex-1 overflow-y-auto p-4">
           <ul className="space-y-1">
