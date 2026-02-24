@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useSyncExternalStore } from "react";
+import { useState, useEffect, useSyncExternalStore, useRef } from "react";
 import {
   LayoutDashboard,
   Calendar,
@@ -20,6 +20,12 @@ import {
 } from "lucide-react";
 
 import { Toaster } from "@/components/ui/sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function usePathname() {
   return useSyncExternalStore(
@@ -196,10 +202,37 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
-          {user && (
-            <span className="hidden text-sm text-zinc-500 sm:inline">
-              {user.name} — {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
-            </span>
+{user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="hidden sm:inline">
+                    {user.name} — {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
+                  </span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-zinc-800">
+                <DropdownMenuItem asChild className="cursor-pointer focus:bg-zinc-800 focus:text-white">
+                  <a href="/" className="flex items-center gap-2">
+                    <ArrowLeft className="h-4 w-4" />
+                    Retour au site
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="cursor-pointer text-red-400 focus:bg-zinc-800 focus:text-red-400"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Déconnexion
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </header>
 

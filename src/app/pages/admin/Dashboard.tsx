@@ -904,7 +904,7 @@ export function AdminDashboard() {
   });
   const [activityCalendarView, setActivityCalendarView] = useState<ActivityCalendarView>("month");
   const [period, setPeriod] = useState<Period>("month");
-  const [rangeMode, setRangeMode] = useState<"today" | "rolling" | "week" | "month" | "year">("today");
+  const [rangeMode, setRangeMode] = useState<"today" | "rolling" | "week" | "month" | "year">("month");
   const [selectedYear, setSelectedYear] = useState(() => String(nowISO.year));
   const [selectedWeek, setSelectedWeek] = useState(() => String(nowISO.week));
   const [loading, setLoading] = useState(true);
