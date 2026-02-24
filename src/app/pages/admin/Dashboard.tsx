@@ -1320,7 +1320,7 @@ export function AdminDashboard() {
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Nouvelle réservation</span>
-            <span className="sm:hidden">Nouvelle</span>
+            <span className="sm:hidden">+ Réserver</span>
           </a>
         </div>
       </div>
