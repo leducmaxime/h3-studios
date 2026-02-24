@@ -173,23 +173,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </ul>
         </nav>
 
-        <div className="space-y-1 border-t border-zinc-800 p-4">
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
-          >
-            <LogOut className="h-5 w-5" />
-            Déconnexion
-          </button>
-          <a
-            href="/"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            Retour au site
-          </a>
-        </div>
       </aside>
 
       <div className="flex flex-1 flex-col">
@@ -213,7 +196,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                     {user.name.charAt(0).toUpperCase()}
                   </div>
                   <span className="hidden sm:inline">
-                    {user.name} — {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
+                    {user.name}
                   </span>
                 </button>
               </DropdownMenuTrigger>
