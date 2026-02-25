@@ -140,7 +140,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <li key={item.href}>
                   <a
                     href={item.href}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
                       isActive
                         ? "bg-primary/10 text-primary"
                         : "text-zinc-400 hover:bg-zinc-800 hover:text-white"

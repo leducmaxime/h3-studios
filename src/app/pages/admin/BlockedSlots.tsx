@@ -318,19 +318,19 @@ export function AdminBlockedSlots() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Blocages d'Agenda</h1>
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">Blocages d'Agenda</h1>
           <p className="mt-1 text-sm text-zinc-400">
             Gérez les créneaux et journées non disponibles pour les réservations
           </p>
         </div>
         <Button
           onClick={() => setAddDialogOpen(true)}
-          className="gap-2 bg-primary text-black hover:bg-primary/90"
+          className="w-full gap-2 bg-primary text-black hover:bg-primary/90 sm:w-auto"
         >
           <Plus className="h-4 w-4" />
-          Bloquer un créneau
+          <span className="whitespace-nowrap">Bloquer</span>
         </Button>
       </div>
 

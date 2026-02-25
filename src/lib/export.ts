@@ -381,9 +381,13 @@ export function generateInvoicePDF(
 interface MonthlyStats {
   revenue: number;
   bookingCount: number;
+  equipmentRevenue: number;
+  noShowCount: number;
+  avgBasket: number;
   occupancyRate: number;
-  noShowRate: number;
   studioStats: Array<{ studio_id: string; count: number; revenue: number }>;
+  paymentMethods: Array<{ method: string; count: number; revenue: number }>;
+  topClients: Array<{ name: string; band_name: string | null; bookings: number; revenue: number }>;
   weeklyStats: Array<{ week: number; count: number; revenue: number }>;
 }
 
@@ -425,11 +429,16 @@ export function generateMonthlyReportPDF(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
 
+  const equipPct = stats.revenue > 0 ? Math.round((stats.equipmentRevenue / stats.revenue) * 100) : 0;
+  const noShowPct = stats.bookingCount > 0 ? Math.round((stats.noShowCount / stats.bookingCount) * 100) : 0;
+
   const kpis = [
-    ["Revenu total:", `${stats.revenue.toFixed(2)} €`],
-    ["Nombre de réservations:", `${stats.bookingCount}`],
+    ["Revenu total:", `${stats.revenue.toFixed(2)} \u20AC`],
+    ["  dont options/\u00E9quipements:", `${stats.equipmentRevenue.toFixed(2)} \u20AC (${equipPct}%)`],
+    ["Nombre de r\u00E9servations:", `${stats.bookingCount}`],
+    ["Panier moyen:", `${stats.avgBasket.toFixed(2)} \u20AC`],
     ["Taux d'occupation:", `${stats.occupancyRate.toFixed(1)}%`],
-    ["Taux de no-show:", `${stats.noShowRate.toFixed(1)}%`],
+    ["No-shows:", `${stats.noShowCount} (${noShowPct}% des r\u00E9servations)`],
   ];
 
   kpis.forEach(([label, value]) => {
@@ -466,6 +475,68 @@ export function generateMonthlyReportPDF(
   doc.line(20, y, pageWidth - 20, y);
   y += 10;
 
+  // Payment Methods Section
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Moyens de Paiement", 20, y);
+  y += 10;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+
+  const methodLabels: Record<string, string> = {
+    cash: "Esp\u00E8ces",
+    card: "CB",
+    transfer: "Virement",
+    check: "Ch\u00E8que",
+    cheque: "Ch\u00E8que",
+  };
+
+  if (stats.paymentMethods.length > 0) {
+    stats.paymentMethods.forEach((pm) => {
+      const label = methodLabels[pm.method] || pm.method;
+      doc.text(`${label}:`, 25, y);
+      doc.text(`${pm.count} paiement${pm.count > 1 ? "s" : ""}, ${pm.revenue.toFixed(2)} \u20AC`, 80, y);
+      y += 7;
+    });
+  } else {
+    doc.text("Aucun paiement enregistr\u00E9", 25, y);
+    y += 7;
+  }
+
+  y += 10;
+
+  // Line separator
+  doc.line(20, y, pageWidth - 20, y);
+  y += 10;
+
+  // Top 5 Clients Section
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Top 5 Clients", 20, y);
+  y += 10;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+
+  if (stats.topClients.length > 0) {
+    stats.topClients.forEach((client, idx) => {
+      const bandSuffix = client.band_name ? ` (${client.band_name})` : "";
+      doc.text(`${idx + 1}. ${client.name}${bandSuffix}`, 25, y);
+      doc.text(`${client.bookings} r\u00E9sa, ${client.revenue.toFixed(2)} \u20AC`, 120, y);
+      y += 7;
+    });
+  } else {
+    doc.text("Aucune r\u00E9servation sur la p\u00E9riode", 25, y);
+    y += 7;
+  }
+
+  y += 10;
+
+  // Line separator
+  doc.line(20, y, pageWidth - 20, y);
+  y += 10;
+
   // By Week Section
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
@@ -477,7 +548,7 @@ export function generateMonthlyReportPDF(
 
   stats.weeklyStats.forEach((week) => {
     doc.text(`Semaine ${week.week}:`, 25, y);
-    doc.text(`${week.count} réservation${week.count > 1 ? "s" : ""}`, 80, y);
+    doc.text(`${week.count} r\u00E9sa, ${week.revenue.toFixed(2)} \u20AC`, 80, y);
     y += 6;
   });
 

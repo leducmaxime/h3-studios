@@ -16,6 +16,7 @@ import {
   Loader2,
   Filter,
   X,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -131,6 +132,21 @@ function formatJsonPretty(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
+function formatChangesPreview(changes: unknown): string {
+  if (changes === null || changes === undefined) return "—";
+  if (typeof changes === "string") return changes.slice(0, 60);
+  if (typeof changes === "object" && changes !== null) {
+    const obj = changes as Record<string, unknown>;
+    if (obj.status) return `Statut: ${String(obj.status)}`;
+    if (obj.payment_status) return `Paiement: ${String(obj.payment_status)}`;
+    if (obj.price) return `Prix: ${String(obj.price)}€`;
+    if (obj.name) return `Nom: ${String(obj.name)}`;
+    if (obj.code) return `Code: ${String(obj.code)}`;
+    const keys = Object.keys(obj).slice(0, 2);
+    return keys.length > 0 ? `${keys.join(", ")}` : JSON.stringify(obj).slice(0, 60);
+  }
+  return JSON.stringify(changes).slice(0, 60);
+}
 // ─── Detail Dialog ──────────────────────────────────────────────────────────────
 
 function AuditDetailDialog({
@@ -223,6 +239,12 @@ export function AdminAuditLog() {
   const [selectedLog, setSelectedLog] = useState<ApiAuditLog | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
+  // New filter states
+  const [actionFilter, setActionFilter] = useState<string>("all");
+  const [adminFilter, setAdminFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [admins, setAdmins] = useState<string[]>([]);
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
@@ -230,14 +252,22 @@ export function AdminAuditLog() {
       params.set("page", String(page));
       params.set("limit", String(perPage));
       if (entityTypeFilter !== "all") params.set("entity_type", entityTypeFilter);
+      if (actionFilter !== "all") params.set("action", actionFilter);
+      if (adminFilter !== "all") params.set("admin_id", adminFilter);
       if (dateFrom) params.set("from_date", dateFrom);
       if (dateTo) params.set("to_date", dateTo);
+      params.set("sort_by", sortBy);
+      params.set("sort_order", sortOrder);
 
       const res = await fetch(`/api/admin/audit?${params.toString()}`);
       const json = (await res.json()) as AuditLogsResponse;
       if (json.success) {
         setLogs(json.data.data);
         setTotal(json.data.total);
+        const uniqueAdmins = Array.from(
+          new Set(json.data.data.map((log) => log.performed_by))
+        ).sort();
+        setAdmins(uniqueAdmins);
       }
     } catch (error) {
       console.error("Failed to fetch audit logs:", error);
@@ -245,7 +275,7 @@ export function AdminAuditLog() {
     } finally {
       setLoading(false);
     }
-  }, [page, entityTypeFilter, dateFrom, dateTo]);
+  }, [page, entityTypeFilter, actionFilter, adminFilter, dateFrom, dateTo, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchLogs();
@@ -254,7 +284,7 @@ export function AdminAuditLog() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [entityTypeFilter, dateFrom, dateTo]);
+  }, [entityTypeFilter, actionFilter, adminFilter, dateFrom, dateTo, sortBy, sortOrder]);
 
   // Client-side search on entity_id, action, performed_by
   const filteredLogs = searchQuery
@@ -271,13 +301,22 @@ export function AdminAuditLog() {
     : logs;
 
   const totalPages = Math.ceil(total / perPage);
-  const hasActiveFilters = entityTypeFilter !== "all" || dateFrom || dateTo;
+  const hasActiveFilters =
+    entityTypeFilter !== "all" ||
+    actionFilter !== "all" ||
+    adminFilter !== "all" ||
+    dateFrom ||
+    dateTo;
 
   function clearFilters() {
     setEntityTypeFilter("all");
+    setActionFilter("all");
+    setAdminFilter("all");
     setDateFrom("");
     setDateTo("");
     setSearchQuery("");
+    setSortBy("date");
+    setSortOrder("desc");
     setPage(1);
   }
 
@@ -359,6 +398,45 @@ export function AdminAuditLog() {
               </select>
             </div>
             <div className="flex-1 space-y-1.5">
+              <label htmlFor="action-filter" className="text-xs text-zinc-400">Action</label>
+              <select
+                id="action-filter"
+                value={actionFilter}
+                onChange={(e) => setActionFilter(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              >
+                <option value="all">Toutes les actions</option>
+                <option value="create">Création</option>
+                <option value="update">Modification</option>
+                <option value="delete">Suppression</option>
+                <option value="cancel">Annulation</option>
+                <option value="no-show">No-show</option>
+                <option value="mark-paid">Payé</option>
+                <option value="refund">Remboursement</option>
+                <option value="block">Blocage</option>
+                <option value="unblock">Déblocage</option>
+                <option value="merge">Fusion</option>
+                <option value="reschedule">Replanification</option>
+                <option value="batch-update">Mise à jour groupée</option>
+              </select>
+            </div>
+            <div className="flex-1 space-y-1.5">
+              <label htmlFor="admin-filter" className="text-xs text-zinc-400">Administrateur</label>
+              <select
+                id="admin-filter"
+                value={adminFilter}
+                onChange={(e) => setAdminFilter(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              >
+                <option value="all">Tous les admins</option>
+                {admins.map((admin) => (
+                  <option key={admin} value={admin}>
+                    {admin}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 space-y-1.5">
               <label htmlFor="date-from" className="text-xs text-zinc-400">Du</label>
               <Input
                 id="date-from"
@@ -408,13 +486,49 @@ export function AdminAuditLog() {
             <thead className="border-b border-zinc-800 bg-zinc-900">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">
-                  Date
+                  <button
+                    onClick={() => {
+                      if (sortBy === "date") {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy("date");
+                        setSortOrder("desc");
+                      }
+                    }}
+                    className="flex items-center gap-1 hover:text-white transition-colors"
+                  >
+                    Date {sortBy === "date" ? (sortOrder === "asc" ? "↑" : "↓") : <ArrowUpDown className="h-3 w-3" />}
+                  </button>
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">
-                  Utilisateur
+                  <button
+                    onClick={() => {
+                      if (sortBy === "admin") {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy("admin");
+                        setSortOrder("asc");
+                      }
+                    }}
+                    className="flex items-center gap-1 hover:text-white transition-colors"
+                  >
+                    Utilisateur {sortBy === "admin" ? (sortOrder === "asc" ? "↑" : "↓") : <ArrowUpDown className="h-3 w-3" />}
+                  </button>
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">
-                  Action
+                  <button
+                    onClick={() => {
+                      if (sortBy === "action") {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy("action");
+                        setSortOrder("asc");
+                      }
+                    }}
+                    className="flex items-center gap-1 hover:text-white transition-colors"
+                  >
+                    Action {sortBy === "action" ? (sortOrder === "asc" ? "↑" : "↓") : <ArrowUpDown className="h-3 w-3" />}
+                  </button>
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">
                   Entité
@@ -431,12 +545,7 @@ export function AdminAuditLog() {
                 const actionCfg = getActionConfig(log.action);
                 const EntityIcon = entityCfg.icon;
                 const changes = parseChanges(log.changes);
-                const changesPreview = changes
-                  ? typeof changes === "string"
-                    ? changes.slice(0, 60)
-                    : JSON.stringify(changes).slice(0, 60)
-                  : "—";
-
+                const changesPreview = formatChangesPreview(changes);
                 return (
                   <tr
                     key={log.id}

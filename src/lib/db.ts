@@ -246,6 +246,37 @@ export async function checkConflictWithGroupType(
   `).bind(...params).first<DbBooking>();
 }
 
+// ─── Blocked Slot Conflict Check ─────────────────────────────────────────────
+
+export async function checkBlockedSlotConflict(
+  db: D1Database,
+  studioId: string,
+  date: string,
+  startTime: string,
+  endTime: string,
+): Promise<DbBlockedSlot | null> {
+  // Check for blocked slots that overlap with the requested time
+  // studio_id can be NULL (blocks all studios) or specific studio
+  // Note: end_time = '00:00' means midnight/end of day (toute la journée)
+  // A blocked slot overlaps if:
+  //   - The blocked slot starts before the booking ends
+  //   - AND the blocked slot ends after the booking starts (or is 00:00 meaning all day)
+  return db.prepare(`
+    SELECT * FROM blocked_slots
+    WHERE date = ?
+      AND (studio_id = ? OR studio_id IS NULL)
+      AND (
+        -- Case 1: Blocked slot ends at midnight (toute la journée) - blocks everything
+        end_time = '00:00'
+        OR
+        -- Case 2: Blocked slot has specific times - check overlap
+        (start_time < ? AND end_time > ?)
+      )
+    LIMIT 1
+  `).bind(date, studioId, endTime, startTime).first<DbBlockedSlot>();
+}
+
+
 export async function moveBookingToOtherStudio(
   db: D1Database,
   bookingId: string,
@@ -1196,7 +1227,9 @@ export async function getAuditLogs(
   filters: AuditLogFilters = {},
   page = 1,
   limit = 50,
-): Promise<PaginatedResult<DbAuditLog>> {
+  sortBy = "date",
+  sortOrder = "desc",
+): Promise<PaginatedResult<DbAuditLog & { admin_name?: string | null }>> {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
@@ -1212,6 +1245,10 @@ export async function getAuditLogs(
     conditions.push("action = ?");
     params.push(filters.action);
   }
+  if (filters.performedBy) {
+    conditions.push("performed_by = ?");
+    params.push(filters.performedBy);
+  }
   if (filters.dateFrom) {
     conditions.push("created_at >= ?");
     params.push(filters.dateFrom);
@@ -1223,13 +1260,17 @@ export async function getAuditLogs(
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  const countResult = await db.prepare(`SELECT COUNT(*) as total FROM audit_logs ${where}`).bind(...params).first<{ total: number }>();
+  // Build ORDER BY clause
+  const orderColumn = sortBy === "date" ? "created_at" : sortBy === "admin" ? "performed_by" : sortBy === "entity" ? "entity_type" : "action";
+  const orderDirection = sortOrder === "asc" ? "ASC" : "DESC";
+
+  const countResult = await db.prepare(`SELECT COUNT(*) as total FROM audit_logs a ${where}`).bind(...params).first<{ total: number }>();
   const total = countResult?.total ?? 0;
 
   const offset = (page - 1) * limit;
   const result = await db.prepare(
-    `SELECT * FROM audit_logs ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-  ).bind(...params, limit, offset).all<DbAuditLog>();
+    `SELECT a.*, au.name as admin_name FROM audit_logs a LEFT JOIN admin_users au ON a.performed_by = au.id ${where} ORDER BY ${orderColumn} ${orderDirection} LIMIT ? OFFSET ?`,
+  ).bind(...params, limit, offset).all<DbAuditLog & { admin_name: string | null }>();
 
   return { data: result.results, total, page, limit };
 }
@@ -1255,6 +1296,9 @@ export interface DashboardStats {
   rangeBookedMinutes: number;
   rangePendingPayments: number;
   rangePendingAmount: number;
+  rangeEquipmentRevenue: number;
+  rangeMinPrice: number;
+  rangeMaxPrice: number;
 }
 
 function getISOWeekStartUTCNoon(year: number, week: number): Date {
@@ -1401,7 +1445,7 @@ export async function getDashboardStats(
     }
   }
 
-  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult] = await db.batch([
+  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult, rangeEquipmentResult, rangeMinMaxResult] = await db.batch([
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
@@ -1475,6 +1519,14 @@ export async function getDashboardStats(
         AND b.date >= ? AND b.date <= ?
         AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0`,
     ).bind(rangeFrom, rangeTo),
+
+    db.prepare(
+      "SELECT COALESCE(SUM(equipment_price), 0) as total FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+    ).bind(rangeFrom, rangeTo),
+
+    db.prepare(
+      "SELECT COALESCE(MIN(total_price), 0) as min_price, COALESCE(MAX(total_price), 0) as max_price FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+    ).bind(rangeFrom, rangeTo),
   ]);
 
   type CountRevenue = { count: number; revenue: number };
@@ -1490,6 +1542,8 @@ export async function getDashboardStats(
   const rangeRow = (rangeResult.results as unknown as CountRevenue[])[0] ?? { count: 0, revenue: 0 };
   const rangeDurationRow = (rangeDurationResult.results as unknown as MinutesRow[])[0] ?? { minutes: 0 };
   const rangePendingRow = (rangePendingResult.results as unknown as CountTotal[])[0] ?? { count: 0, total: 0 };
+  const rangeEquipmentRow = (rangeEquipmentResult.results as unknown as Array<{ total: number }>)[0] ?? { total: 0 };
+  const rangeMinMaxRow = (rangeMinMaxResult.results as unknown as Array<{ min_price: number; max_price: number }>)[0] ?? { min_price: 0, max_price: 0 };
   const todaySlots = occupancyResult.results as unknown as TimeRange[];
 
   const rangeBookedMinutes = (() => {
@@ -1534,6 +1588,190 @@ export async function getDashboardStats(
     rangeBookedMinutes,
     rangePendingPayments: rangePendingRow.count,
     rangePendingAmount: rangePendingRow.total,
+    rangeEquipmentRevenue: rangeEquipmentRow.total,
+    rangeMinPrice: rangeMinMaxRow.min_price,
+    rangeMaxPrice: rangeMinMaxRow.max_price,
+  };
+}
+
+// ─── Monthly Report Data ────────────────────────────────────────────────────
+
+export interface MonthlyReportData {
+  revenue: number;
+  bookingCount: number;
+  equipmentRevenue: number;
+  noShowCount: number;
+  avgBasket: number;
+  occupancyRate: number;
+  studioStats: Array<{ studio_id: string; count: number; revenue: number }>;
+  paymentMethods: Array<{ method: string; count: number; revenue: number }>;
+  topClients: Array<{ name: string; band_name: string | null; bookings: number; revenue: number }>;
+  weeklyStats: Array<{ week: number; count: number; revenue: number }>;
+}
+
+export async function getMonthlyReportData(
+  db: D1Database,
+  month: number,
+  year: number,
+): Promise<MonthlyReportData> {
+  const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+  const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
+  const rangeFrom = getParisDateISO(from);
+  const rangeTo = getParisDateISO(to);
+
+  const [
+    revenueResult,
+    equipmentResult,
+    noShowResult,
+    studioResult,
+    paymentResult,
+    topClientsResult,
+    weeklyResult,
+    occupancySlotsResult,
+  ] = await db.batch([
+    // Total revenue + booking count
+    db.prepare(
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+    ).bind(rangeFrom, rangeTo),
+
+    // Equipment revenue
+    db.prepare(
+      "SELECT COALESCE(SUM(equipment_price), 0) as total FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+    ).bind(rangeFrom, rangeTo),
+
+    // No-show count
+    db.prepare(
+      "SELECT COUNT(*) as count FROM bookings WHERE date >= ? AND date <= ? AND status = 'no-show'",
+    ).bind(rangeFrom, rangeTo),
+
+    // Studio breakdown
+    db.prepare(
+      "SELECT studio_id, COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY studio_id",
+    ).bind(rangeFrom, rangeTo),
+
+    // Payment methods
+    db.prepare(
+      `SELECT p.method, COUNT(*) as count, COALESCE(SUM(p.amount), 0) as revenue
+       FROM payments p
+       JOIN bookings b ON b.id = p.booking_id
+       WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled' AND p.status = 'paid'
+       GROUP BY p.method`,
+    ).bind(rangeFrom, rangeTo),
+
+    // Top 5 clients
+    db.prepare(
+      `SELECT u.name, u.band_name, COUNT(*) as bookings, COALESCE(SUM(b.total_price), 0) as revenue
+       FROM bookings b
+       JOIN users u ON b.user_id = u.id
+       WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled'
+       GROUP BY b.user_id
+       ORDER BY revenue DESC
+       LIMIT 5`,
+    ).bind(rangeFrom, rangeTo),
+
+    // Weekly breakdown
+    db.prepare(
+      `SELECT
+         CAST(strftime('%W', date) AS INTEGER) as week_num,
+         COUNT(*) as count,
+         COALESCE(SUM(total_price), 0) as revenue
+       FROM bookings
+       WHERE date >= ? AND date <= ? AND status != 'cancelled'
+       GROUP BY week_num
+       ORDER BY week_num`,
+    ).bind(rangeFrom, rangeTo),
+
+    // Occupancy: booked slots per studio per day
+    db.prepare(
+      "SELECT date, studio_id, start_time, end_time FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+    ).bind(rangeFrom, rangeTo),
+  ]);
+
+  const revenueRow = revenueResult.results[0] as { count: number; revenue: number };
+  const equipmentRow = equipmentResult.results[0] as { total: number };
+  const noShowRow = noShowResult.results[0] as { count: number };
+
+  const revenue = typeof revenueRow.revenue === "string" ? parseFloat(revenueRow.revenue) : revenueRow.revenue;
+  const bookingCount = typeof revenueRow.count === "string" ? parseInt(revenueRow.count as unknown as string, 10) : revenueRow.count;
+  const equipmentRevenue = typeof equipmentRow.total === "string" ? parseFloat(equipmentRow.total) : equipmentRow.total;
+  const noShowCount = typeof noShowRow.count === "string" ? parseInt(noShowRow.count as unknown as string, 10) : noShowRow.count;
+  const avgBasket = bookingCount > 0 ? Math.round((revenue / bookingCount) * 100) / 100 : 0;
+
+  const studioStats = studioResult.results.map((r) => {
+    const row = r as { studio_id: string; count: number; revenue: number };
+    return {
+      studio_id: row.studio_id,
+      count: typeof row.count === "string" ? parseInt(row.count as unknown as string, 10) : row.count,
+      revenue: typeof row.revenue === "string" ? parseFloat(row.revenue as unknown as string) : row.revenue,
+    };
+  });
+
+  const paymentMethods = paymentResult.results.map((r) => {
+    const row = r as { method: string; count: number; revenue: number };
+    return {
+      method: row.method,
+      count: typeof row.count === "string" ? parseInt(row.count as unknown as string, 10) : row.count,
+      revenue: typeof row.revenue === "string" ? parseFloat(row.revenue as unknown as string) : row.revenue,
+    };
+  });
+
+  const topClients = topClientsResult.results.map((r) => {
+    const row = r as { name: string; band_name: string | null; bookings: number; revenue: number };
+    return {
+      name: row.name,
+      band_name: row.band_name,
+      bookings: typeof row.bookings === "string" ? parseInt(row.bookings as unknown as string, 10) : row.bookings,
+      revenue: typeof row.revenue === "string" ? parseFloat(row.revenue as unknown as string) : row.revenue,
+    };
+  });
+
+  const weeklyStats = weeklyResult.results.map((r) => {
+    const row = r as { week_num: number; count: number; revenue: number };
+    return {
+      week: typeof row.week_num === "string" ? parseInt(row.week_num as unknown as string, 10) : row.week_num,
+      count: typeof row.count === "string" ? parseInt(row.count as unknown as string, 10) : row.count,
+      revenue: typeof row.revenue === "string" ? parseFloat(row.revenue as unknown as string) : row.revenue,
+    };
+  });
+
+  // Occupancy calculation: iterate over each day in range
+  let totalOpenSlots = 0;
+  let totalUsedSlots = 0;
+  const slotRows = occupancySlotsResult.results as Array<{ date: string; studio_id: string; start_time: string; end_time: string }>;
+
+  const fromDate = parseDateISOToUTCNoon(rangeFrom);
+  const toDate = parseDateISOToUTCNoon(rangeTo);
+  const cursor = new Date(fromDate);
+  while (cursor <= toDate) {
+    const dayOfWeek = cursor.getUTCDay();
+    totalOpenSlots +=
+      getStudioOpenSlotsCount("la-scene", dayOfWeek) +
+      getStudioOpenSlotsCount("le-podium", dayOfWeek);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  for (const row of slotRows) {
+    const startIdx = ALL_TIME_SLOTS.indexOf(row.start_time);
+    let endIdx = ALL_TIME_SLOTS.indexOf(row.end_time);
+    if (endIdx === -1 && row.end_time === "00:00") endIdx = ALL_TIME_SLOTS.length;
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      totalUsedSlots += endIdx - startIdx;
+    }
+  }
+
+  const occupancyRate = totalOpenSlots > 0 ? Math.round((totalUsedSlots / totalOpenSlots) * 1000) / 10 : 0;
+
+  return {
+    revenue,
+    bookingCount,
+    equipmentRevenue,
+    noShowCount,
+    avgBasket,
+    occupancyRate,
+    studioStats,
+    paymentMethods,
+    topClients,
+    weeklyStats,
   };
 }
 

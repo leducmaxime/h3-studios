@@ -253,6 +253,7 @@ export interface AuditLogFilters {
   entityType?: string;
   entityId?: string;
   action?: string;
+  performedBy?: string;
   dateFrom?: string;
   dateTo?: string;
 }

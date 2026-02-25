@@ -11,7 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  FileText,
+  Download,
   Ban,
   Building2,
   Euro,
@@ -63,6 +63,9 @@ interface DashboardStats {
   rangeBookedMinutes: number;
   rangePendingPayments: number;
   rangePendingAmount: number;
+  rangeEquipmentRevenue: number;
+  rangeMinPrice: number;
+  rangeMaxPrice: number;
 }
 
 interface RevenuePoint {
@@ -1144,30 +1147,10 @@ export function AdminDashboard() {
   const handleGenerateMonthlyReport = async () => {
     const [year, month] = reportMonth.split("-").map(Number);
     try {
-      const res = await fetch(`/api/admin/stats?month=${month}&year=${year}`);
-      const json = await res.json() as { success: boolean; data?: DashboardStats };
-      
-      const chartsRes = await fetch(`/api/admin/stats/charts?mode=month&month=${month}&year=${year}`);
-      const chartsJson = await chartsRes.json() as {
-        success: boolean;
-        data?: { studios: StudioPoint[] };
-      };
-
+      const res = await fetch(`/api/admin/stats/report?month=${month}&year=${year}`);
+      const json = await res.json() as { success: boolean; data?: Parameters<typeof generateMonthlyReportPDF>[0] };
       if (json.success && json.data) {
-        const studioStats = (chartsJson.data?.studios || []).map(s => ({
-          studio_id: s.studio,
-          count: s.count,
-          revenue: s.revenue,
-        }));
-        const reportStats = {
-          revenue: json.data.monthRevenue,
-          bookingCount: json.data.monthBookings,
-          occupancyRate: json.data.occupancyToday || 0,
-          noShowRate: 0,
-          studioStats,
-          weeklyStats: Array.from({ length: 5 }, (_, i) => ({ week: i + 1, count: 0, revenue: 0 })),
-        };
-        generateMonthlyReportPDF(reportStats, { month, year });
+        generateMonthlyReportPDF(json.data, { month, year });
       }
     } catch (err) {
       console.error("Failed to generate report:", err);
@@ -1309,9 +1292,7 @@ export function AdminDashboard() {
               onClick={handleGenerateMonthlyReport}
               className="border-primary/30 text-primary hover:bg-primary/10"
             >
-              <FileText className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">Rapport PDF</span>
-              <span className="sm:hidden">PDF</span>
+              <Download className="h-4 w-4" />
             </Button>
           </div>
           <a
@@ -1320,7 +1301,7 @@ export function AdminDashboard() {
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Nouvelle réservation</span>
-            <span className="sm:hidden">+ Réserver</span>
+            <span className="sm:hidden">Réserver</span>
           </a>
         </div>
       </div>
@@ -1336,14 +1317,14 @@ export function AdminDashboard() {
         <StatCard
           title="CA réservé (total)"
           value={formatPrice(stats?.rangeRevenue ?? 0)}
-          subValue={`${stats?.rangeBookings ?? 0} réservations`}
+          subValue={stats ? `dont ${formatPrice(stats.rangeEquipmentRevenue)} options (${stats.rangeRevenue > 0 ? Math.round((stats.rangeEquipmentRevenue / stats.rangeRevenue) * 100) : 0}%)` : ""}
           icon={Users}
           color="blue"
         />
         <StatCard
           title="Panier moyen"
           value={formatPrice(avgBasket)}
-          subValue={stats ? `${stats.rangeBookings} réservations` : ""}
+          subValue={stats ? `de ${formatPrice(stats.rangeMinPrice)} à ${formatPrice(stats.rangeMaxPrice)}` : ""}
           icon={ShoppingCart}
           color="green"
         />

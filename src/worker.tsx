@@ -58,6 +58,7 @@ import {
   getBookingsByUser,
   checkConflict,
   checkConflictWithGroupType,
+  checkBlockedSlotConflict,
   moveBookingToOtherStudio,
   getUsers,
   getUserById,
@@ -654,10 +655,16 @@ const app = defineApp([
             fromStudio: body.studioId,
             toStudio: otherStudioId,
             reason: "Group booking displaced solo/duo",
-          });
+          }, request.headers.get("X-Admin-User-Id") || "admin");
         } else {
           return jsonError("Ce créneau n'est plus disponible", 409);
         }
+      }
+
+      // Check for blocked slots
+      const blockedSlot = await checkBlockedSlotConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
+      if (blockedSlot) {
+        return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
       }
 
       const paris = getParisNow();
@@ -978,6 +985,12 @@ const app = defineApp([
           return jsonError("Conflit avec une autre réservation", 409);
         }
 
+        // Check for blocked slots
+        const blockedSlot = await checkBlockedSlotConflict(env.DB, body.studio_id, body.date, body.start_time, body.end_time);
+        if (blockedSlot) {
+          return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
+        }
+
         const user = await env.DB.prepare("SELECT band_name FROM users WHERE id = ?").bind(body.user_id).first<{ band_name: string | null }>();
         const bookingBandName = user?.band_name ?? null;
 
@@ -1042,7 +1055,7 @@ const app = defineApp([
           date: booking.date,
           start_time: booking.start_time,
           end_time: booking.end_time,
-        });
+        }, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess(booking);
       } catch (error) {
@@ -1094,12 +1107,18 @@ const app = defineApp([
           if (conflict) {
             return jsonError("Conflit avec une autre réservation", 409);
           }
+
+          // Check for blocked slots when rescheduling
+          const blockedSlot = await checkBlockedSlotConflict(env.DB, existing.studio_id, newDate, newStart, newEnd);
+          if (blockedSlot) {
+            return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
+          }
         }
 
         const result = await updateBooking(env.DB, id, body);
         if (!result.success) return jsonError(result.error || "Update failed", 400);
 
-        await addAuditLog(env.DB, "booking", id, "update", body);
+        await addAuditLog(env.DB, "booking", id, "update", body, request.headers.get("X-Admin-User-Id") || "admin");
 
         const updated = await getBookingById(env.DB, id);
         return jsonSuccess(updated);
@@ -1130,7 +1149,7 @@ const app = defineApp([
 
       await addAuditLog(env.DB, "booking", params.id, "cancel", {
         reason: body.reason || "Annulée par l'admin",
-      });
+      }, request.headers.get("X-Admin-User-Id") || "admin");
 
       const updated = await getBookingById(env.DB, params.id);
       return jsonSuccess(updated);
@@ -1153,7 +1172,7 @@ const app = defineApp([
 
       if (!result.success) return jsonError(result.error || "No-show update failed", 400);
 
-      await addAuditLog(env.DB, "booking", params.id, "no-show", {});
+      await addAuditLog(env.DB, "booking", params.id, "no-show", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
       const updated = await getBookingById(env.DB, params.id);
       return jsonSuccess(updated);
@@ -1238,7 +1257,7 @@ const app = defineApp([
       const result = await deleteOrphanedBookings(env.DB);
       await addAuditLog(env.DB, "booking", "orphaned", "bulk-delete", {
         bookingsDeleted: result.count,
-      });
+      }, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ success: true, count: result.count });
     } catch (error) {
@@ -1404,7 +1423,7 @@ const app = defineApp([
         await addAuditLog(env.DB, "user", user.id, "create", {
           name: user.name,
           email: user.email,
-        });
+        }, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess(user);
       } catch (error) {
@@ -1453,7 +1472,7 @@ const app = defineApp([
 
       await addAuditLog(env.DB, "user", params.id, body.blocked ? "block" : "unblock", {
         blocked: body.blocked,
-      });
+      }, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ id: params.id, blocked: body.blocked });
     } catch (error) {
@@ -1496,7 +1515,7 @@ const app = defineApp([
           return jsonError(result.error || "Update failed", 400);
         }
 
-        await addAuditLog(env.DB, "user", id, "update", body);
+        await addAuditLog(env.DB, "user", id, "update", body, request.headers.get("X-Admin-User-Id") || "admin");
 
         const updated = await getUserById(env.DB, id);
         return jsonSuccess(updated);
@@ -1689,7 +1708,7 @@ const app = defineApp([
           end_time: endTime,
           count: createdIds.length,
           reason,
-        });
+        }, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess({ success: true, count: createdIds.length });
       } catch (error) {
@@ -1710,7 +1729,7 @@ const app = defineApp([
         return jsonError("Créneau bloqué introuvable", 404);
       }
 
-      await addAuditLog(env.DB, "blocked_slot", params.id, "delete", {});
+      await addAuditLog(env.DB, "blocked_slot", params.id, "delete", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ id: params.id, removed: true });
     } catch (error) {
@@ -1750,7 +1769,7 @@ const app = defineApp([
       await addAuditLog(env.DB, "setting", params.key, "update", {
         key: params.key,
         value: body.value,
-      });
+      }, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ key: params.key, value: body.value });
     } catch (error) {
@@ -1781,7 +1800,7 @@ const app = defineApp([
         }
 
         await setSetting(env.DB, "materiel.v1", JSON.stringify(normalized));
-        await addAuditLog(env.DB, "setting", "materiel.v1", "update", { key: "materiel.v1" });
+        await addAuditLog(env.DB, "setting", "materiel.v1", "update", { key: "materiel.v1" }, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess(normalized);
       } catch (error) {
@@ -1850,7 +1869,7 @@ const app = defineApp([
           email: body.email,
           name: body.name,
           role: body.role || "operator",
-        });
+        }, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess({ id, email: body.email, name: body.name, role: body.role || "operator", is_active: 1 });
       } catch (error) {
@@ -1901,7 +1920,7 @@ const app = defineApp([
 
       await addAuditLog(env.DB, "admin_user", params.id, "role_update", {
         role: body.role,
-      });
+      }, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ id: params.id, role: body.role });
     } catch (error) {
@@ -1940,7 +1959,7 @@ const app = defineApp([
       const result = await env.DB.prepare("DELETE FROM admin_users WHERE id = ?").bind(params.id).run();
       if (result.meta.changes === 0) return jsonError("Utilisateur admin introuvable", 404);
 
-      await addAuditLog(env.DB, "admin_user", params.id, "delete", {});
+      await addAuditLog(env.DB, "admin_user", params.id, "delete", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ id: params.id, deleted: true });
     } catch (error) {
@@ -1994,7 +2013,7 @@ const app = defineApp([
 
       await addAuditLog(env.DB, "admin_user", params.id, newStatus ? "activate" : "deactivate", {
         is_active: newStatus,
-      });
+      }, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ id: params.id, is_active: newStatus });
     } catch (error) {
@@ -2016,12 +2035,18 @@ const app = defineApp([
 
       const entityType = url.searchParams.get("entity_type");
       if (entityType) filters.entityType = entityType;
+      const action = url.searchParams.get("action");
+      if (action) filters.action = action;
+      const adminId = url.searchParams.get("admin_id");
+      if (adminId) filters.performedBy = adminId;
       const dateFrom = url.searchParams.get("from_date");
       if (dateFrom) filters.dateFrom = dateFrom;
       const dateTo = url.searchParams.get("to_date");
       if (dateTo) filters.dateTo = dateTo;
 
-      const result = await getAuditLogs(env.DB, filters, page, limit);
+      const sortBy = url.searchParams.get("sort_by") || "date";
+      const sortOrder = url.searchParams.get("sort_order") || "desc";
+      const result = await getAuditLogs(env.DB, filters, page, limit, sortBy, sortOrder);
       return jsonSuccess(result);
     } catch (error) {
       console.error("GET /api/admin/audit error:", error);
@@ -2059,7 +2084,7 @@ const app = defineApp([
 
       await addAuditLog(env.DB, "pricing", params.id, "update", {
         price_per_half_hour: body.price,
-      });
+      }, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ id: params.id, price: body.price });
     } catch (error) {
@@ -2116,7 +2141,7 @@ const app = defineApp([
         await addAuditLog(env.DB, "equipment", id, "create", {
           name: body.name,
           equipment_id: body.equipment_id,
-        });
+        }, request.headers.get("X-Admin-User-Id") || "admin");
 
         const created = await env.DB.prepare("SELECT * FROM equipment WHERE id = ?").bind(id).first();
         return jsonSuccess(created);
@@ -2147,7 +2172,7 @@ const app = defineApp([
           return jsonError("Équipement introuvable", 404);
         }
 
-        await addAuditLog(env.DB, "equipment", id, "update", body);
+        await addAuditLog(env.DB, "equipment", id, "update", body, request.headers.get("X-Admin-User-Id") || "admin");
 
         const updated = await env.DB.prepare("SELECT * FROM equipment WHERE id = ?").bind(id).first();
         return jsonSuccess(updated);
@@ -2164,7 +2189,7 @@ const app = defineApp([
           return jsonError("Équipement introuvable", 404);
         }
 
-        await addAuditLog(env.DB, "equipment", id, "delete", {});
+        await addAuditLog(env.DB, "equipment", id, "delete", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess({ id, deleted: true });
       } catch (error) {
@@ -2217,7 +2242,7 @@ const app = defineApp([
           code: body.code,
           type: body.type,
           value: body.value,
-        });
+        }, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess(result);
       } catch (error) {
@@ -2249,7 +2274,7 @@ const app = defineApp([
           return jsonError("Code promo introuvable", 404);
         }
 
-        await addAuditLog(env.DB, "promo", id, "update", body);
+        await addAuditLog(env.DB, "promo", id, "update", body, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess({ id, updated: true });
       } catch (error) {
@@ -2265,7 +2290,7 @@ const app = defineApp([
           return jsonError("Code promo introuvable", 404);
         }
 
-        await addAuditLog(env.DB, "promo", id, "delete", {});
+        await addAuditLog(env.DB, "promo", id, "delete", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess({ id, deleted: true });
       } catch (error) {
@@ -2317,7 +2342,7 @@ const app = defineApp([
         await addAuditLog(env.DB, "opening_hours", "batch", "batch-update", {
           count: body.length,
           ids: body.map(e => e.id),
-        });
+        }, request.headers.get("X-Admin-User-Id") || "admin");
 
         const updated = await getOpeningHours(env.DB);
         return jsonSuccess(updated);
@@ -2349,7 +2374,7 @@ const app = defineApp([
         const validated = body.filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d));
         const sorted = [...new Set(validated)].sort();
         await setSetting(env.DB, "public_holidays", JSON.stringify(sorted));
-        await addAuditLog(env.DB, "setting", "public_holidays", "update", { count: sorted.length });
+        await addAuditLog(env.DB, "setting", "public_holidays", "update", { count: sorted.length }, request.headers.get("X-Admin-User-Id") || "admin");
         return jsonSuccess(sorted);
       } catch (error) {
         console.error("PUT /api/admin/public-holidays error:", error);
@@ -2380,7 +2405,7 @@ const app = defineApp([
           return jsonError("Heure invalide (10-23)", 400);
         }
         await setSetting(env.DB, "peak_start_hour", String(hour));
-        await addAuditLog(env.DB, "setting", "peak_start_hour", "update", { peakStartHour: hour });
+        await addAuditLog(env.DB, "setting", "peak_start_hour", "update", { peakStartHour: hour }, request.headers.get("X-Admin-User-Id") || "admin");
         return jsonSuccess({ peakStartHour: hour });
       } catch (error) {
         console.error("PUT /api/admin/peak-hours error:", error);
@@ -2913,7 +2938,7 @@ const app = defineApp([
       const result = await syncInstagram(env.DB);
       if (!result.success) return jsonError(result.error || "Sync failed", 500);
 
-      await addAuditLog(env.DB, "instagram", "feed", "sync", { count: result.count });
+      await addAuditLog(env.DB, "instagram", "feed", "sync", { count: result.count }, request.headers.get("X-Admin-User-Id") || "admin");
       return jsonSuccess(result);
     } catch (error) {
       console.error("POST /api/admin/instagram/sync error:", error);
@@ -2929,7 +2954,7 @@ const app = defineApp([
       if (!token) return jsonError("Token requis", 400);
 
       await setSetting(env.DB, "instagram_access_token", token);
-      await addAuditLog(env.DB, "settings", "instagram", "update_token", {});
+      await addAuditLog(env.DB, "settings", "instagram", "update_token", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
       const result = await syncInstagram(env.DB);
 
@@ -2960,7 +2985,7 @@ const app = defineApp([
       await addAuditLog(env.DB, "reviews", "google", "sync", {
         reviewsCount: result.reviewsCount,
         averageRating: result.averageRating,
-      });
+      }, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({
         success: true,
