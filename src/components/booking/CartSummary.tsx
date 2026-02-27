@@ -36,6 +36,23 @@ export function CartSummary({ cart, total, onRemove, onCheckout }: CartSummaryPr
             </div>
             <div className="flex items-center gap-3">
               <span className="font-semibold text-primary">{formatPrice(booking.price)}</span>
+              {booking.promoCode && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-primary/10 px-2 py-0.5 rounded text-black">
+                    Code promo: {booking.promoCode}
+                  </span>
+                  {booking.promoDiscount > 0 && (
+                    <span className="text-sm text-primary">
+                      -{formatPrice(booking.promoDiscount)}
+                    </span>
+                  )}
+                  {booking.round_mode && (
+                    <span className="text-xs text-zinc-400 ml-2">
+                      {booking.round_mode === "down" ? "Arrondi inférieur" : "Arrondi supérieur"}
+                    </span>
+                  )}
+                </div>
+              )}
               <button
                 onClick={() => onRemove(booking.id)}
                 className="rounded-full p-1 transition-colors hover:bg-white/10"
@@ -49,7 +66,12 @@ export function CartSummary({ cart, total, onRemove, onCheckout }: CartSummaryPr
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
-        <span className="text-lg font-semibold">Total: {formatPrice(total)}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-semibold">Total: {formatPrice(total)}</span>
+          {cart.some((b) => b.promoCode) && (
+            <span className="ml-2 text-sm text-zinc-400">(après promo)</span>
+          )}
+        </div>
         <button
           onClick={onCheckout}
           className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-semibold text-black transition-colors hover:bg-primary/90"
