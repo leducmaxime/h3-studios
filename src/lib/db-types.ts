@@ -73,8 +73,8 @@ export interface DbBooking {
   payment_method: string | null;
   payment_status: string | null;
   notes: string | null;
-  promo_code: string | null;
-  promo_type: "percentage" | "fixed" | null;
+  round_mode: "down" | "up" | "none";
+  round_value: number | null;
   promo_discount: number;
   created_at: string;
   updated_at: string;
@@ -86,6 +86,7 @@ export interface DbBooking {
   user_phone: string | null;
 }
 
+// Type for creating bookings (excludes auto-generated fields and user fields from LEFT JOIN)
 // Type for creating bookings (excludes auto-generated fields and user fields from LEFT JOIN)
 export type CreateBooking = Omit<DbBooking, "id" | "created_at" | "updated_at" | "user_name" | "user_email" | "user_band_name" | "user_phone">;
 
@@ -175,6 +176,7 @@ export interface DbPromoCode {
   expires_at: string | null;
   usage_count: number;
   max_usage: number | null;
+  round_mode: "down" | "up" | "none";
   created_at: string;
 }
 

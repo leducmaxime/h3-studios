@@ -60,22 +60,20 @@ export interface CompletedBooking {
   equipment: EquipmentSelection[];
   equipmentPrice: number;
   promoCode: string | null;
-  promoType: "percentage" | "fixed" | null;
+  round_mode: "down" | "up" | "none" | null;
   promoDiscount: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
 }
-
 // --- Promo codes ---
-
 export interface PromoCode {
   code: string;
   type: "percentage" | "fixed";
   value: number; // % or EUR
   description: string;
   minTotal?: number; // Montant minimum pour appliquer
+  round_mode?: "down" | "up" | "none";
 }
-
 const PROMO_CODES: PromoCode[] = [
   { code: "BIENVENUE", type: "percentage", value: 10, description: "10% de réduction" },
   { code: "H3AMIS", type: "fixed", value: 5, description: "5€ de réduction", minTotal: 15 },

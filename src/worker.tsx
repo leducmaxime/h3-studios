@@ -1,6 +1,6 @@
-import { render, route, layout, prefix } from "rwsdk/router";
+import { render, route, layout } from "rwsdk/router";
 import type { RouteMiddleware } from "rwsdk/router";
-import { defineApp, requestInfo } from "rwsdk/worker";
+import { defineApp } from "rwsdk/worker";
 import { env } from "cloudflare:workers";
 
 import { Document } from "@/app/Document";
@@ -25,7 +25,6 @@ import { AdminBlockedSlots } from "@/app/pages/admin/BlockedSlots";
 import { AdminUsers } from "@/app/pages/admin/Users";
 import { AdminUserDetail } from "@/app/pages/admin/UserDetail";
 import { AdminPayments } from "@/app/pages/admin/Payments";
-import { AdminStudios } from "@/app/pages/admin/Studios";
 import { AdminEquipements } from "@/app/pages/admin/Equipements";
 import { AdminPricing } from "@/app/pages/admin/Pricing";
 import { AdminSettings } from "@/app/pages/admin/Settings";
@@ -35,7 +34,7 @@ import { Login } from "@/app/pages/admin/Login";
 import { PaymentSuccess } from "@/app/pages/PaymentSuccess";
 import { PaymentCancel } from "@/app/pages/PaymentCancel";
 import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
-import { DEFAULT_MATERIEL, parseMaterielSetting, type MaterielData } from "@/lib/materiel";
+import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
 import {
   type AdminRole,
   verifyPassword,
@@ -55,21 +54,18 @@ import {
   updateBooking,
   getBookingsByDate,
   getBookingsByDateRange,
-  getBookingsByUser,
   checkConflict,
   checkConflictWithGroupType,
   checkBlockedSlotConflict,
   moveBookingToOtherStudio,
   getUsers,
   getUserById,
-  getUserByEmail,
   createUser,
   updateUser,
   blockUser,
   mergeUsers,
   getPayments,
   getPaymentsByBookingId,
-  getPaymentByBookingId,
   addPayment,
   markPaymentPaid,
   refundPayment,
@@ -95,13 +91,13 @@ import {
   addAuditLog,
   getAuditLogs,
   getDashboardStats,
+  getMonthlyReportData,
   getSetting,
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters } from "@/lib/db-types";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "@/lib/booking";
 import {
-  formatDateISO,
   getParisDateISO,
   getParisNow,
 } from "@/lib/utils";
@@ -150,6 +146,67 @@ function jsonSuccess(data: unknown): Response {
 
 function jsonError(error: string, status = 400): Response {
   return jsonResponse({ success: false, error }, status);
+}
+
+function validateAdminSettingValue(key: string, rawValue: string): { ok: true; value: string } | { ok: false; error: string } {
+  const value = rawValue.trim();
+
+  const parseIntSetting = (opts: { label: string; min: number; max: number }) => {
+    if (value === "") {
+      return { ok: false as const, error: `${opts.label}: valeur obligatoire` };
+    }
+    const n = Number.parseInt(value, 10);
+    if (!Number.isFinite(n) || String(n) !== value) {
+      return { ok: false as const, error: `${opts.label}: valeur invalide` };
+    }
+    if (n < opts.min || n > opts.max) {
+      return { ok: false as const, error: `${opts.label}: valeur hors limites (${opts.min}-${opts.max})` };
+    }
+    return { ok: true as const, value: String(n) };
+  };
+
+  const parseNumberSetting = (opts: { label: string; min: number; max: number }) => {
+    if (value === "") {
+      return { ok: false as const, error: `${opts.label}: valeur obligatoire` };
+    }
+    const n = Number(value);
+    if (!Number.isFinite(n)) {
+      return { ok: false as const, error: `${opts.label}: valeur invalide` };
+    }
+    if (n < opts.min || n > opts.max) {
+      return { ok: false as const, error: `${opts.label}: valeur hors limites (${opts.min}-${opts.max})` };
+    }
+    return { ok: true as const, value };
+  };
+
+  const parseBooleanSetting = (opts: { label: string }) => {
+    if (value !== "true" && value !== "false") {
+      return { ok: false as const, error: `${opts.label}: valeur invalide` };
+    }
+    return { ok: true as const, value };
+  };
+
+  switch (key) {
+    case "cancellation.free_period_hours":
+      return parseIntSetting({ label: "Délai d'annulation", min: 0, max: 168 });
+    case "cancellation.fee_per_hour_eur":
+      return parseNumberSetting({ label: "Frais d'annulation", min: 0, max: 500 });
+    case "billing.vat_percent":
+      return parseNumberSetting({ label: "TVA", min: 0, max: 30 });
+    case "billing.payment_terms_days":
+      return parseIntSetting({ label: "Conditions de paiement", min: 0, max: 120 });
+    case "promo_codes.enabled":
+      return parseBooleanSetting({ label: "Activation des codes promo" });
+    case "maintenance.enabled":
+      return parseBooleanSetting({ label: "Mode maintenance" });
+    case "maintenance.message":
+      if (value.length > 500) {
+        return { ok: false, error: "Message maintenance: trop long (max 500 caractères)" };
+      }
+      return { ok: true, value };
+    default:
+      return { ok: true, value: rawValue };
+  }
 }
 
 function getISOWeekStartUTCNoon(year: number, week: number): Date {
@@ -590,7 +647,7 @@ const app = defineApp([
         paymentMethod: string;
         paymentStatus: string;
         promoCode?: string;
-        promoType?: "percentage" | "fixed";
+        round_mode?: "down" | "up" | "none";
         promoDiscount?: number;
         notes?: string;
       };
@@ -702,8 +759,8 @@ const app = defineApp([
         payment_method: body.paymentMethod,
         payment_status: body.paymentStatus,
         notes: body.notes || null,
-        promo_code: body.promoCode || null,
-        promo_type: body.promoType || null,
+        round_mode: body.round_mode || "none",
+        round_value: null,
         promo_discount: body.promoDiscount || 0,
         cancelled_at: null,
         cancel_reason: null,
@@ -769,12 +826,13 @@ const app = defineApp([
       }
       const p = result.promo;
       const description = p.type === "percentage" ? `${p.value}% de réduction` : `${p.value}€ de réduction`;
-      const discount = p.type === "percentage"
+      // Utiliser la réduction arrondie si disponible
+      const discount = result.roundedDiscount ?? (p.type === "percentage"
         ? body.total * p.value / 100
-        : Math.min(p.value, body.total);
+        : Math.min(p.value, body.total));
       return jsonSuccess({
         valid: true,
-        promo: { code: p.code, type: p.type, value: p.value, description, minTotal: p.min_total > 0 ? p.min_total : undefined },
+        promo: { code: p.code, type: p.type, value: p.value, description, minTotal: p.min_total > 0 ? p.min_total : undefined, round_mode: p.round_mode ?? "none" },
         discount,
       });
     } catch (error) {
@@ -1042,8 +1100,8 @@ const app = defineApp([
           payment_method: body.payment_method || null,
           payment_status: body.payment_method === "card" ? "paid" : "pay-on-site",
           notes: body.notes || null,
-          promo_code: promoCode,
-          promo_type: promoCode ? "percentage" : null,
+          round_mode: "none",
+          round_value: null,
           promo_discount: promoDiscount,
           cancelled_at: null,
           cancel_reason: null,
@@ -1761,17 +1819,32 @@ const app = defineApp([
         return jsonError("Champ obligatoire manquant: value", 400);
       }
 
-      const result = await setSetting(env.DB, params.key, body.value);
+      if (typeof body.value !== "string") {
+        return jsonError("Champ invalide: value doit être une chaîne", 400);
+      }
+
+      const validated = validateAdminSettingValue(params.key, body.value);
+      if (!validated.ok) {
+        return jsonError(validated.error, 400);
+      }
+
+      const previousValue = await getSetting(env.DB, params.key);
+      if (previousValue === validated.value) {
+        return jsonSuccess({ key: params.key, value: validated.value });
+      }
+
+      const result = await setSetting(env.DB, params.key, validated.value);
       if (!result.success) {
         return jsonError("Update failed", 400);
       }
 
-      await addAuditLog(env.DB, "setting", params.key, "update", {
+      await addAuditLog(env.DB, "setting", params.key, previousValue === null ? "create" : "update", {
         key: params.key,
-        value: body.value,
+        value: validated.value,
+        previous_value: previousValue,
       }, request.headers.get("X-Admin-User-Id") || "admin");
 
-      return jsonSuccess({ key: params.key, value: body.value });
+      return jsonSuccess({ key: params.key, value: validated.value });
     } catch (error) {
       console.error("PUT /api/admin/settings/:key error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to update setting", 500);
@@ -2868,6 +2941,22 @@ const app = defineApp([
     } catch (error) {
       console.error("GET /api/admin/stats/charts error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch chart data", 500);
+    }
+  }),
+
+  route("/api/admin/stats/report", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    const url = new URL(request.url);
+    const month = parseInt(url.searchParams.get("month") || "1", 10);
+    const year = parseInt(url.searchParams.get("year") || String(new Date().getFullYear()), 10);
+
+    try {
+      const data = await getMonthlyReportData(env.DB, month, year);
+      return jsonSuccess(data);
+    } catch (error) {
+      console.error("GET /api/admin/stats/report error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to generate report", 500);
     }
   }),
 

@@ -40,6 +40,7 @@ interface ApiAuditLog {
   action: string;
   changes: string | null;
   performed_by: string;
+  admin_name?: string | null;
   created_at: string;
 }
 
@@ -132,20 +133,64 @@ function formatJsonPretty(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
-function formatChangesPreview(changes: unknown): string {
+function formatChangesPreview(changes: unknown, entityType?: string): string {
   if (changes === null || changes === undefined) return "—";
   if (typeof changes === "string") return changes.slice(0, 60);
   if (typeof changes === "object" && changes !== null) {
     const obj = changes as Record<string, unknown>;
-    if (obj.status) return `Statut: ${String(obj.status)}`;
-    if (obj.payment_status) return `Paiement: ${String(obj.payment_status)}`;
-    if (obj.price) return `Prix: ${String(obj.price)}€`;
-    if (obj.name) return `Nom: ${String(obj.name)}`;
-    if (obj.code) return `Code: ${String(obj.code)}`;
-    const keys = Object.keys(obj).slice(0, 2);
-    return keys.length > 0 ? `${keys.join(", ")}` : JSON.stringify(obj).slice(0, 60);
+    
+    // Booking-specific formatting
+    if (entityType === "booking") {
+      if (obj.booking_ref && obj.studio_id) {
+        const studio = obj.studio_id === "la-scene" ? "La Scène" : obj.studio_id === "le-podium" ? "Le Podium" : obj.studio_id;
+        return `${obj.booking_ref} - ${studio}`;
+      }
+      if (obj.date && obj.start_time) {
+        return `${obj.date} à ${obj.start_time}`;
+      }
+      if (obj.status) return `Statut: ${obj.status}`;
+    }
+    
+    // User-specific formatting
+    if (entityType === "user") {
+      if (obj.name) return `Nom: ${obj.name}`;
+      if (obj.band_name) return `Groupe: ${obj.band_name}`;
+      if (obj.email) return `Email: ${obj.email}`;
+    }
+    
+    // Payment-specific formatting
+    if (entityType === "payment" || entityType === "payments") {
+      if (obj.amount) return `Montant: ${Number(obj.amount) / 100}€`;
+    }
+    
+    // Setting-specific formatting
+    if (entityType === "setting") {
+      if (obj.key && obj.value !== undefined) return `${obj.key}: ${obj.value}`;
+      if (obj.key) return obj.key as string;
+    }
+    
+    // Promo-specific formatting
+    if (entityType === "promo") {
+      if (obj.code) return `Code: ${obj.code}`;
+    }
+    
+    // Generic fallback with readable labels
+    const labels: Record<string, string> = {
+      status: "Statut", payment_status: "Paiement", price: "Prix",
+      name: "Nom", email: "Email", phone: "Tél", reason: "Raison",
+      blocked: "Bloqué", is_active: "Actif", role: "Rôle"
+    };
+    
+    const entries = Object.entries(obj).slice(0, 2);
+    if (entries.length > 0) {
+      return entries.map(([k, v]) => {
+        const label = labels[k] || k;
+        const val = String(v).slice(0, 20);
+        return `${label}: ${val}`;
+      }).join(", ");
+    }
   }
-  return JSON.stringify(changes).slice(0, 60);
+  return "—";
 }
 // ─── Detail Dialog ──────────────────────────────────────────────────────────────
 
@@ -244,7 +289,7 @@ export function AdminAuditLog() {
   const [adminFilter, setAdminFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [admins, setAdmins] = useState<string[]>([]);
+  const [admins, setAdmins] = useState<Array<{ id: string; name: string }>>([]);
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
@@ -264,10 +309,17 @@ export function AdminAuditLog() {
       if (json.success) {
         setLogs(json.data.data);
         setTotal(json.data.total);
-        const uniqueAdmins = Array.from(
-          new Set(json.data.data.map((log) => log.performed_by))
-        ).sort();
-        setAdmins(uniqueAdmins);
+        // Extract unique admins with names from the logs
+        const adminMap = new Map<string, string>();
+        for (const log of json.data.data) {
+          if (!adminMap.has(log.performed_by)) {
+            adminMap.set(log.performed_by, log.admin_name || log.performed_by);
+          }
+        }
+        const adminList = Array.from(adminMap.entries())
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setAdmins(adminList);
       }
     } catch (error) {
       console.error("Failed to fetch audit logs:", error);
@@ -430,8 +482,8 @@ export function AdminAuditLog() {
               >
                 <option value="all">Tous les admins</option>
                 {admins.map((admin) => (
-                  <option key={admin} value={admin}>
-                    {admin}
+                  <option key={admin.id} value={admin.id}>
+                    {admin.name}
                   </option>
                 ))}
               </select>
@@ -545,7 +597,7 @@ export function AdminAuditLog() {
                 const actionCfg = getActionConfig(log.action);
                 const EntityIcon = entityCfg.icon;
                 const changes = parseChanges(log.changes);
-                const changesPreview = formatChangesPreview(changes);
+                const changesPreview = formatChangesPreview(changes, log.entity_type);
                 return (
                   <tr
                     key={log.id}

@@ -117,16 +117,15 @@ export async function createBooking(
   await db.prepare(`
     INSERT INTO bookings (id, booking_ref, user_id, band_name, studio_id, date, start_time, end_time,
       group_type, status, base_price, equipment_price, total_price, equipment,
-      payment_method, payment_status, notes, promo_code, promo_type, promo_discount, created_at, updated_at, cancelled_at, cancel_reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      payment_method, payment_status, notes, round_mode, promo_discount, created_at, updated_at, cancelled_at, cancel_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, data.booking_ref, data.user_id, data.band_name, data.studio_id, data.date,
     data.start_time, data.end_time, data.group_type, data.status,
     data.base_price, data.equipment_price, data.total_price,
     data.equipment, data.payment_method, data.payment_status,
-    data.notes, data.promo_code, data.promo_type, data.promo_discount, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
+    data.notes, data.round_mode, data.promo_discount, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
   ).run();
-
   return (await getBookingById(db, id))!;
 }
 
@@ -1071,17 +1070,17 @@ export async function getPromoCodes(db: D1Database): Promise<DbPromoCode[]> {
 
 export async function createPromoCode(
   db: D1Database,
-  data: { code: string; type: "percentage" | "fixed"; value: number; min_total?: number; expires_at?: string; max_usage?: number },
+  data: { code: string; type: "percentage" | "fixed"; value: number; min_total?: number; expires_at?: string; max_usage?: number; round_mode?: "down" | "up" | "none" },
 ): Promise<{ success: boolean; id: string }> {
   const id = generateId();
 
   await db.prepare(`
-    INSERT INTO promo_codes (id, code, type, value, min_total, is_active, expires_at, usage_count, max_usage, created_at)
-    VALUES (?, ?, ?, ?, ?, 1, ?, 0, ?, ?)
+    INSERT INTO promo_codes (id, code, type, value, min_total, is_active, expires_at, usage_count, max_usage, round_mode, created_at)
+    VALUES (?, ?, ?, ?, ?, 1, ?, 0, ?, ?, ?)
   `).bind(
     id, data.code.toUpperCase(), data.type, data.value,
     data.min_total ?? 0, data.expires_at ?? null,
-    data.max_usage ?? null, now(),
+    data.max_usage ?? null, data.round_mode ?? "none", now(),
   ).run();
 
   return { success: true, id };
@@ -1090,7 +1089,7 @@ export async function createPromoCode(
 export async function updatePromoCode(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbPromoCode, "code" | "type" | "value" | "min_total" | "is_active" | "expires_at" | "max_usage">>,
+  data: Partial<Pick<DbPromoCode, "code" | "type" | "value" | "min_total" | "is_active" | "expires_at" | "max_usage" | "round_mode">>,
 ): Promise<{ success: boolean }> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -1111,30 +1110,45 @@ export async function updatePromoCode(
   return { success: result.meta.changes > 0 };
 }
 
+// Arrondit aux 50 centimes près
+function roundToNearest50Cents(amount: number): number {
+  const euros = Math.floor(amount);
+  const cents = Math.round((amount - euros) * 100);
+
+  if (cents < 25) return euros;
+  if (cents < 75) return euros + 0.5;
+  return euros + 1;
+}
+
 export async function validatePromoCode(
   db: D1Database,
   code: string,
   total: number,
-): Promise<{ valid: boolean; promo?: DbPromoCode; error?: string }> {
+): Promise<{ valid: boolean; promo?: DbPromoCode; roundedDiscount?: number; error?: string }> {
   const promo = await db.prepare(
-    "SELECT * FROM promo_codes WHERE code = ? AND is_active = 1",
+    "SELECT * FROM promo_codes WHERE code = ? AND is_active = 1", 
   ).bind(code.trim().toUpperCase()).first<DbPromoCode>();
-
   if (!promo) return { valid: false, error: "Code promo invalide" };
-
-  if (promo.expires_at && promo.expires_at < now()) {
-    return { valid: false, error: "Code promo expiré" };
+  // Expiration
+  if (promo.expires_at && new Date(promo.expires_at) < new Date(now())) return { valid: false, error: "Code promo expiré" };
+  // Usage limit
+  if (promo.max_usage !== null && promo.usage_count >= promo.max_usage) return { valid: false, error: "Code promo épuisé" };
+  // Minimum amount
+  if (promo.min_total > 0 && total < promo.min_total) return { valid: false, error: `Montant minimum de ${promo.min_total}€ requis` };
+  
+  // Calculer la réduction
+  let discount = promo.value;
+  if (promo.type === "percentage") {
+    discount = (total * promo.value) / 100;
   }
 
-  if (promo.max_usage !== null && promo.usage_count >= promo.max_usage) {
-    return { valid: false, error: "Code promo épuisé" };
+  // Appliquer l'arrondi si activé
+  let finalDiscount = discount;
+  if (promo.round_mode === "down" || promo.round_mode === "up") {
+    finalDiscount = roundToNearest50Cents(discount);
   }
 
-  if (promo.min_total > 0 && total < promo.min_total) {
-    return { valid: false, error: `Montant minimum de ${promo.min_total}€ requis` };
-  }
-
-  return { valid: true, promo };
+  return { valid: true, promo, roundedDiscount: finalDiscount };
 }
 
 // ─── Opening Hours ───────────────────────────────────────────────────────────

@@ -103,7 +103,9 @@ export function AdminBookings() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
   const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "pending" | "pay-on-site">("all");
   const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
@@ -146,7 +148,9 @@ export function AdminBookings() {
       params.set("sortBy", sortBy);
       params.set("sortOrder", sortOrder);
 
-      const dateParams = getDateFilterParams(dateFilter);
+      const dateParams = dateFilter === "custom" && customDateFrom
+        ? { dateFrom: customDateFrom, dateTo: customDateTo || undefined }
+        : getDateFilterParams(dateFilter);
       if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
       if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
 
@@ -163,7 +167,7 @@ export function AdminBookings() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, studioFilter, dateFilter, paymentStatusFilter, search, sortBy, sortOrder]);
+  }, [page, statusFilter, studioFilter, dateFilter, customDateFrom, customDateTo, paymentStatusFilter, search, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchBookings();
@@ -296,16 +300,34 @@ export function AdminBookings() {
           </select>
           <select
             value={dateFilter}
-            onChange={(e) => { setDateFilter(e.target.value as "all" | "today" | "week" | "month"); setPage(1); }}
+            onChange={(e) => { setDateFilter(e.target.value as typeof dateFilter); setPage(1); }}
             className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
             <option value="all">Toutes les dates</option>
             <option value="today">Aujourd&apos;hui</option>
             <option value="week">Cette semaine</option>
             <option value="month">Ce mois</option>
+            <option value="custom">Période personnalisée</option>
           </select>
+          {dateFilter === "custom" && (
+            <>
+              <input
+                type="date"
+                value={customDateFrom}
+                onChange={(e) => { setCustomDateFrom(e.target.value); setPage(1); }}
+                className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                placeholder="Du"
+              />
+              <input
+                type="date"
+                value={customDateTo}
+                onChange={(e) => { setCustomDateTo(e.target.value); setPage(1); }}
+                className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                placeholder="Au"
+              />
+            </>
+          )}
           <select
-            value={sortBy}
             onChange={(e) => { setSortBy(e.target.value as BookingSortField); setPage(1); }}
             className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >

@@ -61,6 +61,7 @@ interface PromoFormData {
   min_total: string;
   expires_at: string;
   max_usage: string;
+  round_mode: "down" | "up" | "none";
 }
 
 const EMPTY_FORM: PromoFormData = {
@@ -70,6 +71,7 @@ const EMPTY_FORM: PromoFormData = {
   min_total: "",
   expires_at: "",
   max_usage: "",
+  round_mode: "none",
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -752,6 +754,7 @@ function PromoCodeDialog({
         min_total: editingPromo.min_total ? String(editingPromo.min_total) : "",
         expires_at: editingPromo.expires_at ? editingPromo.expires_at.slice(0, 10) : "",
         max_usage: editingPromo.max_usage ? String(editingPromo.max_usage) : "",
+        round_mode: editingPromo.round_mode ?? "none",
       });
     } else if (open) {
       setForm(EMPTY_FORM);
@@ -778,11 +781,11 @@ function PromoCodeDialog({
         code: form.code.trim().toUpperCase(),
         type: form.type,
         value: parseFloat(form.value),
+        round_mode: form.round_mode,
       };
       if (form.min_total) payload.min_total = parseFloat(form.min_total);
       if (form.expires_at) payload.expires_at = form.expires_at;
       if (form.max_usage) payload.max_usage = parseInt(form.max_usage, 10);
-
       const url = isEditing
         ? `/api/admin/promo-codes/${editingPromo.id}`
         : "/api/admin/promo-codes";
@@ -887,18 +890,26 @@ function PromoCodeDialog({
             />
           </div>
 
+          {/* Round mode */}
+          <div className="space-y-2">
+            <Label>Arrondi de la réduction</Label>
+            <Select
+              value={form.round_mode}
+              onValueChange={(v) => setForm((f) => ({ ...f, round_mode: v as "down" | "up" | "none" }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sans arrondi</SelectItem>
+                <SelectItem value="down">Arrondi aux 50 centimes (x.00-x.24 → x.00, x.25-x.74 → x.50, x.75-x.99 → x+1.00)</SelectItem>
+                <SelectItem value="up">Arrondi aux 50 centimes (x.01-x.50 → x.50, x.51-x.99 → x+1.00)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Expiration + Max usage */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="promo-expires">Date d&apos;expiration</Label>
-              <Input
-                id="promo-expires"
-                type="date"
-                value={form.expires_at}
-                onChange={(e) => setForm((f) => ({ ...f, expires_at: e.target.value }))}
-              />
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="promo-max-usage">Utilisations max</Label>
               <Input

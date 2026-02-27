@@ -318,7 +318,7 @@ export function AdminBlockedSlots() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-white sm:text-3xl">Blocages d'Agenda</h1>
           <p className="mt-1 text-sm text-zinc-400">
