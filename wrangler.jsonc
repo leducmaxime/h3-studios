@@ -14,24 +14,15 @@
     "enabled": true
   },
 
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "h3-studios-db",
-      "database_id": "b2230e0f-1003-4321-a093-59e6d9207071"
-    }
-  ],
-
-  "triggers": {
-    "crons": ["0 6 * * *"]
-  },
-
   "env": {
     "staging": {
       "name": "h3-studios-staging",
-      "vars": {
-        "ENVIRONMENT": "staging"
-      },
+      "routes": [
+        {
+          "pattern": "staging.h3-studios.fr",
+          "custom_domain": true
+        }
+      ],
       "d1_databases": [
         {
           "binding": "DB",
@@ -45,9 +36,12 @@
     },
     "production": {
       "name": "h3-studios",
-      "vars": {
-        "ENVIRONMENT": "production"
-      },
+      "routes": [
+        {
+          "pattern": "prod.h3-studios.fr",
+          "custom_domain": true
+        }
+      ],
       "d1_databases": [
         {
           "binding": "DB",

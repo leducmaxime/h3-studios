@@ -10,10 +10,12 @@
   "private": true,
   "scripts": {
     "build": "vite build",
+    "build:staging": "CLOUDFLARE_ENV=staging vite build",
+    "build:prod": "CLOUDFLARE_ENV=production vite build",
     "dev": "vite dev",
     "clean:vite": "rm -rf ./node_modules/.vite",
-    "release:staging": "npm run clean:vite && npm run build && wrangler deploy --config dist/worker/wrangler.json --env staging",
-    "release:prod": "npm run clean:vite && npm run build && wrangler deploy --config dist/worker/wrangler.json --env production",
+    "release:staging": "npm run clean:vite && npm run build:staging && wrangler deploy",
+    "release:prod": "npm run clean:vite && npm run build:prod && wrangler deploy",
     "generate": "rw-scripts ensure-env && wrangler types --include-runtime false",
     "check": "npm run generate && npm run types",
     "types": "tsc"

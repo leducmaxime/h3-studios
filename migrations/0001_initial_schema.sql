@@ -1,7 +1,3 @@
--- H3 Studios - Initial Database Schema
--- 12 tables for admin panel management
-
--- Admin users (studio operators)
 CREATE TABLE IF NOT EXISTS admin_users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
@@ -13,7 +9,6 @@ CREATE TABLE IF NOT EXISTS admin_users (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Sessions (admin auth sessions)
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -22,7 +17,6 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- Users (clients / musicians)
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT,
@@ -34,10 +28,14 @@ CREATE TABLE IF NOT EXISTS users (
   total_bookings INTEGER DEFAULT 0,
   total_spent INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  address_line1 TEXT,
+  address_line2 TEXT,
+  postal_code TEXT,
+  city TEXT,
+  country TEXT DEFAULT 'France'
 );
 
--- Bookings
 CREATE TABLE IF NOT EXISTS bookings (
   id TEXT PRIMARY KEY,
   booking_ref TEXT UNIQUE NOT NULL,
@@ -58,22 +56,24 @@ CREATE TABLE IF NOT EXISTS bookings (
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
   cancelled_at TEXT,
-  cancel_reason TEXT
+  cancel_reason TEXT,
+  band_name TEXT,
+  promo_code TEXT,
+  promo_discount INTEGER DEFAULT 0,
+  promo_type TEXT CHECK(promo_type IN ('percentage', 'fixed'))
 );
 
--- Payments
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
   booking_id TEXT NOT NULL,
   amount INTEGER NOT NULL,
-  method TEXT NOT NULL CHECK(method IN ('card', 'cash')),
+  method TEXT NOT NULL CHECK(method IN ('card', 'cash', 'transfer', 'check', 'cheque')),
   status TEXT NOT NULL CHECK(status IN ('pending', 'paid', 'refunded', 'partial-refund')),
   refunded_amount INTEGER DEFAULT 0,
   paid_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- Blocked slots (maintenance, private events, etc.)
 CREATE TABLE IF NOT EXISTS blocked_slots (
   id TEXT PRIMARY KEY,
   studio_id TEXT,
@@ -84,7 +84,6 @@ CREATE TABLE IF NOT EXISTS blocked_slots (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- Pricing (per studio, per group type, peak/off-peak)
 CREATE TABLE IF NOT EXISTS pricing (
   id TEXT PRIMARY KEY,
   studio_id TEXT NOT NULL,
@@ -94,7 +93,6 @@ CREATE TABLE IF NOT EXISTS pricing (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Equipment available for rent
 CREATE TABLE IF NOT EXISTS equipment (
   id TEXT PRIMARY KEY,
   equipment_id TEXT UNIQUE NOT NULL,
@@ -106,7 +104,6 @@ CREATE TABLE IF NOT EXISTS equipment (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Promo codes
 CREATE TABLE IF NOT EXISTS promo_codes (
   id TEXT PRIMARY KEY,
   code TEXT UNIQUE NOT NULL,
@@ -117,10 +114,10 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   expires_at TEXT,
   usage_count INTEGER DEFAULT 0,
   max_usage INTEGER,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now')),
+  round_mode TEXT DEFAULT 'none' CHECK(round_mode IN ('down', 'up', 'none'))
 );
 
--- Opening hours per studio per day of week
 CREATE TABLE IF NOT EXISTS opening_hours (
   id TEXT PRIMARY KEY,
   studio_id TEXT NOT NULL,
@@ -130,7 +127,6 @@ CREATE TABLE IF NOT EXISTS opening_hours (
   is_closed INTEGER DEFAULT 0
 );
 
--- Settings (key-value store for app config)
 CREATE TABLE IF NOT EXISTS settings (
   id TEXT PRIMARY KEY,
   key TEXT UNIQUE NOT NULL,
@@ -138,7 +134,6 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Audit logs (track all admin actions)
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   entity_type TEXT NOT NULL,
@@ -149,7 +144,20 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- Indexes for common queries
+CREATE TABLE IF NOT EXISTS google_reviews (
+  id TEXT PRIMARY KEY,
+  google_review_id TEXT UNIQUE NOT NULL,
+  author_name TEXT NOT NULL,
+  author_photo_url TEXT,
+  rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+  text TEXT,
+  text_original TEXT,
+  relative_time TEXT,
+  publish_time TEXT,
+  google_maps_uri TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
 CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_studio_id ON bookings(studio_id);
@@ -165,3 +173,5 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_opening_hours_studio ON opening_hours(studio_id, day_of_week);
 CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code);
+CREATE INDEX IF NOT EXISTS idx_google_reviews_rating ON google_reviews(rating);
+CREATE INDEX IF NOT EXISTS idx_google_reviews_publish_time ON google_reviews(publish_time);

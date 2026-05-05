@@ -1,1 +1,0 @@
-ALTER TABLE bookings ADD COLUMN promo_type TEXT CHECK(promo_type IN ('percentage', 'fixed'));
