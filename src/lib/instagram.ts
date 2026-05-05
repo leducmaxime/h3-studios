@@ -59,9 +59,7 @@ export async function syncInstagram(db: D1Database): Promise<{ success: boolean;
     let newToken = currentToken;
     try {
       newToken = await refreshInstagramToken(currentToken);
-    } catch (e) {
-      console.error("Failed to refresh Instagram token, keeping current one:", e);
-    }
+    } catch {}
 
     await db.batch([
       db.prepare("INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))")

@@ -41,7 +41,8 @@ async function hashPassword(password: string): Promise<string> {
   return `${arrayBufferToBase64(salt.buffer)}:${arrayBufferToBase64(hash)}`;
 }
 
-const hash = await hashPassword("password123");
-console.log("Password hash for 'password123':", hash);
+const password = process.argv[2] || "password123";
+const hash = await hashPassword(password);
+console.log(hash);
 
 export {};

@@ -193,7 +193,6 @@ export async function constructWebhookEvent(
 ): Promise<{ event: StripeWebhookEvent | null; error?: string }> {
   // If no webhook secret configured, skip verification (dev mode)
   if (!webhookSecret) {
-    console.warn("Stripe webhook secret not configured - skipping signature verification");
     try {
       return { event: JSON.parse(payload) };
     } catch {
