@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "h3-studios",
+  "account_id": "f581acc7214b448e763b5ab2a14d8409",
   "main": "src/worker.tsx",
   "compatibility_date": "2025-01-08",
   "compatibility_flags": ["nodejs_compat"],
@@ -17,7 +18,7 @@
     {
       "binding": "DB",
       "database_name": "h3-studios-db",
-      "database_id": "8a1d88d0-d741-4367-91c9-bbcf4b719b9b"
+      "database_id": "b2230e0f-1003-4321-a093-59e6d9207071"
     }
   ],
 
@@ -35,7 +36,7 @@
         {
           "binding": "DB",
           "database_name": "h3-studios-db-staging",
-          "database_id": "278d9c61-3c04-4107-9470-cd1c71ed43ef"
+          "database_id": "f621ac89-d8ec-42ce-ad5e-1467e629d799"
         }
       ],
       "triggers": {
@@ -47,6 +48,13 @@
       "vars": {
         "ENVIRONMENT": "production"
       },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "h3-studios-db",
+          "database_id": "b2230e0f-1003-4321-a093-59e6d9207071"
+        }
+      ],
       "triggers": {
         "crons": ["0 6 * * *"]
       }
