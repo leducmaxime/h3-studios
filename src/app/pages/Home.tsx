@@ -34,31 +34,33 @@ export function Home() {
       <ScrollUp />
 
       <div className="w-full max-w-6xl px-4">
-        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-          <img
-            src="/images/home/1.png"
-            alt="H3 Studios"
-            className="mx-auto mb-8 w-full max-w-2xl"
-          />
-          <img
-            src="/images/home/2.png"
-            alt="Répétitions - Enregistrements"
-            className="mx-auto w-full max-w-xl"
-          />
-          <div className="mx-auto mt-8 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-        </div>
+        <div className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center md:min-h-[calc(100dvh-9rem)]">
+          <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+            <img
+              src="/images/home/1.png"
+              alt="H3 Studios"
+              className="mx-auto mb-8 w-full max-w-2xl"
+            />
+            <img
+              src="/images/home/2.png"
+              alt="Répétitions - Enregistrements"
+              className="mx-auto w-full max-w-xl"
+            />
+            <div className="mx-auto mt-8 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          </div>
 
-        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
-          <a
-            href="/reservation"
-            className="inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 md:px-12 md:py-5 md:text-2xl"
-          >
-            <Music className="h-6 w-6 md:h-7 md:w-7" />
-            Réserver maintenant
-          </a>
-          <p className="mt-4 text-sm text-white/50">
-            Ouvert 7j/7 • Uniquement sur réservation
-          </p>
+          <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+            <a
+              href="/reservation"
+              className="inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 md:px-12 md:py-5 md:text-2xl"
+            >
+              <Music className="h-6 w-6 md:h-7 md:w-7" />
+              Réserver maintenant
+            </a>
+            <p className="mt-4 text-sm text-white/50">
+              Ouvert 7j/7 • Uniquement sur réservation
+            </p>
+          </div>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
