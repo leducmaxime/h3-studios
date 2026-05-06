@@ -11,6 +11,7 @@ import {
   formatPrice,
   calculatePrice,
   PRICING,
+  ALL_TIME_SLOTS,
   type GroupType,
   type StudioId,
   type OccupancyInfo,
@@ -51,6 +52,8 @@ export function TimeSlotPicker({
   const [slotsPerRow, setSlotsPerRow] = useState(10);
   const settingNewStartRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const hasSelectedStart = startTime !== null || pendingStart !== null;
 
   useEffect(() => {
     if (!startTime) {
@@ -452,7 +455,8 @@ export function TimeSlotPicker({
   }, [pendingStart, rulerLabels, visibleSlots, closingTime, isSlotEffectivelyBooked, isLastFreeBeforeConstraint, isSecondToLastFreeBeforeConstraint, isReachableAsEnd, onClear, onSelectRange, onConfirm]);
 
   const handleMouseEnter = useCallback((slot: string) => {
-    setHoveredMarker(slot);
+    const effectiveSlot = pendingStart ? getNextSlot(slot) : slot;
+    setHoveredMarker(effectiveSlot);
     if (!pendingStart) {
       const slotIdx = visibleSlots.indexOf(slot);
       if (slotIdx >= 0 && isLastFreeBeforeConstraint(slotIdx)) {
@@ -531,8 +535,10 @@ export function TimeSlotPicker({
                       onMouseEnter={() => handleMouseEnter(slot)}
                       aria-label={isHalfHour ? `${hourNum}h30` : `${hourNum}h`}
                     >
-                      <div className="absolute bottom-1 left-0 flex flex-col items-center gap-0.5 -translate-x-1/2">
-                        <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
+                      <div className={`absolute left-0 flex flex-col items-center gap-0.5 -translate-x-1/2 ${hasSelectedStart ? "bottom-1" : "top-1/2 -translate-y-1/2"}`}>
+                        {hasSelectedStart && (
+                          <div className={`w-px ${isHalfHour ? "h-2 bg-white/20" : "h-4 bg-white/50"}`} />
+                        )}
                         {isHalfHour ? (
                           <div className={`flex flex-col items-center leading-none ${getMarkerTextClass(markerState)}`}>
                             <span className="text-[9px]">{hourNum}h</span>
