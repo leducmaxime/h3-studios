@@ -185,8 +185,8 @@ Stored in `.dev.vars` (local) and Cloudflare dashboard (production):
 - **When asked to deploy without environment precision, always assume staging — never production.**
 - **The staging environment is used as the development server.** I do not use local development servers (`pnpm dev`). You may build locally (`pnpm build`) to verify compilation, but all functional testing happens on staging.
 - **After every change:** commit, then deploy to staging, then provide the staging URL (or a direct link to the affected page if applicable).
-- **Staging URL:** `https://h3-studios-staging.amis-harmonie-sucy.workers.dev`
-- **Production URL:** `https://h3-studios.amis-harmonie-sucy.workers.dev`
+- **Staging URL:** `https://staging.h3-studios.fr`
+- **Production URL:** `https://prod.h3-studios.fr`
 
 > **Note:** These deployment rules are non-negotiable. Always follow them in every session.
 
