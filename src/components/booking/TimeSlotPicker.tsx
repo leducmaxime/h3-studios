@@ -132,7 +132,12 @@ export function TimeSlotPicker({
     const startIdx = visibleSlots.indexOf(selectedStart);
     const endIdx = visibleSlots.indexOf(slot);
 
-    if (endIdx <= startIdx) return;
+    if (endIdx <= startIdx) {
+      setSelectedStart(slot);
+      setSelectedEnd(null);
+      setSelectionMode("end");
+      return;
+    }
     if (endIdx - startIdx < 2) return;
 
     for (let i = startIdx; i <= endIdx; i++) {
