@@ -297,14 +297,14 @@ export function TimeSlotPicker({
     return "Créneau sélectionné";
   };
 
-  const slotsPerRow = Math.ceil(visibleSlots.length / 2);
+  const slotsPerRow = 14;
   const rows = useMemo(() => {
     const result: string[][] = [];
     for (let i = 0; i < visibleSlots.length; i += slotsPerRow) {
       result.push(visibleSlots.slice(i, i + slotsPerRow));
     }
     return result;
-  }, [visibleSlots, slotsPerRow]);
+  }, [visibleSlots]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -340,7 +340,7 @@ export function TimeSlotPicker({
 
         <div className="flex flex-col gap-3">
           {rows.map((row, rowIdx) => (
-            <div key={rowIdx} className={`grid gap-1 ${row.length <= 6 ? 'grid-cols-6' : row.length <= 8 ? 'grid-cols-8' : row.length <= 10 ? 'grid-cols-10' : 'grid-cols-12'}`}>
+            <div key={rowIdx} className="grid grid-cols-7 sm:grid-cols-14 gap-1">
               {row.map((slot) => {
                 const isBooked = isSlotBooked(slot);
                 const isPeak = hasPeakPricing && isPeakTime(date, slot);
@@ -351,7 +351,7 @@ export function TimeSlotPicker({
                 return (
                   <button
                     key={slot}
-                    className={`relative h-14 sm:h-16 rounded-lg border transition-all duration-150 ${style} ${
+                    className={`relative h-12 sm:h-14 rounded-lg border transition-all duration-150 ${style} ${
                       isStart ? "ring-2 ring-primary ring-offset-1 ring-offset-black" : ""
                     } ${isEnd ? "ring-2 ring-primary ring-offset-1 ring-offset-black" : ""}`}
                     onClick={() => handleSlotClick(slot)}
