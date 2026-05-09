@@ -217,7 +217,7 @@ export function TimeSlotPicker({
         const startIdx = visibleSlots.indexOf(activeRange.start);
         const endIdx = activeRange.end === closingTime ? visibleSlots.length : visibleSlots.indexOf(activeRange.end);
 
-        if (slotIdx >= startIdx && slotIdx < endIdx) {
+        if (slotIdx >= startIdx && slotIdx <= endIdx) {
           return isPeak ? "bg-primary/50 border-primary/70" : "bg-primary/40 border-primary/60";
         }
       }
