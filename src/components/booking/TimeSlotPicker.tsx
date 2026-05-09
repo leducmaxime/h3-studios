@@ -297,14 +297,14 @@ export function TimeSlotPicker({
     return "Créneau sélectionné";
   };
 
-  const slotsPerRow = 12;
+  const slotsPerRow = Math.ceil(visibleSlots.length / 2);
   const rows = useMemo(() => {
     const result: string[][] = [];
     for (let i = 0; i < visibleSlots.length; i += slotsPerRow) {
       result.push(visibleSlots.slice(i, i + slotsPerRow));
     }
     return result;
-  }, [visibleSlots]);
+  }, [visibleSlots, slotsPerRow]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -340,7 +340,7 @@ export function TimeSlotPicker({
 
         <div className="flex flex-col gap-3">
           {rows.map((row, rowIdx) => (
-            <div key={rowIdx} className="grid grid-cols-6 sm:grid-cols-12 gap-1">
+            <div key={rowIdx} className={`grid gap-1 ${row.length <= 6 ? 'grid-cols-6' : row.length <= 8 ? 'grid-cols-8' : row.length <= 10 ? 'grid-cols-10' : 'grid-cols-12'}`}>
               {row.map((slot) => {
                 const isBooked = isSlotBooked(slot);
                 const isPeak = hasPeakPricing && isPeakTime(date, slot);
