@@ -111,10 +111,8 @@ export function Reservation({ step }: ReservationProps) {
   const recapRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLDivElement>(null);
 
-  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
-    setTimeout(() => {
-      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
+  const scrollToRef = (_ref: React.RefObject<HTMLDivElement | null>) => {
+    return;
   };
 
   // Auto-scroll when date is selected (time slots appear)
