@@ -148,7 +148,6 @@ export function TimeSlotPicker({
     setSelectedEnd(actualEnd);
     setSelectionMode("done");
     onSelectRange(selectedStart, actualEnd);
-    onConfirm();
   }, [isSlotBooked, selectedStart, visibleSlots, closingTime, onSelectRange, onConfirm]);
 
   const handleSlotClick = useCallback((slot: string) => {
@@ -190,7 +189,6 @@ export function TimeSlotPicker({
         setSelectedEnd(end);
         setSelectionMode("done");
         onSelectRange(start, end);
-        onConfirm();
       }
     },
     [visibleSlots, isSlotBooked, closingTime, onSelectRange, onConfirm]
@@ -418,16 +416,24 @@ export function TimeSlotPicker({
 
         {priceInfo && (
           <div className="rounded-xl border bg-primary/10 border-primary/30 p-4">
-            <div className="flex items-center gap-3">
-              <Clock className="w-5 h-5 text-primary" />
-              <div className="flex-1">
-                <div className="text-lg font-semibold">
-                  {priceInfo.start} <ArrowRight className="inline w-4 h-4 mx-1" /> {priceInfo.end}
-                </div>
-                <div className="text-sm text-white/50">
-                  {priceInfo.duration} · {priceInfo.price}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Clock className="w-5 h-5 text-primary" />
+                <div>
+                  <div className="text-lg font-semibold">
+                    {priceInfo.start} <ArrowRight className="inline w-4 h-4 mx-1" /> {priceInfo.end}
+                  </div>
+                  <div className="text-sm text-white/50">
+                    {priceInfo.duration} · {priceInfo.price}
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={onConfirm}
+                className="px-4 py-2 rounded-lg bg-primary text-black font-semibold hover:bg-primary/90 transition-colors"
+              >
+                Confirmer
+              </button>
             </div>
           </div>
         )}
