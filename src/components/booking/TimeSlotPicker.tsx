@@ -385,7 +385,7 @@ export function TimeSlotPicker({
         <div className="flex flex-wrap items-center gap-4 text-xs text-white/50">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-4 h-4 rounded bg-white/5 border border-white/10" />
-            Disponible {hourlyRates.offPeakMin === hourlyRates.offPeakMax
+            Tarif heure creuse {hourlyRates.offPeakMin === hourlyRates.offPeakMax
               ? `${hourlyRates.offPeakMin}€/h`
               : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
           </span>
