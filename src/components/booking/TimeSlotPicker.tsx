@@ -385,12 +385,16 @@ export function TimeSlotPicker({
         <div className="flex flex-wrap items-center gap-4 text-xs text-white/50">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-4 h-4 rounded bg-white/5 border border-white/10" />
-            Disponible
+            Disponible {hourlyRates.offPeakMin === hourlyRates.offPeakMax
+              ? `${hourlyRates.offPeakMin}€/h`
+              : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`}
           </span>
           {hasPeakPricing && (
             <span className="flex items-center gap-1.5 text-primary">
               <Zap className="w-3 h-3" />
-              Soirs, weekends et jours fériés
+              Soirs, weekends et jours fériés {hourlyRates.peakMin === hourlyRates.peakMax
+                ? `${hourlyRates.peakMin}€/h`
+                : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`}
             </span>
           )}
           <span className="flex items-center gap-1.5">
@@ -419,22 +423,7 @@ export function TimeSlotPicker({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-white/50">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-5 h-3 flex-shrink-0 bg-white/5 border border-white/20 rounded-sm" />
-            {hourlyRates.offPeakMin === hourlyRates.offPeakMax
-              ? `${hourlyRates.offPeakMin}€/h`
-              : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}€/h`} off-peak
-          </span>
-          {hasPeakPricing && (
-            <span className="flex items-center gap-1.5 text-primary">
-              <Zap className="w-3 h-3" />
-              {hourlyRates.peakMin === hourlyRates.peakMax
-                ? `${hourlyRates.peakMin}€/h`
-                : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`} soirs, weekends et jours fériés
-            </span>
-          )}
-        </div>
+
       </div>
     </div>
   );
