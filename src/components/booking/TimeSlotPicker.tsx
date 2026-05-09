@@ -390,7 +390,7 @@ export function TimeSlotPicker({
           {hasPeakPricing && (
             <span className="flex items-center gap-1.5 text-primary">
               <Zap className="w-3 h-3" />
-              Peak
+              Soirs, weekends et jours fériés
             </span>
           )}
           <span className="flex items-center gap-1.5">
@@ -431,7 +431,7 @@ export function TimeSlotPicker({
               <Zap className="w-3 h-3" />
               {hourlyRates.peakMin === hourlyRates.peakMax
                 ? `${hourlyRates.peakMin}€/h`
-                : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`} peak
+                : `${hourlyRates.peakMin}-${hourlyRates.peakMax}€/h`} soirs, weekends et jours fériés
             </span>
           )}
         </div>
