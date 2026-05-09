@@ -34,7 +34,7 @@ function parseRSSFeed(xmlText: string): InstagramPost[] {
   
   const posts: InstagramPost[] = [];
   
-  items.forEach((itemXml) => {
+  items.slice(0, 12).forEach((itemXml) => {
     const titleMatch = itemXml.match(/<title>\s*<!\[CDATA\[(.*?)\]\]>\s*<\/title>/);
     const title = titleMatch ? titleMatch[1] : (itemXml.match(/<title>(.*?)<\/title>/)?.[1] || "");
     

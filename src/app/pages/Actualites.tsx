@@ -95,10 +95,10 @@ export function Actualites() {
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {posts.map((post, i) => (
-              <button
+              <div
                 key={post.id}
                 onClick={() => openPost(post)}
-                className={`group overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent text-left transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_30px_rgba(249,176,53,0.1)] ${
+                className={`group cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent text-left transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_30px_rgba(249,176,53,0.1)] ${
                   isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
                 }`}
                 style={{ transitionDelay: `${300 + i * 100}ms` }}
@@ -129,7 +129,7 @@ export function Actualites() {
                     {formatDate(post.timestamp)}
                   </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
