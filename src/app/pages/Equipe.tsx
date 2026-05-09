@@ -50,13 +50,13 @@ export function Equipe() {
   }, []);
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center pb-20 pt-32">
+    <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
       <ScrollUp />
 
       <div className="relative w-full px-4">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-16 text-center">
-            <h1 className="font-blanka text-5xl md:text-6xl lg:text-7xl">L'ÉQUIPE</h1>
+          <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+            <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">L'ÉQUIPE</h1>
             <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
             <p className="mt-6 text-lg text-white/60">
               Les passionnés qui font vivre H3 Studios
@@ -67,7 +67,7 @@ export function Equipe() {
             {team.map((member, i) => (
               <div
                 key={member.name}
-                className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_40px_rgba(249,176,53,0.15)] ${
+                className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_40px_rgba(249,176,53,0.15)] ${
                   isVisible
                     ? "translate-y-0 opacity-100"
                     : "translate-y-10 opacity-0"

@@ -55,7 +55,7 @@ export function CartSummary({ cart, total, onRemove, onCheckout }: CartSummaryPr
               )}
               <button
                 onClick={() => onRemove(booking.id)}
-                className="rounded-full p-1 transition-colors hover:bg-white/10"
+                className="rounded-full p-1 transition-colors hover:bg-white/15"
                 aria-label="Supprimer"
               >
                 <X className="h-4 w-4 text-white/60" />

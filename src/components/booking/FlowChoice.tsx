@@ -30,12 +30,12 @@ export function FlowChoice({ onSelect, disabled = false }: FlowChoiceProps) {
           className={`
             group flex flex-col items-center gap-3 rounded-xl border-2 p-5 transition-all
             ${disabled
-              ? "cursor-not-allowed border-white/10 bg-white/5 opacity-50"
-              : "border-white/20 bg-white/5 hover:border-primary hover:bg-primary/10"
+              ? "cursor-not-allowed border-white/10 bg-white/15 opacity-50"
+              : "border-white/20 bg-white/15 hover:border-primary hover:bg-primary/10"
             }
           `}
         >
-          <div className={`rounded-full p-3 transition-colors ${disabled ? "bg-white/10" : "bg-primary/20 group-hover:bg-primary/30"}`}>
+          <div className={`rounded-full p-3 transition-colors ${disabled ? "bg-white/15" : "bg-primary/20 group-hover:bg-primary/30"}`}>
             <Calendar className={`h-7 w-7 ${disabled ? "text-white/30" : "text-primary"}`} />
           </div>
           <div className="text-center">
@@ -52,12 +52,12 @@ export function FlowChoice({ onSelect, disabled = false }: FlowChoiceProps) {
           className={`
             group flex flex-col items-center gap-3 rounded-xl border-2 p-5 transition-all
             ${studioDisabled
-              ? "cursor-not-allowed border-white/10 bg-white/5 opacity-50"
-              : "border-white/20 bg-white/5 hover:border-primary hover:bg-primary/10"
+              ? "cursor-not-allowed border-white/10 bg-white/15 opacity-50"
+              : "border-white/20 bg-white/15 hover:border-primary hover:bg-primary/10"
             }
           `}
         >
-          <div className={`rounded-full p-3 transition-colors ${studioDisabled ? "bg-white/10" : "bg-primary/20 group-hover:bg-primary/30"}`}>
+          <div className={`rounded-full p-3 transition-colors ${studioDisabled ? "bg-white/15" : "bg-primary/20 group-hover:bg-primary/30"}`}>
             <Music2 className={`h-7 w-7 ${studioDisabled ? "text-white/30" : "text-primary"}`} />
           </div>
           <div className="text-center">

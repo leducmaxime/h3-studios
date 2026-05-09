@@ -85,7 +85,7 @@ export function ProgressIndicator({
                         ? "bg-primary/20 ring-2 ring-primary"
                         : isCurrent
                           ? "bg-primary/30 ring-2 ring-primary"
-                          : "bg-white/5 ring-1 ring-white/20"
+                          : "bg-white/15 ring-1 ring-white/20"
                     }
                     ${isClickable ? "hover:bg-primary/40 hover:scale-110" : ""}
                   `}

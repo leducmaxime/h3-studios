@@ -43,9 +43,9 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
   }
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
+    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <div className={`w-full max-w-[600px] px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-        <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
+        <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/90 backdrop-blur">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
 
           <div className="relative p-6 sm:p-8 text-center">
@@ -64,7 +64,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
             </p>
 
             {bookingData && (
-              <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4 text-left">
+              <div className="mb-6 rounded-xl border border-white/10 bg-white/15 p-4 text-left">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-white/60">Référence(s)</span>
                   <span className="font-mono font-medium text-primary">
@@ -95,7 +95,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
               
               <a
                 href="/reservation"
-                className="flex items-center justify-center gap-2 rounded-lg border border-white/20 py-3 font-medium text-white transition-colors hover:bg-white/10"
+                className="flex items-center justify-center gap-2 rounded-lg border border-white/20 py-3 font-medium text-white transition-colors hover:bg-white/15"
               >
                 <Calendar className="h-5 w-5" />
                 Nouvelle réservation

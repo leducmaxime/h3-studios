@@ -36,7 +36,7 @@ function EquipmentCard({ item, index, isVisible }: { item: MaterielItem; index: 
   const Icon = ICONS[item.icon];
   return (
     <div
-      className={`group rounded-xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-4 transition-all duration-500 hover:border-primary/30 hover:bg-white/[0.07] ${
+      className={`group rounded-xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent p-4 transition-all duration-500 hover:border-primary/30 hover:bg-white/[0.07] ${
         isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
       }`}
       style={{ transitionDelay: `${index * 50}ms` }}
@@ -58,7 +58,7 @@ function RecordingCard({ item, index, isVisible }: { item: MaterielListItem; ind
   const Icon = ICONS[item.icon];
   return (
     <div
-      className={`group rounded-xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-4 transition-all duration-500 hover:border-primary/30 hover:bg-white/[0.07] ${
+      className={`group rounded-xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent p-4 transition-all duration-500 hover:border-primary/30 hover:bg-white/[0.07] ${
         isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
       }`}
       style={{ transitionDelay: `${index * 75}ms` }}
@@ -99,12 +99,12 @@ export function LeMateriel() {
   }, []);
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center pb-20 pt-32">
+    <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
       <ScrollUp />
 
       <div className="w-full max-w-6xl px-4">
-        <div className="mb-16 text-center">
-          <h1 className="font-blanka text-5xl md:text-6xl lg:text-7xl">LE MATÉRIEL</h1>
+        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LE MATÉRIEL</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           <p className="mt-6 text-lg text-white/60 max-w-2xl mx-auto">
             Du matériel de qualité professionnelle pour des répétitions et enregistrements dans les meilleures conditions

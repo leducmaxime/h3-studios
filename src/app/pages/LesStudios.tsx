@@ -47,8 +47,12 @@ export function LesStudios() {
       <ScrollUp />
 
       <div className="w-full max-w-5xl px-4">
-        <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LES STUDIOS</h1>
+          <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          <p className="mt-6 text-lg text-white/60">
+            Deux espaces professionnels pour vos répétitions et enregistrements
+          </p>
         </div>
 
         <div className={`flex flex-wrap items-center justify-center gap-6 text-sm text-white/50 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
@@ -82,7 +86,7 @@ export function LesStudios() {
         {studios.map((studio, i) => (
           <div
             key={i}
-            className={`group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+            className={`group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/15 transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
             style={{ transitionDelay: `${300 + i * 100}ms` }}
           >
             <div className="relative aspect-video">

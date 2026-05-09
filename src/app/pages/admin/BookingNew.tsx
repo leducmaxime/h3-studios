@@ -739,7 +739,7 @@ export function AdminBookingNew() {
                             type="button"
                             onClick={() => handleDecrement(eq)}
                             disabled={quantity === 0}
-                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10"
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
                             aria-label={`Retirer ${eq.name}`}
                           >
                             <Minus className="h-3.5 w-3.5" />
@@ -753,7 +753,7 @@ export function AdminBookingNew() {
                             type="button"
                             onClick={() => handleIncrement(eq)}
                             disabled={quantity >= eq.maxPerSession}
-                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10"
+                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
                             aria-label={`Ajouter ${eq.name}`}
                           >
                             <Plus className="h-3.5 w-3.5" />

@@ -101,7 +101,7 @@ export function EquipmentSelector({
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-white/20 bg-white/5 p-4">
+      <div className="rounded-xl border border-white/20 bg-white/15 p-4">
         <div className="flex h-20 items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
@@ -111,14 +111,14 @@ export function EquipmentSelector({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-white/20 bg-white/5 p-4">
+      <div className="rounded-xl border border-white/20 bg-white/15 p-4">
         <p className="text-sm text-red-400">Erreur: {error}</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-white/20 bg-white/5 p-4">
+    <div className="rounded-xl border border-white/20 bg-white/15 p-4">
       <p className="mb-4 text-xs font-medium text-primary">
         Compris dans votre réservation : Batterie (sans crash), sono, amplis guitare, amplis basse, 4 micros, pupitres, pied synthé
       </p>
@@ -183,7 +183,7 @@ export function EquipmentSelector({
                     type="button"
                     onClick={() => handleDecrement(eq.id)}
                     disabled={quantity === 0}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10"
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
                     aria-label={`Retirer ${eq.name}`}
                   >
                     <Minus className="h-3.5 w-3.5" />
@@ -197,7 +197,7 @@ export function EquipmentSelector({
                     type="button"
                     onClick={() => handleIncrement(eq.id, eq.maxPerSession)}
                     disabled={quantity >= eq.maxPerSession}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10"
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
                     aria-label={`Ajouter ${eq.name}`}
                   >
                     <Plus className="h-3.5 w-3.5" />

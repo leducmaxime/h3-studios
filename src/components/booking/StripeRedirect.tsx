@@ -65,7 +65,7 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
         <button
           onClick={onBack}
           disabled={isProcessing}
-          className="rounded-full p-2 transition-colors hover:bg-white/10 disabled:opacity-50"
+          className="rounded-full p-2 transition-colors hover:bg-white/15 disabled:opacity-50"
           aria-label="Retour"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -78,7 +78,7 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="order-2 lg:order-1">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+          <div className="rounded-xl border border-white/10 bg-white/15 p-6">
             <div className="mb-6 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
                 <CreditCard className="h-6 w-6 text-primary" />
@@ -122,7 +122,7 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
                 w-full flex items-center justify-center gap-2 rounded-lg py-4 text-lg font-semibold transition-all
                 ${!isProcessing
                   ? "bg-primary text-black hover:bg-primary/90"
-                  : "bg-white/10 text-white/50 cursor-not-allowed"
+                  : "bg-white/15 text-white/50 cursor-not-allowed"
                 }
               `}
             >
@@ -147,7 +147,7 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
         </div>
 
         <div className="order-1 lg:order-2">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="rounded-xl border border-white/10 bg-white/15 p-4">
             <h4 className="mb-4 font-semibold">Récapitulatif de commande</h4>
             
             <div className="space-y-3">

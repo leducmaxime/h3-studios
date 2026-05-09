@@ -18,7 +18,7 @@ export function StudioPicker({ onSelect, onBack, groupType, hideHeader = false }
           <div className="flex items-center gap-4">
             <button
               onClick={onBack}
-              className="rounded-full p-2 transition-colors hover:bg-white/10"
+              className="rounded-full p-2 transition-colors hover:bg-white/15"
               aria-label="Retour"
             >
               <ChevronLeft className="h-5 w-5" />
@@ -28,7 +28,7 @@ export function StudioPicker({ onSelect, onBack, groupType, hideHeader = false }
             </div>
           </div>
         )}
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-white/20 bg-white/5 p-6 text-center">
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-white/20 bg-white/15 p-6 text-center">
           <p className="text-white/70">
             Le choix du studio se fera sur place selon la disponibilité, priorité aux groupes.
           </p>
@@ -49,7 +49,7 @@ export function StudioPicker({ onSelect, onBack, groupType, hideHeader = false }
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
-            className="rounded-full p-2 transition-colors hover:bg-white/10"
+            className="rounded-full p-2 transition-colors hover:bg-white/15"
             aria-label="Retour"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -72,7 +72,7 @@ export function StudioPicker({ onSelect, onBack, groupType, hideHeader = false }
             <button
               key={studioId}
               onClick={() => onSelect(studioId)}
-              className="group flex flex-col overflow-hidden rounded-xl border-2 border-white/20 bg-white/5 text-left transition-all hover:border-primary hover:bg-primary/10"
+              className="group flex flex-col overflow-hidden rounded-xl border-2 border-white/20 bg-white/15 text-left transition-all hover:border-primary hover:bg-primary/10"
             >
               <div className="relative h-40 w-full overflow-hidden">
                 <img

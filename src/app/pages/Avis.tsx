@@ -113,12 +113,36 @@ export function Avis() {
   }, []);
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
+    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <ScrollUp />
-      <div className={`font-blanka text-3xl md:text-5xl transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>AVIS CLIENTS</div>
+      <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+        <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">AVIS CLIENTS</h1>
+        <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+      </div>
 
       <div className="w-full max-w-[900px] px-4">
-        <div className={`mb-8 flex flex-col items-center gap-4 rounded-2xl border-4 border-primary bg-black/80 p-6 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+        <div className={`mb-6 flex flex-col items-center gap-4 rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-transparent p-6 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+          <div className="flex items-center gap-2">
+            <Star className="h-6 w-6 fill-primary text-primary" />
+            <span className="text-lg font-semibold text-white">Votre avis compte !</span>
+            <Star className="h-6 w-6 fill-primary text-primary" />
+          </div>
+          <p className="max-w-md text-sm text-white/70">
+            Vous avez répété chez nous ? Partagez votre expérience en 2 minutes. 
+            Votre retour aide d'autres musiciens à découvrir H3 Studios.
+          </p>
+          <a
+            href="https://search.google.com/local/writereview?placeid=ChIJi9IayzcL5kcRKCQIsydm0kA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-all hover:bg-primary/90 hover:scale-105"
+          >
+            <Star className="h-5 w-5 fill-black" />
+            Laisser un avis Google
+          </a>
+        </div>
+
+        <div className={`mb-8 flex flex-col items-center gap-4 rounded-2xl border-4 border-primary bg-black/90 p-6 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
           <div className="flex items-center gap-3">
             <span className="text-4xl font-bold text-primary">{averageRating}</span>
             <div className="flex flex-col items-start gap-1">
@@ -138,26 +162,26 @@ export function Avis() {
           </a>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-4">
-          {reviews.map((review, index) => (
+        <div className="flex flex-col gap-4">
+          {reviews.slice(0, 20).map((review, index) => (
             <div
               key={review.id}
-              className={`flex w-full flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 transition-all duration-700 sm:w-[calc(50%-1rem)] lg:w-[calc(33.33%-1rem)] ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
-              style={{ transitionDelay: `${200 + index * 100}ms` }}
+              className={`flex w-full flex-col gap-3 rounded-xl border border-white/10 bg-white/15 p-6 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+              style={{ transitionDelay: `${200 + index * 50}ms` }}
             >
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-lg font-bold text-primary">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-xl font-bold text-primary">
                     {review.author_name.charAt(0)}
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-medium">{review.author_name}</span>
-                    <span className="text-xs text-white/50">{review.relative_time || "Récemment"}</span>
+                    <span className="font-medium text-lg">{review.author_name}</span>
+                    <span className="text-sm text-white/50">{review.relative_time || "Récemment"}</span>
                   </div>
                 </div>
+                <StarRating rating={review.rating} />
               </div>
-              <StarRating rating={review.rating} />
-              <p className="text-sm text-white/80 leading-relaxed">
+              <p className="text-base text-white/90 leading-relaxed">
                 "{review.text_original || review.text}"
               </p>
             </div>
@@ -169,7 +193,7 @@ export function Avis() {
             href="https://www.google.com/search?q=H3+studios+sucy+en+brie+avis"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+            className="text-sm text-primary underline hover:text-primary/80"
           >
             Voir tous les avis sur Google
           </a>

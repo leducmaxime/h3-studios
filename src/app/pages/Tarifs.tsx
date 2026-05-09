@@ -20,10 +20,13 @@ export function Tarifs() {
   }, []);
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
+    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <ScrollUp />
-      <div className={`text-center font-blanka text-3xl md:text-5xl transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-        TARIFS
+      <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+        <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">
+          TARIFS
+        </h1>
+        <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
       </div>
 
       <div className={`mt-4 flex w-full max-w-[1048px] flex-col gap-8 px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>

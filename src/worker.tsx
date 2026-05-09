@@ -107,7 +107,7 @@ import {
   syncGoogleReviews,
 } from "@/lib/google-reviews";
 import {
-  getCachedInstagramFeed,
+  fetchInstagramFeedFromRSS,
   syncInstagram,
 } from "@/lib/instagram";
 
@@ -3012,11 +3012,46 @@ const app = defineApp([
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
 
     try {
-      const posts = await getCachedInstagramFeed(env.DB);
+      const posts = await fetchInstagramFeedFromRSS();
       return jsonSuccess(posts);
     } catch (error) {
       console.error("GET /api/instagram/feed error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch feed", 500);
+    }
+  }),
+
+  route("/api/instagram/proxy-image", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const url = new URL(request.url);
+      const imageUrl = url.searchParams.get("url");
+      
+      if (!imageUrl) {
+        return jsonError("URL parameter required", 400);
+      }
+
+      const imageResponse = await fetch(imageUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+      });
+
+      if (!imageResponse.ok) {
+        return jsonError("Failed to fetch image", 502);
+      }
+
+      const blob = await imageResponse.blob();
+      return new Response(blob, {
+        headers: {
+          "Content-Type": imageResponse.headers.get("Content-Type") || "image/jpeg",
+          "Cache-Control": "public, max-age=3600",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    } catch (error) {
+      console.error("GET /api/instagram/proxy-image error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to proxy image", 500);
     }
   }),
 

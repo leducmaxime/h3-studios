@@ -50,10 +50,10 @@ export function PaymentChoice({ cart, total, onSelectMethod, onBack }: PaymentCh
 
          <button
            onClick={() => onSelectMethod("cash")}
-           className="group flex flex-col gap-3 rounded-xl border-2 border-white/20 bg-white/5 p-4 text-left transition-all hover:border-white/40 hover:bg-white/10 md:gap-4 md:p-6"
+           className="group flex flex-col gap-3 rounded-xl border-2 border-white/20 bg-white/15 p-4 text-left transition-all hover:border-white/40 hover:bg-white/15 md:gap-4 md:p-6"
          >
            <div className="flex items-center gap-3">
-             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 md:h-12 md:w-12">
+             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 md:h-12 md:w-12">
                <Banknote className="h-5 w-5 text-white/70 md:h-6 md:w-6" />
              </div>
              <div>

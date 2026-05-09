@@ -261,13 +261,13 @@ export function AdminBlockedSlots() {
     const rowText = tone === "muted" ? "text-zinc-600" : "text-zinc-200";
     const subText = tone === "muted" ? "text-zinc-600" : "text-zinc-400";
     const border = tone === "muted" ? "border-white/5" : "border-white/10";
-    const bg = tone === "muted" ? "bg-white/5 opacity-60" : "bg-white/5";
+    const bg = tone === "muted" ? "bg-white/15 opacity-60" : "bg-white/15";
 
     return (
       <div className={`overflow-hidden rounded-xl border ${border} ${bg}`}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px]">
-            <thead className={`border-b ${border} bg-white/5`}>
+            <thead className={`border-b ${border} bg-white/15`}>
               <tr>
                 <th className={`px-4 py-3 text-left text-sm font-medium ${headerText}`}>Date</th>
                 <th className={`px-4 py-3 text-left text-sm font-medium ${headerText}`}>Studio</th>
@@ -278,7 +278,7 @@ export function AdminBlockedSlots() {
             </thead>
             <tbody className={`divide-y ${border}`}>
               {list.map((slot) => (
-                <tr key={slot.id} className={tone === "muted" ? "" : "hover:bg-white/5 transition-colors"}>
+                <tr key={slot.id} className={tone === "muted" ? "" : "hover:bg-white/15 transition-colors"}>
                   <td className={`px-4 py-3 text-sm ${rowText}`}>{formatDate(slot.date)}</td>
                   <td className={`px-4 py-3 text-sm ${rowText}`}>
                     <Badge variant="outline" className={tone === "muted" ? "border-white/10 text-zinc-500" : "border-white/15 text-zinc-200"}>
@@ -342,13 +342,13 @@ export function AdminBlockedSlots() {
         <>
           {slots.length > 0 && (
             <div className="space-y-4">
-              <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 md:flex-row md:items-end md:justify-between">
+              <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/15 p-4 md:flex-row md:items-end md:justify-between">
                 <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-end">
                   <div className="w-full md:w-56">
                     <select
                       id="period"
                       aria-label="Période"
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                      className="w-full rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                       value={periodFilter}
                       onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)}
                     >
@@ -362,7 +362,7 @@ export function AdminBlockedSlots() {
                     <select
                       id="studioFilter"
                       aria-label="Studio"
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                      className="w-full rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                       value={studioFilter}
                       onChange={(e) => setStudioFilter(e.target.value as StudioId | "all")}
                     >
@@ -380,7 +380,7 @@ export function AdminBlockedSlots() {
                       id="dateFrom"
                       type="date"
                       aria-label="Du"
-                      className="border-white/10 bg-white/5 text-white"
+                      className="border-white/10 bg-white/15 text-white"
                       value={dateFrom}
                       onChange={(e) => setDateFrom(e.target.value)}
                     />
@@ -390,7 +390,7 @@ export function AdminBlockedSlots() {
                       id="dateTo"
                       type="date"
                       aria-label="Au"
-                      className="border-white/10 bg-white/5 text-white"
+                      className="border-white/10 bg-white/15 text-white"
                       value={dateTo}
                       onChange={(e) => setDateTo(e.target.value)}
                     />
@@ -399,7 +399,7 @@ export function AdminBlockedSlots() {
                     <select
                       id="sortBy"
                       aria-label="Trier par"
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                      className="w-full rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                     >
@@ -413,7 +413,7 @@ export function AdminBlockedSlots() {
                     <select
                       id="sortOrder"
                       aria-label="Ordre"
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                      className="w-full rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                       value={sortOrder}
                       onChange={(e) => setSortOrder(e.target.value as typeof sortOrder)}
                     >
@@ -450,7 +450,7 @@ export function AdminBlockedSlots() {
                   periodFilter === "past" ? "muted" : "default",
                 )
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-white/5 py-14">
+                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-white/15 py-14">
                   <Ban className="mb-3 h-10 w-10 text-zinc-600" />
                   <p className="text-sm text-zinc-400">Aucun blocage ne correspond aux filtres.</p>
                 </div>
@@ -459,7 +459,7 @@ export function AdminBlockedSlots() {
           )}
 
           {slots.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-white/5 py-20">
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-white/15 py-20">
               <Ban className="mb-4 h-12 w-12 text-zinc-600" />
               <h3 className="mb-2 text-lg font-medium text-white">Aucun blocage</h3>
               <p className="mb-6 text-sm text-zinc-400">
@@ -491,7 +491,7 @@ export function AdminBlockedSlots() {
               <Label htmlFor="studio">Studio (optionnel)</Label>
               <select
                 id="studio"
-                className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                className="w-full rounded-md border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                 value={formData.studioId}
                 onChange={(e) =>
                   setFormData({ ...formData, studioId: e.target.value as StudioId | "" })
@@ -512,7 +512,7 @@ export function AdminBlockedSlots() {
                 id="date"
                 type="date"
                 min={getMinDate()}
-                className="border-white/10 bg-white/5 text-white"
+                className="border-white/10 bg-white/15 text-white"
                 value={formData.date}
                 onChange={(e) => {
                   const nextDate = e.target.value;
@@ -530,7 +530,7 @@ export function AdminBlockedSlots() {
                 id="dateTo"
                 type="date"
                 min={formData.date || getMinDate()}
-                className="border-white/10 bg-white/5 text-white"
+                className="border-white/10 bg-white/15 text-white"
                 value={formData.dateTo}
                 onChange={(e) => setFormData({ ...formData, dateTo: e.target.value })}
               />
@@ -553,7 +553,7 @@ export function AdminBlockedSlots() {
                     endTime: checked ? "00:00" : prev.endTime,
                   }));
                 }}
-                className="h-4 w-4 rounded border-white/10 bg-white/5"
+                className="h-4 w-4 rounded border-white/10 bg-white/15"
               />
               <Label htmlFor="wholeDay">Toute la journée</Label>
             </div>
@@ -563,7 +563,7 @@ export function AdminBlockedSlots() {
                 <Label htmlFor="startTime">Heure de début *</Label>
                 <select
                   id="startTime"
-                  className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-md border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                   value={formData.startTime}
                   onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                   disabled={formData.wholeDay}
@@ -581,7 +581,7 @@ export function AdminBlockedSlots() {
                 <Label htmlFor="endTime">Heure de fin *</Label>
                 <select
                   id="endTime"
-                  className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-md border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                   value={formData.endTime}
                   onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
                   disabled={formData.wholeDay}
@@ -602,7 +602,7 @@ export function AdminBlockedSlots() {
               <Input
                 id="reason"
                 placeholder="Ex: Vacances d'été, Maintenance, Événement privé..."
-                className="border-white/10 bg-white/5 text-white"
+                className="border-white/10 bg-white/15 text-white"
                 value={formData.reason}
                 onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
               />
@@ -641,7 +641,7 @@ export function AdminBlockedSlots() {
           </DialogHeader>
 
           {selectedSlot && (
-            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <div className="rounded-lg border border-white/10 bg-white/15 p-4">
               <div className="mb-2 text-sm font-medium text-white">
                 {selectedSlot.studio_id ? STUDIOS[selectedSlot.studio_id].name : "Tous les studios"}
               </div>

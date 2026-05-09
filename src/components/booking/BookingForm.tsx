@@ -94,7 +94,7 @@ export function BookingForm({
       <div className="flex items-center gap-3 sm:gap-4">
         <button
           onClick={onBack}
-          className="rounded-full p-2 transition-colors hover:bg-white/10"
+          className="rounded-full p-2 transition-colors hover:bg-white/15"
           aria-label="Retour"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -114,7 +114,7 @@ export function BookingForm({
             onChange={(e) => handleFieldChange("userName", e.target.value)}
             placeholder="Jean Dupont"
             required
-            className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
+            className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
           />
         </div>
 
@@ -129,7 +129,7 @@ export function BookingForm({
             onChange={(e) => handleFieldChange("userEmail", e.target.value)}
             placeholder="jean@exemple.fr"
             required
-            className={`rounded-lg border bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
+            className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
               validationErrors.userEmail ? "border-red-500" : "border-white/20"
             }`}
           />
@@ -150,7 +150,7 @@ export function BookingForm({
             placeholder="0612345678"
             maxLength={10}
             required
-            className={`rounded-lg border bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
+            className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
               validationErrors.userPhone ? "border-red-500" : "border-white/20"
             }`}
           />
@@ -169,7 +169,7 @@ export function BookingForm({
             value={bandName}
             onChange={(e) => handleFieldChange("bandName", e.target.value)}
             placeholder="Les Rockers"
-            className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
+            className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
           />
         </div>
       </div>
@@ -187,7 +187,7 @@ export function BookingForm({
             onChange={(e) => handleFieldChange("billingAddress", e.target.value)}
             placeholder="12 Rue de la Musique"
             required
-            className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
+            className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
           />
         </div>
         <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
@@ -204,7 +204,7 @@ export function BookingForm({
               placeholder="94370"
               maxLength={5}
               required
-              className={`rounded-lg border bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
+              className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3 ${
                 validationErrors.billingPostalCode ? "border-red-500" : "border-white/20"
               }`}
             />
@@ -223,7 +223,7 @@ export function BookingForm({
               onChange={(e) => handleFieldChange("billingCity", e.target.value)}
               placeholder="Sucy-en-Brie"
               required
-              className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
+              className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:px-4 sm:py-3"
             />
           </div>
         </div>
@@ -239,7 +239,7 @@ export function BookingForm({
           onChange={(e) => handleFieldChange("additionalInfo", e.target.value)}
           placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
           rows={3}
-          className="rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-y sm:px-4 sm:py-3"
+          className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-y sm:px-4 sm:py-3"
         />
       </div>
 
@@ -250,7 +250,7 @@ export function BookingForm({
           w-full rounded-lg py-3.5 text-base font-semibold transition-all sm:py-4 sm:text-lg
           ${canContinue
             ? "bg-primary text-black hover:bg-primary/90"
-            : "bg-white/10 text-white/50 cursor-not-allowed"
+            : "bg-white/15 text-white/50 cursor-not-allowed"
           }
         `}
       >

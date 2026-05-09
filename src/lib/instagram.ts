@@ -13,63 +13,90 @@ export interface InstagramFeed {
   last_updated: string;
 }
 
-const INSTAGRAM_GRAPH_URL = "https://graph.instagram.com";
+const RSS_APP_FEED_URL = "https://rss.app/feeds/wpmloa9fZdyyGMag.xml";
 
-export async function fetchInstagramFeed(accessToken: string): Promise<InstagramPost[]> {
-  const fields = "id,caption,media_type,media_url,permalink,thumbnail_url,timestamp";
-  const url = `${INSTAGRAM_GRAPH_URL}/me/media?fields=${fields}&access_token=${accessToken}&limit=12`;
-
-  const response = await fetch(url);
+export async function fetchInstagramFeedFromRSS(): Promise<InstagramPost[]> {
+  const response = await fetch(RSS_APP_FEED_URL, {
+    cf: { cacheTtl: 3600 }
+  });
+  
   if (!response.ok) {
-    const error = await response.json() as any;
-    throw new Error(`Instagram API error: ${error?.error?.message || response.statusText}`);
+    throw new Error(`RSS feed error: ${response.statusText}`);
   }
 
-  const json = await response.json() as { data: InstagramPost[] };
-  return json.data;
+  const xmlText = await response.text();
+  const posts = parseRSSFeed(xmlText);
+  return posts;
 }
 
-export async function refreshInstagramToken(accessToken: string): Promise<string> {
-  const url = `${INSTAGRAM_GRAPH_URL}/refresh_access_token?grant_type=ig_refresh_token&access_token=${accessToken}`;
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    const error = await response.json() as any;
-    throw new Error(`Instagram token refresh error: ${error?.error?.message || response.statusText}`);
-  }
-
-  const json = await response.json() as { access_token: string };
-  return json.access_token;
+function parseRSSFeed(xmlText: string): InstagramPost[] {
+  const items = xmlText.match(/<item>[\s\S]*?<\/item>/g) || [];
+  
+  const posts: InstagramPost[] = [];
+  
+  items.forEach((itemXml) => {
+    const titleMatch = itemXml.match(/<title>\s*<!\[CDATA\[(.*?)\]\]>\s*<\/title>/);
+    const title = titleMatch ? titleMatch[1] : (itemXml.match(/<title>(.*?)<\/title>/)?.[1] || "");
+    
+    const linkMatch = itemXml.match(/<link>(.*?)<\/link>/);
+    const link = linkMatch ? linkMatch[1] : "";
+    
+    const pubDateMatch = itemXml.match(/<pubDate>(.*?)<\/pubDate>/);
+    const pubDate = pubDateMatch ? pubDateMatch[1] : "";
+    
+    const guidMatch = itemXml.match(/<guid[^>]*>(.*?)<\/guid>/);
+    const guid = guidMatch ? guidMatch[1] : "";
+    
+    let mediaUrl = "";
+    
+    const mediaContentMatch = itemXml.match(/<media:content[^>]*url="([^"]+)"/);
+    if (mediaContentMatch) {
+      mediaUrl = mediaContentMatch[1]
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"');
+    }
+    
+    if (!mediaUrl) {
+      const imgMatch = itemXml.match(/<img[^>]+src="([^"]+)"/);
+      if (imgMatch) {
+        mediaUrl = imgMatch[1]
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"');
+      }
+    }
+    
+    const mediaType = itemXml.includes('medium="video"') || title.toLowerCase().includes("reel")
+      ? "VIDEO"
+      : "IMAGE";
+    
+    posts.push({
+      id: guid || link,
+      caption: title,
+      media_type: mediaType as "IMAGE" | "VIDEO",
+      media_url: mediaUrl,
+      permalink: link,
+      thumbnail_url: mediaUrl,
+      timestamp: new Date(pubDate).toISOString(),
+    });
+  });
+  
+  return posts;
 }
 
 export async function syncInstagram(db: D1Database): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
-    const tokenSetting = await db
-      .prepare("SELECT value FROM settings WHERE key = ?")
-      .bind("instagram_access_token")
-      .first<{ value: string }>();
+    const posts = await fetchInstagramFeedFromRSS();
 
-    if (!tokenSetting?.value) {
-      return { success: false, error: "No Instagram access token configured" };
-    }
-
-    const currentToken = tokenSetting.value;
-    const posts = await fetchInstagramFeed(currentToken);
-
-    let newToken = currentToken;
-    try {
-      newToken = await refreshInstagramToken(currentToken);
-    } catch {}
-
-    await db.batch([
-      db.prepare("INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))")
-        .bind("instagram-token", "instagram_access_token", newToken),
-      db.prepare("INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))")
-        .bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
-          data: posts,
-          last_updated: new Date().toISOString()
-        }))
-    ]);
+    await db.prepare(
+      "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
+    ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
+      data: posts,
+      last_updated: new Date().toISOString()
+    })).run();
 
     return { success: true, count: posts.length };
   } catch (error) {

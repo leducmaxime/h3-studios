@@ -79,7 +79,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
         {cart.map((booking) => (
           <div
             key={booking.id}
-            className="rounded-xl border border-white/10 bg-white/5 p-4"
+            className="rounded-xl border border-white/10 bg-white/15 p-4"
           >
             <div className="mb-3 flex items-start justify-between">
               <div>
@@ -138,14 +138,14 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
                   );
                   downloadICS(ics, `h3-studios-${booking.bookingRef}.ics`);
                 }}
-                className="flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-xs transition-colors hover:bg-white/20"
+                className="flex items-center gap-1 rounded-lg bg-white/15 px-3 py-1.5 text-xs transition-colors hover:bg-white/20"
               >
                 <Download className="h-3 w-3" />
                 .ics
               </button>
               <button
                 onClick={() => handleAddToGoogleCalendar(booking)}
-                className="flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-xs transition-colors hover:bg-white/20"
+                className="flex items-center gap-1 rounded-lg bg-white/15 px-3 py-1.5 text-xs transition-colors hover:bg-white/20"
               >
                 <ExternalLink className="h-3 w-3" />
                 Google
@@ -167,7 +167,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
       {cart.length > 1 && (
         <button
           onClick={handleDownloadAll}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 transition-colors hover:bg-white/5"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 transition-colors hover:bg-white/15"
         >
           <Download className="h-5 w-5" />
           Télécharger tous les .ics
@@ -178,7 +178,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
         <div className="flex gap-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 rounded-lg border border-white/20 px-4 py-3 transition-colors hover:bg-white/5"
+            className="flex items-center gap-2 rounded-lg border border-white/20 px-4 py-3 transition-colors hover:bg-white/15"
           >
             <ChevronLeft className="h-4 w-4" />
             Retour

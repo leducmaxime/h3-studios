@@ -80,7 +80,7 @@ export function GroupTypeToggle({ value, onChange }: GroupTypeToggleProps) {
                 flex flex-col items-center gap-0.5 lg:gap-1 rounded-lg p-2 lg:p-3 transition-all
                 ${selected
                   ? "bg-primary text-black ring-2 ring-primary ring-offset-1 lg:ring-offset-2 ring-offset-black"
-                  : "bg-white/10 hover:bg-white/20"
+                  : "bg-white/15 hover:bg-white/20"
                 }
               `}
             >

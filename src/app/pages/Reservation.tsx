@@ -268,7 +268,7 @@ export function Reservation({ step }: ReservationProps) {
         </div>
 
         {state.cart.length > 0 && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="rounded-xl border border-white/10 bg-white/15 p-3">
             <div className="mb-2 flex items-center gap-2 text-sm">
               <ShoppingCart className="h-4 w-4 text-primary" />
               <span className="font-medium text-white/80">
@@ -304,10 +304,13 @@ export function Reservation({ step }: ReservationProps) {
   };
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
+    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <ScrollUp />
-      <div className={`text-center font-blanka text-3xl md:text-5xl transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-        RESERVATION
+      <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+        <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">
+          RESERVATION
+        </h1>
+        <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
       </div>
       
       <div className={`w-full max-w-none sm:max-w-[900px] -mx-4 sm:mx-0 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
@@ -332,7 +335,7 @@ export function Reservation({ step }: ReservationProps) {
           </div>
         )}
 
-        <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/80 backdrop-blur">
+        <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/90 backdrop-blur">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
           <div className="relative p-4 sm:p-6 md:p-8">
@@ -392,7 +395,7 @@ export function Reservation({ step }: ReservationProps) {
                 <div className="flex items-center gap-4">
                   <button
                     onClick={goBack}
-                    className="rounded-full p-2 transition-colors hover:bg-white/10"
+                    className="rounded-full p-2 transition-colors hover:bg-white/15"
                     aria-label="Retour"
                   >
                     <ChevronLeft className="h-5 w-5" />
@@ -494,7 +497,7 @@ export function Reservation({ step }: ReservationProps) {
                 <div className="flex items-center gap-4">
                   <button
                     onClick={goBack}
-                    className="rounded-full p-2 transition-colors hover:bg-white/10"
+                    className="rounded-full p-2 transition-colors hover:bg-white/15"
                     aria-label="Retour"
                   >
                     <ChevronLeft className="h-5 w-5" />
@@ -649,7 +652,7 @@ export function Reservation({ step }: ReservationProps) {
                               </span>
                               <button
                                 onClick={() => removeFromCart(booking.id)}
-                                className="rounded-full p-1 transition-colors hover:bg-white/10"
+                                className="rounded-full p-1 transition-colors hover:bg-white/15"
                                 aria-label="Supprimer"
                               >
                                 <X className="h-4 w-4 text-white/60" />
@@ -721,7 +724,7 @@ export function Reservation({ step }: ReservationProps) {
                       </button>
                       <button
                         onClick={addAnotherBooking}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/5"
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/15"
                       >
                         <Plus className="h-4 w-4" />
                         Ajouter une autre réservation
@@ -778,7 +781,7 @@ export function Reservation({ step }: ReservationProps) {
       {state.step > 0 && state.step < 8 && (
         <button
           onClick={resetBooking}
-          className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"
+          className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/15 hover:text-white"
         >
           <RotateCcw className="h-4 w-4" />
           Annuler et recommencer

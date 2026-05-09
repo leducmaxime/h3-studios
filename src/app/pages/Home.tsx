@@ -30,7 +30,7 @@ export function Home() {
   }, []);
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center pb-20 pt-32">
+    <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
       <ScrollUp />
 
       <div className="w-full max-w-6xl px-4">
@@ -69,7 +69,7 @@ export function Home() {
             return (
               <div
                 key={i}
-                className={`group flex flex-col items-center rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-6 text-center transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_40px_rgba(249,176,53,0.15)] ${
+                className={`group flex flex-col items-center rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent p-6 text-center transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_40px_rgba(249,176,53,0.15)] ${
                   isVisible
                     ? "translate-y-0 opacity-100"
                     : "translate-y-10 opacity-0"

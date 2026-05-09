@@ -140,7 +140,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
         <button
           onClick={goToPreviousWeek}
           disabled={dayOffset === 0}
-          className="rounded-full p-2 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+          className="rounded-full p-2 transition-colors hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Semaine précédente"
         >
           <ChevronLeft className="h-6 w-6" />
@@ -153,7 +153,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
         <button
           onClick={goToNextWeek}
           disabled={dayOffset >= maxDayOffset}
-          className="rounded-full p-2 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+          className="rounded-full p-2 transition-colors hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Semaine suivante"
         >
           <ChevronRight className="h-6 w-6" />
@@ -183,10 +183,10 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
               className={`
                 relative flex flex-col items-center justify-center rounded-lg lg:rounded-xl p-1.5 lg:p-3 min-h-[72px] lg:min-h-[100px] transition-all
                 ${past || tooFar
-                  ? "opacity-30 cursor-not-allowed bg-white/5"
+                  ? "opacity-30 cursor-not-allowed bg-white/15"
                   : isFull
-                    ? "opacity-70 cursor-not-allowed bg-white/5"
-                    : "hover:bg-primary/20 cursor-pointer bg-white/10"
+                    ? "opacity-70 cursor-not-allowed bg-white/15"
+                    : "hover:bg-primary/20 cursor-pointer bg-white/15"
                 }
                 ${selected
                   ? "ring-2 ring-primary ring-offset-1 lg:ring-offset-2 ring-offset-black bg-primary/20 text-primary"

@@ -12,9 +12,9 @@ export function PaymentCancel() {
   }, []);
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-8 pt-24">
+    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <div className={`w-full max-w-[600px] px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-        <div className="relative overflow-hidden rounded-2xl border-4 border-yellow-500 bg-black/80 backdrop-blur">
+        <div className="relative overflow-hidden rounded-2xl border-4 border-yellow-500 bg-black/90 backdrop-blur">
           <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent" />
 
           <div className="relative p-6 sm:p-8 text-center">
@@ -32,7 +32,7 @@ export function PaymentCancel() {
               Votre paiement a été annulé. Aucun montant n'a été débité.
             </p>
 
-            <div className="mb-6 rounded-lg bg-white/5 border border-white/10 p-4">
+            <div className="mb-6 rounded-lg bg-white/15 border border-white/10 p-4">
               <p className="text-sm text-white/60">
                 Votre panier a été conservé. Vous pouvez reprendre votre réservation 
                 là où vous l'avez laissée ou commencer une nouvelle réservation.
@@ -50,7 +50,7 @@ export function PaymentCancel() {
               
               <a
                 href="/reservation"
-                className="flex items-center justify-center gap-2 rounded-lg border border-white/20 py-3 font-medium text-white transition-colors hover:bg-white/10"
+                className="flex items-center justify-center gap-2 rounded-lg border border-white/20 py-3 font-medium text-white transition-colors hover:bg-white/15"
               >
                 <ArrowLeft className="h-5 w-5" />
                 Modifier ma réservation

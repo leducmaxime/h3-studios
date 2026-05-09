@@ -299,7 +299,7 @@ export function TimeSlotPicker({
       case "available-end":
         return "text-white/90 hover:bg-white/20 cursor-pointer";
       case "available":
-        return "text-white/70 hover:bg-white/10 cursor-pointer";
+        return "text-white/70 hover:bg-white/15 cursor-pointer";
       case "blocked":
         return "text-red-400/50 cursor-not-allowed";
       case "too-close":
@@ -390,7 +390,7 @@ export function TimeSlotPicker({
       case "peak":
         return "bg-primary/5";
       default:
-        return "bg-white/5";
+        return "bg-white/15";
     }
   }, []);
 
@@ -482,7 +482,7 @@ export function TimeSlotPicker({
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
-            className="rounded-full p-2 transition-colors hover:bg-white/10"
+            className="rounded-full p-2 transition-colors hover:bg-white/15"
             aria-label="Retour"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -612,7 +612,7 @@ export function TimeSlotPicker({
           const isPreview = !startTime || !endTime;
 
           return (
-            <div className={`mt-3 flex items-center justify-center gap-3 rounded-lg px-4 py-3 text-base ${isPreview ? "bg-white/5 border border-white/10" : "bg-primary/10 border border-primary/30"}`}>
+            <div className={`mt-3 flex items-center justify-center gap-3 rounded-lg px-4 py-3 text-base ${isPreview ? "bg-white/15 border border-white/10" : "bg-primary/10 border border-primary/30"}`}>
               <span className={`font-semibold ${isPreview ? "text-white/70" : "text-primary"}`}>
                 {displayStart.replace(":00", "h").replace(":30", "h30")} → {displayEnd.replace(":00", "h").replace(":30", "h30")}
               </span>
@@ -630,7 +630,7 @@ export function TimeSlotPicker({
 
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-white/50 mt-3">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-5 h-3 flex-shrink-0 bg-white/10 border border-white/20 rounded-sm" />
+            <span className="inline-block w-5 h-3 flex-shrink-0 bg-white/15 border border-white/20 rounded-sm" />
             Disponible {hourlyRates.offPeakMin === hourlyRates.offPeakMax ? hourlyRates.offPeakMin : `${hourlyRates.offPeakMin}-${hourlyRates.offPeakMax}`}€/h
           </span>
           {hasPeakPricing && (

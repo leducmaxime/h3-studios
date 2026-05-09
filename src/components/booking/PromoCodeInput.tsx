@@ -64,7 +64,7 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
         <button
           type="button"
           onClick={onRemove}
-          className="rounded-full p-1 transition-colors hover:bg-white/10"
+          className="rounded-full p-1 transition-colors hover:bg-white/15"
           aria-label="Retirer le code promo"
         >
           <X className="h-3.5 w-3.5 text-white/50" />
@@ -89,7 +89,7 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
             onKeyDown={handleKeyDown}
             placeholder="Code promo"
             aria-describedby={error ? "promo-code-error" : undefined}
-            className="w-full rounded-lg border border-white/20 bg-white/5 py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:border-primary/50 focus:outline-none"
+            className="w-full rounded-lg border border-white/20 bg-white/15 py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:border-primary/50 focus:outline-none"
           />
         </div>
         <button

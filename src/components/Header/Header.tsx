@@ -8,6 +8,7 @@ const menuData = [
   { id: 1, title: "Réservation", path: "/reservation" },
   { id: 2, title: "Les Studios", path: "/les-studios" },
   { id: 5, title: "L'Équipe", path: "/equipe" },
+  { id: 8, title: "Actualités", path: "/actualites" },
   { id: 4, title: "Avis", path: "/avis" },
   { id: 7, title: "À Propos", path: "/a-propos" },
 ];
@@ -74,7 +75,7 @@ export function Header() {
     <header
       className={`left-0 top-0 z-40 flex w-full items-center ${
         sticky
-          ? "fixed z-[9999] bg-black/80 backdrop-blur-sm transition"
+          ? "fixed z-[9999] bg-black/90 backdrop-blur-sm transition"
           : "absolute bg-black"
       }`}
     >

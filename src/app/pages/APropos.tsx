@@ -84,7 +84,7 @@ function ContactForm() {
               onChange={(e) => handleChange("name", e.target.value)}
               placeholder="Votre nom"
               required
-              className="w-full rounded-lg border border-white/20 bg-white/5 py-2.5 pl-10 pr-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full rounded-lg border border-white/20 bg-white/15 py-2.5 pl-10 pr-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
@@ -102,7 +102,7 @@ function ContactForm() {
               onChange={(e) => handleChange("email", e.target.value)}
               placeholder="votre@email.fr"
               required
-              className="w-full rounded-lg border border-white/20 bg-white/5 py-2.5 pl-10 pr-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full rounded-lg border border-white/20 bg-white/15 py-2.5 pl-10 pr-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
@@ -121,7 +121,7 @@ function ContactForm() {
             onChange={(e) => handleChange("subject", e.target.value)}
             placeholder="Objet de votre message"
             required
-            className="w-full rounded-lg border border-white/20 bg-white/5 py-2.5 pl-10 pr-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-lg border border-white/20 bg-white/15 py-2.5 pl-10 pr-3 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
       </div>
@@ -137,7 +137,7 @@ function ContactForm() {
           placeholder="Votre message..."
           rows={4}
           required
-          className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+          className="w-full rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-y"
         />
       </div>
 
@@ -180,16 +180,17 @@ export function APropos() {
       <ScrollUp />
 
       <div className="w-full max-w-5xl px-4">
-        <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">À PROPOS</h1>
-          <p className="mt-4 text-lg text-white/60">
+          <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          <p className="mt-6 text-lg text-white/60">
             Un son authentique pour des artistes authentiques
           </p>
         </div>
       </div>
 
       <div className="w-full max-w-5xl px-4 space-y-6">
-        <div className={`overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+        <div className={`overflow-hidden rounded-2xl border border-white/10 bg-white/15 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
           <div className="relative aspect-[21/9] overflow-hidden">
             <video
               src="/videos/hero-about.mp4"
@@ -211,7 +212,7 @@ export function APropos() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
+          <div className={`rounded-2xl border border-white/10 bg-white/15 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
               <Music className="h-6 w-6 text-primary" />
             </div>
@@ -221,7 +222,7 @@ export function APropos() {
             </p>
           </div>
 
-          <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "300ms" }}>
+          <div className={`rounded-2xl border border-white/10 bg-white/15 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "300ms" }}>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
               <GraduationCap className="h-6 w-6 text-primary" />
             </div>
@@ -231,7 +232,7 @@ export function APropos() {
             </p>
           </div>
 
-          <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "400ms" }}>
+          <div className={`rounded-2xl border border-white/10 bg-white/15 p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "400ms" }}>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
               <Calendar className="h-6 w-6 text-primary" />
             </div>
@@ -244,7 +245,7 @@ export function APropos() {
 
         <div
           id="contact"
-          className={`rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+          className={`rounded-2xl border border-white/10 bg-white/15 p-6 lg:p-8 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
           style={{ transitionDelay: "500ms" }}
         >
           <h2 className="mb-6 text-xl font-bold text-primary">Contact</h2>
@@ -281,7 +282,7 @@ export function APropos() {
           </div>
         </div>
 
-        <div className={`rounded-2xl border border-white/10 bg-white/5 p-6 lg:p-8 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "600ms" }}>
+        <div className={`rounded-2xl border border-white/10 bg-white/15 p-6 lg:p-8 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "600ms" }}>
           <h2 className="mb-6 text-xl font-bold text-primary">Localisation</h2>
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">

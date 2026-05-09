@@ -70,7 +70,7 @@ export function StickyBookingCTA({
             className={`
               shrink-0 rounded-lg px-6 py-3 font-semibold transition-all
               ${disabled
-                ? "cursor-not-allowed bg-white/10 text-white/50"
+                ? "cursor-not-allowed bg-white/15 text-white/50"
                 : "bg-primary text-black hover:bg-primary/90 active:scale-[0.98]"
               }
             `}

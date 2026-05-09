@@ -77,7 +77,7 @@ export function StudioCard({
       className={`
         flex flex-col gap-4 overflow-hidden rounded-xl border-2 transition-all
         ${!isAvailable
-          ? "border-white/20 bg-white/5 opacity-60"
+          ? "border-white/20 bg-white/15 opacity-60"
           : "border-primary/50 bg-black hover:border-primary hover:bg-primary/5"
         }
       `}
@@ -104,7 +104,7 @@ export function StudioCard({
       <div className="flex flex-col gap-4 px-4 pb-4">
         <p className="text-sm text-white/70">{studio.description}</p>
 
-        <div className="rounded-lg bg-white/5 p-3">
+        <div className="rounded-lg bg-white/15 p-3">
           {!isAvailable ? (
             <div className="text-center text-white/50">
               Non disponible sur ce créneau
@@ -150,7 +150,7 @@ export function StudioCard({
           className={`
             w-full rounded-lg py-3 font-semibold transition-all
             ${!isAvailable
-              ? "bg-white/10 text-white/30 cursor-not-allowed"
+              ? "bg-white/15 text-white/30 cursor-not-allowed"
               : "bg-primary text-black hover:bg-primary/90"
             }
           `}
