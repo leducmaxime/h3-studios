@@ -8,7 +8,6 @@ const menuData = [
   { id: 1, title: "Réservation", path: "/reservation" },
   { id: 2, title: "Les Studios", path: "/les-studios" },
   { id: 5, title: "L'Équipe", path: "/equipe" },
-  { id: 6, title: "Actualités", path: "/actualites" },
   { id: 4, title: "Avis", path: "/avis" },
   { id: 7, title: "À Propos", path: "/a-propos" },
 ];
