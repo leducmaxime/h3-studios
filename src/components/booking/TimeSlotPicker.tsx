@@ -399,7 +399,7 @@ export function TimeSlotPicker({
           )}
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-4 h-4 rounded bg-red-500/30 border border-red-500/50" />
-            Réservé
+            Non disponible
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-4 h-4 rounded bg-primary/40 border border-primary/60" />
