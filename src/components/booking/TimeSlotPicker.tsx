@@ -144,12 +144,12 @@ export function TimeSlotPicker({
       if (isSlotBooked(visibleSlots[i])) return;
     }
 
-    const actualEnd = visibleSlots[endIdx + 1] || closingTime;
+    const actualEnd = slot;
     setSelectedEnd(actualEnd);
     setSelectionMode("done");
     onSelectRange(selectedStart, actualEnd);
     onConfirm();
-  }, [isSlotBooked, selectedStart, visibleSlots, closingTime, onSelectRange, onConfirm]);
+  }, [isSlotBooked, selectedStart, visibleSlots, onSelectRange, onConfirm]);
 
   const handleSlotClick = useCallback((slot: string) => {
     if (selectionMode === "start" || selectionMode === "done") {
