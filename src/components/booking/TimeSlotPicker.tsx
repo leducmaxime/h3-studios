@@ -439,7 +439,11 @@ export function TimeSlotPicker({
     }
 
     if (labelIdx <= pendingIdx) {
-      if (isLast || isSlotEffectivelyBooked(label)) return;
+      if (isLast || isSlotEffectivelyBooked(label)) {
+        setPendingStart(null);
+        onClear();
+        return;
+      }
       settingNewStartRef.current = true;
       setPendingStart(label);
       onClear();
