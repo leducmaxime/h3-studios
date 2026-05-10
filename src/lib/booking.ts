@@ -377,6 +377,7 @@ export function isPeakTime(date: Date, time: string): boolean {
   const dayOfWeek = date.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
   const isHoliday = _publicHolidays.has(dateToParisISO(date));
+  if (hour === 0) return true;
   return hour >= _peakStartHour || isWeekend || isHoliday;
 }
 
