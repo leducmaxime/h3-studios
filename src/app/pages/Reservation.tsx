@@ -400,11 +400,11 @@ export function Reservation({ step }: ReservationProps) {
                   </button>
                   <p className="text-white/70">
                     {!state.selectedDate
-                      ? "Choisissez une date pour votre répétition"
+                      ? "Étape 1 : Choisissez une date"
                       : !state.startTime
-                        ? "Choisissez votre créneau"
+                        ? "Étape 2 : Choisissez votre créneau horaire"
                         : state.groupType === "group" && !state.studioId
-                          ? "Choisissez votre studio"
+                          ? "Étape 3 : Choisissez votre studio"
                           : "Récapitulatif de votre réservation"}
                   </p>
                 </div>
@@ -502,11 +502,11 @@ export function Reservation({ step }: ReservationProps) {
                   </button>
                   <p className="text-white/70">
                     {!state.studioId
-                      ? "Choisissez votre studio"
+                      ? "Étape 1 : Choisissez votre studio"
                       : !state.selectedDate
-                        ? "Choisissez une date pour votre répétition"
+                        ? "Étape 2 : Choisissez une date"
                         : !state.startTime
-                          ? "Choisissez votre créneau"
+                          ? "Étape 3 : Choisissez votre créneau horaire"
                           : "Récapitulatif de votre réservation"}
                   </p>
                 </div>
