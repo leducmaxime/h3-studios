@@ -292,9 +292,9 @@ export function TimeSlotPicker({
   };
 
   const getInstructionText = () => {
-    if (selectionMode === "start") return "Étape 2 : Cliquez sur l'heure de début";
-    if (selectionMode === "end") return "Étape 2 : Cliquez sur l'heure de fin";
-    return "Étape 2 : Créneau sélectionné ✓";
+    if (selectionMode === "start") return "Cliquez sur l'heure de début";
+    if (selectionMode === "end") return "Cliquez sur l'heure de fin";
+    return "Créneau sélectionné ✓";
   };
 
   const slotsPerRow = 16;
