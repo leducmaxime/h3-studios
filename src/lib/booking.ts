@@ -262,23 +262,17 @@ export function isStudioAvailable(
 ): boolean {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endIdx === -1 && endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length - 1;
   const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
 
   for (const slot of range) {
     const occupant = Array.from(occupancy).find(o => o.studioId === studioId && o.time === slot);
-    if (!occupant) continue;
-
-    if (occupant.groupType === "blocked") return false;
-
-    // Groups cannot share with anyone
-    if (requesterGroupType === "group") return false;
-
-    // Solo/duo can share with other solo/duo, but not with groups
-    if (occupant.groupType === "group") return false;
+    if (occupant && (occupant.groupType === "solo" || occupant.groupType === "duo") && occupant.bookingId) {
+      return occupant.bookingId;
+    }
   }
 
-  return true;
+  return null;
 }
 
 /**
@@ -293,7 +287,7 @@ export function findMoveableSoloDuoBooking(
 ): string | null {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endIdx === -1 && endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
   const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
 
   for (const slot of range) {
@@ -304,6 +298,71 @@ export function findMoveableSoloDuoBooking(
   }
 
   return null;
+}
+
+/**
+ * Check if a slot can be a valid start time.
+ * A slot can start if it's not occupied and there are at least
+ * MIN_BOOKING_SLOTS (2) available slots from it onward (including itself).
+ * Respects closing time boundaries (e.g. "22:00" can't start at Le Podium
+ * which closes at 22:30, but "23:00" CAN start at La Scène which closes at 00:00).
+ */
+export function canBeStartTime(
+  slot: string,
+  visibleSlots: string[],
+  isSlotOccupied: (slot: string) => boolean
+): boolean {
+  const slotIdx = visibleSlots.indexOf(slot);
+  if (slotIdx === -1) return false;
+  if (isSlotOccupied(slot)) return false;
+
+  // Count consecutive free slots from this position
+  let freeCount = 0;
+  for (let i = slotIdx; i < visibleSlots.length; i++) {
+    const currentSlot = visibleSlots[i];
+    // "00:00" is a boundary marker, not a bookable slot — don't count it
+    if (currentSlot === "00:00") break;
+    if (isSlotOccupied(currentSlot)) break;
+    freeCount++;
+  }
+
+  return freeCount >= MIN_BOOKING_SLOTS;
+}
+
+/**
+ * Check if endSlot is a valid end time for startSlot.
+ * The end slot must come after start, with at least MIN_BOOKING_SLOTS (2) total.
+ * All slots strictly between start and end must be free.
+ * The end slot itself CAN be occupied (boundary booking).
+ * Respects "00:00" as the last possible end time.
+ */
+export function canBeEndTime(
+  startSlot: string,
+  endSlot: string,
+  visibleSlots: string[],
+  isSlotOccupied: (slot: string) => boolean
+): boolean {
+  const startIdx = visibleSlots.indexOf(startSlot);
+  let endIdx = visibleSlots.indexOf(endSlot);
+
+  // "00:00" may not be in visibleSlots but is a valid end time (after last slot)
+  if (endSlot === "00:00" && endIdx === -1) {
+    endIdx = visibleSlots.length;
+  }
+
+  if (startIdx === -1 || endIdx === -1) return false;
+  if (endIdx <= startIdx) return false;
+
+  const duration = endIdx - startIdx;
+  if (duration < MIN_BOOKING_SLOTS) return false;
+
+  // All slots between start and end (exclusive of start, up to but not including end) must be free
+  // The end slot itself can be occupied or free — no check needed
+  for (let i = startIdx + 1; i < endIdx; i++) {
+    if (i < visibleSlots.length && isSlotOccupied(visibleSlots[i])) return false;
+  }
+
+  return true;
 }
 
 /**
@@ -325,7 +384,7 @@ export function assignStudioForSoloDuo(
   // Collect all slots in the booking range
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endIdx === -1 && endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length - 1;
   const bookedRange = ALL_TIME_SLOTS.slice(startIdx, endIdx);
 
   // Check if Le Podium can even cover this time range (opening hours)
@@ -400,8 +459,8 @@ export function calculatePrice(
 ): { total: number; breakdown: PriceSlot[] } {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
   let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endIndex === -1 && endTime === "00:00") endIndex = ALL_TIME_SLOTS.length;
-  
+  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.length - 1;
+
   if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
     return { total: 0, breakdown: [] };
   }
@@ -426,8 +485,8 @@ export function calculatePrice(
 export function formatDuration(startTime: string, endTime: string): string {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
   let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endIndex === -1 && endTime === "00:00") endIndex = ALL_TIME_SLOTS.length;
-  
+  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.length - 1;
+
   if (startIndex === -1 || endIndex === -1) return "";
   
   const slots = endIndex - startIndex;

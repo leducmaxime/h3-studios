@@ -122,6 +122,8 @@ describe("formatDuration", () => {
 
   it("should handle midnight as end time", () => {
     expect(formatDuration("22:00", "00:00")).toBe("2h");
+    expect(formatDuration("23:00", "00:00")).toBe("1h");
+    expect(formatDuration("23:30", "00:00")).toBe("30min");
   });
 });
 
