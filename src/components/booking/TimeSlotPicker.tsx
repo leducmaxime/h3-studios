@@ -192,12 +192,16 @@ export function TimeSlotPicker({
   }, [selectedStart, visibleSlots, isSlotBooked, onSelectRange, onConfirm, handleClear]);
 
   const handleSlotClick = useCallback((slot: string) => {
+    if (selectionMode === "end" && slot === selectedStart) {
+      handleClear();
+      return;
+    }
     if (selectionMode === "start" || selectionMode === "done") {
       handleSelectStart(slot);
     } else {
       handleSelectEnd(slot);
     }
-  }, [selectionMode, handleSelectStart, handleSelectEnd]);
+  }, [selectionMode, selectedStart, handleSelectStart, handleSelectEnd, handleClear]);
 
   const handleSlotMouseEnter = useCallback((slot: string) => {
     if (selectionMode !== "end" || !selectedStart) return;
