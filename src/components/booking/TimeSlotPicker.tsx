@@ -259,10 +259,8 @@ export function TimeSlotPicker({
       const isBooked = isSlotBooked(slot);
       const isPeak = hasPeakPricing && isPeakTime(date, slot);
       const slotIdx = visibleSlots.indexOf(slot);
-
-      if (isBooked) {
-        return "bg-red-500/30 border-red-500/50 cursor-pointer opacity-60";
-      }
+      const isSelectedStart = selectedStart === slot;
+      const isSelectedEnd = selectedEnd === slot;
 
       if (activeRange) {
         const startIdx = visibleSlots.indexOf(activeRange.start);
@@ -271,6 +269,10 @@ export function TimeSlotPicker({
         if (slotIdx >= startIdx && slotIdx <= endIdx) {
           return isPeak ? "bg-primary/50 border-primary/70" : "bg-primary/40 border-primary/60";
         }
+      }
+
+      if (isBooked) {
+        return "bg-red-500/30 border-red-500/50 cursor-pointer opacity-60";
       }
 
       if (selectedStart && !selectedEnd && selectionMode === "end") {
