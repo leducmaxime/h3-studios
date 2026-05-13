@@ -122,6 +122,16 @@ export function TimeSlotPicker({
     [isOccupiedBy, studioFilter, groupType]
   );
 
+  const isSlotStartOfBooking = useCallback(
+    (time: string): boolean => {
+      const slotIdx = visibleSlots.indexOf(time);
+      if (slotIdx <= 0) return false;
+      const prevSlot = visibleSlots[slotIdx - 1];
+      return isSlotBooked(time) && !isSlotBooked(prevSlot);
+    },
+    [isSlotBooked, visibleSlots]
+  );
+
   const handleClear = useCallback(() => {
     setSelectedStart(null);
     setSelectedEnd(null);
@@ -261,6 +271,7 @@ export function TimeSlotPicker({
       const slotIdx = visibleSlots.indexOf(slot);
       const isSelectedStart = selectedStart === slot;
       const isSelectedEnd = selectedEnd === slot;
+      const isBoundary = isSlotStartOfBooking(slot);
 
       if (activeRange) {
         const startIdx = visibleSlots.indexOf(activeRange.start);
@@ -275,8 +286,8 @@ export function TimeSlotPicker({
         return isPeak ? "bg-primary/50 border-primary/70" : "bg-primary/40 border-primary/60";
       }
 
-      if (isBooked) {
-        return "bg-red-500/30 border-red-500/50 cursor-pointer opacity-60";
+      if (isBooked && !isBoundary) {
+        return "bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60";
       }
 
       if (selectedStart && !selectedEnd && selectionMode === "end") {
@@ -295,7 +306,7 @@ export function TimeSlotPicker({
           }
         }
 
-        if (slotIdx > startIdx && !isBooked) {
+        if (slotIdx > startIdx) {
           return isPeak
             ? "bg-primary/10 hover:bg-primary/20 border-primary/20 cursor-pointer"
             : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer";
@@ -306,7 +317,7 @@ export function TimeSlotPicker({
         ? "bg-primary/5 hover:bg-primary/10 border-white/10 cursor-pointer"
         : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer";
     },
-    [isSlotBooked, hasPeakPricing, date, activeRange, visibleSlots, closingTime, selectedStart, selectedEnd, selectionMode, hoveredEndSlot]
+    [isSlotBooked, isSlotStartOfBooking, hasPeakPricing, date, activeRange, visibleSlots, closingTime, selectedStart, selectedEnd, selectionMode, hoveredEndSlot]
   );
 
   const priceInfo = useMemo(() => {
