@@ -271,6 +271,10 @@ export function TimeSlotPicker({
         }
       }
 
+      if (isSelectedStart) {
+        return isPeak ? "bg-primary/50 border-primary/70" : "bg-primary/40 border-primary/60";
+      }
+
       if (isBooked) {
         return "bg-red-500/30 border-red-500/50 cursor-pointer opacity-60";
       }
