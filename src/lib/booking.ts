@@ -198,12 +198,9 @@ export function getStudioTimeSlots(studioId: StudioId, date: Date): string[] {
   const dayOfWeek = date.getDay();
   const hours = STUDIO_HOURS[studioId][dayOfWeek];
   const openIdx = ALL_TIME_SLOTS.indexOf(hours.open);
-  // "00:00" means end of day → include all slots up to 23:30
-  const closeIdx = hours.close === "00:00"
-    ? ALL_TIME_SLOTS.length
-    : ALL_TIME_SLOTS.indexOf(hours.close);
+  const closeIdx = ALL_TIME_SLOTS.indexOf(hours.close);
   if (openIdx === -1 || closeIdx === -1) return [];
-  return ALL_TIME_SLOTS.slice(openIdx, closeIdx);
+  return ALL_TIME_SLOTS.slice(openIdx, closeIdx + 1);
 }
 
 /** Get the union of time slots across all studios for a given date (used when no studio is selected yet) */
@@ -320,8 +317,7 @@ export function canBeStartTime(
   let freeCount = 0;
   for (let i = slotIdx; i < visibleSlots.length; i++) {
     const currentSlot = visibleSlots[i];
-    // "00:00" is a boundary marker, not a bookable slot — don't count it
-    if (currentSlot === "00:00") break;
+    if (i === visibleSlots.length - 1) break;
     if (isSlotOccupied(currentSlot)) break;
     freeCount++;
   }
