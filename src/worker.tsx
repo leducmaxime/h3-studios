@@ -692,7 +692,7 @@ const app = defineApp([
       };
 
       const name = body.user?.name?.trim() || "";
-      const email = body.user?.email?.trim() || "";
+      const email = body.user?.email?.trim().toLowerCase() || "";
       const phone = body.user?.phone?.trim() || "";
       const bandNameRaw = body.user?.bandName?.trim() || "";
       const bookingBandName = bandNameRaw ? bandNameRaw : null;
@@ -914,9 +914,10 @@ const app = defineApp([
         return jsonError("Email et mot de passe requis", 400);
       }
 
+      const normalizedEmail = body.email.trim().toLowerCase();
       const user = await env.DB
-        .prepare("SELECT id, email, password_hash, name, role, is_active FROM admin_users WHERE email = ?")
-        .bind(body.email)
+        .prepare("SELECT id, email, password_hash, name, role, is_active FROM admin_users WHERE LOWER(TRIM(email)) = ?")
+        .bind(normalizedEmail)
         .first<{
           id: string;
           email: string;
@@ -1640,6 +1641,10 @@ const app = defineApp([
           country?: string;
         };
 
+        if (body.email) {
+          body.email = body.email.trim().toLowerCase();
+        }
+
         const result = await updateUser(env.DB, id, body);
         if (!result.success) {
           return jsonError(result.error || "Update failed", 400);
@@ -1993,9 +1998,11 @@ const app = defineApp([
           return jsonError("Champs obligatoires manquants: email, name, password", 400);
         }
 
+        const normalizedEmail = body.email.trim().toLowerCase();
+
         const existing = await env.DB
-          .prepare("SELECT id FROM admin_users WHERE email = ?")
-          .bind(body.email)
+          .prepare("SELECT id FROM admin_users WHERE LOWER(TRIM(email)) = ?")
+          .bind(normalizedEmail)
           .first();
 
         if (existing) {
@@ -2008,15 +2015,15 @@ const app = defineApp([
 
         await env.DB.prepare(
           "INSERT INTO admin_users (id, email, password_hash, name, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
-        ).bind(id, body.email, passwordHash, body.name, body.role || "operator", timestamp, timestamp).run();
+        ).bind(id, normalizedEmail, passwordHash, body.name, body.role || "operator", timestamp, timestamp).run();
 
         await addAuditLog(env.DB, "admin_user", id, "create", {
-          email: body.email,
+          email: normalizedEmail,
           name: body.name,
           role: body.role || "operator",
         }, request.headers.get("X-Admin-User-Id") || "admin");
 
-        return jsonSuccess({ id, email: body.email, name: body.name, role: body.role || "operator", is_active: 1 });
+        return jsonSuccess({ id, email: normalizedEmail, name: body.name, role: body.role || "operator", is_active: 1 });
       } catch (error) {
         console.error("POST /api/admin/admin-users error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to create admin user", 500);
@@ -3395,12 +3402,14 @@ const app = defineApp([
       if (body.postal_code !== undefined) allowedFields.postal_code = body.postal_code;
       if (body.city !== undefined) allowedFields.city = body.city;
 
-      if (body.email !== undefined && body.email !== user.email) {
-        const existing = await getUserByEmail(env.DB, body.email);
+      const normalizedEmail = body.email?.trim().toLowerCase();
+      const currentEmail = user.email?.trim().toLowerCase();
+      if (normalizedEmail && normalizedEmail !== currentEmail) {
+        const existing = await getUserByEmail(env.DB, normalizedEmail);
         if (existing && existing.id !== user.id) {
           return jsonError("Cet email est déjà utilisé", 400);
         }
-        (allowedFields as Record<string, unknown>).email = body.email;
+        (allowedFields as Record<string, unknown>).email = normalizedEmail;
       }
 
       if (body.password !== undefined && body.password.length > 0) {

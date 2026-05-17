@@ -464,6 +464,7 @@ export async function getUserByEmail(
   db: D1Database,
   email: string,
 ): Promise<DbUser | null> {
+  const normalizedEmail = email.trim().toLowerCase();
   return db.prepare(
     `SELECT u.*, COALESCE(s.total_bookings, 0) as total_bookings, COALESCE(s.total_spent, 0) as total_spent
      FROM users u
@@ -471,8 +472,8 @@ export async function getUserByEmail(
        SELECT user_id, COUNT(*) as total_bookings, COALESCE(SUM(total_price), 0) as total_spent
        FROM bookings WHERE status != 'cancelled' GROUP BY user_id
      ) s ON u.id = s.user_id
-     WHERE u.email = ?`,
-  ).bind(email).first<DbUser>();
+     WHERE LOWER(TRIM(u.email)) = ?`,
+  ).bind(normalizedEmail).first<DbUser>();
 }
 
 export async function updateUserPassword(
@@ -511,7 +512,7 @@ export async function createUser(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
   `).bind(
     id,
-    data.email ?? null,
+    data.email ? data.email.trim().toLowerCase() : null,
     data.name,
     data.first_name ?? null,
     data.last_name ?? null,
