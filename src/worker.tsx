@@ -3379,6 +3379,8 @@ const app = defineApp([
         first_name?: string;
         last_name?: string;
         name?: string;
+        email?: string;
+        password?: string;
         phone?: string;
         band_name?: string;
         address_line1?: string;
@@ -3397,6 +3399,22 @@ const app = defineApp([
       if (body.address_line2 !== undefined) allowedFields.address_line2 = body.address_line2;
       if (body.postal_code !== undefined) allowedFields.postal_code = body.postal_code;
       if (body.city !== undefined) allowedFields.city = body.city;
+
+      if (body.email !== undefined && body.email !== user.email) {
+        const existing = await getUserByEmail(env.DB, body.email);
+        if (existing && existing.id !== user.id) {
+          return jsonError("Cet email est déjà utilisé", 400);
+        }
+        (allowedFields as Record<string, unknown>).email = body.email;
+      }
+
+      if (body.password !== undefined && body.password.length > 0) {
+        if (body.password.length < 6) {
+          return jsonError("Le mot de passe doit contenir au moins 6 caractères", 400);
+        }
+        const passwordHash = await hashPassword(body.password);
+        (allowedFields as Record<string, unknown>).password_hash = passwordHash;
+      }
 
       if (Object.keys(allowedFields).length === 0) {
         return jsonError("Aucun champ à mettre à jour", 400);

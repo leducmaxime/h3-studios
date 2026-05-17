@@ -911,6 +911,7 @@ export function AdminDashboard() {
   const [selectedYear, setSelectedYear] = useState(() => String(nowISO.year));
   const [selectedWeek, setSelectedWeek] = useState(() => String(nowISO.week));
   const [loading, setLoading] = useState(true);
+  const [upcomingBookings, setUpcomingBookings] = useState<UpcomingBooking[]>([]);
   const [reportMonth, setReportMonth] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -928,6 +929,17 @@ export function AdminDashboard() {
         }
       })
       .catch((err) => console.error("Failed to fetch stats meta:", err));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/admin/bookings?dateDirection=upcoming&limit=3&sortBy=date&sortOrder=asc")
+      .then((res) => res.json())
+      .then((json: any) => {
+        if (json?.success && json?.data?.data) {
+          setUpcomingBookings(json.data.data.slice(0, 3));
+        }
+      })
+      .catch((err) => console.error("Failed to fetch upcoming bookings:", err));
   }, []);
 
   useEffect(() => {
@@ -1336,6 +1348,34 @@ export function AdminDashboard() {
           color={(stats?.rangePendingPayments ?? 0) > 0 ? "red" : "blue"}
         />
       </div>
+
+      {upcomingBookings.length > 0 && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+          <h2 className="mb-3 text-sm font-semibold text-zinc-300">Prochaines réservations</h2>
+          <div className="space-y-2">
+            {upcomingBookings.map((booking) => (
+              <a
+                key={booking.id}
+                href={`/admin/bookings/${booking.id}`}
+                className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 transition-colors hover:border-zinc-700"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary">
+                    {booking.date.slice(8, 10)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{booking.user_name || "—"}</p>
+                    <p className="text-xs text-zinc-500">
+                      {formatDate(booking.date)} · {booking.start_time} – {booking.end_time} · {STUDIOS[booking.studio_id as keyof typeof STUDIOS]?.name || booking.studio_id}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-primary">{formatPrice(booking.total_price)}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {rangeMode === "rolling" && (

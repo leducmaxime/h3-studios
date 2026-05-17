@@ -30,6 +30,8 @@ export function ClientProfile() {
   const [addressLine2, setAddressLine2] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [city, setCity] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
@@ -47,6 +49,7 @@ export function ClientProfile() {
         setUser(u);
         setFirstName(u.first_name || "");
         setLastName(u.last_name || "");
+        setEmail(u.email || "");
         setPhone(u.phone || "");
         setBandName(u.band_name || "");
         setAddressLine1(u.address_line1 || "");
@@ -68,20 +71,25 @@ export function ClientProfile() {
 
     try {
       const name = `${firstName} ${lastName}`.trim();
+      const payload: Record<string, string | undefined> = {
+        first_name: firstName || undefined,
+        last_name: lastName || undefined,
+        name,
+        email: email || undefined,
+        phone: phone || undefined,
+        band_name: bandName || undefined,
+        address_line1: addressLine1 || undefined,
+        address_line2: addressLine2 || undefined,
+        postal_code: postalCode || undefined,
+        city: city || undefined,
+      };
+      if (password.length > 0) {
+        payload.password = password;
+      }
       const res = await fetch("/api/client/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          first_name: firstName || undefined,
-          last_name: lastName || undefined,
-          name,
-          phone: phone || undefined,
-          band_name: bandName || undefined,
-          address_line1: addressLine1 || undefined,
-          address_line2: addressLine2 || undefined,
-          postal_code: postalCode || undefined,
-          city: city || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json() as { success?: boolean; error?: string };
@@ -150,6 +158,32 @@ export function ClientProfile() {
                 className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="profile-email" className="text-zinc-300">Email <span className="text-red-400">*</span></Label>
+            <Input
+              id="profile-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="votre@email.com"
+              disabled={saving}
+              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="profile-password" className="text-zinc-300">Nouveau mot de passe</Label>
+            <Input
+              id="profile-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Laisser vide pour ne pas changer"
+              disabled={saving}
+              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+            />
           </div>
 
           <div className="space-y-2">
