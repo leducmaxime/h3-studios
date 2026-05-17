@@ -718,15 +718,17 @@ export function Reservation({ step }: ReservationProps) {
                     <div className="flex flex-col gap-3">
                       <button
                         onClick={() => {
+                          if (clientUserLoading) return;
                           if (!clientUser) {
                             window.location.href = "/mon-compte/connexion?redirect=/reservation/panier";
                             return;
                           }
                           goToPaymentChoice();
                         }}
-                        className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
+                        disabled={clientUserLoading}
+                        className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Valider et payer - {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
+                        {clientUserLoading ? "Vérification..." : `Valider et payer - ${formatPrice(Math.max(0, cartTotal - state.promoDiscount))}`}
                       </button>
                       <button
                         onClick={addAnotherBooking}

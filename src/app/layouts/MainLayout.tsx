@@ -43,7 +43,8 @@ function useClearBookingOnNavigate() {
   useEffect(() => {
     if (!pathname) return;
     const isReservationPage = pathname.startsWith("/reservation");
-    if (!isReservationPage) {
+    const isAccountPage = pathname.startsWith("/mon-compte");
+    if (!isReservationPage && !isAccountPage) {
       localStorage.removeItem("h3-studios-booking-state");
     }
   }, [pathname]);

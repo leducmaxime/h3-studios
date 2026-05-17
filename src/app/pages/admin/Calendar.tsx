@@ -807,7 +807,7 @@ export function AdminCalendar() {
                         const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
                         let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
                         if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                        const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                        const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
                         const height = (endIdx - startIdx) * 30;
 
                         return (
@@ -817,10 +817,12 @@ export function AdminCalendar() {
                             onClick={() => setSelectedBooking(booking)}
                             onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setTooltip(null)}
-                            className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
+                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
                             style={{
                               top: `${top}px`,
                               height: `${Math.max(height, 28)}px`,
+                              left: leftPos,
+                              width,
                             }}
                           >
                             <p className="truncate text-[12px] font-medium leading-tight">
