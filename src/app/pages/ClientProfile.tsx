@@ -118,12 +118,13 @@ export function ClientProfile() {
 
   return (
     <div className="min-h-[80vh] bg-black px-4 py-16">
-      <div className="container max-w-lg mx-auto">
+      <div className="container max-w-2xl mx-auto">
         <div className="mb-8">
-          <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary">MON PROFIL</h1>
+          <h1 className="font-blanka text-3xl md:text-4xl text-primary">MON PROFIL</h1>
           <p className="mt-1 text-zinc-400 text-sm">{user.email}</p>
         </div>
 
+        <p className="text-xs text-zinc-500 mb-3">Les champs marqués d'un <span className="text-red-400">*</span> sont obligatoires.</p>
         <form onSubmit={handleSubmit} className="space-y-5 bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

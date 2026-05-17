@@ -107,9 +107,9 @@ export function ClientLogin() {
 
   return (
     <div className="min-h-[80vh] bg-black flex items-start justify-center px-4 py-16">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
-          <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary">MON COMPTE</h1>
+          <h1 className="font-blanka text-3xl md:text-4xl text-primary">MON COMPTE</h1>
           <p className="mt-2 text-zinc-400 text-sm">H3 Studios — Sucy-en-Brie</p>
         </div>
 
@@ -139,7 +139,7 @@ export function ClientLogin() {
         {tab === "login" ? (
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="login-email" className="text-zinc-300">Email</Label>
+              <Label htmlFor="login-email" className="text-zinc-300">Email <span className="text-red-400">*</span></Label>
               <Input
                 id="login-email"
                 type="email"
