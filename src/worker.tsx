@@ -704,28 +704,17 @@ const app = defineApp([
         return jsonError("Merci de renseigner nom, email et téléphone.", 400);
       }
 
-      let user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first<{ id: string }>();
+      await updateUser(env.DB, clientUser.id, {
+        name,
+        email,
+        phone,
+        ...(bandNameRaw ? { band_name: bandNameRaw } : {}),
+        ...(addressLine1 ? { address_line1: addressLine1 } : {}),
+        ...(postalCode ? { postal_code: postalCode } : {}),
+        ...(city ? { city: city } : {}),
+      });
       
-      if (!user) {
-        user = await createUser(env.DB, {
-          name,
-          email,
-          phone,
-          band_name: bookingBandName ?? undefined,
-          address_line1: addressLine1 || undefined,
-          postal_code: postalCode || undefined,
-          city: city || undefined,
-        });
-      } else {
-        await updateUser(env.DB, user.id, {
-          name,
-          phone,
-          ...(bandNameRaw ? { band_name: bandNameRaw } : {}),
-          ...(addressLine1 ? { address_line1: addressLine1 } : {}),
-          ...(postalCode ? { postal_code: postalCode } : {}),
-          ...(city ? { city: city } : {}),
-        });
-      }
+      const user = { id: clientUser.id };
 
       // Check for conflicts - groups can displace solo/duo bookings
       const conflict = await checkConflictWithGroupType(env.DB, body.studioId, body.date, body.startTime, body.endTime);
