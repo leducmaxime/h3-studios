@@ -106,11 +106,11 @@ export function ClientLogin() {
   };
 
   return (
-    <div className="min-h-[80vh] bg-black flex items-start justify-center px-4 py-16">
+    <div className="min-h-[80vh] bg-black flex items-start justify-center px-4 pt-32 pb-16">
       <div className="w-full max-w-2xl">
-        <div className="text-center mb-8">
-          <h1 className="font-blanka text-3xl md:text-4xl text-primary">MON COMPTE</h1>
-          <p className="mt-2 text-zinc-400 text-sm">H3 Studios — Sucy-en-Brie</p>
+        <div className="mb-12 text-center">
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON COMPTE</h1>
+          <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
         </div>
 
         <div className="flex border-b border-zinc-800 mb-6">

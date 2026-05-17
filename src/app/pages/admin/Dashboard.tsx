@@ -43,6 +43,7 @@ import {
 import { STUDIOS, SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
 import { generateMonthlyReportPDF } from "@/lib/export";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface DashboardStats {
   todayBookings: number;
@@ -96,12 +97,14 @@ interface UpcomingBooking {
   id: string;
   booking_ref: string;
   user_name: string | null;
+  band_name: string | null;
   studio_id: string;
   date: string;
   start_time: string;
   end_time: string;
   total_price: number;
   promo_discount?: number;
+  payment_status: string;
 }
 
 interface CalendarBooking {
@@ -1360,17 +1363,31 @@ export function AdminDashboard() {
                 className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 transition-colors hover:border-zinc-700"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary">
-                    {booking.date.slice(8, 10)}
+                  <div className="flex h-10 w-10 flex-col items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <span className="text-sm font-bold leading-none">{booking.date.slice(8, 10)}</span>
+                    <span className="text-[10px] uppercase leading-none">{new Date(booking.date + "T00:00:00").toLocaleDateString("fr-FR", { month: "short" })}</span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{booking.user_name || "—"}</p>
+                    <p className="text-sm font-medium">
+                      {booking.band_name ? (
+                        <><span className="text-primary">{booking.band_name}</span>{" "}<span className="text-zinc-500">({booking.user_name || "—"})</span></>
+                      ) : (
+                        booking.user_name || "—"
+                      )}
+                    </p>
                     <p className="text-xs text-zinc-500">
-                      {formatDate(booking.date)} · {booking.start_time} – {booking.end_time} · {STUDIOS[booking.studio_id as keyof typeof STUDIOS]?.name || booking.studio_id}
+                      {booking.start_time} – {booking.end_time} · {STUDIOS[booking.studio_id as keyof typeof STUDIOS]?.name || booking.studio_id}
                     </p>
                   </div>
                 </div>
-                <span className="text-sm font-medium text-primary">{formatPrice(booking.total_price)}</span>
+                <div className="flex items-center gap-2">
+                  {booking.payment_status === "paid" ? (
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">Payé</Badge>
+                  ) : (
+                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px]">Reste à payer</Badge>
+                  )}
+                  <span className="text-sm font-medium text-primary">{formatPrice(booking.total_price)}</span>
+                </div>
               </a>
             ))}
           </div>

@@ -130,7 +130,6 @@ export function ClientProfile() {
         <div className="mb-12 text-center">
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON PROFIL</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-          <p className="mt-6 text-lg text-white/60">{user.email}</p>
         </div>
 
         <p className="text-xs text-zinc-500 mb-3">Les champs marqués d'un <span className="text-red-400">*</span> sont obligatoires.</p>
