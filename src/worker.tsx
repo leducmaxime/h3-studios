@@ -33,6 +33,9 @@ import { AdminBookingNew } from "@/app/pages/admin/BookingNew";
 import { Login } from "@/app/pages/admin/Login";
 import { PaymentSuccess } from "@/app/pages/PaymentSuccess";
 import { PaymentCancel } from "@/app/pages/PaymentCancel";
+import { ClientLogin } from "@/app/pages/ClientLogin";
+import { ClientAccount } from "@/app/pages/ClientAccount";
+import { ClientProfile } from "@/app/pages/ClientProfile";
 import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
 import {
@@ -46,6 +49,15 @@ import {
   buildSessionCookie,
   clearSessionCookie,
 } from "@/lib/auth";
+import {
+  createClientSession,
+  validateClientSession,
+  deleteClientSession,
+  buildClientSessionCookie,
+  clearClientSessionCookie,
+  getClientSessionToken,
+  requireClientAuth,
+} from "@/lib/client-auth";
 import {
   getBookings,
   getBookingById,
@@ -328,6 +340,30 @@ const adminAuthMiddleware = (): RouteMiddleware =>
 const app = defineApp([
   setCommonHeaders(),
   adminAuthMiddleware(),
+  
+  // Client auth middleware: redirect unauthenticated users on /mon-compte/* (except /mon-compte/connexion)
+  async (rInfo) => {
+    const { request } = rInfo;
+    const url = new URL(request.url);
+    const { pathname } = url;
+
+    if (!pathname.startsWith("/mon-compte")) return;
+    if (pathname === "/mon-compte/connexion") return;
+    if (pathname.startsWith("/api/client")) return;
+
+    const token = getClientSessionToken(request);
+    if (!token) {
+      return Response.redirect(new URL("/mon-compte/connexion", request.url).toString(), 302);
+    }
+
+    const user = await validateClientSession(env.DB, token);
+    if (!user) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/mon-compte/connexion" },
+      });
+    }
+  },
   
   route("/sitemap.xml", () => {
     return new Response(generateSitemap(), {
@@ -2712,7 +2748,8 @@ const app = defineApp([
           FROM bookings
           WHERE date >= ? AND date <= ?
             AND status != 'cancelled'
-            AND payment_status != 'pay-on-site'`,
+            AND payment_method = 'card'
+            AND payment_status = 'paid'`,
          ).bind(fromStr, toStr),
          env.DB.prepare(
            `SELECT
@@ -3122,6 +3159,222 @@ const app = defineApp([
       return jsonError(error instanceof Error ? error.message : "Sync failed", 500);
     }
   }),
+
+  // ─── Client Auth API ────────────────────────────────────────────────────────
+
+  route("/api/client/register", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as { name?: string; email?: string; phone?: string; password?: string };
+
+      if (!body.name || !body.email || !body.password) {
+        return jsonError("Nom, email et mot de passe requis", 400);
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+        return jsonError("Format d'email invalide", 400);
+      }
+
+      if (body.password.length < 6) {
+        return jsonError("Le mot de passe doit contenir au moins 6 caractères", 400);
+      }
+
+      const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(body.email.trim().toLowerCase()).first();
+      if (existing) {
+        return jsonError("Un compte avec cet email existe déjà", 409);
+      }
+
+      const passwordHash = await hashPassword(body.password);
+      const user = await createUser(env.DB, {
+        name: body.name.trim(),
+        email: body.email.trim().toLowerCase(),
+        phone: body.phone?.trim() || undefined,
+      });
+
+      await updateUserPassword(env.DB, user.id, passwordHash);
+
+      const token = await createClientSession(env.DB, user.id);
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: { id: user.id, email: user.email, name: user.name, phone: user.phone },
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Set-Cookie": buildClientSessionCookie(token),
+        },
+      });
+    } catch (error) {
+      console.error("POST /api/client/register error:", error);
+      return jsonError(error instanceof Error ? error.message : "Registration failed", 500);
+    }
+  }),
+
+  route("/api/client/login", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as { email?: string; password?: string };
+
+      if (!body.email || !body.password) {
+        return jsonError("Email et mot de passe requis", 400);
+      }
+
+      const row = await env.DB.prepare("SELECT id, email, password_hash, name, phone, is_blocked FROM users WHERE email = ?")
+        .bind(body.email.trim().toLowerCase())
+        .first<{ id: string; email: string | null; password_hash: string | null; name: string; phone: string | null; is_blocked: number }>();
+
+      if (!row || !row.password_hash) {
+        return jsonError("Identifiants invalides", 401);
+      }
+
+      if (row.is_blocked) {
+        return jsonError("Compte bloqué", 403);
+      }
+
+      const valid = await verifyPassword(body.password, row.password_hash);
+      if (!valid) {
+        return jsonError("Identifiants invalides", 401);
+      }
+
+      const token = await createClientSession(env.DB, row.id);
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: { id: row.id, email: row.email, name: row.name, phone: row.phone },
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Set-Cookie": buildClientSessionCookie(token),
+        },
+      });
+    } catch (error) {
+      console.error("POST /api/client/login error:", error);
+      return jsonError(error instanceof Error ? error.message : "Login failed", 500);
+    }
+  }),
+
+  route("/api/client/logout", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const token = getClientSessionToken(request);
+      if (token) {
+        await deleteClientSession(env.DB, token);
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Set-Cookie": clearClientSessionCookie(),
+        },
+      });
+    } catch (error) {
+      console.error("POST /api/client/logout error:", error);
+      return jsonError(error instanceof Error ? error.message : "Logout failed", 500);
+    }
+  }),
+
+  route("/api/client/me", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const user = await requireClientAuth(request, env.DB);
+      return jsonSuccess(user);
+    } catch (error) {
+      if (error instanceof Response) return error;
+      console.error("GET /api/client/me error:", error);
+      return jsonError(error instanceof Error ? error.message : "Auth check failed", 500);
+    }
+  }),
+
+  route("/api/client/bookings", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const user = await requireClientAuth(request, env.DB);
+      const bookings = await getBookings(env.DB, { userId: user.id }, 1, 100);
+      return jsonSuccess(bookings.data);
+    } catch (error) {
+      if (error instanceof Response) return error;
+      console.error("GET /api/client/bookings error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch bookings", 500);
+    }
+  }),
+
+  route("/api/client/profile", async ({ request }) => {
+    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
+
+    try {
+      const user = await requireClientAuth(request, env.DB);
+      const body = await request.json() as {
+        name?: string;
+        phone?: string;
+        band_name?: string;
+        address_line1?: string;
+        address_line2?: string;
+        postal_code?: string;
+        city?: string;
+      };
+
+      const allowedFields: Partial<Pick<typeof body, "name" | "phone" | "band_name" | "address_line1" | "address_line2" | "postal_code" | "city">> = {};
+      if (body.name !== undefined) allowedFields.name = body.name;
+      if (body.phone !== undefined) allowedFields.phone = body.phone;
+      if (body.band_name !== undefined) allowedFields.band_name = body.band_name;
+      if (body.address_line1 !== undefined) allowedFields.address_line1 = body.address_line1;
+      if (body.address_line2 !== undefined) allowedFields.address_line2 = body.address_line2;
+      if (body.postal_code !== undefined) allowedFields.postal_code = body.postal_code;
+      if (body.city !== undefined) allowedFields.city = body.city;
+
+      if (Object.keys(allowedFields).length === 0) {
+        return jsonError("Aucun champ à mettre à jour", 400);
+      }
+
+      const result = await updateUser(env.DB, user.id, allowedFields);
+      if (!result.success) return jsonError("Mise à jour échouée", 400);
+
+      const updated = await getUserById(env.DB, user.id);
+      return jsonSuccess({
+        id: updated!.id,
+        email: updated!.email,
+        name: updated!.name,
+        phone: updated!.phone,
+        band_name: updated!.band_name,
+        address_line1: updated!.address_line1,
+        address_line2: updated!.address_line2,
+        postal_code: updated!.postal_code,
+        city: updated!.city,
+      });
+    } catch (error) {
+      if (error instanceof Response) return error;
+      console.error("PUT /api/client/profile error:", error);
+      return jsonError(error instanceof Error ? error.message : "Profile update failed", 500);
+    }
+  }),
+
+  // ─── Client Pages ───────────────────────────────────────────────────────────
+
+  render(({ children, rw }) => <DocumentWithPath path="/mon-compte/connexion" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/mon-compte/connexion", ClientLogin),
+    ]),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/mon-compte" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/mon-compte", ClientAccount),
+    ]),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/mon-compte/profil" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/mon-compte/profil", ClientProfile),
+    ]),
+  ]),
 
   // ─── Payment & Webhook API ─────────────────────────────────────────────────
 
