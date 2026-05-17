@@ -1020,7 +1020,6 @@ const app = defineApp([
         const search = url.searchParams.get("search");
         if (search) filters.search = search;
         const paymentStatus = url.searchParams.get("paymentStatus");
-        if (paymentStatus) filters.paymentStatus = paymentStatus;
         const dateDirection = url.searchParams.get("dateDirection");
         if (dateDirection) filters.dateDirection = dateDirection as BookingFilters["dateDirection"];
         const sortBy = url.searchParams.get("sortBy");
@@ -1031,17 +1030,19 @@ const app = defineApp([
         const page = parseInt(url.searchParams.get("page") || "1", 10);
         const limit = parseInt(url.searchParams.get("limit") || "20", 10);
 
-        const result = await getBookings(env.DB, filters, page, limit);
-        
-        // Calculate actual payment status for each booking
-        const bookingsWithPaymentStatus = await Promise.all(
+        const needsPaymentCalc = paymentStatus === "paid" || paymentStatus === "remaining";
+        const fetchLimit = needsPaymentCalc ? 1000 : limit;
+
+        const result = await getBookings(env.DB, filters, 1, fetchLimit);
+
+        let bookingsWithPaymentStatus = await Promise.all(
           result.data.map(async (booking) => {
             const payments = await getPaymentsByBookingId(env.DB, booking.id);
             const totalPaid = payments
               .filter((p) => p.status === "paid")
               .reduce((acc, p) => acc + p.amount, 0);
             const isFullyPaid = totalPaid >= booking.total_price;
-            
+
             return {
               ...booking,
               payment_status: isFullyPaid ? "paid" : booking.payment_status,
@@ -1049,7 +1050,28 @@ const app = defineApp([
             };
           })
         );
-        
+
+        if (needsPaymentCalc) {
+          if (paymentStatus === "paid") {
+            bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
+              (b) => b.payment_status === "paid"
+            );
+          } else if (paymentStatus === "remaining") {
+            bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
+              (b) => b.payment_status !== "paid"
+            );
+          }
+          const total = bookingsWithPaymentStatus.length;
+          const offset = (page - 1) * limit;
+          bookingsWithPaymentStatus = bookingsWithPaymentStatus.slice(offset, offset + limit);
+          return jsonSuccess({
+            data: bookingsWithPaymentStatus,
+            total,
+            page,
+            limit,
+          });
+        }
+
         return jsonSuccess({
           ...result,
           data: bookingsWithPaymentStatus,

@@ -119,7 +119,7 @@ export function AdminBookings() {
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "pay-on-site">("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining">("all");
   const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
   const [page, setPage] = useState(1);
@@ -333,12 +333,12 @@ export function AdminBookings() {
           </select>
           <select
             value={paymentStatusFilter}
-            onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "pay-on-site"); setPage(1); }}
+            onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "remaining"); setPage(1); }}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
             <option value="all">Paiement</option>
             <option value="paid">Payé</option>
-            <option value="pay-on-site">Sur place</option>
+            <option value="remaining">Reste à payer</option>
           </select>
 
           <div className="ml-auto flex items-center gap-1">

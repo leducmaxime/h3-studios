@@ -116,7 +116,7 @@ export function ClientAccount() {
   const past = bookings.filter((b) => b.date < today || b.status === "cancelled" || b.status === "completed" || b.status === "no-show");
 
   return (
-    <div className="min-h-[80vh] bg-black px-4 py-16">
+    <div className="min-h-[80vh] bg-black px-4 pt-32 pb-16">
       <div className="container max-w-4xl mx-auto">
         <div className="mb-12 text-center">
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON COMPTE</h1>
