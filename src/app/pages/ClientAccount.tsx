@@ -50,6 +50,13 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   "no-show": { label: "Absent", color: "bg-yellow-500/20 text-yellow-400" },
 };
 
+const PAYMENT_LABELS: Record<string, { label: string; color: string }> = {
+  paid: { label: "Payé", color: "bg-green-600/20 text-green-400" },
+  "pay-on-site": { label: "Paiement sur place", color: "bg-orange-600/20 text-orange-400" },
+  pending: { label: "En attente", color: "bg-yellow-600/20 text-yellow-400" },
+  refunded: { label: "Remboursé", color: "bg-blue-600/20 text-blue-400" },
+};
+
 function formatDateFR(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -111,12 +118,13 @@ export function ClientAccount() {
   return (
     <div className="min-h-[80vh] bg-black px-4 py-16">
       <div className="container max-w-4xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
-          <div>
-            <h1 className="font-blanka text-3xl md:text-4xl text-primary">MON COMPTE</h1>
-            <p className="mt-1 text-zinc-400 text-sm">Bonjour, {user.name}</p>
-          </div>
-          <div className="flex gap-3">
+        <div className="mb-12 text-center">
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON COMPTE</h1>
+          <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          <p className="mt-6 text-lg text-white/60">
+            Bonjour, {user.name}
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-3">
             <Button
               variant="outline"
               size="sm"
@@ -173,6 +181,7 @@ export function ClientAccount() {
 
 function BookingCard({ booking }: { booking: BookingRow }) {
   const status = STATUS_LABELS[booking.status] ?? { label: booking.status, color: "bg-zinc-500/20 text-zinc-400" };
+  const payment = PAYMENT_LABELS[booking.payment_status || ""] ?? { label: booking.payment_status || "—", color: "bg-zinc-500/20 text-zinc-400" };
   const studio = STUDIO_LABELS[booking.studio_id] ?? booking.studio_id;
   const group = GROUP_LABELS[booking.group_type] ?? booking.group_type;
 
@@ -189,9 +198,12 @@ function BookingCard({ booking }: { booking: BookingRow }) {
         </div>
         <div className="text-xs text-zinc-500 mt-1">Réf : {booking.booking_ref}</div>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex flex-wrap items-center gap-3 shrink-0">
         <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}>
           {status.label}
+        </span>
+        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${payment.color}`}>
+          {payment.label}
         </span>
         <span className="text-white font-semibold">{booking.total_price.toFixed(2).replace(".", ",")} €</span>
       </div>
