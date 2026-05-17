@@ -74,6 +74,15 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function isBookingPast(booking: { date: string; end_time: string }): boolean {
+  const today = formatDateISO(new Date());
+  if (booking.date < today) return true;
+  if (booking.date > today) return false;
+  const now = new Date();
+  const nowStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return booking.end_time <= nowStr;
+}
+
 function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: string } {
   const today = new Date();
   const todayStr = formatDateISO(today);
@@ -290,6 +299,15 @@ export function AdminBookings() {
             <option value="pay-on-site">Sur place</option>
           </select>
           <select
+            value={dateDirectionFilter}
+            onChange={(e) => { setDateDirectionFilter(e.target.value as "all" | "past" | "upcoming"); setPage(1); }}
+            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="all">Toutes les dates</option>
+            <option value="upcoming">À venir</option>
+            <option value="past">Passées</option>
+          </select>
+          <select
             value={studioFilter}
             onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
             className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
@@ -424,7 +442,16 @@ export function AdminBookings() {
                           <p className="text-sm text-zinc-400">{booking.user_email || "—"}</p>
                         </a>
                       </td>
-                      <td className="px-4 py-3 text-sm">{formatDate(booking.date)}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          {formatDate(booking.date)}
+                          {isBookingPast(booking) ? (
+                            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">Passée</span>
+                          ) : (
+                            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">À venir</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3">
                         <span className="text-sm">
                           {booking.start_time} - {booking.end_time}
