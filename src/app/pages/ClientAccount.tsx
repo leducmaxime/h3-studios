@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
+import { CalendarDays, Clock, MapPin, Users, Music, CreditCard, ArrowRight, LogOut, UserCircle, Ticket, History } from "lucide-react";
 
 interface ClientUser {
   id: string;
@@ -43,23 +44,33 @@ const GROUP_LABELS: Record<string, string> = {
   group: "Groupe",
 };
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  confirmed: { label: "Confirmée", color: "bg-green-500/20 text-green-400" },
-  cancelled: { label: "Annulée", color: "bg-red-500/20 text-red-400" },
-  completed: { label: "Terminée", color: "bg-blue-500/20 text-blue-400" },
-  "no-show": { label: "Absent", color: "bg-yellow-500/20 text-yellow-400" },
+const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon?: React.ElementType }> = {
+  confirmed: { label: "Confirmée", bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" },
+  cancelled: { label: "Annulée", bg: "bg-red-500/10", text: "text-red-400", border: "border-red-500/20" },
+  completed: { label: "Terminée", bg: "bg-blue-500/10", text: "text-blue-400", border: "border-blue-500/20" },
+  "no-show": { label: "Absent", bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
 };
 
-const PAYMENT_LABELS: Record<string, { label: string; color: string }> = {
-  paid: { label: "Payé", color: "bg-green-600/20 text-green-400" },
-  "pay-on-site": { label: "Paiement sur place", color: "bg-orange-600/20 text-orange-400" },
-  pending: { label: "En attente", color: "bg-yellow-600/20 text-yellow-400" },
-  refunded: { label: "Remboursé", color: "bg-blue-600/20 text-blue-400" },
+const PAYMENT_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  paid: { label: "Payé", bg: "bg-emerald-600/10", text: "text-emerald-400", border: "border-emerald-600/20" },
+  "pay-on-site": { label: "Sur place", bg: "bg-orange-600/10", text: "text-orange-400", border: "border-orange-600/20" },
+  pending: { label: "En attente", bg: "bg-amber-600/10", text: "text-amber-400", border: "border-amber-600/20" },
+  refunded: { label: "Remboursé", bg: "bg-blue-600/10", text: "text-blue-400", border: "border-blue-600/20" },
 };
 
 function formatDateFR(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function formatShortDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+function getDayName(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("fr-FR", { weekday: "short" });
 }
 
 export function ClientAccount() {
@@ -121,35 +132,68 @@ export function ClientAccount() {
         <div className="mb-12 text-center">
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON COMPTE</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-          <p className="mt-6 text-lg text-white/60">
-            Bonjour, {user.name}
-          </p>
-          <div className="mt-6 flex items-center justify-center gap-3">
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+          <div className="lg:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <UserCircle className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-white">{user.name}</h2>
+                <p className="text-sm text-zinc-500">{user.email}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <StatCard value={bookings.length} label="Réservations" icon={Ticket} />
+              <StatCard value={upcoming.length} label="À venir" icon={CalendarDays} />
+              <StatCard value={past.length} label="Passées" icon={History} />
+              <StatCard value={bookings.reduce((sum, b) => sum + b.total_price, 0).toFixed(0) + " €"} label="Total dépensé" icon={CreditCard} />
+            </div>
+          </div>
+
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 flex flex-col justify-center gap-3">
             <Button
-              variant="outline"
-              size="sm"
-              className="border-white/20 text-white hover:bg-white/10"
+              className="w-full h-11 bg-primary text-black hover:bg-primary/90 font-semibold"
               onClick={() => navigate("/mon-compte/profil")}
             >
+              <UserCircle className="h-4 w-4 mr-2" />
               Modifier mon profil
             </Button>
             <Button
               variant="outline"
-              size="sm"
-              className="border-red-800/50 text-red-400 hover:bg-red-950/50"
+              className="w-full h-11 border-white/15 text-zinc-400 hover:text-red-400 hover:border-red-800/50 hover:bg-red-950/30"
               onClick={handleLogout}
               disabled={loggingOut}
             >
-              {loggingOut ? "..." : "Déconnexion"}
+              <LogOut className="h-4 w-4 mr-2" />
+              {loggingOut ? "Déconnexion..." : "Déconnexion"}
             </Button>
           </div>
         </div>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-white mb-4">Réservations à venir</h2>
+          <div className="flex items-center gap-3 mb-5">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CalendarDays className="h-4 w-4 text-primary" />
+            </div>
+            <h2 className="text-lg font-semibold text-white">Réservations à venir</h2>
+            <span className="ml-auto text-sm text-zinc-500">{upcoming.length} réservation{upcoming.length !== 1 ? "s" : ""}</span>
+          </div>
           {upcoming.length === 0 ? (
-            <div className="border border-white/10 rounded-lg p-6 text-center text-zinc-500">
-              Aucune réservation à venir
+            <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-8 text-center">
+              <CalendarDays className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
+              <p className="text-zinc-500">Aucune réservation à venir</p>
+              <Button
+                className="mt-4 bg-primary text-black hover:bg-primary/90"
+                size="sm"
+                onClick={() => navigate("/reservation")}
+              >
+                Réserver un studio
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -161,10 +205,17 @@ export function ClientAccount() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-white mb-4">Réservations passées</h2>
+          <div className="flex items-center gap-3 mb-5">
+            <div className="h-8 w-8 rounded-lg bg-zinc-800 flex items-center justify-center">
+              <History className="h-4 w-4 text-zinc-500" />
+            </div>
+            <h2 className="text-lg font-semibold text-white">Réservations passées</h2>
+            <span className="ml-auto text-sm text-zinc-500">{past.length} réservation{past.length !== 1 ? "s" : ""}</span>
+          </div>
           {past.length === 0 ? (
-            <div className="border border-white/10 rounded-lg p-6 text-center text-zinc-500">
-              Aucune réservation passée
+            <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-8 text-center">
+              <History className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
+              <p className="text-zinc-500">Aucune réservation passée</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -179,33 +230,71 @@ export function ClientAccount() {
   );
 }
 
+function StatCard({ value, label, icon: Icon }: { value: string | number; label: string; icon: React.ElementType }) {
+  return (
+    <div className="bg-black/30 border border-zinc-800/50 rounded-xl p-4 text-center">
+      <Icon className="h-5 w-5 text-primary/60 mx-auto mb-2" />
+      <div className="text-xl font-bold text-white">{value}</div>
+      <div className="text-xs text-zinc-500 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
 function BookingCard({ booking }: { booking: BookingRow }) {
-  const status = STATUS_LABELS[booking.status] ?? { label: booking.status, color: "bg-zinc-500/20 text-zinc-400" };
-  const payment = PAYMENT_LABELS[booking.payment_status || ""] ?? { label: booking.payment_status || "—", color: "bg-zinc-500/20 text-zinc-400" };
+  const status = STATUS_CONFIG[booking.status] ?? { label: booking.status, bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
+  const payment = PAYMENT_CONFIG[booking.payment_status || ""] ?? { label: booking.payment_status || "—", bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
   const studio = STUDIO_LABELS[booking.studio_id] ?? booking.studio_id;
   const group = GROUP_LABELS[booking.group_type] ?? booking.group_type;
+  const isPast = booking.date < new Date().toISOString().slice(0, 10) || ["cancelled", "completed", "no-show"].includes(booking.status);
 
   return (
-    <div className="border border-white/10 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-white font-medium">{formatDateFR(booking.date)}</span>
-          <span className="text-zinc-500">•</span>
-          <span className="text-zinc-300">{booking.start_time} — {booking.end_time}</span>
+    <div className={`group bg-zinc-900/50 border rounded-2xl p-5 transition-all duration-200 hover:bg-zinc-900/70 ${isPast ? "border-zinc-800/50" : "border-zinc-800 hover:border-zinc-700"}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex items-center gap-4 shrink-0">
+          <div className={`h-14 w-14 rounded-xl flex flex-col items-center justify-center shrink-0 ${isPast ? "bg-zinc-800/50" : "bg-primary/10"}`}>
+            <span className={`text-xs font-medium ${isPast ? "text-zinc-500" : "text-primary/70"}`}>{getDayName(booking.date)}</span>
+            <span className={`text-lg font-bold leading-tight ${isPast ? "text-zinc-400" : "text-white"}`}>{formatShortDate(booking.date).split(" ")[0]}</span>
+          </div>
+          <div className="hidden sm:block h-10 w-px bg-zinc-800" />
         </div>
-        <div className="text-sm text-zinc-400">
-          {studio} — {group}{booking.band_name ? ` — ${booking.band_name}` : ""}
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-white font-semibold">{formatDateFR(booking.date)}</span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-zinc-400 flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              {booking.start_time} — {booking.end_time}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-1.5 text-sm text-zinc-400 flex-wrap">
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+              {studio}
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="h-3.5 w-3.5 text-zinc-500" />
+              {group}
+            </span>
+            {booking.band_name && (
+              <span className="flex items-center gap-1">
+                <Music className="h-3.5 w-3.5 text-zinc-500" />
+                {booking.band_name}
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-zinc-600 mt-1.5 font-mono">{booking.booking_ref}</div>
         </div>
-        <div className="text-xs text-zinc-500 mt-1">Réf : {booking.booking_ref}</div>
-      </div>
-      <div className="flex flex-wrap items-center gap-3 shrink-0">
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}>
-          {status.label}
-        </span>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${payment.color}`}>
-          {payment.label}
-        </span>
-        <span className="text-white font-semibold">{booking.total_price.toFixed(2).replace(".", ",")} €</span>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <span className={`text-xs font-medium px-3 py-1.5 rounded-full border ${status.bg} ${status.text} ${status.border}`}>
+            {status.label}
+          </span>
+          <span className={`text-xs font-medium px-3 py-1.5 rounded-full border ${payment.bg} ${payment.text} ${payment.border}`}>
+            {payment.label}
+          </span>
+          <span className="text-white font-bold text-sm ml-1">{booking.total_price.toFixed(2).replace(".", ",")} €</span>
+        </div>
       </div>
     </div>
   );
