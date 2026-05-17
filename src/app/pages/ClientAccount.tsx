@@ -193,7 +193,7 @@ function BookingCard({ booking }: { booking: BookingRow }) {
         <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}>
           {status.label}
         </span>
-        <span className="text-white font-semibold">{(booking.total_price / 100).toFixed(2)} €</span>
+        <span className="text-white font-semibold">{booking.total_price.toFixed(2).replace(".", ",")} €</span>
       </div>
     </div>
   );
