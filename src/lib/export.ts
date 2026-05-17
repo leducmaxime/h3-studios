@@ -78,6 +78,12 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
       "no-show": "No-show",
     };
 
+    const groupTypeLabels: Record<string, string> = {
+      solo: "Solo",
+      duo: "Duo",
+      group: "Groupe",
+    };
+
     const paymentLabels: Record<string, string> = {
       pending: "En attente",
       paid: "Payé",
@@ -93,7 +99,7 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
       escapeCSV(booking.start_time),
       escapeCSV(booking.end_time),
       escapeCSV(durationHours),
-      escapeCSV(booking.group_type),
+      escapeCSV(groupTypeLabels[booking.group_type] || booking.group_type),
       escapeCSV(statusLabels[booking.status] || booking.status),
       escapeCSV(formatPriceForCSV(booking.total_price)),
       escapeCSV(paymentLabels[booking.payment_status || ""] || booking.payment_status || "—"),
