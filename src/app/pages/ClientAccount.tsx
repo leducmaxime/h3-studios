@@ -113,7 +113,7 @@ export function ClientAccount() {
       <div className="container max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="font-blanka text-3xl md:text-4xl text-primary tracking-wider">MON COMPTE</h1>
+            <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary">MON COMPTE</h1>
             <p className="mt-1 text-zinc-400 text-sm">Bonjour, {user.name}</p>
           </div>
           <div className="flex gap-3">

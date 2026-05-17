@@ -120,14 +120,14 @@ export function ClientProfile() {
     <div className="min-h-[80vh] bg-black px-4 py-16">
       <div className="container max-w-lg mx-auto">
         <div className="mb-8">
-          <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary tracking-wide">MON PROFIL</h1>
+          <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary">MON PROFIL</h1>
           <p className="mt-1 text-zinc-400 text-sm">{user.email}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5 bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="profile-firstname" className="text-zinc-300">Prénom</Label>
+              <Label htmlFor="profile-firstname" className="text-zinc-300">Prénom <span className="text-red-400">*</span></Label>
               <Input
                 id="profile-firstname"
                 type="text"
@@ -138,7 +138,7 @@ export function ClientProfile() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="profile-lastname" className="text-zinc-300">Nom</Label>
+              <Label htmlFor="profile-lastname" className="text-zinc-300">Nom <span className="text-red-400">*</span></Label>
               <Input
                 id="profile-lastname"
                 type="text"
@@ -177,7 +177,7 @@ export function ClientProfile() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="profile-address1" className="text-zinc-300">Adresse</Label>
+            <Label htmlFor="profile-address1" className="text-zinc-300">Adresse <span className="text-red-400">*</span></Label>
             <Input
               id="profile-address1"
               type="text"
@@ -204,7 +204,7 @@ export function ClientProfile() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="profile-postal" className="text-zinc-300">Code postal</Label>
+              <Label htmlFor="profile-postal" className="text-zinc-300">Code postal <span className="text-red-400">*</span></Label>
               <Input
                 id="profile-postal"
                 type="text"
@@ -216,7 +216,7 @@ export function ClientProfile() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="profile-city" className="text-zinc-300">Ville</Label>
+              <Label htmlFor="profile-city" className="text-zinc-300">Ville <span className="text-red-400">*</span></Label>
               <Input
                 id="profile-city"
                 type="text"

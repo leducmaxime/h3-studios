@@ -83,7 +83,7 @@ function isBookingPast(booking: { date: string; end_time: string }): boolean {
   return booking.end_time <= nowStr;
 }
 
-function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: string } {
+function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: string; dateDirection?: "past" | "upcoming" } {
   const today = new Date();
   const todayStr = formatDateISO(today);
 
@@ -99,6 +99,10 @@ function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: stri
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
       return { dateFrom: formatDateISO(monthStart) };
     }
+    case "upcoming":
+      return { dateDirection: "upcoming" };
+    case "past":
+      return { dateDirection: "past" };
     default:
       return {};
   }
@@ -112,11 +116,10 @@ export function AdminBookings() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
   const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "pending" | "pay-on-site">("all");
-  const [dateDirectionFilter, setDateDirectionFilter] = useState<"all" | "past" | "upcoming">("all");
   const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
   const [page, setPage] = useState(1);
@@ -154,7 +157,6 @@ export function AdminBookings() {
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (studioFilter !== "all") params.set("studio", studioFilter);
       if (paymentStatusFilter !== "all") params.set("paymentStatus", paymentStatusFilter);
-      if (dateDirectionFilter !== "all") params.set("dateDirection", dateDirectionFilter);
       if (search) params.set("search", search);
       params.set("sortBy", sortBy);
       params.set("sortOrder", sortOrder);
@@ -164,6 +166,7 @@ export function AdminBookings() {
         : getDateFilterParams(dateFilter);
       if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
       if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
+      if (dateParams.dateDirection) params.set("dateDirection", dateParams.dateDirection);
 
       const res = await fetch(`/api/admin/bookings?${params}`);
       const json = (await res.json()) as BookingsApiResponse;
@@ -178,7 +181,7 @@ export function AdminBookings() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, studioFilter, dateFilter, customDateFrom, customDateTo, paymentStatusFilter, dateDirectionFilter, search, sortBy, sortOrder]);
+  }, [page, statusFilter, studioFilter, dateFilter, customDateFrom, customDateTo, paymentStatusFilter, search, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchBookings();
@@ -266,7 +269,6 @@ export function AdminBookings() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
@@ -278,93 +280,105 @@ export function AdminBookings() {
             className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 pl-10 pr-4 text-sm focus:border-primary focus:outline-none"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-zinc-500">Date</label>
+            <select
+              value={dateFilter}
+              onChange={(e) => { setDateFilter(e.target.value as typeof dateFilter); setPage(1); }}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="all">Toutes les dates</option>
+              <option value="today">Aujourd&apos;hui</option>
+              <option value="week">Cette semaine</option>
+              <option value="month">Ce mois</option>
+              <option value="upcoming">À venir</option>
+              <option value="past">Passées</option>
+              <option value="custom">Personnalisé...</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-zinc-500">Statut</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all"); setPage(1); }}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="all">Tous</option>
+              <option value="confirmed">Confirmé</option>
+              <option value="completed">Terminé</option>
+              <option value="cancelled">Annulé</option>
+              <option value="no-show">No-show</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-zinc-500">Studio</label>
+            <select
+              value={studioFilter}
+              onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="all">Tous</option>
+              <option value="la-scene">La Scène</option>
+              <option value="le-podium">Le Podium</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-zinc-500">Paiement</label>
+            <select
+              value={paymentStatusFilter}
+              onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "pending" | "pay-on-site"); setPage(1); }}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="all">Tous</option>
+              <option value="paid">Payé</option>
+              <option value="pending">Reste à payer</option>
+              <option value="pay-on-site">Sur place</option>
+            </select>
+          </div>
+        </div>
+
+        {dateFilter === "custom" && (
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={customDateFrom}
+              onChange={(e) => { setCustomDateFrom(e.target.value); setPage(1); }}
+              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+              placeholder="Du"
+            />
+            <input
+              type="date"
+              value={customDateTo}
+              onChange={(e) => { setCustomDateTo(e.target.value); setPage(1); }}
+              className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+              placeholder="Au"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-xs text-zinc-500">Trier par</span>
           <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all"); setPage(1); }}
-            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="all">Tous les statuts</option>
-            <option value="confirmed">Confirmé</option>
-            <option value="completed">Terminé</option>
-            <option value="cancelled">Annulé</option>
-            <option value="no-show">No-show</option>
-          </select>
-          <select
-            value={paymentStatusFilter}
-            onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "pending" | "pay-on-site"); setPage(1); }}
-            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="all">Tous les paiements</option>
-            <option value="paid">Payé</option>
-            <option value="pending">Reste à payer</option>
-            <option value="pay-on-site">Sur place</option>
-          </select>
-          <select
-            value={dateDirectionFilter}
-            onChange={(e) => { setDateDirectionFilter(e.target.value as "all" | "past" | "upcoming"); setPage(1); }}
-            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="all">Toutes les dates</option>
-            <option value="upcoming">À venir</option>
-            <option value="past">Passées</option>
-          </select>
-          <select
-            value={studioFilter}
-            onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
-            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="all">Tous les studios</option>
-            <option value="la-scene">La Scène</option>
-            <option value="le-podium">Le Podium</option>
-          </select>
-          <select
-            value={dateFilter}
-            onChange={(e) => { setDateFilter(e.target.value as typeof dateFilter); setPage(1); }}
-            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="all">Toutes les dates</option>
-            <option value="today">Aujourd&apos;hui</option>
-            <option value="week">Cette semaine</option>
-            <option value="month">Ce mois</option>
-            <option value="custom">Période personnalisée</option>
-          </select>
-          {dateFilter === "custom" && (
-            <>
-              <input
-                type="date"
-                value={customDateFrom}
-                onChange={(e) => { setCustomDateFrom(e.target.value); setPage(1); }}
-                className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                placeholder="Du"
-              />
-              <input
-                type="date"
-                value={customDateTo}
-                onChange={(e) => { setCustomDateTo(e.target.value); setPage(1); }}
-                className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                placeholder="Au"
-              />
-            </>
-          )}
-          <select
+            value={sortBy}
             onChange={(e) => { setSortBy(e.target.value as BookingSortField); setPage(1); }}
-            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
           >
-            <option value="date">Trier par date</option>
-            <option value="start_time">Trier par heure</option>
-            <option value="total_price">Trier par montant</option>
-            <option value="status">Trier par statut</option>
-            <option value="payment_status">Trier par paiement</option>
-            <option value="created_at">Trier par création</option>
+            <option value="date">Date</option>
+            <option value="start_time">Heure</option>
+            <option value="total_price">Montant</option>
+            <option value="status">Statut</option>
+            <option value="payment_status">Paiement</option>
+            <option value="created_at">Création</option>
           </select>
           <select
             value={sortOrder}
             onChange={(e) => { setSortOrder(e.target.value as BookingSortOrder); setPage(1); }}
-            className="flex-1 min-w-[120px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
           >
-            <option value="desc">Décroissant</option>
-            <option value="asc">Croissant</option>
+            <option value="desc">↓ Décroissant</option>
+            <option value="asc">↑ Croissant</option>
           </select>
         </div>
       </div>

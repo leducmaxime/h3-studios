@@ -109,7 +109,7 @@ export function ClientLogin() {
     <div className="min-h-[80vh] bg-black flex items-start justify-center px-4 py-16">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary tracking-wide">MON COMPTE</h1>
+          <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary">MON COMPTE</h1>
           <p className="mt-2 text-zinc-400 text-sm">H3 Studios — Sucy-en-Brie</p>
         </div>
 
