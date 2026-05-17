@@ -632,7 +632,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               <Button
                 variant="outline"
                 className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
-                onClick={() => generateInvoicePDF(booking, payments[0] || null, user || ({} as DbUser))}
+                onClick={async () => { await generateInvoicePDF(booking, payments[0] || null, user || ({} as DbUser)); }}
                 disabled={!user}
               >
                 <FileText className="mr-3 h-4 w-4 text-zinc-400" />

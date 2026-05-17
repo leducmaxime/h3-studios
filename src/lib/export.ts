@@ -1,8 +1,6 @@
 import { type DbBooking, type DbUser, type DbPayment } from "./db-types";
 import { STUDIOS, formatPrice, type StudioId } from "./booking";
 import { formatDateISO } from "./utils";
-import { jsPDF } from "jspdf";
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function escapeCSV(value: string | number | null | undefined): string {
@@ -206,11 +204,12 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
 
 interface InvoiceBooking extends DbBooking {}
 
-export function generateInvoicePDF(
+export async function generateInvoicePDF(
   booking: InvoiceBooking,
   payment: DbPayment | null,
   user: DbUser
-): void {
+): Promise<void> {
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = 20;
@@ -397,10 +396,11 @@ interface MonthlyStats {
   weeklyStats: Array<{ week: number; count: number; revenue: number }>;
 }
 
-export function generateMonthlyReportPDF(
+export async function generateMonthlyReportPDF(
   stats: MonthlyStats,
   period: { month: number; year: number }
-): void {
+): Promise<void> {
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = 20;

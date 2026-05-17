@@ -1150,7 +1150,7 @@ export function AdminDashboard() {
       const res = await fetch(`/api/admin/stats/report?month=${month}&year=${year}`);
       const json = await res.json() as { success: boolean; data?: Parameters<typeof generateMonthlyReportPDF>[0] };
       if (json.success && json.data) {
-        generateMonthlyReportPDF(json.data, { month, year });
+        await generateMonthlyReportPDF(json.data, { month, year });
       }
     } catch (err) {
       console.error("Failed to generate report:", err);
