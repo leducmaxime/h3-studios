@@ -502,6 +502,7 @@ export function AdminCalendar() {
 
           <div className="grid grid-cols-[80px_repeat(7,_minmax(0,1fr))] lg:grid-cols-[100px_repeat(7,_minmax(0,1fr))]">
             <div className="border-r border-zinc-800 bg-zinc-950/30">
+              <div className="border-b border-zinc-800" style={{ height: '23px' }} />
               {VISIBLE_HOURS.map((hour) => (
                 <div key={hour} className="h-[60px] border-b border-zinc-800 pr-3 pt-1 text-right text-xs text-zinc-500">
                   {hour}
