@@ -720,7 +720,7 @@ export function Reservation({ step }: ReservationProps) {
                         onClick={() => {
                           if (clientUserLoading) return;
                           if (!clientUser) {
-                            window.location.href = "/mon-compte/connexion?redirect=/reservation/panier";
+                            window.location.href = "/mon-compte/connexion?redirect=/reservation/coordonnees";
                             return;
                           }
                           goToPaymentChoice();
