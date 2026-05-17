@@ -516,9 +516,9 @@ export function AdminCalendar() {
               return (
                 <div
                   key={`${date.toISOString()}-day`}
-                  className={`relative border-l border-zinc-800 ${isToday ? "bg-primary/5" : ""}`}
+                  className={`border-l border-zinc-800 ${isToday ? "bg-primary/5" : ""}`}
                 >
-                  <div className="grid grid-cols-2 h-full">
+                  <div className="grid grid-cols-2">
                     <div className={`border-r border-zinc-800/50 ${isToday ? "bg-blue-500/5" : ""}`}>
                       <div className={`text-center py-1 text-[10px] font-medium border-b border-zinc-800 ${STUDIO_COLORS["la-scene"].text}`}>
                         La Scène
@@ -531,74 +531,75 @@ export function AdminCalendar() {
                     </div>
                   </div>
 
-                  {VISIBLE_HOURS.map((hour) => (
-                    <div key={hour} className="h-[60px] border-b border-zinc-800" />
-                  ))}
+                  <div className="relative">
+                    {VISIBLE_HOURS.map((hour) => (
+                      <div key={hour} className="h-[60px] border-b border-zinc-800" />
+                    ))}
 
-                   {studios.map((studioId) => {
-                     const studioBlocked = expandedBlocked(dateStr, studioId);
-                     const studioBookings = bookings.filter(
-                       (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
-                     );
+                    {studios.map((studioId) => {
+                      const studioBlocked = expandedBlocked(dateStr, studioId);
+                      const studioBookings = bookings.filter(
+                        (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
+                      );
 
-                     const leftPos = studioId === "la-scene" ? "4px" : "50%";
-                     const width = "calc(50% - 8px)";
+                      const leftPos = studioId === "la-scene" ? "4px" : "50%";
+                      const width = "calc(50% - 8px)";
 
-                     return (
-                       <div key={`${dateStr}-${studioId}`} className="contents">
-                         {studioBlocked.map((slot) => {
-                           const startIdx = ALL_TIME_SLOTS.indexOf(slot.start_time);
-                           let endIdx = ALL_TIME_SLOTS.indexOf(slot.end_time);
-                           if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                           if (startIdx === -1) return null;
+                      return (
+                        <div key={`${dateStr}-${studioId}`} className="contents">
+                          {studioBlocked.map((slot) => {
+                            const startIdx = ALL_TIME_SLOTS.indexOf(slot.start_time);
+                            let endIdx = ALL_TIME_SLOTS.indexOf(slot.end_time);
+                            if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                            if (startIdx === -1) return null;
 
-                           const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                           const height = (endIdx - startIdx) * 30;
+                            const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                            const height = (endIdx - startIdx) * 30;
 
-                           return (
-                             <div
-                               key={`${slot.id}-${studioId}`}
-                               title={`Bloqué: ${slot.reason}`}
-                               className={`absolute overflow-hidden rounded border px-1.5 py-1 ${BLOCKED_COLORS.bg} ${BLOCKED_COLORS.border} ${BLOCKED_COLORS.text}`}
-                               style={{
-                                 top: `${top}px`,
-                                 height: `${Math.max(height, 24)}px`,
-                                 left: leftPos,
-                                 width,
-                                 zIndex: 1,
-                                 backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 6px, rgba(255,255,255,0.0) 6px, rgba(255,255,255,0.0) 12px)",
-                               }}
-                             >
-                               <p className="truncate text-[11px] font-medium leading-tight">
-                                 {slot.start_time} Bloqué
-                               </p>
-                               <p className="truncate text-[9px] opacity-80">{slot.reason}</p>
-                             </div>
-                           );
-                         })}
+                            return (
+                              <div
+                                key={`${slot.id}-${studioId}`}
+                                title={`Bloqué: ${slot.reason}`}
+                                className={`absolute overflow-hidden rounded border px-1.5 py-1 ${BLOCKED_COLORS.bg} ${BLOCKED_COLORS.border} ${BLOCKED_COLORS.text}`}
+                                style={{
+                                  top: `${top}px`,
+                                  height: `${Math.max(height, 24)}px`,
+                                  left: leftPos,
+                                  width,
+                                  zIndex: 1,
+                                  backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 6px, rgba(255,255,255,0.0) 6px, rgba(255,255,255,0.0) 12px)",
+                                }}
+                              >
+                                <p className="truncate text-[11px] font-medium leading-tight">
+                                  {slot.start_time} Bloqué
+                                </p>
+                                <p className="truncate text-[9px] opacity-80">{slot.reason}</p>
+                              </div>
+                            );
+                          })}
 
-                         {studioBookings.map((booking) => {
-                           const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                           let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                           if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                           const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                           const height = (endIdx - startIdx) * 30;
-                           const paymentColors = getPaymentStatusColor(booking);
+                          {studioBookings.map((booking) => {
+                            const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                            let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                            if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                            const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                            const height = (endIdx - startIdx) * 30;
+                            const paymentColors = getPaymentStatusColor(booking);
 
-                           return (
-                             <button
-                               key={booking.id}
-                               type="button"
+                            return (
+                              <button
+                                key={booking.id}
+                                type="button"
                                 onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                                 onMouseLeave={() => setTooltip(null)}
-                               onClick={() => setSelectedBooking(booking)}
-                               className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
-                               style={{
-                                 top: `${top}px`,
-                                 height: `${Math.max(height, 24)}px`,
-                                 left: leftPos,
-                                 width,
-                               }}
+                                onClick={() => setSelectedBooking(booking)}
+                                className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
+                                style={{
+                                  top: `${top}px`,
+                                  height: `${Math.max(height, 24)}px`,
+                                  left: leftPos,
+                                  width,
+                                }}
                               >
                                 <p className="truncate text-[11px] font-medium leading-tight">
                                   {booking.start_time} · {GROUP_LABELS[booking.group_type]}
@@ -610,38 +611,38 @@ export function AdminCalendar() {
                                   <p className="text-[9px] opacity-70">Options</p>
                                 )}
                               </button>
-                           );
-                         })}
-                       </div>
-                     );
-                   })}
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
 
-                   {(() => {
-                     const consultationBookings = bookings.filter(
-                       (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
-                     );
+                    {(() => {
+                      const consultationBookings = bookings.filter(
+                        (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
+                      );
 
-                     return consultationBookings.map((booking) => {
-                       const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                       let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                       if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                       const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                       const height = (endIdx - startIdx) * 30;
+                      return consultationBookings.map((booking) => {
+                        const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+                        let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+                        if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+                        const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                        const height = (endIdx - startIdx) * 30;
 
-                       const studioId = booking.studio_id as StudioId;
-                       const leftPos = studioId === "la-scene" ? "4px" : studioId === "le-podium" ? "50%" : "4px";
-                       const width = studioId === "la-scene" || studioId === "le-podium" ? "calc(50% - 8px)" : "calc(100% - 8px)";
+                        const studioId = booking.studio_id as StudioId;
+                        const leftPos = studioId === "la-scene" ? "4px" : studioId === "le-podium" ? "50%" : "4px";
+                        const width = studioId === "la-scene" || studioId === "le-podium" ? "calc(50% - 8px)" : "calc(100% - 8px)";
 
-                       return (
-                         <button
-                           key={booking.id}
-                           type="button"
-                           onClick={() => setSelectedBooking(booking)}
+                        return (
+                          <button
+                            key={booking.id}
+                            type="button"
+                            onClick={() => setSelectedBooking(booking)}
                             onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setTooltip(null)}
-                           className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
-                           style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
-                           >
+                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
+                            style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
+                          >
                             <p className="truncate text-[11px] font-medium leading-tight">
                               {booking.start_time} · {GROUP_LABELS[booking.group_type]}
                             </p>
@@ -652,9 +653,10 @@ export function AdminCalendar() {
                               <p className="text-[9px] opacity-70">Options</p>
                             )}
                           </button>
-                       );
-                     });
-                   })()}
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
               );
             })}
