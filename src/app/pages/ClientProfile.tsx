@@ -5,6 +5,7 @@ import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { User, Mail, Lock, Phone, Music, MapPin, Building2, Hash, Home, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface ClientUser {
   id: string;
@@ -18,6 +19,20 @@ interface ClientUser {
   address_line2: string | null;
   postal_code: string | null;
   city: string | null;
+}
+
+function RequiredAsterisk() {
+  return <span className="text-primary ml-0.5" aria-hidden="true">*</span>;
+}
+
+function FieldLabel({ htmlFor, icon: Icon, children, required }: { htmlFor: string; icon: React.ElementType; children: React.ReactNode; required?: boolean }) {
+  return (
+    <Label htmlFor={htmlFor} className="text-zinc-300 text-sm font-medium flex items-center gap-1.5">
+      <Icon className="h-3.5 w-3.5 text-zinc-500" />
+      {children}
+      {required && <RequiredAsterisk />}
+    </Label>
+  );
 }
 
 export function ClientProfile() {
@@ -126,170 +141,212 @@ export function ClientProfile() {
 
   return (
     <div className="min-h-[80vh] bg-black px-4 pt-32 pb-16">
-      <div className="container max-w-2xl mx-auto">
-        <div className="mb-12 text-center">
+      <div className="container max-w-3xl mx-auto">
+        <div className="mb-10 text-center">
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON PROFIL</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
         </div>
 
-        <p className="text-xs text-zinc-500 mb-3">Les champs marqués d'un <span className="text-red-400">*</span> sont obligatoires.</p>
-        <form onSubmit={handleSubmit} className="space-y-5 bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="profile-firstname" className="text-zinc-300">Prénom <span className="text-red-400">*</span></Label>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <User className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="text-lg font-semibold text-white">Identité</h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-firstname" icon={User} required>Prénom</FieldLabel>
+                <Input
+                  id="profile-firstname"
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  disabled={saving}
+                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-lastname" icon={User} required>Nom</FieldLabel>
+                <Input
+                  id="profile-lastname"
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  disabled={saving}
+                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <FieldLabel htmlFor="profile-email" icon={Mail} required>Email</FieldLabel>
               <Input
-                id="profile-firstname"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                id="profile-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="votre@email.com"
                 disabled={saving}
-                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+                className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="profile-lastname" className="text-zinc-300">Nom <span className="text-red-400">*</span></Label>
-              <Input
-                id="profile-lastname"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                disabled={saving}
-                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-              />
+          </section>
+
+          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Phone className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="text-lg font-semibold text-white">Coordonnées</h2>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="profile-email" className="text-zinc-300">Email <span className="text-red-400">*</span></Label>
-            <Input
-              id="profile-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="votre@email.com"
-              disabled={saving}
-              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="profile-password" className="text-zinc-300">Nouveau mot de passe</Label>
-            <Input
-              id="profile-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Laisser vide pour ne pas changer"
-              disabled={saving}
-              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="profile-phone" className="text-zinc-300">Téléphone</Label>
-            <Input
-              id="profile-phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="06 12 34 56 78"
-              disabled={saving}
-              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="profile-band" className="text-zinc-300">Nom du groupe</Label>
-            <Input
-              id="profile-band"
-              type="text"
-              value={bandName}
-              onChange={(e) => setBandName(e.target.value)}
-              placeholder="Nom de votre groupe"
-              disabled={saving}
-              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="profile-address1" className="text-zinc-300">Adresse <span className="text-red-400">*</span></Label>
-            <Input
-              id="profile-address1"
-              type="text"
-              value={addressLine1}
-              onChange={(e) => setAddressLine1(e.target.value)}
-              placeholder="Numéro et rue"
-              disabled={saving}
-              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="profile-address2" className="text-zinc-300">Complément d'adresse</Label>
-            <Input
-              id="profile-address2"
-              type="text"
-              value={addressLine2}
-              onChange={(e) => setAddressLine2(e.target.value)}
-              placeholder="Bâtiment, étage..."
-              disabled={saving}
-              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="profile-postal" className="text-zinc-300">Code postal <span className="text-red-400">*</span></Label>
-              <Input
-                id="profile-postal"
-                type="text"
-                value={postalCode}
-                onChange={(e) => setPostalCode(e.target.value)}
-                placeholder="94370"
-                disabled={saving}
-                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-phone" icon={Phone}>Téléphone</FieldLabel>
+                <Input
+                  id="profile-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="06 12 34 56 78"
+                  disabled={saving}
+                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-band" icon={Music}>Nom du groupe</FieldLabel>
+                <Input
+                  id="profile-band"
+                  type="text"
+                  value={bandName}
+                  onChange={(e) => setBandName(e.target.value)}
+                  placeholder="Nom de votre groupe"
+                  disabled={saving}
+                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="profile-city" className="text-zinc-300">Ville <span className="text-red-400">*</span></Label>
-              <Input
-                id="profile-city"
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Sucy-en-Brie"
-                disabled={saving}
-                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-              />
+          </section>
+
+          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="text-lg font-semibold text-white">Adresse</h2>
             </div>
-          </div>
+
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-address1" icon={Home} required>Adresse</FieldLabel>
+                <Input
+                  id="profile-address1"
+                  type="text"
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  placeholder="Numéro et rue"
+                  disabled={saving}
+                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-address2" icon={Building2}>Complément d'adresse</FieldLabel>
+                <Input
+                  id="profile-address2"
+                  type="text"
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  placeholder="Bâtiment, étage..."
+                  disabled={saving}
+                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="profile-postal" icon={Hash} required>Code postal</FieldLabel>
+                  <Input
+                    id="profile-postal"
+                    type="text"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
+                    placeholder="94370"
+                    disabled={saving}
+                    className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="profile-city" icon={MapPin} required>Ville</FieldLabel>
+                  <Input
+                    id="profile-city"
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Sucy-en-Brie"
+                    disabled={saving}
+                    className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Lock className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="text-lg font-semibold text-white">Sécurité</h2>
+            </div>
+
+            <div className="space-y-2">
+              <FieldLabel htmlFor="profile-password" icon={Lock}>Nouveau mot de passe</FieldLabel>
+              <Input
+                id="profile-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Laisser vide pour ne pas changer"
+                disabled={saving}
+                className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+              />
+              <p className="text-xs text-zinc-600 mt-1">Laissez ce champ vide si vous ne souhaitez pas modifier votre mot de passe.</p>
+            </div>
+          </section>
 
           {error && (
-            <div className="text-sm text-red-400 bg-red-950/50 border border-red-900/50 rounded-lg px-4 py-3">
+            <div className="flex items-start gap-3 text-sm text-red-400 bg-red-950/40 border border-red-900/40 rounded-xl px-5 py-4">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               {error}
             </div>
           )}
 
           {success && (
-            <div className="text-sm text-green-400 bg-green-950/50 border border-green-900/50 rounded-lg px-4 py-3">
+            <div className="flex items-start gap-3 text-sm text-green-400 bg-green-950/40 border border-green-900/40 rounded-xl px-5 py-4">
+              <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
               {success}
             </div>
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button
               type="submit"
-              className="flex-1 h-10 text-sm font-semibold"
+              className="flex-1 h-11 text-sm font-semibold bg-primary text-black hover:bg-primary/90"
               disabled={saving}
             >
-              {saving ? "Enregistrement..." : "Enregistrer"}
+              {saving ? "Enregistrement..." : "Enregistrer les modifications"}
             </Button>
             <Button
               type="button"
               variant="outline"
-              className="border-white/20 text-white hover:bg-white/10 h-10"
+              className="border-white/20 text-white hover:bg-white/10 h-11 px-6"
               onClick={() => navigate("/mon-compte")}
             >
+              <ArrowLeft className="h-4 w-4 mr-2" />
               Retour
             </Button>
           </div>
