@@ -3171,10 +3171,24 @@ const app = defineApp([
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
 
     try {
-      const body = await request.json() as { name?: string; email?: string; phone?: string; password?: string };
+      const body = await request.json() as {
+        firstName?: string;
+        lastName?: string;
+        email?: string;
+        phone?: string;
+        bandName?: string;
+        addressLine1?: string;
+        postalCode?: string;
+        city?: string;
+        password?: string;
+      };
 
-      if (!body.name || !body.email || !body.password) {
-        return jsonError("Nom, email et mot de passe requis", 400);
+      const firstName = body.firstName?.trim() || "";
+      const lastName = body.lastName?.trim() || "";
+      const name = `${firstName} ${lastName}`.trim();
+
+      if (!firstName || !lastName || !body.email || !body.password) {
+        return jsonError("Prénom, nom, email et mot de passe requis", 400);
       }
 
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
@@ -3192,9 +3206,15 @@ const app = defineApp([
 
       const passwordHash = await hashPassword(body.password);
       const user = await createUser(env.DB, {
-        name: body.name.trim(),
+        name,
+        first_name: firstName,
+        last_name: lastName,
         email: body.email.trim().toLowerCase(),
         phone: body.phone?.trim() || undefined,
+        band_name: body.bandName?.trim() || undefined,
+        address_line1: body.addressLine1?.trim() || undefined,
+        postal_code: body.postalCode?.trim() || undefined,
+        city: body.city?.trim() || undefined,
       });
 
       await updateUserPassword(env.DB, user.id, passwordHash);
@@ -3317,6 +3337,8 @@ const app = defineApp([
     try {
       const user = await requireClientAuth(request, env.DB);
       const body = await request.json() as {
+        first_name?: string;
+        last_name?: string;
         name?: string;
         phone?: string;
         band_name?: string;
@@ -3326,7 +3348,9 @@ const app = defineApp([
         city?: string;
       };
 
-      const allowedFields: Partial<Pick<typeof body, "name" | "phone" | "band_name" | "address_line1" | "address_line2" | "postal_code" | "city">> = {};
+      const allowedFields: Partial<Pick<typeof body, "first_name" | "last_name" | "name" | "phone" | "band_name" | "address_line1" | "address_line2" | "postal_code" | "city">> = {};
+      if (body.first_name !== undefined) allowedFields.first_name = body.first_name;
+      if (body.last_name !== undefined) allowedFields.last_name = body.last_name;
       if (body.name !== undefined) allowedFields.name = body.name;
       if (body.phone !== undefined) allowedFields.phone = body.phone;
       if (body.band_name !== undefined) allowedFields.band_name = body.band_name;
@@ -3347,6 +3371,8 @@ const app = defineApp([
         id: updated!.id,
         email: updated!.email,
         name: updated!.name,
+        first_name: updated!.first_name,
+        last_name: updated!.last_name,
         phone: updated!.phone,
         band_name: updated!.band_name,
         address_line1: updated!.address_line1,

@@ -6,6 +6,8 @@ export interface ClientUser {
   id: string;
   email: string | null;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   phone: string | null;
   band_name: string | null;
   address_line1: string | null;
@@ -50,7 +52,7 @@ export async function createClientSession(db: D1Database, userId: string): Promi
 export async function validateClientSession(db: D1Database, token: string): Promise<ClientUser | null> {
   const row = await db
     .prepare(
-      `SELECT s.user_id, s.expires_at, u.id, u.email, u.name, u.phone, u.band_name,
+      `SELECT s.user_id, s.expires_at, u.id, u.email, u.name, u.first_name, u.last_name, u.phone, u.band_name,
               u.address_line1, u.address_line2, u.postal_code, u.city, u.is_blocked
        FROM sessions s
        JOIN users u ON s.user_id = u.id
@@ -63,6 +65,8 @@ export async function validateClientSession(db: D1Database, token: string): Prom
       id: string;
       email: string | null;
       name: string;
+      first_name: string | null;
+      last_name: string | null;
       phone: string | null;
       band_name: string | null;
       address_line1: string | null;
@@ -89,6 +93,8 @@ export async function validateClientSession(db: D1Database, token: string): Prom
     id: row.id,
     email: row.email,
     name: row.name,
+    first_name: row.first_name,
+    last_name: row.last_name,
     phone: row.phone,
     band_name: row.band_name,
     address_line1: row.address_line1,

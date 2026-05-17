@@ -33,6 +33,8 @@ export interface DbUser {
   email: string | null;
   password_hash: string | null;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   phone: string | null;
   band_name: string | null;
   notes: string | null;

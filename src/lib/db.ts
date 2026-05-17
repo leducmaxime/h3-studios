@@ -19,7 +19,7 @@ import {
   type DbPaymentStatus,
   type CreateBooking,
 } from "./db-types";
-import { getParisDateISO, getParisNow } from "./utils";
+import { getParisDateISO } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
 
 function generateId(): string {
@@ -72,15 +72,13 @@ export async function getBookings(
   }
 
   if (filters.dateDirection && filters.dateDirection !== "all") {
-    const paris = getParisNow();
-    const today = paris.dateISO;
-    const nowTime = `${String(paris.hours).padStart(2, "0")}:${String(paris.minutes).padStart(2, "0")}`;
+    const today = getParisDateISO();
     if (filters.dateDirection === "upcoming") {
-      conditions.push("(b.date > ? OR (b.date = ? AND b.end_time > ?))");
-      params.push(today, today, nowTime);
+      conditions.push("b.date >= ?");
+      params.push(today);
     } else if (filters.dateDirection === "past") {
-      conditions.push("(b.date < ? OR (b.date = ? AND b.end_time <= ?))");
-      params.push(today, today, nowTime);
+      conditions.push("b.date < ?");
+      params.push(today);
     }
   }
 
@@ -387,6 +385,8 @@ export async function getUsers(
         u.email,
         u.password_hash,
         u.name,
+        u.first_name,
+        u.last_name,
         u.phone,
         u.band_name,
         u.notes,
@@ -430,6 +430,8 @@ export async function getUserById(
         u.email,
         u.password_hash,
         u.name,
+        u.first_name,
+        u.last_name,
         u.phone,
         u.band_name,
         u.notes,
@@ -488,6 +490,8 @@ export async function createUser(
   db: D1Database,
   data: {
     name: string;
+    first_name?: string;
+    last_name?: string;
     email?: string;
     phone?: string;
     band_name?: string;
@@ -503,12 +507,14 @@ export async function createUser(
   const timestamp = now();
 
   await db.prepare(`
-    INSERT INTO users (id, email, name, phone, band_name, notes, address_line1, address_line2, postal_code, city, country, is_blocked, total_bookings, total_spent, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
+    INSERT INTO users (id, email, name, first_name, last_name, phone, band_name, notes, address_line1, address_line2, postal_code, city, country, is_blocked, total_bookings, total_spent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
   `).bind(
     id,
     data.email ?? null,
     data.name,
+    data.first_name ?? null,
+    data.last_name ?? null,
     data.phone ?? null,
     data.band_name ?? null,
     data.notes ?? null,
@@ -527,7 +533,7 @@ export async function createUser(
 export async function updateUser(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbUser, "email" | "name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country">>,
+  data: Partial<Pick<DbUser, "email" | "name" | "first_name" | "last_name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];

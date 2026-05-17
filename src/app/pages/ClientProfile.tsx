@@ -10,6 +10,8 @@ interface ClientUser {
   id: string;
   email: string | null;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   phone: string | null;
   band_name: string | null;
   address_line1: string | null;
@@ -20,7 +22,8 @@ interface ClientUser {
 
 export function ClientProfile() {
   const [user, setUser] = useState<ClientUser | null>(null);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [bandName, setBandName] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
@@ -42,7 +45,8 @@ export function ClientProfile() {
         }
         const u = data.data as ClientUser;
         setUser(u);
-        setName(u.name || "");
+        setFirstName(u.first_name || "");
+        setLastName(u.last_name || "");
         setPhone(u.phone || "");
         setBandName(u.band_name || "");
         setAddressLine1(u.address_line1 || "");
@@ -63,10 +67,13 @@ export function ClientProfile() {
     setSaving(true);
 
     try {
+      const name = `${firstName} ${lastName}`.trim();
       const res = await fetch("/api/client/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          first_name: firstName || undefined,
+          last_name: lastName || undefined,
           name,
           phone: phone || undefined,
           band_name: bandName || undefined,
@@ -113,21 +120,34 @@ export function ClientProfile() {
     <div className="min-h-[80vh] bg-black px-4 py-16">
       <div className="container max-w-lg mx-auto">
         <div className="mb-8">
-          <h1 className="font-blanka text-3xl md:text-4xl text-primary tracking-wider">MON PROFIL</h1>
+          <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary tracking-wide">MON PROFIL</h1>
           <p className="mt-1 text-zinc-400 text-sm">{user.email}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5 bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-          <div className="space-y-2">
-            <Label htmlFor="profile-name" className="text-zinc-300">Nom *</Label>
-            <Input
-              id="profile-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={saving}
-              className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="profile-firstname" className="text-zinc-300">Prénom</Label>
+              <Input
+                id="profile-firstname"
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                disabled={saving}
+                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-lastname" className="text-zinc-300">Nom</Label>
+              <Input
+                id="profile-lastname"
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                disabled={saving}
+                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

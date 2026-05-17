@@ -193,6 +193,8 @@ export function useBookingWithRouter(urlStep?: string) {
     id: string;
     email: string | null;
     name: string;
+    first_name: string | null;
+    last_name: string | null;
     phone: string | null;
     band_name: string | null;
     address_line1: string | null;
@@ -246,7 +248,7 @@ export function useBookingWithRouter(urlStep?: string) {
     const fetchClientUser = fetch("/api/client/me")
       .then((res) => {
         if (!res.ok) return null;
-        return res.json() as Promise<{ data?: { id: string; email: string | null; name: string; phone: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null } }>;
+        return res.json() as Promise<{ data?: { id: string; email: string | null; name: string; first_name: string | null; last_name: string | null; phone: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null } }>;
       })
       .then((json) => {
         if (json?.data) {

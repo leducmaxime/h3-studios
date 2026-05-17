@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +18,13 @@ export function ClientLogin() {
   const [tab, setTab] = useState<Tab>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [bandName, setBandName] = useState("");
+  const [addressLine1, setAddressLine1] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [city, setCity] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -58,8 +63,8 @@ export function ClientLogin() {
     e.preventDefault();
     setError("");
 
-    if (!name || !email || !password) {
-      setError("Nom, email et mot de passe sont obligatoires");
+    if (!firstName || !lastName || !email || !password) {
+      setError("Prénom, nom, email et mot de passe sont obligatoires");
       return;
     }
 
@@ -73,7 +78,17 @@ export function ClientLogin() {
       const res = await fetch("/api/client/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone, password }),
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          phone,
+          bandName,
+          addressLine1,
+          postalCode,
+          city,
+          password,
+        }),
       });
       const data = await res.json() as { success?: boolean; error?: string };
 
@@ -91,10 +106,10 @@ export function ClientLogin() {
   };
 
   return (
-    <div className="min-h-[80vh] bg-black flex items-center justify-center px-4 py-16">
+    <div className="min-h-[80vh] bg-black flex items-start justify-center px-4 py-16">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="font-blanka text-3xl md:text-4xl text-primary tracking-wider">MON COMPTE</h1>
+          <h1 className="font-blanka text-2xl sm:text-3xl md:text-4xl text-primary tracking-wide">MON COMPTE</h1>
           <p className="mt-2 text-zinc-400 text-sm">H3 Studios — Sucy-en-Brie</p>
         </div>
 
@@ -163,19 +178,34 @@ export function ClientLogin() {
             </Button>
           </form>
         ) : (
-          <form onSubmit={handleRegister} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="reg-name" className="text-zinc-300">Nom *</Label>
-              <Input
-                id="reg-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Votre nom"
-                disabled={loading}
-                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
-              />
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="reg-firstname" className="text-zinc-300">Prénom *</Label>
+                <Input
+                  id="reg-firstname"
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Jean"
+                  disabled={loading}
+                  className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reg-lastname" className="text-zinc-300">Nom *</Label>
+                <Input
+                  id="reg-lastname"
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Dupont"
+                  disabled={loading}
+                  className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+                />
+              </div>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="reg-email" className="text-zinc-300">Email *</Label>
               <Input
@@ -200,6 +230,58 @@ export function ClientLogin() {
                 className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="reg-band" className="text-zinc-300">Nom du groupe</Label>
+              <Input
+                id="reg-band"
+                type="text"
+                value={bandName}
+                onChange={(e) => setBandName(e.target.value)}
+                placeholder="Les Rockers (facultatif)"
+                disabled={loading}
+                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="reg-address" className="text-zinc-300">Adresse</Label>
+              <Input
+                id="reg-address"
+                type="text"
+                value={addressLine1}
+                onChange={(e) => setAddressLine1(e.target.value)}
+                placeholder="12 Rue de la Musique"
+                disabled={loading}
+                className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="reg-postal" className="text-zinc-300">Code postal</Label>
+                <Input
+                  id="reg-postal"
+                  type="text"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  placeholder="94370"
+                  disabled={loading}
+                  className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reg-city" className="text-zinc-300">Ville</Label>
+                <Input
+                  id="reg-city"
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Sucy-en-Brie"
+                  disabled={loading}
+                  className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="reg-password" className="text-zinc-300">Mot de passe *</Label>
               <Input

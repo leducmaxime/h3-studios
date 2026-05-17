@@ -8,6 +8,8 @@ interface ClientUser {
   id: string;
   email: string | null;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   phone: string | null;
   band_name: string | null;
   address_line1: string | null;
