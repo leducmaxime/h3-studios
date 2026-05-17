@@ -424,7 +424,7 @@ export function AdminBookings() {
                   const displayName = booking.band_name || booking.user_name || "—";
 
                   return (
-                    <tr key={booking.id} className="bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors">
+                    <tr key={booking.id} className={`bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors ${isBookingPast(booking) ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3">
                         <a
                           href={`/admin/bookings/${booking.id}`}
@@ -443,14 +443,7 @@ export function AdminBookings() {
                         </a>
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <div className="flex items-center gap-2">
-                          {formatDate(booking.date)}
-                          {isBookingPast(booking) ? (
-                            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">Passée</span>
-                          ) : (
-                            <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">À venir</span>
-                          )}
-                        </div>
+                        {formatDate(booking.date)}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm">
