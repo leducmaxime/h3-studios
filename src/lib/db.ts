@@ -76,6 +76,7 @@ export async function getBookings(
     if (filters.dateDirection === "upcoming") {
       conditions.push("b.date >= ?");
       params.push(today);
+      conditions.push("b.status != 'cancelled'");
     } else if (filters.dateDirection === "past") {
       conditions.push("b.date < ?");
       params.push(today);
