@@ -17,7 +17,7 @@ export interface ClientUser {
 }
 
 const CLIENT_SESSION_COOKIE = "h3_client_session";
-const SESSION_DURATION_DAYS = 7;
+const SESSION_DURATION_HOURS = 2;
 
 function generateToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -36,7 +36,7 @@ function generateId(): string {
 export async function createClientSession(db: D1Database, userId: string): Promise<string> {
   const id = `cls-${generateId()}`;
   const token = generateToken();
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000)
+  const expiresAt = new Date(Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000)
     .toISOString()
     .replace("T", " ")
     .slice(0, 19);
@@ -108,8 +108,8 @@ export async function deleteClientSession(db: D1Database, token: string): Promis
   await db.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
 }
 
-export function buildClientSessionCookie(token: string, maxAgeDays: number = SESSION_DURATION_DAYS): string {
-  const maxAge = maxAgeDays * 24 * 60 * 60;
+export function buildClientSessionCookie(token: string, maxAgeHours: number = SESSION_DURATION_HOURS): string {
+  const maxAge = maxAgeHours * 60 * 60;
   return `${CLIENT_SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
 }
 

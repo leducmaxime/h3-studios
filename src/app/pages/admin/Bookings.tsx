@@ -116,6 +116,7 @@ export function AdminBookings() {
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "pending" | "pay-on-site">("all");
+  const [dateDirectionFilter, setDateDirectionFilter] = useState<"all" | "past" | "upcoming">("all");
   const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
   const [page, setPage] = useState(1);
@@ -153,6 +154,7 @@ export function AdminBookings() {
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (studioFilter !== "all") params.set("studio", studioFilter);
       if (paymentStatusFilter !== "all") params.set("paymentStatus", paymentStatusFilter);
+      if (dateDirectionFilter !== "all") params.set("dateDirection", dateDirectionFilter);
       if (search) params.set("search", search);
       params.set("sortBy", sortBy);
       params.set("sortOrder", sortOrder);
@@ -176,7 +178,7 @@ export function AdminBookings() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, studioFilter, dateFilter, customDateFrom, customDateTo, paymentStatusFilter, search, sortBy, sortOrder]);
+  }, [page, statusFilter, studioFilter, dateFilter, customDateFrom, customDateTo, paymentStatusFilter, dateDirectionFilter, search, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchBookings();
