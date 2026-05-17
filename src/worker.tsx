@@ -1051,6 +1051,20 @@ const app = defineApp([
           })
         );
 
+        const parisNow = getParisNow();
+        const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
+        bookingsWithPaymentStatus = bookingsWithPaymentStatus.map((booking) => {
+          if (booking.status === "confirmed") {
+            const isPast =
+              booking.date < parisNow.dateISO ||
+              (booking.date === parisNow.dateISO && booking.end_time <= nowTimeStr);
+            if (isPast) {
+              return { ...booking, status: "completed" as const };
+            }
+          }
+          return booking;
+        });
+
         if (needsPaymentCalc) {
           if (paymentStatus === "paid") {
             bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
