@@ -134,6 +134,44 @@ export const pageSEO: Record<string, PageSEO> = {
     ],
     path: "/actualites",
   },
+  "/mon-compte": {
+    title: "Mon Compte - Mes Réservations | H3 STUDIOS",
+    description:
+      "Consultez vos réservations passées et à venir sur votre compte H3 Studios. Modifiez votre profil et gérez vos bookings.",
+    keywords: [
+      "mon compte H3 Studios",
+      "mes réservations",
+      "espace client",
+      "profil utilisateur",
+      "bookings",
+    ],
+    path: "/mon-compte",
+  },
+  "/mon-compte/connexion": {
+    title: "Connexion / Inscription | H3 STUDIOS",
+    description:
+      "Connectez-vous ou créez votre compte H3 Studios pour réserver en ligne et consulter vos réservations.",
+    keywords: [
+      "connexion H3 Studios",
+      "inscription",
+      "créer compte",
+      "espace client",
+      "réservation studio",
+    ],
+    path: "/mon-compte/connexion",
+  },
+  "/mon-compte/profil": {
+    title: "Modifier mon Profil | H3 STUDIOS",
+    description:
+      "Modifiez vos informations personnelles sur votre compte H3 Studios : nom, téléphone, adresse, nom du groupe.",
+    keywords: [
+      "modifier profil",
+      "informations client",
+      "compte H3 Studios",
+      "paramètres",
+    ],
+    path: "/mon-compte/profil",
+  },
 };
 
 export const routes = Object.keys(pageSEO);

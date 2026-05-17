@@ -189,6 +189,18 @@ export function useBookingWithRouter(urlStep?: string) {
   appliedPromoRef.current = state.appliedPromo;
   const [availability, setAvailability] = useState<Set<OccupancyInfo>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [clientUser, setClientUser] = useState<{
+    id: string;
+    email: string | null;
+    name: string;
+    phone: string | null;
+    band_name: string | null;
+    address_line1: string | null;
+    address_line2: string | null;
+    postal_code: string | null;
+    city: string | null;
+  } | null>(null);
+  const [clientUserLoading, setClientUserLoading] = useState(true);
 
   const mergedAvailability = useMemo(() => {
     if (!state.selectedDate) return availability;
@@ -230,6 +242,21 @@ export function useBookingWithRouter(urlStep?: string) {
 
   useEffect(() => {
     if (isHydrated) return;
+    
+    const fetchClientUser = fetch("/api/client/me")
+      .then((res) => {
+        if (!res.ok) return null;
+        return res.json() as Promise<{ data?: { id: string; email: string | null; name: string; phone: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null } }>;
+      })
+      .then((json) => {
+        if (json?.data) {
+          setClientUser(json.data);
+          return json.data;
+        }
+        return null;
+      })
+      .catch(() => null)
+      .finally(() => setClientUserLoading(false));
     
     const savedState = loadBookingState();
     const prefs = loadUserPreferences();
@@ -279,7 +306,21 @@ export function useBookingWithRouter(urlStep?: string) {
       }));
     }
     
-    setIsHydrated(true);
+    fetchClientUser.then((user) => {
+      if (user) {
+        setState((s) => ({
+          ...s,
+          userName: user.name || s.userName,
+          userEmail: user.email || s.userEmail,
+          userPhone: user.phone || s.userPhone,
+          bandName: user.band_name || s.bandName,
+          billingAddress: user.address_line1 || s.billingAddress,
+          billingPostalCode: user.postal_code || s.billingPostalCode,
+          billingCity: user.city || s.billingCity,
+        }));
+      }
+      setIsHydrated(true);
+    }).catch(() => setIsHydrated(true));
   }, [isHydrated, urlStep]);
 
   useEffect(() => {
@@ -294,6 +335,28 @@ export function useBookingWithRouter(urlStep?: string) {
     }
     saveBookingState(state);
   }, [state, isHydrated]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    fetch("/api/client/me")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.data) {
+          const u = data.data as { name?: string; email?: string; phone?: string; band_name?: string; address_line1?: string; postal_code?: string; city?: string };
+          setState((s) => ({
+            ...s,
+            userName: u.name || s.userName,
+            userEmail: u.email || s.userEmail,
+            userPhone: u.phone || s.userPhone,
+            bandName: u.band_name || s.bandName,
+            billingAddress: u.address_line1 || s.billingAddress,
+            billingPostalCode: u.postal_code || s.billingPostalCode,
+            billingCity: u.city || s.billingCity,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -820,6 +883,8 @@ export function useBookingWithRouter(urlStep?: string) {
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,
+    clientUser,
+    clientUserLoading,
     setStep,
     navigateToStep,
     selectFlow,

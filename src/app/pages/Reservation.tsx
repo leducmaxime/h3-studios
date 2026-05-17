@@ -54,6 +54,8 @@ export function Reservation({ step }: ReservationProps) {
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,
+    clientUser,
+    clientUserLoading,
     selectFlow,
     selectDate,
     selectStudioFirst,
@@ -715,7 +717,13 @@ export function Reservation({ step }: ReservationProps) {
 
                     <div className="flex flex-col gap-3">
                       <button
-                        onClick={goToPaymentChoice}
+                        onClick={() => {
+                          if (!clientUser) {
+                            window.location.href = "/mon-compte/connexion?redirect=/reservation/panier";
+                            return;
+                          }
+                          goToPaymentChoice();
+                        }}
                         className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
                       >
                         Valider et payer - {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}

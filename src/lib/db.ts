@@ -19,7 +19,7 @@ import {
   type DbPaymentStatus,
   type CreateBooking,
 } from "./db-types";
-import { getParisDateISO } from "./utils";
+import { getParisDateISO, getParisNow } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
 
 function generateId(): string {
@@ -69,6 +69,19 @@ export async function getBookings(
     conditions.push("(b.booking_ref LIKE ? OR u.name LIKE ? OR u.band_name LIKE ? OR b.band_name LIKE ?)");
     const term = `%${filters.search}%`;
     params.push(term, term, term, term);
+  }
+
+  if (filters.dateDirection && filters.dateDirection !== "all") {
+    const paris = getParisNow();
+    const today = paris.dateISO;
+    const nowTime = `${String(paris.hours).padStart(2, "0")}:${String(paris.minutes).padStart(2, "0")}`;
+    if (filters.dateDirection === "upcoming") {
+      conditions.push("(b.date > ? OR (b.date = ? AND b.end_time > ?))");
+      params.push(today, today, nowTime);
+    } else if (filters.dateDirection === "past") {
+      conditions.push("(b.date < ? OR (b.date = ? AND b.end_time <= ?))");
+      params.push(today, today, nowTime);
+    }
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -372,6 +385,7 @@ export async function getUsers(
       SELECT
         u.id,
         u.email,
+        u.password_hash,
         u.name,
         u.phone,
         u.band_name,
@@ -414,6 +428,7 @@ export async function getUserById(
       SELECT
         u.id,
         u.email,
+        u.password_hash,
         u.name,
         u.phone,
         u.band_name,
@@ -447,7 +462,26 @@ export async function getUserByEmail(
   db: D1Database,
   email: string,
 ): Promise<DbUser | null> {
-  return db.prepare("SELECT * FROM users WHERE email = ?").bind(email).first<DbUser>();
+  return db.prepare(
+    `SELECT u.*, COALESCE(s.total_bookings, 0) as total_bookings, COALESCE(s.total_spent, 0) as total_spent
+     FROM users u
+     LEFT JOIN (
+       SELECT user_id, COUNT(*) as total_bookings, COALESCE(SUM(total_price), 0) as total_spent
+       FROM bookings WHERE status != 'cancelled' GROUP BY user_id
+     ) s ON u.id = s.user_id
+     WHERE u.email = ?`,
+  ).bind(email).first<DbUser>();
+}
+
+export async function updateUserPassword(
+  db: D1Database,
+  userId: string,
+  passwordHash: string,
+): Promise<{ success: boolean }> {
+  const result = await db.prepare(
+    "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+  ).bind(passwordHash, now(), userId).run();
+  return { success: result.meta.changes > 0 };
 }
 
 export async function createUser(

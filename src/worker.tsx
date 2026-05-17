@@ -74,6 +74,7 @@ import {
   getUserById,
   createUser,
   updateUser,
+  updateUserPassword,
   blockUser,
   mergeUsers,
   getPayments,
@@ -660,6 +661,8 @@ const app = defineApp([
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
 
     try {
+      const clientUser = await requireClientAuth(request, env.DB);
+
       const body = await request.json() as {
         bookingRef: string;
         userId?: string;
@@ -780,7 +783,7 @@ const app = defineApp([
 
       const booking = await createBooking(env.DB, {
         booking_ref: body.bookingRef,
-        user_id: user.id,
+        user_id: clientUser.id,
         band_name: bookingBandName,
         studio_id: body.studioId,
         date: body.date,
@@ -1018,6 +1021,8 @@ const app = defineApp([
         if (search) filters.search = search;
         const paymentStatus = url.searchParams.get("paymentStatus");
         if (paymentStatus) filters.paymentStatus = paymentStatus;
+        const dateDirection = url.searchParams.get("dateDirection");
+        if (dateDirection) filters.dateDirection = dateDirection as BookingFilters["dateDirection"];
         const sortBy = url.searchParams.get("sortBy");
         if (sortBy) filters.sortBy = sortBy as BookingFilters["sortBy"];
         const sortOrder = url.searchParams.get("sortOrder");
@@ -3438,7 +3443,7 @@ async function handleScheduled(controller: ScheduledController) {
 
   const apiKey = (env as any).GOOGLE_PLACES_API_KEY;
   if (apiKey) {
-    const result = await syncGoogleReviews(env.DB, apiKey);
+    const result = await syncGoogleReviews(env.DB as D1Database, apiKey);
     if (result.success) {
       console.log(`[Cron] Reviews synced: ${result.reviewsCount} reviews, ${result.averageRating}/5`);
     } else {
@@ -3446,7 +3451,7 @@ async function handleScheduled(controller: ScheduledController) {
     }
   }
 
-  const igResult = await syncInstagram(env.DB);
+  const igResult = await syncInstagram(env.DB as D1Database);
   if (igResult.success) {
     console.log(`[Cron] Instagram synced: ${igResult.count} posts`);
   } else {

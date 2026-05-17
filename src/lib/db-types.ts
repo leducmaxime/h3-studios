@@ -31,6 +31,7 @@ export interface DbSession {
 export interface DbUser {
   id: string;
   email: string | null;
+  password_hash: string | null;
   name: string;
   phone: string | null;
   band_name: string | null;
@@ -238,6 +239,7 @@ export interface BookingFilters {
   search?: string; // booking_ref or user name
   sortBy?: BookingSortField;
   sortOrder?: BookingSortOrder;
+  dateDirection?: "past" | "upcoming" | "all";
 }
 
 export interface UserFilters {

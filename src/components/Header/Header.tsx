@@ -11,6 +11,7 @@ const menuData = [
   { id: 8, title: "Actualités", path: "/actualites" },
   { id: 4, title: "Avis", path: "/avis" },
   { id: 7, title: "À Propos", path: "/a-propos" },
+  { id: 9, title: "Mon compte", path: "/mon-compte" },
 ];
 
 function usePathname() {
