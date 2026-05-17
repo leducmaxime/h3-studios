@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Clock, MapPin, Users, Music, CreditCard, ArrowRight, LogOut, UserCircle, Ticket, History } from "lucide-react";
+import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History } from "lucide-react";
 
 interface ClientUser {
   id: string;
@@ -130,48 +130,8 @@ export function ClientAccount() {
     <div className="min-h-[80vh] bg-black px-4 pt-32 pb-16">
       <div className="container max-w-4xl mx-auto">
         <div className="mb-12 text-center">
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON COMPTE</h1>
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes réservations</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-          <div className="lg:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                <UserCircle className="h-7 w-7 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-white">{user.name}</h2>
-                <p className="text-sm text-zinc-500">{user.email}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <StatCard value={bookings.length} label="Réservations" icon={Ticket} />
-              <StatCard value={upcoming.length} label="À venir" icon={CalendarDays} />
-              <StatCard value={past.length} label="Passées" icon={History} />
-              <StatCard value={bookings.reduce((sum, b) => sum + b.total_price, 0).toFixed(0) + " €"} label="Total dépensé" icon={CreditCard} />
-            </div>
-          </div>
-
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 flex flex-col justify-center gap-3">
-            <Button
-              className="w-full h-11 bg-primary text-black hover:bg-primary/90 font-semibold"
-              onClick={() => navigate("/mon-compte/profil")}
-            >
-              <UserCircle className="h-4 w-4 mr-2" />
-              Modifier mon profil
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full h-11 border-white/15 text-zinc-400 hover:text-red-400 hover:border-red-800/50 hover:bg-red-950/30"
-              onClick={handleLogout}
-              disabled={loggingOut}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              {loggingOut ? "Déconnexion..." : "Déconnexion"}
-            </Button>
-          </div>
         </div>
 
         <section className="mb-10">
