@@ -3185,10 +3185,13 @@ const app = defineApp([
 
       const firstName = body.firstName?.trim() || "";
       const lastName = body.lastName?.trim() || "";
+      const addressLine1 = body.addressLine1?.trim() || "";
+      const postalCode = body.postalCode?.trim() || "";
+      const city = body.city?.trim() || "";
       const name = `${firstName} ${lastName}`.trim();
 
-      if (!firstName || !lastName || !body.email || !body.password) {
-        return jsonError("Prénom, nom, email et mot de passe requis", 400);
+      if (!firstName || !lastName || !body.email || !body.password || !addressLine1 || !postalCode || !city) {
+        return jsonError("Prénom, nom, email, mot de passe, adresse, code postal et ville requis", 400);
       }
 
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
@@ -3212,9 +3215,9 @@ const app = defineApp([
         email: body.email.trim().toLowerCase(),
         phone: body.phone?.trim() || undefined,
         band_name: body.bandName?.trim() || undefined,
-        address_line1: body.addressLine1?.trim() || undefined,
-        postal_code: body.postalCode?.trim() || undefined,
-        city: body.city?.trim() || undefined,
+        address_line1: addressLine1,
+        postal_code: postalCode,
+        city: city,
       });
 
       await updateUserPassword(env.DB, user.id, passwordHash);

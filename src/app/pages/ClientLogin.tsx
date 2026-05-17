@@ -63,8 +63,8 @@ export function ClientLogin() {
     e.preventDefault();
     setError("");
 
-    if (!firstName || !lastName || !email || !password) {
-      setError("Prénom, nom, email et mot de passe sont obligatoires");
+    if (!firstName || !lastName || !email || !password || !addressLine1 || !postalCode || !city) {
+      setError("Prénom, nom, email, mot de passe, adresse, code postal et ville sont obligatoires");
       return;
     }
 
@@ -237,14 +237,14 @@ export function ClientLogin() {
                 type="text"
                 value={bandName}
                 onChange={(e) => setBandName(e.target.value)}
-                placeholder="Les Rockers (facultatif)"
+                placeholder="Les Rockers"
                 disabled={loading}
                 className="bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="reg-address" className="text-zinc-300">Adresse</Label>
+              <Label htmlFor="reg-address" className="text-zinc-300">Adresse *</Label>
               <Input
                 id="reg-address"
                 type="text"
@@ -257,7 +257,7 @@ export function ClientLogin() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="reg-postal" className="text-zinc-300">Code postal</Label>
+                <Label htmlFor="reg-postal" className="text-zinc-300">Code postal *</Label>
                 <Input
                   id="reg-postal"
                   type="text"
@@ -269,7 +269,7 @@ export function ClientLogin() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="reg-city" className="text-zinc-300">Ville</Label>
+                <Label htmlFor="reg-city" className="text-zinc-300">Ville *</Label>
                 <Input
                   id="reg-city"
                   type="text"
