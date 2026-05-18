@@ -108,13 +108,12 @@ export function Login() {
           </Button>
 
           <div className="text-center">
-            <button
-              type="button"
-              onClick={() => navigate("/admin/mot-de-passe-oublie")}
+            <a
+              href="/admin/mot-de-passe-oublie"
               className="text-sm text-zinc-500 hover:text-primary transition-colors"
             >
               Mot de passe oublié ?
-            </button>
+            </a>
           </div>
         </form>
 
