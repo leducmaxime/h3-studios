@@ -1098,9 +1098,9 @@ export function AdminCalendar() {
                     <div>
                       <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Options</p>
                       <div className="mt-1 text-xs text-zinc-300">
-                        {JSON.parse(b.equipment!).map((eq: any, i: number) => (
+                        {JSON.parse(b.equipment!).map((eq: any) => (
                           <div key={eq.id}>
-                            {eq.quantity}× {eq.id}
+                            {eq.quantity}× {eq.name || EQUIPMENT[eq.id]?.name || eq.id}
                           </div>
                         ))}
                       </div>
