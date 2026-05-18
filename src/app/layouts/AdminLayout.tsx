@@ -72,6 +72,7 @@ const ALL_NAV_ITEMS = [
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [user, setUser] = useState<AdminUser | null>(null);
   const currentPath = usePathname();
 
@@ -107,16 +108,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-zinc-900 transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zinc-900 transition-all duration-200 lg:static lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } ${sidebarCollapsed ? "w-16" : "w-56"}`}
       >
         <div className="flex h-16 items-center justify-between border-b border-zinc-800 px-4">
           <a href="/admin" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary font-blanka text-sm text-black">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary font-blanka text-sm text-black">
               H3
             </div>
-            <span className="font-blanka text-lg">ADMIN</span>
+            {!sidebarCollapsed && <span className="font-blanka text-lg">ADMIN</span>}
           </a>
           <button
             type="button"
@@ -127,8 +128,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </button>
         </div>
 
-
-        <nav className="flex-1 overflow-y-auto p-4">
+        <nav className="flex-1 overflow-y-auto p-2">
           <ul className="space-y-1">
             {navItems.map((item) => {
               const isActive = item.exact
@@ -140,15 +140,20 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <li key={item.href}>
                   <a
                     href={item.href}
+                    title={sidebarCollapsed ? item.label : undefined}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
                       isActive
                         ? "bg-primary/10 text-primary"
                         : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                    }`}
+                    } ${sidebarCollapsed ? "justify-center" : ""}`}
                   >
-                    <Icon className="h-5 w-5" />
-                    {item.label}
-                    {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
+                    <Icon className="h-5 w-5 shrink-0" />
+                    {!sidebarCollapsed && (
+                      <>
+                        {item.label}
+                        {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
+                      </>
+                    )}
                   </a>
                 </li>
               );
@@ -156,6 +161,17 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </ul>
         </nav>
 
+        <div className="border-t border-zinc-800 p-2">
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white w-full ${sidebarCollapsed ? "justify-center" : ""}`}
+            title={sidebarCollapsed ? "Déplier" : "Plier"}
+          >
+            <Menu className="h-5 w-5 shrink-0" />
+            {!sidebarCollapsed && <span>Plier le menu</span>}
+          </button>
+        </div>
       </aside>
 
       <div className="flex flex-1 flex-col">
