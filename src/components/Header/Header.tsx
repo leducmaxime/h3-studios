@@ -99,177 +99,212 @@ export function Header() {
 
   return (
     <header
-      className={`left-0 top-0 z-40 flex w-full items-center ${
-        sticky
-          ? "fixed z-[9999] bg-black/90 backdrop-blur-sm transition"
-          : "absolute bg-black"
+      className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${
+        sticky ? "bg-black/90 backdrop-blur-sm" : "bg-transparent"
       }`}
     >
-      <div className="container">
-        <div className="relative -mx-4 flex items-center justify-between">
-          <div className="max-w-full px-4 xl:mr-6">
-            <a
-              href="/"
-              onClick={(e) => {
-                e.preventDefault();
-                onLogoClick();
-                navigate("/");
-              }}
-              className={`block w-full ${sticky ? "py-5 lg:py-2" : "py-4"}`}
-            >
-              <img
-                src="/images/logo.png"
-                alt="logo"
-                width={60}
-                height={60}
-                className={spin ? "animate-[spin_1s_linear_1]" : "animate-pulse"}
-              />
-            </a>
-          </div>
-          <div className="flex w-full items-center justify-between px-4">
-            <div className="w-full">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 sm:h-20 items-center justify-between">
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onLogoClick();
+              navigate("/");
+            }}
+            className="flex items-center gap-2.5 group"
+          >
+            <img
+              src="/images/logo.png"
+              alt="logo"
+              width={48}
+              height={48}
+              className={spin ? "animate-[spin_1s_linear_1]" : "animate-pulse"}
+            />
+          </a>
+
+          <nav className="hidden lg:flex items-center gap-1">
+            {menuData.map((menuItem) => (
+              <a
+                key={menuItem.id}
+                href={menuItem.path}
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate(menuItem.path);
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  currentPath === menuItem.path
+                    ? "text-primary bg-primary/10"
+                    : "text-white/70 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                {menuItem.title}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2">
+              <a
+                href="https://www.facebook.com/profile.php?id=100089893392179"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
+                aria-label="Facebook"
+              >
+                <Facebook className="h-5 w-5" />
+              </a>
+              <a
+                href="https://www.instagram.com/h3_studios_sucy/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
+                aria-label="Instagram"
+              >
+                <Instagram className="h-5 w-5" />
+              </a>
+            </div>
+
+            <div className="relative" ref={profileRef}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setNavbarOpen(!navbarOpen);
+                  setProfileOpen(!profileOpen);
                 }}
-                aria-label="Mobile Menu"
-                className="absolute right-4 top-1/2 block -translate-y-1/2 rounded-lg px-3 py-[6px] ring-primary focus:ring-2 lg:hidden"
+                className="flex items-center justify-center rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
+                aria-label="Profil"
               >
-                <span
-                  className={`relative my-1.5 block h-0.5 w-[30px] bg-white transition-all duration-300 ${
-                    navbarOpen ? "top-[7px] rotate-45" : ""
-                  }`}
-                />
-                <span
-                  className={`relative my-1.5 block h-0.5 w-[30px] bg-white transition-all duration-300 ${
-                    navbarOpen ? "opacity-0" : ""
-                  }`}
-                />
-                <span
-                  className={`relative my-1.5 block h-0.5 w-[30px] bg-white transition-all duration-300 ${
-                    navbarOpen ? "top-[-8px] -rotate-45" : ""
-                  }`}
-                />
+                <User className="h-5 w-5" />
               </button>
-              <nav
-                ref={navRef}
-                className={`absolute right-0 z-30 w-[250px] rounded border-[.5px] border-white/20 bg-black px-6 py-4 duration-300 lg:visible lg:static lg:w-auto lg:border-none lg:!bg-transparent lg:p-0 lg:opacity-100 ${
-                  navbarOpen
-                    ? "visible top-full opacity-100"
-                    : "invisible top-[120%] opacity-0"
-                }`}
-              >
-                <ul className="block lg:flex lg:w-full lg:items-center lg:space-x-6">
-                  {menuData.map((menuItem) => (
-                    <li
-                      key={menuItem.id}
-                      className="group relative"
-                    >
-                      <a
-                        href={menuItem.path}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setNavbarOpen(false);
-                          navigate(menuItem.path);
+
+              {profileOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-white/20 bg-black py-2 shadow-xl">
+                  {isLoggedIn ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          navigate("/mon-compte/profil");
                         }}
-                        className={`flex py-2 text-sm font-bold transition-colors lg:mr-0 lg:inline-flex lg:px-0 lg:py-6 ${
-                          currentPath === menuItem.path
-                            ? "text-primary underline decoration-primary decoration-2 underline-offset-8"
-                            : "hover:text-primary"
-                        }`}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
                       >
-                        {menuItem.title}
-                      </a>
-                    </li>
-                  ))}
-                  <li className="mt-4 flex gap-4 lg:ml-auto lg:mt-0">
-                    <a
-                      href="https://www.facebook.com/profile.php?id=100089893392179"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary transition-opacity hover:opacity-70"
-                      aria-label="Facebook"
-                    >
-                      <Facebook className="h-5 w-5" />
-                    </a>
-                    <a
-                      href="https://www.instagram.com/h3_studios_sucy/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary transition-opacity hover:opacity-70"
-                      aria-label="Instagram"
-                    >
-                      <Instagram className="h-5 w-5" />
-                    </a>
-                  </li>
-                </ul>
-              </nav>
-            </div>
-          </div>
-
-          <div className="relative px-4" ref={profileRef}>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setProfileOpen(!profileOpen);
-              }}
-              className="flex items-center justify-center rounded-full p-2 text-primary transition-colors hover:bg-white/10"
-              aria-label="Profil"
-            >
-              <User className="h-6 w-6" />
-            </button>
-
-            {profileOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-white/20 bg-black py-2 shadow-xl">
-                {isLoggedIn ? (
-                  <>
+                        <UserCircle className="h-4 w-4 text-primary" />
+                        Mon Profil
+                      </button>
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          navigate("/mon-compte");
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
+                      >
+                        <CalendarDays className="h-4 w-4 text-primary" />
+                        Mes Réservations
+                      </button>
+                      <div className="my-1 border-t border-white/10" />
+                      <button
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-400 transition-colors hover:bg-white/10"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Déconnexion
+                      </button>
+                    </>
+                  ) : (
                     <button
                       onClick={() => {
                         setProfileOpen(false);
-                        navigate("/mon-compte/profil");
+                        navigate("/mon-compte/connexion");
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
                     >
                       <UserCircle className="h-4 w-4 text-primary" />
-                      Mon Profil
+                      Connexion
                     </button>
-                    <button
-                      onClick={() => {
-                        setProfileOpen(false);
-                        navigate("/mon-compte");
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
-                    >
-                      <CalendarDays className="h-4 w-4 text-primary" />
-                      Mes Réservations
-                    </button>
-                    <div className="my-1 border-t border-white/10" />
-                    <button
-                      onClick={handleLogout}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-red-400 transition-colors hover:bg-white/10"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Déconnexion
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setProfileOpen(false);
-                      navigate("/mon-compte/connexion");
-                    }}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
-                  >
-                    <UserCircle className="h-4 w-4 text-primary" />
-                    Connexion
-                  </button>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setNavbarOpen(!navbarOpen);
+              }}
+              aria-label="Mobile Menu"
+              className="lg:hidden rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
+            >
+              <span
+                className={`relative my-1.5 block h-0.5 w-[24px] bg-current transition-all duration-300 ${
+                  navbarOpen ? "top-[7px] rotate-45" : ""
+                }`}
+              />
+              <span
+                className={`relative my-1.5 block h-0.5 w-[24px] bg-current transition-all duration-300 ${
+                  navbarOpen ? "opacity-0" : ""
+                }`}
+              />
+              <span
+                className={`relative my-1.5 block h-0.5 w-[24px] bg-current transition-all duration-300 ${
+                  navbarOpen ? "top-[-8px] -rotate-45" : ""
+                }`}
+              />
+            </button>
           </div>
         </div>
       </div>
+
+      <nav
+        ref={navRef}
+        className={`lg:hidden absolute left-0 right-0 top-full bg-black/95 backdrop-blur-sm border-b border-white/10 transition-all duration-300 ${
+          navbarOpen
+            ? "opacity-100 translate-y-0"
+            : "opacity-0 -translate-y-4 pointer-events-none"
+        }`}
+      >
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col gap-1">
+            {menuData.map((menuItem) => (
+              <a
+                key={menuItem.id}
+                href={menuItem.path}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setNavbarOpen(false);
+                  navigate(menuItem.path);
+                }}
+                className={`px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  currentPath === menuItem.path
+                    ? "text-primary bg-primary/10"
+                    : "text-white/70 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                {menuItem.title}
+              </a>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center gap-2 border-t border-white/10 pt-4">
+            <a
+              href="https://www.facebook.com/profile.php?id=100089893392179"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
+              aria-label="Facebook"
+            >
+              <Facebook className="h-5 w-5" />
+            </a>
+            <a
+              href="https://www.instagram.com/h3_studios_sucy/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
+              aria-label="Instagram"
+            >
+              <Instagram className="h-5 w-5" />
+            </a>
+          </div>
+        </div>
+      </nav>
     </header>
   );
 }
