@@ -209,7 +209,7 @@ function getEquipmentLines(equipment: string | null): string[] {
   try {
     const parsed = JSON.parse(equipment) as Array<{ id: string; quantity: number; name?: string }>;
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return ["Options : " + parsed.map(eq => `${eq.quantity}× ${eq.name || eq.id}`).join(", ")];
+      return parsed.map(eq => `${eq.quantity}× ${eq.name || eq.id}`);
     }
   } catch {
     // ignore
