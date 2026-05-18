@@ -3760,6 +3760,10 @@ const app = defineApp([
           status: "paid",
           paid_at: new Date().toISOString().replace("T", " ").slice(0, 19),
         });
+
+        await env.DB.prepare(
+          "UPDATE bookings SET payment_status = 'paid' WHERE id = ?"
+        ).bind(booking.id).run();
       }
 
       return new Response("OK", { status: 200 });
