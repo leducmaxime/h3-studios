@@ -14,7 +14,6 @@ import {
   Clock,
   Eye,
   Loader2,
-  Filter,
   X,
   ArrowUpDown,
 } from "lucide-react";
@@ -22,7 +21,6 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -278,7 +276,6 @@ export function AdminAuditLog() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [filtersVisible, setFiltersVisible] = useState(false);
 
   // Detail dialog
   const [selectedLog, setSelectedLog] = useState<ApiAuditLog | null>(null);
@@ -397,130 +394,112 @@ export function AdminAuditLog() {
             {total} entrée(s) — Historique complet des actions
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setFiltersVisible(!filtersVisible)}
-          className="border-zinc-700"
-        >
-          <Filter className="mr-2 h-4 w-4" />
-          Filtres
-          {hasActiveFilters && (
-            <span className="ml-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-black">
-              !
-            </span>
-          )}
-        </Button>
       </div>
 
       {/* Search + Filters */}
-      <div className="space-y-3">
-        {/* Search bar — always visible */}
+      <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-          <Input
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
             placeholder="Rechercher par ID, action, utilisateur..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="border-zinc-700 bg-zinc-900 pl-10"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
           />
         </div>
-
-        {/* Collapsible filters */}
-        {filtersVisible && (
-          <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-1.5">
-              <label htmlFor="entity-filter" className="text-xs text-zinc-400">Type d&apos;entité</label>
-              <select
-                id="entity-filter"
-                value={entityTypeFilter}
-                onChange={(e) => setEntityTypeFilter(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-              >
-                <option value="all">Tous les types</option>
-                <option value="booking">Réservation</option>
-                <option value="user">Client</option>
-                <option value="payment">Paiement</option>
-                <option value="setting">Paramètre</option>
-                <option value="promo">Code promo</option>
-                <option value="equipment">Équipement</option>
-                <option value="pricing">Tarif</option>
-                <option value="blocked_slot">Créneau bloqué</option>
-                <option value="opening_hours">Horaires</option>
-              </select>
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <label htmlFor="action-filter" className="text-xs text-zinc-400">Action</label>
-              <select
-                id="action-filter"
-                value={actionFilter}
-                onChange={(e) => setActionFilter(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-              >
-                <option value="all">Toutes les actions</option>
-                <option value="create">Création</option>
-                <option value="update">Modification</option>
-                <option value="delete">Suppression</option>
-                <option value="cancel">Annulation</option>
-                <option value="no-show">No-show</option>
-                <option value="mark-paid">Payé</option>
-                <option value="refund">Remboursement</option>
-                <option value="block">Blocage</option>
-                <option value="unblock">Déblocage</option>
-                <option value="merge">Fusion</option>
-                <option value="reschedule">Replanification</option>
-                <option value="batch-update">Mise à jour groupée</option>
-              </select>
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <label htmlFor="admin-filter" className="text-xs text-zinc-400">Administrateur</label>
-              <select
-                id="admin-filter"
-                value={adminFilter}
-                onChange={(e) => setAdminFilter(e.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-              >
-                <option value="all">Tous les admins</option>
-                {admins.map((admin) => (
-                  <option key={admin.id} value={admin.id}>
-                    {admin.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <label htmlFor="date-from" className="text-xs text-zinc-400">Du</label>
-              <Input
-                id="date-from"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="border-zinc-700 bg-zinc-800"
-              />
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <label htmlFor="date-to" className="text-xs text-zinc-400">Au</label>
-              <Input
-                id="date-to"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="border-zinc-700 bg-zinc-800"
-              />
-            </div>
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                className="shrink-0 text-zinc-400 hover:text-white"
-              >
-                <X className="mr-1 h-4 w-4" />
-                Effacer
-              </Button>
-            )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <select
+            value={entityTypeFilter}
+            onChange={(e) => setEntityTypeFilter(e.target.value)}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+          >
+            <option value="all">Type</option>
+            <option value="booking">Réservation</option>
+            <option value="user">Client</option>
+            <option value="payment">Paiement</option>
+            <option value="setting">Paramètre</option>
+            <option value="promo">Code promo</option>
+            <option value="equipment">Équipement</option>
+            <option value="pricing">Tarif</option>
+            <option value="blocked_slot">Créneau bloqué</option>
+            <option value="opening_hours">Horaires</option>
+          </select>
+          <select
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value)}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+          >
+            <option value="all">Action</option>
+            <option value="create">Création</option>
+            <option value="update">Modification</option>
+            <option value="delete">Suppression</option>
+            <option value="cancel">Annulation</option>
+            <option value="no-show">No-show</option>
+            <option value="mark-paid">Payé</option>
+            <option value="refund">Remboursement</option>
+            <option value="block">Blocage</option>
+            <option value="unblock">Déblocage</option>
+            <option value="merge">Fusion</option>
+            <option value="reschedule">Replanification</option>
+            <option value="batch-update">Mise à jour groupée</option>
+          </select>
+          <select
+            value={adminFilter}
+            onChange={(e) => setAdminFilter(e.target.value)}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+          >
+            <option value="all">Admin</option>
+            {admins.map((admin) => (
+              <option key={admin.id} value={admin.id}>
+                {admin.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+          />
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-7 shrink-0 px-2 text-[10px] text-zinc-400 hover:text-white"
+            >
+              <X className="mr-1 h-3 w-3" />
+              Effacer
+            </Button>
+          )}
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-[10px] text-zinc-500">Tri</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="date">Date</option>
+              <option value="action">Action</option>
+              <option value="entity_type">Entité</option>
+            </select>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="desc">↓</option>
+              <option value="asc">↑</option>
+            </select>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Loading indicator */}

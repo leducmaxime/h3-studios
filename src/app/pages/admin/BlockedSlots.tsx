@@ -342,83 +342,72 @@ export function AdminBlockedSlots() {
         <>
           {slots.length > 0 && (
             <div className="space-y-4">
-              <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/15 p-4 md:flex-row md:items-end md:justify-between">
-                <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-end">
-                  <div className="w-full md:w-56">
+              <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <select
+                    value={periodFilter}
+                    onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)}
+                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                  >
+                    <option value="upcoming">À venir</option>
+                    <option value="past">Passés</option>
+                    <option value="all">Tous</option>
+                  </select>
+                  <select
+                    value={studioFilter}
+                    onChange={(e) => setStudioFilter(e.target.value as StudioId | "all")}
+                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                  >
+                    <option value="all">Studio</option>
+                    <option value="la-scene">La Scène</option>
+                    <option value="le-podium">Le Podium</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                  />
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[10px] text-zinc-400 hover:text-white"
+                    onClick={() => {
+                      setPeriodFilter("upcoming");
+                      setStudioFilter("all");
+                      setDateFrom("");
+                      setDateTo("");
+                      setSortBy("date");
+                      setSortOrder("asc");
+                    }}
+                  >
+                    Effacer
+                  </Button>
+                  <div className="ml-auto flex items-center gap-1">
+                    <span className="text-[10px] text-zinc-500">Tri</span>
                     <select
-                      id="period"
-                      aria-label="Période"
-                      className="w-full rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
-                      value={periodFilter}
-                      onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)}
-                    >
-                      <option value="upcoming">Blocages à venir</option>
-                      <option value="past">Blocages passés</option>
-                      <option value="all">Tous les blocages</option>
-                    </select>
-                  </div>
-
-                  <div className="w-full md:w-56">
-                    <select
-                      id="studioFilter"
-                      aria-label="Studio"
-                      className="w-full rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
-                      value={studioFilter}
-                      onChange={(e) => setStudioFilter(e.target.value as StudioId | "all")}
-                    >
-                      <option value="all">Tous les studios</option>
-                      <option value="la-scene">La Scène</option>
-                      <option value="le-podium">Le Podium</option>
-                    </select>
-                  </div>
-
-                </div>
-
-                <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                  <div>
-                    <Input
-                      id="dateFrom"
-                      type="date"
-                      aria-label="Du"
-                      className="border-white/10 bg-white/15 text-white"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Input
-                      id="dateTo"
-                      type="date"
-                      aria-label="Au"
-                      className="border-white/10 bg-white/15 text-white"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                    />
-                  </div>
-                  <div className="w-full md:w-56">
-                    <select
-                      id="sortBy"
-                      aria-label="Trier par"
-                      className="w-full rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
                     >
-                      <option value="date">Date / heure</option>
+                      <option value="date">Date</option>
                       <option value="studio">Studio</option>
-                      <option value="created_at">Date de création</option>
+                      <option value="created_at">Créé</option>
                       <option value="reason">Raison</option>
                     </select>
-                  </div>
-                  <div className="w-full md:w-44">
                     <select
-                      id="sortOrder"
-                      aria-label="Ordre"
-                      className="w-full rounded-lg border border-white/10 bg-white/15 px-3 py-2 text-sm text-white"
                       value={sortOrder}
                       onChange={(e) => setSortOrder(e.target.value as typeof sortOrder)}
+                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
                     >
-                      <option value="asc">Croissant</option>
-                      <option value="desc">Décroissant</option>
+                      <option value="asc">↑</option>
+                      <option value="desc">↓</option>
                     </select>
                   </div>
                 </div>
@@ -428,20 +417,6 @@ export function AdminBlockedSlots() {
                 <p className="text-sm text-zinc-400">
                   {filteredSlots.length} résultat(s)
                 </p>
-                <Button
-                  variant="ghost"
-                  className="text-zinc-400 hover:text-white"
-                  onClick={() => {
-                    setPeriodFilter("upcoming");
-                    setStudioFilter("all");
-                    setDateFrom("");
-                    setDateTo("");
-                    setSortBy("date");
-                    setSortOrder("asc");
-                  }}
-                >
-                  Réinitialiser
-                </Button>
               </div>
 
               {filteredSlots.length > 0 ? (

@@ -303,48 +303,48 @@ export function AdminUsers() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-          <Input
-            id="user-search"
+      <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
             placeholder="Rechercher par nom, email, téléphone ou groupe..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-10 border-zinc-700 bg-zinc-800"
+            className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
           />
         </div>
-
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <select
             value={blockedFilter}
             onChange={(e) => { setBlockedFilter(e.target.value as typeof blockedFilter); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
-            <option value="all">Tous les clients</option>
+            <option value="all">Tous</option>
             <option value="active">Actifs</option>
             <option value="blocked">Bloqués</option>
           </select>
-
-          <select
-            value={sortBy}
-            onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="created_at">Trier par création</option>
-            <option value="name">Trier par nom</option>
-            <option value="total_bookings">Trier par réservations</option>
-            <option value="total_spent">Trier par total dépensé</option>
-          </select>
-
-          <select
-            value={sortOrder}
-            onChange={(e) => { setSortOrder(e.target.value as typeof sortOrder); setPage(1); }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="desc">Décroissant</option>
-            <option value="asc">Croissant</option>
-          </select>
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-[10px] text-zinc-500">Tri</span>
+            <select
+              value={sortBy}
+              onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="created_at">Création</option>
+              <option value="name">Nom</option>
+              <option value="total_bookings">Résas</option>
+              <option value="total_spent">€</option>
+            </select>
+            <select
+              value={sortOrder}
+              onChange={(e) => { setSortOrder(e.target.value as typeof sortOrder); setPage(1); }}
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="desc">↓</option>
+              <option value="asc">↑</option>
+            </select>
+          </div>
         </div>
       </div>
 
