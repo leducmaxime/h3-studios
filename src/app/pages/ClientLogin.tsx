@@ -176,6 +176,16 @@ export function ClientLogin() {
             >
               {loading ? "Connexion..." : "Se connecter"}
             </Button>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => navigate("/mon-compte/mot-de-passe-oublie")}
+                className="text-sm text-zinc-500 hover:text-primary transition-colors"
+              >
+                Mot de passe oublié ?
+              </button>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleRegister} className="space-y-4">

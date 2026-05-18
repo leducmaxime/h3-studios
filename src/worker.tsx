@@ -36,6 +36,8 @@ import { PaymentCancel } from "@/app/pages/PaymentCancel";
 import { ClientLogin } from "@/app/pages/ClientLogin";
 import { ClientAccount } from "@/app/pages/ClientAccount";
 import { ClientProfile } from "@/app/pages/ClientProfile";
+import { ForgotPassword } from "@/app/pages/ForgotPassword";
+import { ResetPassword } from "@/app/pages/ResetPassword";
 import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
 import {
@@ -48,6 +50,8 @@ import {
   requireAuth,
   buildSessionCookie,
   clearSessionCookie,
+  generateToken,
+  generateId,
 } from "@/lib/auth";
 import {
   createClientSession,
@@ -3358,6 +3362,108 @@ const app = defineApp([
     }
   }),
 
+  route("/api/client/forgot-password", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as { email?: string };
+      if (!body.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+        return jsonError("Email invalide", 400);
+      }
+
+      const user = await env.DB
+        .prepare("SELECT id, email, name FROM users WHERE email = ?")
+        .bind(body.email.trim().toLowerCase())
+        .first<{ id: string; email: string; name: string }>();
+
+      if (!user) {
+        return jsonSuccess({ sent: true });
+      }
+
+      const token = generateToken();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      await env.DB
+        .prepare(
+          "INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(`prt-${generateId()}`, user.id, token, expiresAt)
+        .run();
+
+      const resetUrl = new URL(`/mon-compte/reinitialiser?token=${token}`, request.url).toString();
+      const emailHtml = `
+        <h2>Réinitialisation de votre mot de passe</h2>
+        <p>Bonjour ${user.name},</p>
+        <p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le lien ci-dessous :</p>
+        <p><a href="${resetUrl}">${resetUrl}</a></p>
+        <p>Ce lien est valable pendant 1 heure.</p>
+        <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+      `;
+
+      const resendResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "H3 Studios <contact@h3-studios.fr>",
+          to: user.email,
+          subject: "Réinitialisation de votre mot de passe H3 Studios",
+          html: emailHtml,
+        }),
+      });
+
+      if (!resendResponse.ok) {
+        const errorData = await resendResponse.text();
+        console.error("Resend API error:", errorData);
+        return jsonError("Échec de l'envoi de l'email", 500);
+      }
+
+      return jsonSuccess({ sent: true });
+    } catch (error) {
+      console.error("POST /api/client/forgot-password error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed", 500);
+    }
+  }),
+
+  route("/api/client/reset-password", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as { token?: string; password?: string };
+      if (!body.token || !body.password) {
+        return jsonError("Token et mot de passe requis", 400);
+      }
+      if (body.password.length < 6) {
+        return jsonError("Le mot de passe doit contenir au moins 6 caractères", 400);
+      }
+
+      const row = await env.DB
+        .prepare(
+          "SELECT user_id, expires_at, used FROM password_reset_tokens WHERE token = ?",
+        )
+        .bind(body.token)
+        .first<{ user_id: string; expires_at: string; used: number }>();
+
+      if (!row || row.used || new Date(row.expires_at) < new Date()) {
+        return jsonError("Token invalide ou expiré", 400);
+      }
+
+      const passwordHash = await hashPassword(body.password);
+      await updateUserPassword(env.DB, row.user_id, passwordHash);
+      await env.DB
+        .prepare("UPDATE password_reset_tokens SET used = 1 WHERE token = ?")
+        .bind(body.token)
+        .run();
+
+      return jsonSuccess({ reset: true });
+    } catch (error) {
+      console.error("POST /api/client/reset-password error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed", 500);
+    }
+  }),
+
   route("/api/client/bookings", async ({ request }) => {
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
 
@@ -3453,6 +3559,18 @@ const app = defineApp([
   render(({ children, rw }) => <DocumentWithPath path="/mon-compte/connexion" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/mon-compte/connexion", ClientLogin),
+    ]),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/mon-compte/mot-de-passe-oublie" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/mon-compte/mot-de-passe-oublie", ForgotPassword),
+    ]),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/mon-compte/reinitialiser" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/mon-compte/reinitialiser", ResetPassword),
     ]),
   ]),
 

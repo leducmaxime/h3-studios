@@ -98,14 +98,14 @@ export async function verifyPassword(password: string, storedHash: string): Prom
 
 const SESSION_DURATION_DAYS = 7;
 
-function generateToken(): string {
+export function generateToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
 
-function generateId(): string {
+export function generateId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
