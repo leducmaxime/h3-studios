@@ -128,7 +128,8 @@ export function Avis() {
             <Star className="h-6 w-6 fill-primary text-primary" />
           </div>
           <p className="max-w-md text-sm text-white/70">
-            Vous avez répété chez nous ? Partagez votre expérience en 2 minutes. 
+            Vous avez répété chez nous ?<br />
+            Partagez votre expérience en 2 minutes. 
             Votre retour aide d'autres musiciens à découvrir H3 Studios.
           </p>
           <a
