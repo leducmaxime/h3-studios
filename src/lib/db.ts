@@ -705,7 +705,6 @@ export async function getPayments(
           p.booking_id as booking_id,
           p.amount as amount,
           CASE
-            WHEN b.payment_status != 'pay-on-site' THEN 'card'
             WHEN p.method IN ('cheque', 'check') THEN 'check'
             ELSE p.method
           END as method,
@@ -718,7 +717,11 @@ export async function getPayments(
           u.band_name as user_band_name,
           u.id as user_id,
           b.date as booking_date,
-          CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' ELSE 'online' END as payment_type
+          CASE
+            WHEN b.payment_status = 'pay-on-site' THEN 'on-site'
+            WHEN p.method = 'card' THEN 'online'
+            ELSE 'on-site'
+          END as payment_type
         FROM payments p
         JOIN bookings b ON b.id = p.booking_id
         LEFT JOIN users u ON u.id = b.user_id
@@ -770,7 +773,6 @@ export async function getPayments(
           p.booking_id as booking_id,
           p.amount as amount,
           CASE
-            WHEN b.payment_status != 'pay-on-site' THEN 'card'
             WHEN p.method IN ('cheque', 'check') THEN 'check'
             ELSE p.method
           END as method,
@@ -783,7 +785,11 @@ export async function getPayments(
           u.band_name as user_band_name,
           u.id as user_id,
           b.date as booking_date,
-          CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' ELSE 'online' END as payment_type
+          CASE
+            WHEN b.payment_status = 'pay-on-site' THEN 'on-site'
+            WHEN p.method = 'card' THEN 'online'
+            ELSE 'on-site'
+          END as payment_type
         FROM payments p
         JOIN bookings b ON b.id = p.booking_id
         LEFT JOIN users u ON u.id = b.user_id
