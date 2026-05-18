@@ -128,7 +128,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-2">
+        <nav className={`flex-1 p-2 ${sidebarCollapsed ? "overflow-visible" : "overflow-y-auto"}`}>
           <ul className="space-y-1">
             {navItems.map((item) => {
               const isActive = item.exact
@@ -140,8 +140,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <li key={item.href}>
                   <a
                     href={item.href}
-                    title={sidebarCollapsed ? item.label : undefined}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                    className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
                       isActive
                         ? "bg-primary/10 text-primary"
                         : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
@@ -153,6 +152,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                         {item.label}
                         {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
                       </>
+                    )}
+                    {sidebarCollapsed && (
+                      <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                        {item.label}
+                      </span>
                     )}
                   </a>
                 </li>
