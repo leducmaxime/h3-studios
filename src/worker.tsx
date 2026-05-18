@@ -360,6 +360,8 @@ const app = defineApp([
 
     if (!pathname.startsWith("/mon-compte")) return;
     if (pathname === "/mon-compte/connexion") return;
+    if (pathname === "/mon-compte/mot-de-passe-oublie") return;
+    if (pathname === "/mon-compte/reinitialiser") return;
     if (pathname.startsWith("/api/client")) return;
 
     const token = getClientSessionToken(request);
