@@ -14,19 +14,7 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const forgotPasswordRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    const btn = forgotPasswordRef.current;
-    if (!btn) return;
 
-    const handleClick = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-      window.location.href = "/admin/mot-de-passe-oublie";
-    };
-
-    btn.addEventListener("click", handleClick);
-    return () => btn.removeEventListener("click", handleClick);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,13 +112,12 @@ export function Login() {
         </form>
 
         <div className="text-center">
-          <button
-            ref={forgotPasswordRef}
-            type="button"
-            className="text-sm text-zinc-500 hover:text-primary transition-colors bg-transparent border-none cursor-pointer py-2"
+          <a
+            href={`${typeof window !== "undefined" ? window.location.origin : ""}/admin/mot-de-passe-oublie`}
+            className="inline-block text-sm text-zinc-500 hover:text-primary transition-colors py-2"
           >
             Mot de passe oublié ?
-          </button>
+          </a>
         </div>
 
         <p className="text-center text-xs text-zinc-600">
