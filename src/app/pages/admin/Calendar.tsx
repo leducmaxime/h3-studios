@@ -39,7 +39,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { STUDIOS, formatPrice, ALL_TIME_SLOTS, type StudioId } from "@/lib/booking";
+import { STUDIOS, formatPrice, ALL_TIME_SLOTS, EQUIPMENT, type StudioId } from "@/lib/booking";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -209,7 +209,10 @@ function getEquipmentLines(equipment: string | null): string[] {
   try {
     const parsed = JSON.parse(equipment) as Array<{ id: string; quantity: number; name?: string }>;
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map(eq => `${eq.quantity}× ${eq.name || eq.id}`);
+      return parsed.map(eq => {
+        const eqName = eq.name || EQUIPMENT[eq.id]?.name || eq.id;
+        return `${eq.quantity}× ${eqName}`;
+      });
     }
   } catch {
     // ignore
