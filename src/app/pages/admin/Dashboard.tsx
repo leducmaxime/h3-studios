@@ -1391,6 +1391,12 @@ export function AdminDashboard() {
               </a>
             ))}
           </div>
+          <a
+            href="/admin/calendar"
+            className="mt-3 block text-center text-sm text-primary transition-colors hover:text-primary/80"
+          >
+            Voir plus →
+          </a>
         </div>
       )}
 
