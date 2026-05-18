@@ -3522,6 +3522,11 @@ const app = defineApp([
         <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
       `;
 
+      if (!env.RESEND_API_KEY) {
+        console.error("RESEND_API_KEY not configured");
+        return jsonError("Service d'email non configuré", 500);
+      }
+
       const resendResponse = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
