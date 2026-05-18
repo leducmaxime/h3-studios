@@ -600,7 +600,7 @@ const app = defineApp([
       if (!resendResponse.ok) {
         const errorData = await resendResponse.text();
         console.error("Resend API error:", errorData);
-        return jsonError("Échec de l'envoi du message", 500);
+        return jsonError(`Échec de l'envoi de l'email: ${errorData}`, 500);
       }
 
       return jsonSuccess({ sent: true });
