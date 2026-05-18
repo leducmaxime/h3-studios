@@ -61,7 +61,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <link rel="stylesheet" href={styles} />
         <link rel="preload" href="/images/background.webp" as="image" />
         
@@ -84,7 +84,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
 
         <link rel="modulepreload" href="/src/client.tsx" />
       </head>
-      <body className="h-screen bg-[url('/images/background.webp')] bg-[length:500px] bg-repeat font-sans">
+      <body className="h-screen bg-[url('/images/background.webp')] bg-[length:500px] bg-repeat font-secondary">
         <noscript>
           <iframe
             src="https://www.googletagmanager.com/ns.html?id=G-B3TYEET971"

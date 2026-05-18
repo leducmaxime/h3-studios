@@ -7,6 +7,7 @@
   --color-primary: #ffde59;
 
   --font-sans: "Now", sans-serif;
+  --font-secondary: "Inter", sans-serif;
   --font-blanka: "Blanka", sans-serif;
 
   --breakpoint-xs: 450px;
@@ -74,6 +75,10 @@
 
   .font-blanka {
     font-family: var(--font-blanka);
+  }
+
+  .font-secondary {
+    font-family: var(--font-secondary);
   }
 
   a,

@@ -99,7 +99,7 @@ export function Header() {
 
   return (
     <header
-      className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${
+      className={`fixed left-0 right-0 top-0 z-50 font-secondary transition-all duration-300 ${
         sticky ? "bg-black/90 backdrop-blur-sm" : "bg-transparent"
       }`}
     >
