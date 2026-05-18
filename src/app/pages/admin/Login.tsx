@@ -108,17 +108,13 @@ export function Login() {
           </Button>
         </form>
 
-        <div className="text-center -mt-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              window.location.assign("/admin/mot-de-passe-oublie");
-            }}
-            className="text-sm text-zinc-500 hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+        <div className="text-center">
+          <a
+            href="/admin/mot-de-passe-oublie"
+            className="inline-block text-sm text-zinc-500 hover:text-primary transition-colors py-2"
           >
             Mot de passe oublié ?
-          </button>
+          </a>
         </div>
 
         <p className="text-center text-xs text-zinc-600">
