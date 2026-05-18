@@ -644,107 +644,85 @@ export function AdminPayments() {
       </div>
 
       {/* Filters */}
-       <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center">
-         <div className="relative flex-1">
-           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-           <Input
-             id="payments-search"
-             placeholder="Rechercher par client ou référence..."
-             value={searchInput}
-             onChange={(e) => setSearchInput(e.target.value)}
-             className="pl-10 border-zinc-700 bg-zinc-800"
-           />
-         </div>
+      <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
+            placeholder="Rechercher..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
+          />
+        </div>
 
-         <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <select
-            id="payment-status-filter"
+            value={dateFilter}
+            onChange={(e) => { setDateFilter(e.target.value as typeof dateFilter); setPage(1); }}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+          >
+            <option value="all">Date</option>
+            <option value="today">Auj.</option>
+            <option value="week">Sem.</option>
+            <option value="month">Mois</option>
+          </select>
+          <select
             value={statusFilter}
-             onChange={(e) => {
-               setStatusFilter(e.target.value as typeof statusFilter);
-               setPage(1);
-             }}
-             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-           >
-             <option value="all">Tous les statuts</option>
-             <option value="pending">En attente</option>
-             <option value="paid">Payé</option>
+            onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+          >
+            <option value="all">Statut</option>
+            <option value="pending">En attente</option>
+            <option value="paid">Payé</option>
             <option value="refunded">Remboursé</option>
           </select>
-
           <select
-            id="payment-type-filter"
             value={paymentTypeFilter}
-            onChange={(e) => {
-              setPaymentTypeFilter(e.target.value as typeof paymentTypeFilter);
-              setPage(1);
-            }}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            onChange={(e) => { setPaymentTypeFilter(e.target.value as typeof paymentTypeFilter); setPage(1); }}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
-            <option value="all">Tous les types</option>
+            <option value="all">Type</option>
             <option value="on-site">Sur place</option>
             <option value="online">En ligne</option>
           </select>
-
           <select
-            id="payment-method-filter"
             value={methodFilter}
-             onChange={(e) => {
-               setMethodFilter(e.target.value as typeof methodFilter);
-               setPage(1);
-             }}
-             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            onChange={(e) => { setMethodFilter(e.target.value as typeof methodFilter); setPage(1); }}
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
-            <option value="all">Toutes les méthodes</option>
+            <option value="all">Méthode</option>
             <option value="cash">Espèces</option>
             <option value="card">CB</option>
             <option value="transfer">Virement</option>
             <option value="check">Chèque</option>
           </select>
-           <select
-             id="payments-date-filter"
-             value={dateFilter}
-             onChange={(e) => {
-               setDateFilter(e.target.value as typeof dateFilter);
-               setPage(1);
-             }}
-             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-           >
-             <option value="all">Toutes les dates</option>
-             <option value="today">Aujourd'hui</option>
-             <option value="week">Cette semaine</option>
-             <option value="month">Ce mois</option>
-           </select>
-           <select
-             id="payments-sort-by"
-             value={sortBy}
-             onChange={(e) => {
-               setSortBy(e.target.value as typeof sortBy);
-               setPage(1);
-             }}
-             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-           >
-             <option value="created_at">Trier par création</option>
-             <option value="booking_date">Trier par date réservation</option>
-             <option value="amount">Trier par montant</option>
-            <option value="status">Trier par statut</option>
-            <option value="method">Trier par méthode</option>
-            <option value="payment_type">Trier par type</option>
-          </select>
-           <select
-             id="payments-sort-order"
-             value={sortOrder}
-             onChange={(e) => {
-               setSortOrder(e.target.value as typeof sortOrder);
-               setPage(1);
-             }}
-             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-           >
-             <option value="desc">Décroissant</option>
-             <option value="asc">Croissant</option>
-           </select>
-         </div>
-       </div>
+
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-[10px] text-zinc-500">Tri</span>
+            <select
+              value={sortBy}
+              onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="booking_date">Date</option>
+              <option value="amount">€</option>
+              <option value="status">Statut</option>
+              <option value="method">Méthode</option>
+              <option value="payment_type">Type</option>
+              <option value="created_at">Créé</option>
+            </select>
+            <select
+              value={sortOrder}
+              onChange={(e) => { setSortOrder(e.target.value as typeof sortOrder); setPage(1); }}
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="desc">↓</option>
+              <option value="asc">↑</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800">
