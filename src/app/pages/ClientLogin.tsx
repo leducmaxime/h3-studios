@@ -139,7 +139,7 @@ export function ClientLogin() {
         {tab === "login" ? (
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="login-email" className="text-zinc-300">Email <span className="text-red-400">*</span></Label>
+              <Label htmlFor="login-email" className="text-zinc-300">Email <span className="text-primary">*</span></Label>
               <Input
                 id="login-email"
                 type="email"
@@ -151,7 +151,7 @@ export function ClientLogin() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="login-password" className="text-zinc-300">Mot de passe <span className="text-red-400">*</span></Label>
+              <Label htmlFor="login-password" className="text-zinc-300">Mot de passe <span className="text-primary">*</span></Label>
               <Input
                 id="login-password"
                 type="password"
@@ -181,7 +181,7 @@ export function ClientLogin() {
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="reg-firstname" className="text-zinc-300">Prénom <span className="text-red-400">*</span></Label>
+                <Label htmlFor="reg-firstname" className="text-zinc-300">Prénom <span className="text-primary">*</span></Label>
                 <Input
                   id="reg-firstname"
                   type="text"
@@ -193,7 +193,7 @@ export function ClientLogin() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="reg-lastname" className="text-zinc-300">Nom <span className="text-red-400">*</span></Label>
+                <Label htmlFor="reg-lastname" className="text-zinc-300">Nom <span className="text-primary">*</span></Label>
                 <Input
                   id="reg-lastname"
                   type="text"
@@ -207,7 +207,7 @@ export function ClientLogin() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="reg-email" className="text-zinc-300">Email <span className="text-red-400">*</span></Label>
+              <Label htmlFor="reg-email" className="text-zinc-300">Email <span className="text-primary">*</span></Label>
               <Input
                 id="reg-email"
                 type="email"
@@ -244,7 +244,7 @@ export function ClientLogin() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="reg-address" className="text-zinc-300">Adresse <span className="text-red-400">*</span></Label>
+              <Label htmlFor="reg-address" className="text-zinc-300">Adresse <span className="text-primary">*</span></Label>
               <Input
                 id="reg-address"
                 type="text"
@@ -257,7 +257,7 @@ export function ClientLogin() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="reg-postal" className="text-zinc-300">Code postal <span className="text-red-400">*</span></Label>
+                <Label htmlFor="reg-postal" className="text-zinc-300">Code postal <span className="text-primary">*</span></Label>
                 <Input
                   id="reg-postal"
                   type="text"
@@ -269,7 +269,7 @@ export function ClientLogin() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="reg-city" className="text-zinc-300">Ville <span className="text-red-400">*</span></Label>
+                <Label htmlFor="reg-city" className="text-zinc-300">Ville <span className="text-primary">*</span></Label>
                 <Input
                   id="reg-city"
                   type="text"
@@ -283,7 +283,7 @@ export function ClientLogin() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="reg-password" className="text-zinc-300">Mot de passe <span className="text-red-400">*</span></Label>
+              <Label htmlFor="reg-password" className="text-zinc-300">Mot de passe <span className="text-primary">*</span></Label>
               <Input
                 id="reg-password"
                 type="password"
