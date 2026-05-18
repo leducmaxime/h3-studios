@@ -244,25 +244,10 @@ export function useBookingWithRouter(urlStep?: string) {
 
   useEffect(() => {
     if (isHydrated) return;
-    
-    const fetchClientUser = fetch("/api/client/me")
-      .then((res) => {
-        if (!res.ok) return null;
-        return res.json() as Promise<{ data?: { id: string; email: string | null; name: string; first_name: string | null; last_name: string | null; phone: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null } }>;
-      })
-      .then((json) => {
-        if (json?.data) {
-          setClientUser(json.data);
-          return json.data;
-        }
-        return null;
-      })
-      .catch(() => null)
-      .finally(() => setClientUserLoading(false));
-    
+
     const savedState = loadBookingState();
     const prefs = loadUserPreferences();
-    
+
     if (savedState && savedState.step === 8) {
       clearBookingState();
       if (prefs) {
@@ -277,14 +262,14 @@ export function useBookingWithRouter(urlStep?: string) {
       setIsHydrated(true);
       return;
     }
-    
+
     if (savedState) {
       const urlStepNum = getStepFromUrl(urlStep);
       const restoredState = {
         ...savedState,
         step: (urlStepNum > 0 ? urlStepNum : savedState.step) as BookingState["step"],
       };
-      
+
       if (prefs) {
         restoredState.userName = prefs.userName || restoredState.userName;
         restoredState.userEmail = prefs.userEmail || restoredState.userEmail;
@@ -296,7 +281,7 @@ export function useBookingWithRouter(urlStep?: string) {
       if (restoredState.cart.length > 0 && !restoredState.isAddingNew && restoredState.step <= 1) {
         restoredState.step = 5 as BookingState["step"];
       }
-      
+
       setState(restoredState);
     } else if (prefs) {
       setState((s) => ({
@@ -307,22 +292,40 @@ export function useBookingWithRouter(urlStep?: string) {
         bandName: prefs.bandName || "",
       }));
     }
-    
-    fetchClientUser.then((user) => {
-      if (user) {
-        setState((s) => ({
-          ...s,
-          userName: user.name || s.userName,
-          userEmail: user.email || s.userEmail,
-          userPhone: user.phone || s.userPhone,
-          bandName: user.band_name || s.bandName,
-          billingAddress: user.address_line1 || s.billingAddress,
-          billingPostalCode: user.postal_code || s.billingPostalCode,
-          billingCity: user.city || s.billingCity,
-        }));
-      }
-      setIsHydrated(true);
-    }).catch(() => setIsHydrated(true));
+
+    fetch("/api/client/me", { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) {
+          console.warn("[Booking] /api/client/me returned", res.status);
+          return null;
+        }
+        return res.json() as Promise<{ data?: { id: string; email: string | null; name: string; first_name: string | null; last_name: string | null; phone: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null } }>;
+      })
+      .then((json) => {
+        if (json?.data) {
+          const user = json.data;
+          setClientUser(user);
+          setState((s) => ({
+            ...s,
+            userName: user.name || s.userName,
+            userEmail: user.email || s.userEmail,
+            userPhone: user.phone || s.userPhone,
+            bandName: user.band_name || s.bandName,
+            billingAddress: user.address_line1 || s.billingAddress,
+            billingPostalCode: user.postal_code || s.billingPostalCode,
+            billingCity: user.city || s.billingCity,
+          }));
+        } else {
+          console.warn("[Booking] /api/client/me: no user data");
+        }
+        setClientUserLoading(false);
+        setIsHydrated(true);
+      })
+      .catch((err) => {
+        console.error("[Booking] /api/client/me error:", err);
+        setClientUserLoading(false);
+        setIsHydrated(true);
+      });
   }, [isHydrated, urlStep]);
 
   useEffect(() => {
@@ -337,28 +340,6 @@ export function useBookingWithRouter(urlStep?: string) {
     }
     saveBookingState(state);
   }, [state, isHydrated]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    fetch("/api/client/me")
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (data?.data) {
-          const u = data.data as { name?: string; email?: string; phone?: string; band_name?: string; address_line1?: string; postal_code?: string; city?: string };
-          setState((s) => ({
-            ...s,
-            userName: u.name || s.userName,
-            userEmail: u.email || s.userEmail,
-            userPhone: u.phone || s.userPhone,
-            bandName: u.band_name || s.bandName,
-            billingAddress: u.address_line1 || s.billingAddress,
-            billingPostalCode: u.postal_code || s.billingPostalCode,
-            billingCity: u.city || s.billingCity,
-          }));
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!isHydrated) return;

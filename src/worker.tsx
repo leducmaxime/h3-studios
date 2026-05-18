@@ -1144,9 +1144,10 @@ const app = defineApp([
 
         const page = parseInt(url.searchParams.get("page") || "1", 10);
         const limit = parseInt(url.searchParams.get("limit") || "20", 10);
+        const all = url.searchParams.get("all") === "true";
 
         const needsPostFilter = statusFilter || paymentStatus === "paid" || paymentStatus === "remaining";
-        const fetchLimit = needsPostFilter ? 1000 : limit;
+        const fetchLimit = all ? 5000 : needsPostFilter ? 1000 : limit;
 
         const result = await getBookings(env.DB, filters, 1, fetchLimit);
 
@@ -1194,6 +1195,15 @@ const app = defineApp([
           bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
             (b) => b.payment_status !== "paid"
           );
+        }
+
+        if (all) {
+          return jsonSuccess({
+            data: bookingsWithPaymentStatus,
+            total: bookingsWithPaymentStatus.length,
+            page: 1,
+            limit: bookingsWithPaymentStatus.length,
+          });
         }
 
         if (needsPostFilter) {
@@ -1613,6 +1623,7 @@ const app = defineApp([
         const url = new URL(request.url);
         const page = parseInt(url.searchParams.get("page") || "1", 10);
         const limit = parseInt(url.searchParams.get("limit") || "20", 10);
+        const all = url.searchParams.get("all") === "true";
         const search = url.searchParams.get("search") || undefined;
         const blockedParam = url.searchParams.get("blocked");
         const isBlocked = blockedParam === "true" ? true : blockedParam === "false" ? false : undefined;
@@ -1636,8 +1647,8 @@ const app = defineApp([
         const result = await getUsers(
           env.DB,
           { search, isBlocked, hasBookings, sortBy, sortOrder },
-          page,
-          limit,
+          all ? 1 : page,
+          all ? 9999 : limit,
         );
         return jsonSuccess(result);
       } catch (error) {
@@ -1809,6 +1820,7 @@ const app = defineApp([
 
       const page = parseInt(url.searchParams.get("page") || "1", 10);
       const limit = parseInt(url.searchParams.get("limit") || "20", 10);
+      const all = url.searchParams.get("all") === "true";
 
       const status = url.searchParams.get("status");
       if (status) filters.status = status as typeof filters.status;
@@ -1827,7 +1839,7 @@ const app = defineApp([
       const sortOrder = url.searchParams.get("sortOrder");
       if (sortOrder) filters.sortOrder = sortOrder as typeof filters.sortOrder;
 
-      const result = await getPayments(env.DB, filters, page, limit);
+      const result = await getPayments(env.DB, filters, all ? 1 : page, all ? 9999 : limit);
       return jsonSuccess(result);
     } catch (error) {
       console.error("GET /api/admin/payments error:", error);

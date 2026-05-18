@@ -591,9 +591,32 @@ export function AdminPayments() {
     setRefundOpen(true);
   }
 
-  function handleExportCSV() {
-    exportPaymentsCSV(payments);
-    toast.success(`${payments.length} paiement(s) exporté(s)`);
+  async function handleExportCSV() {
+    const params = new URLSearchParams();
+    params.set("all", "true");
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (paymentTypeFilter !== "all") params.set("paymentType", paymentTypeFilter);
+    if (methodFilter !== "all") params.set("method", methodFilter);
+    if (search) params.set("search", search);
+    params.set("sortBy", sortBy);
+    params.set("sortOrder", sortOrder);
+
+    const dateParams = getDateFilterParams(dateFilter);
+    if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
+    if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
+
+    try {
+      const res = await fetch(`/api/admin/payments?${params}`);
+      const json = (await res.json()) as PaymentsResponse;
+      if (json.success) {
+        exportPaymentsCSV(json.data.data);
+        toast.success(`${json.data.data.length} paiement(s) exporté(s)`);
+      } else {
+        toast.error("Erreur lors de l'export");
+      }
+    } catch {
+      toast.error("Erreur réseau lors de l'export");
+    }
   }
 
   // ─── Render ─────────────────────────────────────────────────────────────────

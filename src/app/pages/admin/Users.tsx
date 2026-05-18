@@ -212,9 +212,26 @@ export function AdminUsers() {
     return users.filter((u) => selectedIds.has(u.id));
   }, [users, selectedIds]);
 
-  const handleExportCSV = () => {
-    exportUsersCSV(users);
-    toast.success(`${users.length} client(s) exporté(s)`);
+  const handleExportCSV = async () => {
+    const params = new URLSearchParams();
+    params.set("all", "true");
+    if (search) params.set("search", search);
+    if (blockedFilter !== "all") params.set("blocked", blockedFilter === "blocked" ? "true" : "false");
+    params.set("sortBy", sortBy);
+    params.set("sortOrder", sortOrder);
+
+    try {
+      const res = await fetch(`/api/admin/users?${params}`);
+      const json = (await res.json()) as { success: boolean; data: UsersApiResponse };
+      if (json.success) {
+        exportUsersCSV(json.data.data);
+        toast.success(`${json.data.data.length} client(s) exporté(s)`);
+      } else {
+        toast.error("Erreur lors de l'export");
+      }
+    } catch {
+      toast.error("Erreur réseau lors de l'export");
+    }
   };
 
   return (

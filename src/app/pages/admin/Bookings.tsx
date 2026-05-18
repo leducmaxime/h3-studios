@@ -242,9 +242,35 @@ export function AdminBookings() {
     }
   };
 
-  const handleExportCSV = () => {
-    exportBookingsCSV(bookings);
-    toast.success(`${bookings.length} réservation(s) exportée(s)`);
+  const handleExportCSV = async () => {
+    const params = new URLSearchParams();
+    params.set("all", "true");
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (studioFilter !== "all") params.set("studio", studioFilter);
+    if (paymentStatusFilter !== "all") params.set("paymentStatus", paymentStatusFilter);
+    if (search) params.set("search", search);
+    params.set("sortBy", sortBy);
+    params.set("sortOrder", sortOrder);
+
+    const dateParams = dateFilter === "custom" && customDateFrom
+      ? { dateFrom: customDateFrom, dateTo: customDateTo || undefined }
+      : getDateFilterParams(dateFilter);
+    if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
+    if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
+    if (dateParams.dateDirection) params.set("dateDirection", dateParams.dateDirection);
+
+    try {
+      const res = await fetch(`/api/admin/bookings?${params}`);
+      const json = (await res.json()) as BookingsApiResponse;
+      if (json.success && json.data) {
+        exportBookingsCSV(json.data.data);
+        toast.success(`${json.data.data.length} réservation(s) exportée(s)`);
+      } else {
+        toast.error("Erreur lors de l'export");
+      }
+    } catch {
+      toast.error("Erreur réseau lors de l'export");
+    }
   };
 
   return (
