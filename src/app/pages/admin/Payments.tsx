@@ -645,18 +645,17 @@ export function AdminPayments() {
 
       {/* Filters */}
       <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-          <input
-            type="text"
-            placeholder="Rechercher..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
-          />
-        </div>
-
         <div className="flex flex-wrap items-center gap-1.5">
+          <div className="relative w-48">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+            <input
+              type="text"
+              placeholder="Rechercher..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
+            />
+          </div>
           <select
             value={dateFilter}
             onChange={(e) => { setDateFilter(e.target.value as typeof dateFilter); setPage(1); }}
