@@ -31,6 +31,8 @@ import { AdminSettings } from "@/app/pages/admin/Settings";
 import { AdminAuditLog } from "@/app/pages/admin/AuditLog";
 import { AdminBookingNew } from "@/app/pages/admin/BookingNew";
 import { Login } from "@/app/pages/admin/Login";
+import { AdminForgotPassword } from "@/app/pages/admin/AdminForgotPassword";
+import { AdminResetPassword } from "@/app/pages/admin/AdminResetPassword";
 import { PaymentSuccess } from "@/app/pages/PaymentSuccess";
 import { PaymentCancel } from "@/app/pages/PaymentCancel";
 import { ClientLogin } from "@/app/pages/ClientLogin";
@@ -259,6 +261,10 @@ const SUPER_ADMIN_ROUTE_PREFIXES = [
 const AUTH_EXCLUDED_PATHS = [
   "/api/admin/login",
   "/admin/login",
+  "/api/admin/forgot-password",
+  "/api/admin/reset-password",
+  "/admin/mot-de-passe-oublie",
+  "/admin/reinitialiser",
 ];
 
 function isAdminPath(pathname: string): boolean {
@@ -452,6 +458,14 @@ const app = defineApp([
 
   render(({ children, rw }) => <DocumentWithPath path="/admin/login" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     route("/admin/login", Login),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/admin/mot-de-passe-oublie" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    route("/admin/mot-de-passe-oublie", AdminForgotPassword),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/admin/reinitialiser" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    route("/admin/reinitialiser", AdminResetPassword),
   ]),
 
   render(({ children, rw }) => <DocumentWithPath path="/admin" nonce={rw.nonce}>{children}</DocumentWithPath>, [
@@ -991,6 +1005,112 @@ const app = defineApp([
       if (error instanceof Response) return error;
       console.error("GET /api/admin/me error:", error);
       return jsonError(error instanceof Error ? error.message : "Auth check failed", 500);
+    }
+  }),
+
+  route("/api/admin/forgot-password", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as { email?: string };
+      if (!body.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+        return jsonError("Email invalide", 400);
+      }
+
+      const admin = await env.DB
+        .prepare("SELECT id, email, name FROM admin_users WHERE LOWER(TRIM(email)) = ? AND is_active = 1")
+        .bind(body.email.trim().toLowerCase())
+        .first<{ id: string; email: string; name: string }>();
+
+      if (!admin) {
+        return jsonSuccess({ sent: true });
+      }
+
+      const token = generateToken();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      await env.DB
+        .prepare(
+          "INSERT INTO admin_password_reset_tokens (id, admin_user_id, token, expires_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(`aprt-${generateId()}`, admin.id, token, expiresAt)
+        .run();
+
+      const resetUrl = new URL(`/admin/reinitialiser?token=${token}`, request.url).toString();
+      const emailHtml = `
+        <h2>Réinitialisation de votre mot de passe admin</h2>
+        <p>Bonjour ${admin.name},</p>
+        <p>Vous avez demandé à réinitialiser votre mot de passe administrateur. Cliquez sur le lien ci-dessous :</p>
+        <p><a href="${resetUrl}">${resetUrl}</a></p>
+        <p>Ce lien est valable pendant 1 heure.</p>
+        <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+      `;
+
+      const resendResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "H3 Studios <contact@h3-studios.fr>",
+          to: admin.email,
+          subject: "Réinitialisation de votre mot de passe admin H3 Studios",
+          html: emailHtml,
+        }),
+      });
+
+      if (!resendResponse.ok) {
+        const errorData = await resendResponse.text();
+        console.error("Resend API error:", errorData);
+        return jsonError("Échec de l'envoi de l'email", 500);
+      }
+
+      return jsonSuccess({ sent: true });
+    } catch (error) {
+      console.error("POST /api/admin/forgot-password error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed", 500);
+    }
+  }),
+
+  route("/api/admin/reset-password", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as { token?: string; password?: string };
+      if (!body.token || !body.password) {
+        return jsonError("Token et mot de passe requis", 400);
+      }
+      if (body.password.length < 6) {
+        return jsonError("Le mot de passe doit contenir au moins 6 caractères", 400);
+      }
+
+      const row = await env.DB
+        .prepare(
+          "SELECT admin_user_id, expires_at, used FROM admin_password_reset_tokens WHERE token = ?",
+        )
+        .bind(body.token)
+        .first<{ admin_user_id: string; expires_at: string; used: number }>();
+
+      if (!row || row.used || new Date(row.expires_at) < new Date()) {
+        return jsonError("Token invalide ou expiré", 400);
+      }
+
+      const passwordHash = await hashPassword(body.password);
+      await env.DB
+        .prepare("UPDATE admin_users SET password_hash = ?, updated_at = ? WHERE id = ?")
+        .bind(passwordHash, new Date().toISOString(), row.admin_user_id)
+        .run();
+
+      await env.DB
+        .prepare("UPDATE admin_password_reset_tokens SET used = 1 WHERE token = ?")
+        .bind(body.token)
+        .run();
+
+      return jsonSuccess({ reset: true });
+    } catch (error) {
+      console.error("POST /api/admin/reset-password error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed", 500);
     }
   }),
 

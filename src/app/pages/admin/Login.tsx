@@ -105,6 +105,16 @@ export function Login() {
           >
             {loading ? "Connexion..." : "Se connecter"}
           </Button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => window.location.href = "/admin/mot-de-passe-oublie"}
+              className="text-sm text-zinc-500 hover:text-primary transition-colors"
+            >
+              Mot de passe oublié ?
+            </button>
+          </div>
         </form>
 
         <p className="text-center text-xs text-zinc-600">

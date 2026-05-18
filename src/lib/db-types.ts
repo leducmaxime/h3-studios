@@ -26,6 +26,26 @@ export interface DbSession {
   created_at: string;
 }
 
+// --- Password Reset Tokens ---
+
+export interface DbPasswordResetToken {
+  id: string;
+  user_id: string;
+  token: string;
+  expires_at: string;
+  used: number; // 0 | 1
+  created_at: string;
+}
+
+export interface DbAdminPasswordResetToken {
+  id: string;
+  admin_user_id: string;
+  token: string;
+  expires_at: string;
+  used: number; // 0 | 1
+  created_at: string;
+}
+
 // --- Users (clients / musicians) ---
 
 export interface DbUser {
