@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { navigate } from "rwsdk/client";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,7 +110,7 @@ export function Login() {
           <div className="text-center">
             <button
               type="button"
-              onClick={() => window.location.href = "/admin/mot-de-passe-oublie"}
+              onClick={() => navigate("/admin/mot-de-passe-oublie")}
               className="text-sm text-zinc-500 hover:text-primary transition-colors"
             >
               Mot de passe oublié ?
