@@ -106,16 +106,16 @@ export function Login() {
           >
             {loading ? "Connexion..." : "Se connecter"}
           </Button>
-
-          <div className="text-center">
-            <a
-              href="/admin/mot-de-passe-oublie"
-              className="text-sm text-zinc-500 hover:text-primary transition-colors"
-            >
-              Mot de passe oublié ?
-            </a>
-          </div>
         </form>
+
+        <div className="text-center -mt-2">
+          <a
+            href="/admin/mot-de-passe-oublie"
+            className="text-sm text-zinc-500 hover:text-primary transition-colors"
+          >
+            Mot de passe oublié ?
+          </a>
+        </div>
 
         <p className="text-center text-xs text-zinc-600">
           H3 Studios &mdash; Sucy-en-Brie
