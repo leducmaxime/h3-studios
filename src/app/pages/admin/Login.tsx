@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { navigate } from "rwsdk/client";
 
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,6 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const forgotPasswordRef = useRef<HTMLButtonElement>(null);
-
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,16 +106,17 @@ export function Login() {
           >
             {loading ? "Connexion..." : "Se connecter"}
           </Button>
-        </form>
 
-        <div className="text-center">
-          <a
-            href={`${typeof window !== "undefined" ? window.location.origin : ""}/admin/mot-de-passe-oublie`}
-            className="inline-block text-sm text-zinc-500 hover:text-primary transition-colors py-2"
-          >
-            Mot de passe oublié ?
-          </a>
-        </div>
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={() => navigate("/admin/mot-de-passe-oublie")}
+              className="text-sm text-zinc-400 hover:text-primary transition-colors bg-transparent border-none cursor-pointer"
+            >
+              Mot de passe oublié ?
+            </button>
+          </div>
+        </form>
 
         <p className="text-center text-xs text-zinc-600">
           H3 Studios &mdash; Sucy-en-Brie
