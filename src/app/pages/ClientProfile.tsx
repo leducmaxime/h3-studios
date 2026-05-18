@@ -153,93 +153,75 @@ export function ClientProfile() {
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <User className="h-4 w-4 text-primary" />
               </div>
-              <h2 className="text-lg font-semibold text-white">Identité</h2>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <FieldLabel htmlFor="profile-firstname" icon={User} required>Prénom</FieldLabel>
-                <Input
-                  id="profile-firstname"
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  disabled={saving}
-                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel htmlFor="profile-lastname" icon={User} required>Nom</FieldLabel>
-                <Input
-                  id="profile-lastname"
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  disabled={saving}
-                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
-                />
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-2">
-              <FieldLabel htmlFor="profile-email" icon={Mail} required>Email</FieldLabel>
-              <Input
-                id="profile-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="votre@email.com"
-                disabled={saving}
-                className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
-              />
-            </div>
-          </section>
-
-          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Phone className="h-4 w-4 text-primary" />
-              </div>
-              <h2 className="text-lg font-semibold text-white">Coordonnées</h2>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <FieldLabel htmlFor="profile-phone" icon={Phone}>Téléphone</FieldLabel>
-                <Input
-                  id="profile-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="06 12 34 56 78"
-                  disabled={saving}
-                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
-                />
-              </div>
-              <div className="space-y-2">
-                <FieldLabel htmlFor="profile-band" icon={Music}>Nom du groupe</FieldLabel>
-                <Input
-                  id="profile-band"
-                  type="text"
-                  value={bandName}
-                  onChange={(e) => setBandName(e.target.value)}
-                  placeholder="Nom de votre groupe"
-                  disabled={saving}
-                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <MapPin className="h-4 w-4 text-primary" />
-              </div>
-              <h2 className="text-lg font-semibold text-white">Adresse</h2>
+              <h2 className="text-lg font-semibold text-white">Mes informations</h2>
             </div>
 
             <div className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="profile-firstname" icon={User} required>Prénom</FieldLabel>
+                  <Input
+                    id="profile-firstname"
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    disabled={saving}
+                    className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="profile-lastname" icon={User} required>Nom</FieldLabel>
+                  <Input
+                    id="profile-lastname"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    disabled={saving}
+                    className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-email" icon={Mail} required>Email</FieldLabel>
+                <Input
+                  id="profile-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="votre@email.com"
+                  disabled={saving}
+                  className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="profile-phone" icon={Phone}>Téléphone</FieldLabel>
+                  <Input
+                    id="profile-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="06 12 34 56 78"
+                    disabled={saving}
+                    className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="profile-band" icon={Music}>Nom du groupe</FieldLabel>
+                  <Input
+                    id="profile-band"
+                    type="text"
+                    value={bandName}
+                    onChange={(e) => setBandName(e.target.value)}
+                    placeholder="Nom de votre groupe"
+                    disabled={saving}
+                    className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <FieldLabel htmlFor="profile-address1" icon={Home} required>Adresse</FieldLabel>
                 <Input

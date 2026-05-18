@@ -2906,7 +2906,6 @@ const app = defineApp([
           JOIN bookings b ON b.id = p.booking_id
           WHERE b.date >= ? AND b.date <= ?
             AND b.status != 'cancelled'
-            AND b.payment_status = 'pay-on-site'
             AND p.status = 'paid'
           GROUP BY p.method`,
         ).bind(fromStr, toStr),
@@ -2918,7 +2917,8 @@ const app = defineApp([
           WHERE date >= ? AND date <= ?
             AND status != 'cancelled'
             AND payment_method = 'card'
-            AND payment_status = 'paid'`,
+            AND payment_status = 'paid'
+            AND id NOT IN (SELECT booking_id FROM payments WHERE status = 'paid')`,
          ).bind(fromStr, toStr),
          env.DB.prepare(
            `SELECT
