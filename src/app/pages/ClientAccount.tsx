@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History } from "lucide-react";
+import { getParisDateISO } from "@/lib/utils";
 
 interface ClientUser {
   id: string;
@@ -122,7 +123,7 @@ export function ClientAccount() {
     );
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getParisDateISO();
   const upcoming = bookings.filter((b) => b.date >= today && b.status !== "cancelled" && b.status !== "completed" && b.status !== "no-show");
   const past = bookings.filter((b) => b.date < today || b.status === "cancelled" || b.status === "completed" || b.status === "no-show");
 

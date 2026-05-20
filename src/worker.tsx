@@ -1,7 +1,7 @@
 import { render, route, layout } from "rwsdk/router";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 
 import { Document } from "@/app/Document";
 import { setCommonHeaders } from "@/app/headers";
@@ -42,6 +42,7 @@ import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
 import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
+import { sendBookingConfirmationEmail, type BookingConfirmationData } from "@/lib/email";
 import {
   type AdminRole,
   verifyPassword,
@@ -818,6 +819,31 @@ const app = defineApp([
         await env.DB.prepare(
           "UPDATE promo_codes SET usage_count = usage_count + 1 WHERE code = ?",
         ).bind(body.promoCode.trim().toUpperCase()).run();
+      }
+
+      // Send booking confirmation email
+      if (env.RESEND_API_KEY) {
+        const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
+          bookingRef: booking.booking_ref,
+          studioId: body.studioId,
+          date: body.date,
+          startTime: body.startTime,
+          endTime: body.endTime,
+          groupType: body.groupType,
+          equipment: body.equipment,
+          equipmentPrice: body.equipmentPrice,
+          totalPrice: body.price,
+          paymentMethod: body.paymentMethod,
+          paymentStatus: body.paymentStatus,
+          userName: name,
+          userEmail: email,
+          userPhone: phone,
+          promoCode: body.promoCode,
+          promoDiscount: body.promoDiscount,
+        }).catch((err) => {
+          console.error("Failed to send booking confirmation email:", err);
+        });
+        waitUntil(emailPromise);
       }
 
       return jsonSuccess({ success: true, bookingId: booking.id, ref: booking.booking_ref });
@@ -3609,7 +3635,23 @@ const app = defineApp([
     try {
       const user = await requireClientAuth(request, env.DB);
       const bookings = await getBookings(env.DB, { userId: user.id }, 1, 100);
-      return jsonSuccess(bookings.data);
+
+      // Transform past confirmed bookings to completed (same logic as admin API)
+      const parisNow = getParisNow();
+      const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
+      const bookingsWithStatus = bookings.data.map((booking) => {
+        if (booking.status === "confirmed") {
+          const isPast =
+            booking.date < parisNow.dateISO ||
+            (booking.date === parisNow.dateISO && booking.end_time <= nowTimeStr);
+          if (isPast) {
+            return { ...booking, status: "completed" as const };
+          }
+        }
+        return booking;
+      });
+
+      return jsonSuccess(bookingsWithStatus);
     } catch (error) {
       if (error instanceof Response) return error;
       console.error("GET /api/client/bookings error:", error);
