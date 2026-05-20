@@ -130,31 +130,27 @@ export function ClientAccount() {
   return (
     <div className="min-h-[80vh] bg-black px-4 pt-32 pb-16">
       <div className="container max-w-4xl mx-auto">
-        <div className="mb-12">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes réservations</h1>
-              <div className="mx-auto sm:mx-0 mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-            </div>
-            <div className="flex items-center gap-3 justify-center sm:justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                onClick={() => navigate("/mon-compte/profil")}
-              >
-                <User className="h-4 w-4 mr-2" />
-                Mon profil
-              </Button>
-              <Button
-                className="bg-primary text-black hover:bg-primary/90"
-                size="sm"
-                onClick={() => navigate("/reservation")}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Nouvelle réservation
-              </Button>
-            </div>
+        <div className="mb-12 text-center">
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes réservations</h1>
+          <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              onClick={() => navigate("/mon-compte/profil")}
+            >
+              <User className="h-4 w-4 mr-2" />
+              Mon profil
+            </Button>
+            <Button
+              className="bg-primary text-black hover:bg-primary/90"
+              size="sm"
+              onClick={() => navigate("/reservation")}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Nouvelle réservation
+            </Button>
           </div>
         </div>
 
