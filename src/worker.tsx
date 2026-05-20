@@ -794,6 +794,17 @@ const app = defineApp([
       const isZeroTotal = body.price === 0;
       const bookingPaymentStatus = isZeroTotal ? "paid" : body.paymentStatus;
 
+      // Fetch promo type if a promo code is provided
+      let promoType: string | null = null;
+      if (body.promoCode) {
+        const promoRow = await env.DB.prepare(
+          "SELECT type FROM promo_codes WHERE code = ?"
+        ).bind(body.promoCode.trim().toUpperCase()).first<{ type: string }>();
+        if (promoRow) {
+          promoType = promoRow.type;
+        }
+      }
+
       const booking = await createBooking(env.DB, {
         booking_ref: body.bookingRef,
         user_id: clientUser.id,
@@ -813,7 +824,9 @@ const app = defineApp([
         notes: body.notes || null,
         round_mode: body.round_mode || "none",
         round_value: null,
+        promo_code: body.promoCode || null,
         promo_discount: body.promoDiscount || 0,
+        promo_type: promoType,
         cancelled_at: null,
         cancel_reason: null,
       });
@@ -1330,6 +1343,15 @@ const app = defineApp([
 
         const promoDiscount = (body as { promo_discount?: number }).promo_discount || 0;
         const promoCode = (body as { promo_code?: string }).promo_code || null;
+        let promoType: string | null = null;
+        if (promoCode) {
+          const promoRow = await env.DB.prepare(
+            "SELECT type FROM promo_codes WHERE code = ?"
+          ).bind(promoCode.trim().toUpperCase()).first<{ type: string }>();
+          if (promoRow) {
+            promoType = promoRow.type;
+          }
+        }
         const subtotal = basePrice + equipmentPrice;
 
         const booking = await createBooking(env.DB, {
@@ -1351,7 +1373,9 @@ const app = defineApp([
           notes: body.notes || null,
           round_mode: "none",
           round_value: null,
+          promo_code: promoCode,
           promo_discount: promoDiscount,
+          promo_type: promoType,
           cancelled_at: null,
           cancel_reason: null,
         });

@@ -129,14 +129,14 @@ export async function createBooking(
   await db.prepare(`
     INSERT INTO bookings (id, booking_ref, user_id, band_name, studio_id, date, start_time, end_time,
       group_type, status, base_price, equipment_price, total_price, equipment,
-      payment_method, payment_status, notes, round_mode, promo_discount, created_at, updated_at, cancelled_at, cancel_reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      payment_method, payment_status, notes, round_mode, promo_code, promo_discount, promo_type, created_at, updated_at, cancelled_at, cancel_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, data.booking_ref, data.user_id, data.band_name, data.studio_id, data.date,
     data.start_time, data.end_time, data.group_type, data.status,
     data.base_price, data.equipment_price, data.total_price,
     data.equipment, data.payment_method, data.payment_status,
-    data.notes, data.round_mode, data.promo_discount, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
+    data.notes, data.round_mode, data.promo_code || null, data.promo_discount, data.promo_type || null, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
   ).run();
   return (await getBookingById(db, id))!;
 }
