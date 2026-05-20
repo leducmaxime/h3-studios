@@ -54,7 +54,10 @@ function getGroupTypeLabel(groupType: string): string {
   return labels[groupType] || groupType;
 }
 
-function getPaymentMethodLabel(method: string, status: string): string {
+function getPaymentMethodLabel(method: string, status: string, totalPrice = 0): string {
+  if (totalPrice === 0) {
+    return "Gratuit — réduction intégrale appliquée";
+  }
   if (method === "card" && status === "pending") {
     return "Paiement en ligne (en cours)";
   }
@@ -90,7 +93,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   const dateLabel = formatDateFrench(data.date);
   const timeLabel = formatTimeRange(data.startTime, data.endTime);
   const groupLabel = getGroupTypeLabel(data.groupType);
-  const paymentLabel = getPaymentMethodLabel(data.paymentMethod, data.paymentStatus);
+  const paymentLabel = getPaymentMethodLabel(data.paymentMethod, data.paymentStatus, data.totalPrice);
   const equipmentLabel = buildEquipmentList(data.equipment);
   const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
 
@@ -211,7 +214,9 @@ function buildEmailHtml(data: BookingConfirmationData): string {
                       ` : ""}
                       ${hasPromo ? `
                       <tr>
-                        <td style="padding:6px 0;color:#facc15;font-size:14px;">Code promo ${data.promoCode}</td>
+                        <td style="padding:6px 0;color:#facc15;font-size:14px;">
+                          Code promo <strong>${data.promoCode}</strong>
+                        </td>
                         <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
                       </tr>
                       ` : ""}
@@ -220,7 +225,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
                       </tr>
                       <tr>
                         <td style="padding:6px 0;color:#ffffff;font-size:16px;font-weight:600;">Total</td>
-                        <td align="right" style="padding:6px 0;color:#facc15;font-size:20px;font-weight:700;">${formatPrice(data.totalPrice)}</td>
+                        <td align="right" style="padding:6px 0;color:#facc15;font-size:20px;font-weight:700;">${data.totalPrice === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(data.totalPrice)}</td>
                       </tr>
                     </table>
                   </td>

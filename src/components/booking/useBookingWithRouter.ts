@@ -351,6 +351,29 @@ export function useBookingWithRouter(urlStep?: string) {
     navigateToUrl(state.step, state.flow);
   }, [state.step, state.flow, isHydrated, state.cart.length, state.isAddingNew]);
 
+  // Always fetch user data on mount (in case auth state changed since last render)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    fetch("/api/client/me", { credentials: "include" })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.data) {
+          const u = data.data as { name?: string; email?: string; phone?: string; band_name?: string; address_line1?: string; postal_code?: string; city?: string };
+          setState((s) => ({
+            ...s,
+            userName: u.name || s.userName,
+            userEmail: u.email || s.userEmail,
+            userPhone: u.phone || s.userPhone,
+            bandName: u.band_name || s.bandName,
+            billingAddress: u.address_line1 || s.billingAddress,
+            billingPostalCode: u.postal_code || s.billingPostalCode,
+            billingCity: u.city || s.billingCity,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -611,9 +634,8 @@ export function useBookingWithRouter(urlStep?: string) {
   const goToPaymentFromCoordonnees = useCallback(async () => {
     const currentCart = state.cart;
     const cartTotal = currentCart.reduce((sum, b) => sum + b.price, 0);
-    const promoDiscount = appliedPromoRef.current ? 
-      currentCart.reduce((sum, b) => sum + (b.promoDiscount || 0), 0) : 0;
-    const finalTotal = Math.max(0, cartTotal - promoDiscount);
+    const totalPromoDiscount = state.promoDiscount || 0;
+    const finalTotal = Math.max(0, cartTotal - totalPromoDiscount);
     
     // If total is 0€ (100% discount), skip payment and create booking directly
     if (finalTotal === 0) {
@@ -621,8 +643,12 @@ export function useBookingWithRouter(urlStep?: string) {
       setIsSubmitting(true);
       try {
         const promoCodeToApply = appliedPromoRef.current?.code ?? null;
+        let remainingPromo = totalPromoDiscount;
         for (let i = 0; i < state.cart.length; i++) {
           const booking = state.cart[i];
+          const bookingPromoDiscount = Math.min(booking.price, remainingPromo);
+          remainingPromo -= bookingPromoDiscount;
+          const finalPrice = Math.max(0, booking.price - bookingPromoDiscount);
           const res = await fetch("/api/bookings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -644,12 +670,12 @@ export function useBookingWithRouter(urlStep?: string) {
               groupType: booking.groupType,
               equipment: booking.equipment,
               equipmentPrice: booking.equipmentPrice,
-              price: booking.price,
+              price: finalPrice,
               paymentMethod: "cash",
               paymentStatus: "pay-on-site",
               promoCode: i === 0 ? promoCodeToApply : null,
               round_mode: i === 0 ? appliedPromoRef.current?.round_mode ?? null : null,
-              promoDiscount: booking.promoDiscount,
+              promoDiscount: bookingPromoDiscount,
               notes: state.additionalInfo,
             }),
           });
@@ -672,7 +698,7 @@ export function useBookingWithRouter(urlStep?: string) {
     } else {
       setState((s) => ({ ...s, step: 6 }));
     }
-  }, [state.cart, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
+  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
 
   /** Cancel current new booking and go back to cart */
   const goToCart = useCallback(() => {
@@ -697,8 +723,13 @@ export function useBookingWithRouter(urlStep?: string) {
 
     try {
       const promoCodeToApply = appliedPromoRef.current?.code ?? null;
+      const totalPromoDiscount = state.promoDiscount || 0;
+      let remainingPromo = totalPromoDiscount;
       for (let i = 0; i < state.cart.length; i++) {
         const booking = state.cart[i];
+        const bookingPromoDiscount = Math.min(booking.price, remainingPromo);
+        remainingPromo -= bookingPromoDiscount;
+        const finalPrice = Math.max(0, booking.price - bookingPromoDiscount);
         const res = await fetch("/api/bookings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -720,12 +751,12 @@ export function useBookingWithRouter(urlStep?: string) {
             groupType: booking.groupType,
             equipment: booking.equipment,
             equipmentPrice: booking.equipmentPrice,
-            price: booking.price,
+            price: finalPrice,
             paymentMethod: method,
             paymentStatus: method === "card" ? "pending" : "pay-on-site",
             promoCode: i === 0 ? promoCodeToApply : null,
             round_mode: i === 0 ? appliedPromoRef.current?.round_mode ?? null : null,
-            promoDiscount: booking.promoDiscount,
+            promoDiscount: bookingPromoDiscount,
             notes: state.additionalInfo,
           }),
         });
@@ -749,7 +780,7 @@ export function useBookingWithRouter(urlStep?: string) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.cart, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
+  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
 
   const processPayment = useCallback(() => {
     setState((s) => {

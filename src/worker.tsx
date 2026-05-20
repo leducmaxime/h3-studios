@@ -791,6 +791,9 @@ const app = defineApp([
         return jsonError(`Les réservations ne peuvent pas dépasser ${maxAdvanceDays} jours à l'avance`, 400);
       }
 
+      const isZeroTotal = body.price === 0;
+      const bookingPaymentStatus = isZeroTotal ? "paid" : body.paymentStatus;
+
       const booking = await createBooking(env.DB, {
         booking_ref: body.bookingRef,
         user_id: clientUser.id,
@@ -806,7 +809,7 @@ const app = defineApp([
         total_price: body.price,
         equipment: JSON.stringify(body.equipment),
         payment_method: body.paymentMethod,
-        payment_status: body.paymentStatus,
+        payment_status: bookingPaymentStatus,
         notes: body.notes || null,
         round_mode: body.round_mode || "none",
         round_value: null,
@@ -814,6 +817,17 @@ const app = defineApp([
         cancelled_at: null,
         cancel_reason: null,
       });
+
+      // Auto-create a 0€ payment record for fully discounted bookings
+      if (isZeroTotal) {
+        await addPayment(env.DB, {
+          booking_id: booking.id,
+          amount: 0,
+          method: body.paymentMethod,
+          status: "paid",
+          paid_at: new Date().toISOString(),
+        });
+      }
 
       if (body.promoCode) {
         await env.DB.prepare(
@@ -834,7 +848,7 @@ const app = defineApp([
           equipmentPrice: body.equipmentPrice,
           totalPrice: body.price,
           paymentMethod: body.paymentMethod,
-          paymentStatus: body.paymentStatus,
+          paymentStatus: bookingPaymentStatus,
           userName: name,
           userEmail: email,
           userPhone: phone,
