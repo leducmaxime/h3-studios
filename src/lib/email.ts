@@ -1,0 +1,309 @@
+import { type EquipmentSelection, STUDIOS, EQUIPMENT, formatPrice } from "@/lib/booking";
+
+export interface BookingConfirmationData {
+  bookingRef: string;
+  studioId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  groupType: string;
+  equipment: EquipmentSelection[];
+  equipmentPrice: number;
+  totalPrice: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  promoCode?: string | null;
+  promoDiscount?: number;
+}
+
+function formatDateFrench(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  return date.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatDateShort(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  return date.toLocaleDateString("fr-FR", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function formatTimeRange(startTime: string, endTime: string): string {
+  if (endTime === "00:00") {
+    return `${startTime} → 00:00`;
+  }
+  return `${startTime} → ${endTime}`;
+}
+
+function getGroupTypeLabel(groupType: string): string {
+  const labels: Record<string, string> = {
+    solo: "Solo / Prof particulier",
+    duo: "Duo",
+    group: "Groupe (3+)",
+  };
+  return labels[groupType] || groupType;
+}
+
+function getPaymentMethodLabel(method: string, status: string): string {
+  if (method === "card" && status === "pending") {
+    return "Paiement en ligne (en cours)";
+  }
+  if (method === "card" && status === "paid") {
+    return "Carte bancaire";
+  }
+  if (method === "cash" || status === "pay-on-site") {
+    return "Paiement sur place (espèces ou CB)";
+  }
+  return method;
+}
+
+function getStudioName(studioId: string): string {
+  return STUDIOS[studioId as keyof typeof STUDIOS]?.name || studioId;
+}
+
+function buildEquipmentList(equipment: EquipmentSelection[]): string {
+  if (!equipment || equipment.length === 0) {
+    return "Aucun matériel supplémentaire";
+  }
+  return equipment
+    .map((item) => {
+      const eq = EQUIPMENT[item.id as keyof typeof EQUIPMENT];
+      if (!eq) return null;
+      return `${eq.name} ×${item.quantity}`;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function buildEmailHtml(data: BookingConfirmationData): string {
+  const studioName = getStudioName(data.studioId);
+  const dateLabel = formatDateFrench(data.date);
+  const timeLabel = formatTimeRange(data.startTime, data.endTime);
+  const groupLabel = getGroupTypeLabel(data.groupType);
+  const paymentLabel = getPaymentMethodLabel(data.paymentMethod, data.paymentStatus);
+  const equipmentLabel = buildEquipmentList(data.equipment);
+  const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
+
+  return `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirmation de réservation - H3 Studios</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td align="center" style="padding:40px 20px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#111111;border-radius:16px;overflow:hidden;border:1px solid #222222;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:40px 30px;text-align:center;border-bottom:2px solid #facc15;">
+              <img src="https://h3-studios.fr/images/logo.png" alt="H3 Studios" width="140" style="display:block;margin:0 auto 12px auto;" />
+              <p style="margin:0;color:#888888;font-size:13px;letter-spacing:3px;text-transform:uppercase;">Salle de répétition &amp; studio d'enregistrement</p>
+            </td>
+          </tr>
+          
+          <!-- Main Content -->
+          <tr>
+            <td style="padding:40px 30px 30px 30px;">
+              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;">Votre réservation est confirmée !</h2>
+              <p style="margin:0 0 30px 0;color:#aaaaaa;font-size:15px;line-height:1.6;">
+                Bonjour ${data.userName},<br>
+                Nous avons bien enregistré votre réservation. Voici les détails :
+              </p>
+              
+              <!-- Booking Ref Badge -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+                <tr>
+                  <td style="background-color:#1a1a1a;border:1px solid #333333;border-radius:12px;padding:20px;text-align:center;">
+                    <p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Référence de réservation</p>
+                    <p style="margin:0;color:#facc15;font-size:24px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${data.bookingRef}</p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Details Grid -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+                <tr>
+                  <td width="50%" valign="top" style="padding-right:8px;padding-bottom:16px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Studio</p>
+                          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${studioName}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td width="50%" valign="top" style="padding-left:8px;padding-bottom:16px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
+                          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${groupLabel}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td width="50%" valign="top" style="padding-right:8px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Date</p>
+                          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${dateLabel}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td width="50%" valign="top" style="padding-left:8px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Horaire</p>
+                          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${timeLabel}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Equipment -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+                    <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Matériel supplémentaire</p>
+                    <p style="margin:0;color:#ffffff;font-size:14px;line-height:1.5;">${equipmentLabel}</p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Price Breakdown -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;border-top:1px solid #333333;padding-top:20px;">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 12px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Récapitulatif</p>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Répétition (${studioName})</td>
+                        <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.totalPrice - data.equipmentPrice + (data.promoDiscount || 0))}</td>
+                      </tr>
+                      ${data.equipmentPrice > 0 ? `
+                      <tr>
+                        <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Matériel</td>
+                        <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.equipmentPrice)}</td>
+                      </tr>
+                      ` : ""}
+                      ${hasPromo ? `
+                      <tr>
+                        <td style="padding:6px 0;color:#facc15;font-size:14px;">Code promo ${data.promoCode}</td>
+                        <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
+                      </tr>
+                      ` : ""}
+                      <tr>
+                        <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;color:#ffffff;font-size:16px;font-weight:600;">Total</td>
+                        <td align="right" style="padding:6px 0;color:#facc15;font-size:20px;font-weight:700;">${formatPrice(data.totalPrice)}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Payment Method -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+                <tr>
+                  <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;border-left:3px solid #facc15;">
+                    <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Mode de paiement</p>
+                    <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${paymentLabel}</p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Important Info -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background-color:#1a1500;border-radius:10px;padding:16px;border:1px solid #332200;">
+                    <p style="margin:0 0 8px 0;color:#facc15;font-size:13px;font-weight:600;">📍 Informations importantes</p>
+                    <p style="margin:0;color:#aaaaaa;font-size:13px;line-height:1.6;">
+                      <strong style="color:#ffffff;">Adresse :</strong> 13 Rue François de Tessan, 94370 Sucy-en-Brie<br>
+                      <strong style="color:#ffffff;">Accès :</strong> RER A - Gare de Sucy - Bonneuil (5 min à pied)<br>
+                      <strong style="color:#ffffff;">Annulation :</strong> Vous pouvez annuler jusqu'à 24h avant votre créneau depuis votre espace client.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#0a0a0a;padding:30px;text-align:center;border-top:1px solid #222222;">
+              <p style="margin:0 0 8px 0;color:#666666;font-size:13px;">H3 Studios - Salle de répétition &amp; studio d'enregistrement</p>
+              <p style="margin:0 0 16px 0;color:#555555;font-size:12px;">13 Rue François de Tessan, 94370 Sucy-en-Brie</p>
+              <p style="margin:0;color:#444444;font-size:11px;">
+                <a href="https://staging.h3-studios.fr" style="color:#888888;text-decoration:none;">h3-studios.fr</a> &nbsp;|&nbsp;
+                <a href="mailto:contact@h3-studios.fr" style="color:#888888;text-decoration:none;">contact@h3-studios.fr</a>
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+export async function sendBookingConfirmationEmail(
+  apiKey: string,
+  data: BookingConfirmationData
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const html = buildEmailHtml(data);
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "H3 Studios <contact@h3-studios.fr>",
+        to: data.userEmail,
+        subject: `✅ Réservation confirmée — ${formatDateShort(data.date)} · ${data.startTime}→${data.endTime === '00:00' ? '00:00' : data.endTime} — H3 Studios`,
+        html,
+        reply_to: "contact@h3-studios.fr",
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorData = await resendResponse.text();
+      console.error("Resend API error (booking confirmation):", errorData);
+      return { success: false, error: errorData };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending booking confirmation email:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
