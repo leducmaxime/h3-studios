@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History } from "lucide-react";
+import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, User } from "lucide-react";
 import { getParisDateISO } from "@/lib/utils";
 
 interface ClientUser {
@@ -130,9 +130,32 @@ export function ClientAccount() {
   return (
     <div className="min-h-[80vh] bg-black px-4 pt-32 pb-16">
       <div className="container max-w-4xl mx-auto">
-        <div className="mb-12 text-center">
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes réservations</h1>
-          <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+        <div className="mb-12">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes réservations</h1>
+              <div className="mx-auto sm:mx-0 mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+            </div>
+            <div className="flex items-center gap-3 justify-center sm:justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                onClick={() => navigate("/mon-compte/profil")}
+              >
+                <User className="h-4 w-4 mr-2" />
+                Mon profil
+              </Button>
+              <Button
+                className="bg-primary text-black hover:bg-primary/90"
+                size="sm"
+                onClick={() => navigate("/reservation")}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Nouvelle réservation
+              </Button>
+            </div>
+          </div>
         </div>
 
         <section className="mb-10">
@@ -206,7 +229,7 @@ function BookingCard({ booking }: { booking: BookingRow }) {
   const payment = PAYMENT_CONFIG[booking.payment_status || ""] ?? { label: booking.payment_status || "—", bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
   const studio = STUDIO_LABELS[booking.studio_id] ?? booking.studio_id;
   const group = GROUP_LABELS[booking.group_type] ?? booking.group_type;
-  const isPast = booking.date < new Date().toISOString().slice(0, 10) || ["cancelled", "completed", "no-show"].includes(booking.status);
+  const isPast = booking.date < getParisDateISO() || ["cancelled", "completed", "no-show"].includes(booking.status);
 
   return (
     <div className={`group bg-zinc-900/50 border rounded-2xl p-5 transition-all duration-200 hover:bg-zinc-900/70 ${isPast ? "border-zinc-800/50" : "border-zinc-800 hover:border-zinc-700"}`}>

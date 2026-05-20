@@ -3648,7 +3648,7 @@ const app = defineApp([
 
     try {
       const user = await requireClientAuth(request, env.DB);
-      const bookings = await getBookings(env.DB, { userId: user.id }, 1, 100);
+      const bookings = await getBookings(env.DB, { userId: user.id }, 1, 500);
 
       // Transform past confirmed bookings to completed (same logic as admin API)
       const parisNow = getParisNow();
