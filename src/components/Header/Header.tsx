@@ -100,7 +100,7 @@ export function Header() {
   return (
     <header
       className={`fixed left-0 right-0 top-0 z-50 font-secondary transition-all duration-300 ${
-        sticky ? "bg-black/90 backdrop-blur-sm" : "bg-transparent"
+        sticky ? "bg-black border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)]" : "bg-transparent"
       }`}
     >
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
