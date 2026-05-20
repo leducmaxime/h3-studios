@@ -79,6 +79,10 @@ interface CollectContext {
   totalPaid: number;
   remaining: number;
   bookingPaymentMethod: BookingPaymentMethod;
+  promoCode: string | null;
+  promoCodeType: string | null;
+  promoCodeValue: number | null;
+  promoDiscount: number;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -454,6 +458,9 @@ export function AdminPayments() {
         booking_ref: string;
         total_price: number;
         promo_discount: number;
+        promo_code?: string | null;
+        promo_code_type?: string | null;
+        promo_code_value?: number | null;
         payment_method: BookingPaymentMethod;
         band_name?: string | null;
         user_name?: string | null;
@@ -477,6 +484,10 @@ export function AdminPayments() {
         totalPaid,
         remaining,
         bookingPaymentMethod: booking.payment_method || null,
+        promoCode: booking.promo_code || null,
+        promoCodeType: booking.promo_code_type || null,
+        promoCodeValue: booking.promo_code_value ?? null,
+        promoDiscount: booking.promo_discount || 0,
       });
 
       setCollectEntries([
@@ -984,6 +995,15 @@ export function AdminPayments() {
                 <>
                   {collectContext.userName || collectContext.bookingRef} · Reste à payer :{" "}
                   <span className="font-semibold text-foreground">{formatPrice(collectTotals.remainingStart)}</span>
+                  {collectContext.promoCode && (
+                    <span className="ml-2 text-xs text-primary">
+                      Promo: {collectContext.promoCode}
+                      {collectContext.promoCodeType && collectContext.promoCodeValue != null && (
+                        <> ({collectContext.promoCodeType === "percentage" ? `-${collectContext.promoCodeValue}%` : `-${formatPrice(collectContext.promoCodeValue)}`})</>
+                      )}
+                      {collectContext.promoDiscount > 0 && <> · -{formatPrice(collectContext.promoDiscount)} appliqué</>}
+                    </span>
+                  )}
                 </>
               ) : (
                 "Chargement..."

@@ -98,7 +98,9 @@ export interface DbBooking {
   notes: string | null;
   round_mode: "down" | "up" | "none";
   round_value: number | null;
+  promo_code: string | null;
   promo_discount: number;
+  promo_type: string | null;
   created_at: string;
   updated_at: string;
   cancelled_at: string | null;

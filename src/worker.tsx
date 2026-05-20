@@ -1379,7 +1379,12 @@ const app = defineApp([
 
     if (request.method === "GET") {
       try {
-        const booking = await getBookingById(env.DB, id);
+        const booking = await env.DB.prepare(`
+          SELECT b.*, pc.type as promo_code_type, pc.value as promo_code_value
+          FROM bookings b
+          LEFT JOIN promo_codes pc ON b.promo_code = pc.code
+          WHERE b.id = ?
+        `).bind(id).first<DbBooking & { promo_code_type: string | null; promo_code_value: number | null }>();
         if (!booking) return jsonError("Réservation introuvable", 404);
         return jsonSuccess(booking);
       } catch (error) {

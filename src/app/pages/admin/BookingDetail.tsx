@@ -42,6 +42,11 @@ import {
 } from "@/components/ui/select";
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
+
+interface BookingWithPromo extends DbBooking {
+  promo_code_type?: string | null;
+  promo_code_value?: number | null;
+}
 import { generateInvoicePDF } from "@/lib/export";
 
 function formatDate(dateStr: string): string {
@@ -84,7 +89,7 @@ interface EquipmentInfo {
 }
 
 export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
-  const [booking, setBooking] = useState<DbBooking | null>(null);
+  const [booking, setBooking] = useState<BookingWithPromo | null>(null);
   const [user, setUser] = useState<DbUser | null>(null);
   const [payments, setPayments] = useState<DbPayment[]>([]);
   const [equipment, setEquipment] = useState<EquipmentInfo[]>([]);
@@ -118,7 +123,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       const res = await fetch(`/api/admin/bookings/${bookingId}`);
       const json = (await res.json()) as { success: boolean; data?: DbBooking; error?: string };
       if (json.success && json.data) {
-        setBooking(json.data);
+        setBooking(json.data as BookingWithPromo);
         setNewDate(json.data.date);
         setNewStartTime(json.data.start_time);
         setNewEndTime(json.data.end_time);
@@ -442,14 +447,19 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm flex items-center gap-2">
                         Réduction
-                        {/* {booking.promo_code && (
+                        {booking.promo_code && (
                           <span className="px-2 py-0.5 rounded bg-primary/10 text-xs">{booking.promo_code}</span>
-                        )} */}
+                        )}
+                        {booking.promo_code_type && booking.promo_code_value != null && (
+                          <span className="text-xs text-zinc-400">
+                            ({booking.promo_code_type === "percentage" ? `-${booking.promo_code_value}%` : `-${formatPrice(booking.promo_code_value || 0)}`})
+                          </span>
+                        )}
                       </span>
                       <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
                     </div>
                   )}
-                  {/* {booking.promo_code && booking.promo_discount === 0 && (
+                  {booking.promo_code && booking.promo_discount === 0 && (
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm flex items-center gap-2">
                         Code promo
@@ -457,7 +467,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       </span>
                       <span className="font-medium text-zinc-500">-</span>
                     </div>
-                  )} */}
+                  )}
                   <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
                     <span className="font-semibold">Total</span>
                     <span className="text-xl font-bold text-primary">{formatPrice(finalTotal)}</span>
