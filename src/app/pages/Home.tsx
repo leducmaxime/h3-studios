@@ -50,8 +50,8 @@ export function Home() {
                 href="/reservation"
                 className="group inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 md:px-12 md:py-5 md:text-2xl"
               >
-                Réserver maintenant
                 <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1 md:h-7 md:w-7" />
+                Réserver maintenant
               </a>
               <a
                 href="/les-studios"
