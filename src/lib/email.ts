@@ -324,7 +324,8 @@ function buildEmailHtml(data: BookingConfirmationData): string {
                     <p style="margin:0;color:#aaaaaa;font-size:13px;line-height:1.6;">
                       <strong style="color:#ffffff;">Adresse :</strong> <a href="https://maps.google.com/?q=3+Rue+de+la+Grande+Ceinture+94370+Sucy-en-Brie" style="color:#facc15;text-decoration:none;">3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie</a><br>
                       <strong style="color:#ffffff;">Accès :</strong> RER A - Gare de Sucy - Bonneuil (2 min à pied)<br>
-                      <strong style="color:#ffffff;">Modification :</strong> pour toute modification, veuillez nous contacter au plus tôt au <a href="tel:+33613440875" style="color:#facc15;text-decoration:none;">06.13.44.08.75</a>.
+                      <strong style="color:#ffffff;">Modification :</strong> pour toute modification, veuillez nous contacter au plus tôt au <a href="tel:+33613440875" style="color:#facc15;text-decoration:none;">06.13.44.08.75</a>.<br>
+                      <strong style="color:#ffffff;">Horaire :</strong> merci de respecter votre créneau de réservation.
                     </p>
                   </td>
                 </tr>
@@ -335,7 +336,6 @@ function buildEmailHtml(data: BookingConfirmationData): string {
           <!-- Footer -->
           <tr>
             <td style="background-color:#0a0a0a;padding:30px;text-align:center;border-top:1px solid #222222;">
-              <p style="margin:0 0 8px 0;color:#666666;font-size:13px;">H3 Studios - Salle de répétition &amp; studio d'enregistrement</p>
               <p style="margin:0 0 16px 0;color:#555555;font-size:12px;">3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie</p>
               <p style="margin:0;color:#444444;font-size:11px;">
                 <a href="https://staging.h3-studios.fr" style="color:#888888;text-decoration:none;">h3-studios.fr</a> &nbsp;|&nbsp;
