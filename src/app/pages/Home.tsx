@@ -163,8 +163,8 @@ export function Home() {
         </div>
 
         {/* Dark overlays */}
-        <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/70 via-black/60 to-black/90" />
-        <div className="absolute inset-0 z-[2] bg-gradient-to-r from-black/50 via-transparent to-black/50" />
+        <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/40 via-black/30 to-black/60" />
+        <div className="absolute inset-0 z-[2] bg-gradient-to-r from-black/30 via-transparent to-black/30" />
 
         {/* Animated grain texture */}
         <div
