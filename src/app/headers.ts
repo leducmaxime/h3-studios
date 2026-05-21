@@ -22,12 +22,11 @@ export const setCommonHeaders =
         `default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' 'nonce-${nonce}' https://challenges.cloudflare.com https://www.googletagmanager.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://maps.googleapis.com https://maps.gstatic.com https://*.google.com https://*.ggpht.com https://www.googletagmanager.com https://www.google-analytics.com https://*.cdninstagram.com; frame-ancestors 'self'; frame-src 'self' https://challenges.cloudflare.com https://www.google.com; connect-src 'self' https://maps.googleapis.com https://www.google-analytics.com https://www.googletagmanager.com; object-src 'none';`,
       );
 
-    response.headers.set(
-      "Cache-Control",
-      "public, max-age=0, s-maxage=31536000, must-revalidate",
-    );
-    
-    response.headers.set("CDN-Cache-Control", "max-age=31536000");
-    
-    response.headers.set("Cloudflare-CDN-Cache-Control", "max-age=31536000");
+    // Only set default Cache-Control if not already set by an endpoint
+    if (!response.headers.has("Cache-Control")) {
+      response.headers.set(
+        "Cache-Control",
+        "no-cache, no-store, must-revalidate",
+      );
+    }
   };
