@@ -1,7 +1,7 @@
 "use client";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
-import { Music, Radio, Calendar } from "lucide-react";
+import { Music, Radio, Calendar, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const services = [
@@ -81,6 +81,18 @@ export function Home() {
               </div>
             );
           })}
+        </div>
+
+        {/* Quote */}
+        <div className={`mx-auto mt-20 max-w-3xl text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "600ms" }}>
+          <div className="mb-6 flex justify-center">
+            <Star className="h-8 w-8 text-primary/60" />
+          </div>
+          <blockquote className="text-xl font-light italic leading-relaxed text-white/80 md:text-2xl">
+            "La musique est le langage universel qui transcende les mots. Notre mission est de vous offrir un espace où chaque note trouve sa place."
+          </blockquote>
+          <div className="mt-4 h-1 w-16 mx-auto rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          <p className="mt-4 text-sm font-semibold text-primary">H3 Studios</p>
         </div>
       </div>
     </div>
