@@ -185,6 +185,7 @@ export function Reservation({ step }: ReservationProps) {
     const peakHours = peakSlots.length * 0.5;
     const offPeakRate = offPeakSlots.length > 0 ? offPeakSlots[0].rate : 0;
     const peakRate = peakSlots.length > 0 ? peakSlots[0].rate : 0;
+    const anyRate = priceResult.breakdown.length > 0 ? priceResult.breakdown[0].rate : 0;
     const offPeakSubtotal = offPeakHours * offPeakRate;
     const peakSubtotal = peakHours * peakRate;
     const hasPeakPricing = gt === "group";
@@ -246,7 +247,7 @@ export function Reservation({ step }: ReservationProps) {
               </>
             ) : (
               <div className="flex items-center justify-between">
-                <span className="text-white/60">{durationH}h x {offPeakRate}€/h</span>
+                <span className="text-white/60">{durationH}h x {anyRate}€/h</span>
                 <span>{formatPrice(total)}</span>
               </div>
             )}

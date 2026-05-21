@@ -279,7 +279,8 @@ export function isStudioAvailableForGroup(
   studioId: StudioId,
   startTime: string,
   endTime: string,
-  occupancy: Set<OccupancyInfo>
+  occupancy: Set<OccupancyInfo>,
+  date: Date
 ): boolean {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
@@ -287,6 +288,7 @@ export function isStudioAvailableForGroup(
   const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
 
   const otherStudioId = studioId === "la-scene" ? "le-podium" : "la-scene";
+  const otherStudioSlots = getStudioTimeSlots(otherStudioId, date);
 
   for (const slot of range) {
     const occupant = Array.from(occupancy).find(o => o.studioId === studioId && o.time === slot);
@@ -296,10 +298,10 @@ export function isStudioAvailableForGroup(
       return false; // Group or blocked = not available
     }
 
-    // Solo/duo - check if other studio is free at this slot
+    // Solo/duo - check if other studio is free AND open at this slot
     const otherOccupant = Array.from(occupancy).find(o => o.studioId === otherStudioId && o.time === slot);
-    if (otherOccupant) {
-      return false; // Other studio also occupied = can't displace
+    if (otherOccupant || !otherStudioSlots.includes(slot)) {
+      return false; // Other studio occupied or closed = can't displace
     }
   }
 
@@ -313,11 +315,12 @@ export function isStudioAvailableForGroup(
 export function isAnyStudioAvailableForGroup(
   startTime: string,
   endTime: string,
-  occupancy: Set<OccupancyInfo>
+  occupancy: Set<OccupancyInfo>,
+  date: Date
 ): boolean {
   return (
-    isStudioAvailableForGroup("la-scene", startTime, endTime, occupancy) ||
-    isStudioAvailableForGroup("le-podium", startTime, endTime, occupancy)
+    isStudioAvailableForGroup("la-scene", startTime, endTime, occupancy, date) ||
+    isStudioAvailableForGroup("le-podium", startTime, endTime, occupancy, date)
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { ChevronLeft, Clock, Zap, ArrowRight } from "lucide-react";
 import {
   getStudioTimeSlots,
@@ -55,6 +55,13 @@ export function TimeSlotPicker({
   const [selectedEnd, setSelectedEnd] = useState<string | null>(endTime);
   const [hoveredEndSlot, setHoveredEndSlot] = useState<string | null>(null);
 
+  // Sync local state with parent props when they reset (e.g. studio assignment failed)
+  useEffect(() => {
+    setSelectedStart(startTime);
+    setSelectedEnd(endTime);
+    setSelectionMode(startTime && endTime ? "done" : startTime ? "end" : "start");
+  }, [startTime, endTime]);
+
   const hasPeakPricing = groupType === "group";
 
   const visibleSlots = useMemo(() => {
@@ -73,6 +80,9 @@ export function TimeSlotPicker({
     if (sceneClose === "00:00" || podiumClose === "00:00") return "00:00";
     return sceneClose > podiumClose ? sceneClose : podiumClose;
   }, [studioFilter, date]);
+
+  const sceneTimeSlots = useMemo(() => getStudioTimeSlots("la-scene", date), [date]);
+  const podiumTimeSlots = useMemo(() => getStudioTimeSlots("le-podium", date), [date]);
 
   const occupancyArray = useMemo(() => {
     const items = Array.from(availability as Set<unknown>);
@@ -113,10 +123,11 @@ export function TimeSlotPicker({
           return true;
         }
 
-        // Occupied by solo/duo - available only if other studio is free
+        // Occupied by solo/duo - available only if other studio is free and open
         const otherStudio = studioFilter === "la-scene" ? "le-podium" : "la-scene";
         const otherOccupant = isOccupiedBy(otherStudio, time);
-        return !!otherOccupant;
+        const otherOpen = (otherStudio === "la-scene" ? sceneTimeSlots : podiumTimeSlots).includes(time);
+        return !!otherOccupant || !otherOpen;
       }
 
       // SANS studioFilter
@@ -124,15 +135,19 @@ export function TimeSlotPicker({
       const podiumOccupant = isOccupiedBy("le-podium", time);
 
       if (groupType !== "group") {
-        // Solo/Duo: unavailable only if BOTH studios are occupied
-        return !!(sceneOccupant && podiumOccupant);
+        // Solo/Duo: unavailable only if BOTH studios are occupied OR closed
+        const sceneAvailable = !sceneOccupant && sceneTimeSlots.includes(time);
+        const podiumAvailable = !podiumOccupant && podiumTimeSlots.includes(time);
+        return !(sceneAvailable || podiumAvailable);
       }
 
-      // Groupe: unavailable if no studio is available
-      const sceneAvailable = !sceneOccupant ||
-        ((sceneOccupant.groupType === "solo" || sceneOccupant.groupType === "duo") && !podiumOccupant);
-      const podiumAvailable = !podiumOccupant ||
-        ((podiumOccupant.groupType === "solo" || podiumOccupant.groupType === "duo") && !sceneOccupant);
+      // Groupe: unavailable if no studio is available (open and free, or displaceable to open studio)
+      const sceneOpen = sceneTimeSlots.includes(time);
+      const podiumOpen = podiumTimeSlots.includes(time);
+      const sceneAvailable = (!sceneOccupant && sceneOpen) ||
+        ((sceneOccupant?.groupType === "solo" || sceneOccupant?.groupType === "duo") && !podiumOccupant && podiumOpen);
+      const podiumAvailable = (!podiumOccupant && podiumOpen) ||
+        ((podiumOccupant?.groupType === "solo" || podiumOccupant?.groupType === "duo") && !sceneOccupant && sceneOpen);
 
       return !(sceneAvailable || podiumAvailable);
     },

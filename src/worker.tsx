@@ -870,8 +870,10 @@ const app = defineApp([
         ).bind(body.promoCode.trim().toUpperCase()).run();
       }
 
-      // Send booking confirmation email
-      if (env.RESEND_API_KEY) {
+      // Send booking confirmation email immediately for non-card payments
+      // (cash/on-site or zero-total). For card payments, email is sent after
+      // Stripe webhook confirms payment.
+      if (env.RESEND_API_KEY && bookingPaymentStatus !== "pending") {
         const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
           bookingRef: booking.booking_ref,
           studioId: body.studioId,
@@ -3985,6 +3987,35 @@ const app = defineApp([
         await env.DB.prepare(
           "UPDATE bookings SET payment_status = 'paid' WHERE id = ?"
         ).bind(booking.id).run();
+
+        // Send booking confirmation email now that card payment is confirmed
+        if (env.RESEND_API_KEY) {
+          const user = await getUserById(env.DB, booking.user_id);
+          if (user && user.email) {
+            const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
+              bookingRef: booking.booking_ref,
+              studioId: booking.studio_id,
+              date: booking.date,
+              startTime: booking.start_time,
+              endTime: booking.end_time,
+              groupType: booking.group_type,
+              equipment: booking.equipment ? JSON.parse(booking.equipment) : [],
+              equipmentPrice: booking.equipment_price,
+              totalPrice: booking.total_price,
+              paymentMethod: "card",
+              paymentStatus: "paid",
+              userName: user.name,
+              userEmail: user.email,
+              userPhone: user.phone || "",
+              promoCode: booking.promo_code,
+              promoDiscount: booking.promo_discount,
+              promoType: booking.promo_type,
+            }).catch((err) => {
+              console.error(`Webhook: Failed to send booking confirmation email for ${ref}:`, err);
+            });
+            waitUntil(emailPromise);
+          }
+        }
       }
 
       return new Response("OK", { status: 200 });
