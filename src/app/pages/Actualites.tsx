@@ -1,8 +1,15 @@
 "use client";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
-import { Instagram, ExternalLink, Calendar, X, Play } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Instagram, ExternalLink, Calendar, X, Play, ChevronLeft, ChevronRight, Images } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+
+interface InstagramChild {
+  id: string;
+  media_type: string;
+  media_url: string;
+  thumbnail_url?: string;
+}
 
 interface InstagramPost {
   id: string;
@@ -12,6 +19,7 @@ interface InstagramPost {
   permalink: string;
   thumbnail_url?: string;
   timestamp: string;
+  children?: InstagramChild[];
 }
 
 export function Actualites() {
@@ -19,6 +27,8 @@ export function Actualites() {
   const [posts, setPosts] = useState<InstagramPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<InstagramPost | null>(null);
+  const [carouselIndex, setCarouselIndex] = useState<Record<string, number>>({});
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
 
   useEffect(() => {
     setIsVisible(true);
@@ -43,12 +53,36 @@ export function Actualites() {
 
   const openPost = (post: InstagramPost) => {
     setSelectedPost(post);
+    setPlayingVideo(null);
     document.body.style.overflow = "hidden";
   };
 
   const closePost = () => {
     setSelectedPost(null);
+    setPlayingVideo(null);
     document.body.style.overflow = "";
+  };
+
+  const nextCarouselImage = useCallback((postId: string, total: number) => {
+    setCarouselIndex(prev => ({
+      ...prev,
+      [postId]: ((prev[postId] || 0) + 1) % total
+    }));
+  }, []);
+
+  const prevCarouselImage = useCallback((postId: string, total: number) => {
+    setCarouselIndex(prev => ({
+      ...prev,
+      [postId]: ((prev[postId] || 0) - 1 + total) % total
+    }));
+  }, []);
+
+  const getCurrentImage = (post: InstagramPost) => {
+    if (post.children && post.children.length > 0) {
+      const idx = carouselIndex[post.id] || 0;
+      return post.children[idx];
+    }
+    return { media_url: post.media_url, thumbnail_url: post.thumbnail_url, media_type: post.media_type };
   };
 
   return (
@@ -94,43 +128,93 @@ export function Actualites() {
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {posts.map((post, i) => (
-              <div
-                key={post.id}
-                onClick={() => openPost(post)}
-                className={`group cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent text-left transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_30px_rgba(249,176,53,0.1)] ${
-                  isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
-                }`}
-                style={{ transitionDelay: `${300 + i * 100}ms` }}
-              >
-                <div className="relative aspect-square overflow-hidden bg-zinc-900">
-                  <img
-                    src={`/api/instagram/proxy-image?url=${encodeURIComponent(post.media_url || post.thumbnail_url || '')}`}
-                    alt={post.caption}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    loading="lazy"
-                    onError={(e) => {
-                      console.error('Image failed to load:', post.media_url);
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                  {post.media_type === "VIDEO" && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/80">
-                        <Play className="h-8 w-8 text-black" fill="currentColor" />
+            {posts.map((post, i) => {
+              const currentImage = getCurrentImage(post);
+              const hasCarousel = post.children && post.children.length > 1;
+              const isVideo = post.media_type === "VIDEO";
+
+              return (
+                <div
+                  key={post.id}
+                  onClick={() => openPost(post)}
+                  className={`group cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent text-left transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_30px_rgba(249,176,53,0.1)] ${
+                    isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+                  }`}
+                  style={{ transitionDelay: `${300 + i * 100}ms` }}
+                >
+                  <div className="relative aspect-square overflow-hidden bg-zinc-900">
+                    <img
+                      src={`/api/instagram/proxy-image?url=${encodeURIComponent(currentImage.media_url || currentImage.thumbnail_url || '')}`}
+                      alt={post.caption}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      loading="lazy"
+                      onError={(e) => {
+                        console.error('Image failed to load:', currentImage.media_url);
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    
+                    {/* Video overlay with play button */}
+                    {isVideo && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/80">
+                          <Play className="h-8 w-8 text-black" fill="currentColor" />
+                        </div>
                       </div>
+                    )}
+
+                    {/* Carousel indicator */}
+                    {hasCarousel && (
+                      <>
+                        <div className="absolute right-3 top-3 flex h-7 items-center gap-1 rounded-full bg-black/60 px-2.5 text-xs text-white">
+                          <Images className="h-3.5 w-3.5" />
+                          {post.children!.length}
+                        </div>
+                        {/* Carousel dots */}
+                        <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                          {post.children!.map((_, idx) => (
+                            <div
+                              key={idx}
+                              className={`h-1.5 w-1.5 rounded-full transition-all ${
+                                idx === (carouselIndex[post.id] || 0)
+                                  ? "w-4 bg-white"
+                                  : "bg-white/50"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        {/* Hover carousel arrows */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            prevCarouselImage(post.id, post.children!.length);
+                          }}
+                          className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nextCarouselImage(post.id, post.children!.length);
+                          }}
+                          className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <p className="mb-2 line-clamp-2 text-sm text-white/70">{post.caption || "Publication Instagram"}</p>
+                    <div className="flex items-center gap-2 text-xs text-white/50">
+                      <Calendar className="h-3 w-3" />
+                      {formatDate(post.timestamp)}
                     </div>
-                  )}
-                </div>
-                <div className="p-4">
-                  <p className="mb-2 line-clamp-2 text-sm text-white/70">{post.caption || "Publication Instagram"}</p>
-                  <div className="flex items-center gap-2 text-xs text-white/50">
-                    <Calendar className="h-3 w-3" />
-                    {formatDate(post.timestamp)}
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -139,7 +223,7 @@ export function Actualites() {
             href="https://www.instagram.com/h3_studios_sucy"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-all hover:bg-primary/90"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3.5 text-sm font-semibold text-black transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20"
           >
             <Instagram className="h-5 w-5" />
             Voir toutes les publications
@@ -164,7 +248,29 @@ export function Actualites() {
             </button>
             
             <div className="relative aspect-square bg-zinc-900">
-              {selectedPost.media_type === "VIDEO" ? (
+              {selectedPost.media_type === "VIDEO" && !playingVideo ? (
+                /* Video preview with play button */
+                <div className="relative h-full w-full">
+                  <img
+                    src={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.thumbnail_url || selectedPost.media_url)}`}
+                    alt={selectedPost.caption}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      console.error('Thumbnail failed to load:', selectedPost.thumbnail_url);
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <div 
+                    className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer"
+                    onClick={() => setPlayingVideo(selectedPost.id)}
+                  >
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/80 transition-transform hover:scale-110">
+                      <Play className="h-10 w-10 text-black" fill="currentColor" />
+                    </div>
+                  </div>
+                </div>
+              ) : selectedPost.media_type === "VIDEO" && playingVideo === selectedPost.id ? (
+                /* Video player */
                 <video
                   src={selectedPost.media_url}
                   poster={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.thumbnail_url || selectedPost.media_url)}`}
@@ -175,7 +281,54 @@ export function Actualites() {
                     console.error('Video failed to load:', selectedPost.media_url);
                   }}
                 />
+              ) : selectedPost.children && selectedPost.children.length > 1 ? (
+                /* Carousel in modal */
+                <div className="relative h-full w-full">
+                  <img
+                    src={`/api/instagram/proxy-image?url=${encodeURIComponent(
+                      selectedPost.children[carouselIndex[selectedPost.id] || 0]?.media_url || selectedPost.media_url
+                    )}`}
+                    alt={selectedPost.caption}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      console.error('Carousel image failed to load');
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  {/* Modal carousel controls */}
+                  <button
+                    onClick={() => prevCarouselImage(selectedPost.id, selectedPost.children!.length)}
+                    className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => nextCarouselImage(selectedPost.id, selectedPost.children!.length)}
+                    className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                  {/* Modal carousel dots */}
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
+                    {selectedPost.children.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCarouselIndex(prev => ({ ...prev, [selectedPost.id]: idx }))}
+                        className={`h-2 rounded-full transition-all ${
+                          idx === (carouselIndex[selectedPost.id] || 0)
+                            ? "w-6 bg-white"
+                            : "w-2 bg-white/50 hover:bg-white/70"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="absolute right-3 top-3 flex h-7 items-center gap-1 rounded-full bg-black/60 px-2.5 text-xs text-white">
+                    <Images className="h-3.5 w-3.5" />
+                    {(carouselIndex[selectedPost.id] || 0) + 1} / {selectedPost.children.length}
+                  </div>
+                </div>
               ) : (
+                /* Single image */
                 <img
                   src={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.media_url)}`}
                   alt={selectedPost.caption}
@@ -199,7 +352,7 @@ export function Actualites() {
                   href={selectedPost.permalink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-primary/90"
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3.5 text-sm font-semibold text-black transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20"
                 >
                   <Instagram className="h-4 w-4" />
                   Voir sur Instagram

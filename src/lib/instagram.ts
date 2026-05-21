@@ -1,3 +1,10 @@
+export interface InstagramChild {
+  id: string;
+  media_type: string;
+  media_url: string;
+  thumbnail_url?: string;
+}
+
 export interface InstagramPost {
   id: string;
   caption: string;
@@ -6,6 +13,7 @@ export interface InstagramPost {
   permalink: string;
   thumbnail_url?: string;
   timestamp: string;
+  children?: InstagramChild[];
 }
 
 export interface InstagramFeed {
@@ -45,8 +53,9 @@ export async function fetchInstagramFeedFromAPI(accessToken: string): Promise<In
   for (const item of data.data || []) {
     let mediaUrl = item.media_url;
     let thumbnailUrl = item.thumbnail_url;
+    let children: InstagramChild[] | undefined;
 
-    // For carousel albums, fetch the first media item
+    // For carousel albums, fetch all media items
     if (item.media_type === "CAROUSEL_ALBUM") {
       try {
         const childrenResponse = await fetch(
@@ -56,10 +65,11 @@ export async function fetchInstagramFeedFromAPI(accessToken: string): Promise<In
 
         if (childrenResponse.ok) {
           const childrenData = await childrenResponse.json() as {
-            data: Array<{ id: string; media_type: string; media_url: string; thumbnail_url?: string }>;
+            data: InstagramChild[];
           };
 
           if (childrenData.data && childrenData.data.length > 0) {
+            children = childrenData.data;
             const firstChild = childrenData.data[0];
             mediaUrl = firstChild.media_url;
             if (firstChild.thumbnail_url) {
@@ -80,6 +90,7 @@ export async function fetchInstagramFeedFromAPI(accessToken: string): Promise<In
       permalink: item.permalink,
       thumbnail_url: thumbnailUrl,
       timestamp: item.timestamp,
+      children,
     });
   }
 
