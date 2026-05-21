@@ -29,7 +29,7 @@ export function Tarifs() {
         <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
       </div>
 
-      <div className={`mt-4 flex w-full max-w-[1048px] flex-col gap-8 px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+      <div className={`mt-4 flex w-full max-w-[1048px] flex-col gap-8 px-2 sm:px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="flex w-full flex-col items-center gap-8 text-center">
             <div className="text-center font-blanka text-2xl">GRILLE TARIFAIRE</div>

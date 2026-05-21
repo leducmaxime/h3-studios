@@ -283,7 +283,7 @@ export function Home() {
 
       {/* ========== QUICK STATS STRIP ========== */}
       <section className="relative z-10 w-full border-y border-white/5 bg-black/80 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-8 px-4 py-8 md:gap-16 md:py-10">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-8 px-2 sm:px-4 py-8 md:gap-16 md:py-10">
           {[
             { num: "2", label: "Studios professionnels" },
             { num: "77m²", label: "De surface totale" },
@@ -303,7 +303,7 @@ export function Home() {
       </section>
 
       {/* ========== SERVICES ========== */}
-      <section className="w-full px-4 py-20 md:py-28">
+      <section className="w-full px-2 sm:px-4 py-20 md:py-28">
         <div className="mx-auto max-w-6xl">
           <Reveal className="mb-16 text-center">
             <span className="mb-3 block text-sm font-medium uppercase tracking-[0.3em] text-primary/70">
@@ -340,7 +340,7 @@ export function Home() {
       </section>
 
       {/* ========== STUDIOS SHOWCASE ========== */}
-      <section className="w-full px-4 py-20 md:py-28">
+      <section className="w-full px-2 sm:px-4 py-20 md:py-28">
         <div className="mx-auto max-w-6xl">
           <Reveal className="mb-16 text-center">
             <span className="mb-3 block text-sm font-medium uppercase tracking-[0.3em] text-primary/70">
@@ -407,7 +407,7 @@ export function Home() {
         {/* Subtle background gradient */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.02] to-transparent" />
 
-        <div className="relative mx-auto max-w-6xl px-4">
+        <div className="relative mx-auto max-w-6xl px-2 sm:px-4">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             {/* Left: Text content */}
             <div>
@@ -493,7 +493,7 @@ export function Home() {
       </section>
 
       {/* ========== TRUST / SOCIAL PROOF ========== */}
-      <section className="w-full px-4 py-20 md:py-28">
+      <section className="w-full px-2 sm:px-4 py-20 md:py-28">
         <div className="mx-auto max-w-4xl">
           <Reveal className="text-center">
             <div className="relative mx-auto mb-8 flex h-20 w-20 items-center justify-center">
@@ -521,7 +521,7 @@ export function Home() {
       </section>
 
       {/* ========== LOCATION QUICK INFO ========== */}
-      <section className="w-full border-t border-white/5 px-4 py-16">
+      <section className="w-full border-t border-white/5 px-2 sm:px-4 py-16">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-6 md:gap-10">
           {highlights.map((h, i) => {
             const Icon = h.icon;
@@ -544,7 +544,7 @@ export function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.03] to-transparent" />
         <div className="absolute inset-0 opacity-[0.02]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
 
-        <div className="relative mx-auto max-w-3xl px-4 text-center">
+        <div className="relative mx-auto max-w-3xl px-2 sm:px-4 text-center">
           <Reveal>
             <h2 className="font-blanka text-4xl leading-tight text-white md:text-5xl lg:text-6xl">
               PRÊT À JOUER ?

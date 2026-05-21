@@ -46,7 +46,7 @@ export function LesStudios() {
     <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
       <ScrollUp />
 
-      <div className="w-full max-w-5xl px-4">
+      <div className="w-full max-w-5xl px-2 sm:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LES STUDIOS</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
@@ -82,7 +82,7 @@ export function LesStudios() {
         </div>
       </div>
 
-      <div className="w-full max-w-6xl px-4 grid gap-6 lg:grid-cols-2">
+      <div className="w-full max-w-6xl px-2 sm:px-4 grid gap-6 lg:grid-cols-2">
         {studios.map((studio, i) => (
           <div
             key={i}
@@ -121,7 +121,7 @@ export function LesStudios() {
         ))}
       </div>
 
-      <div className={`w-full max-w-6xl px-4 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "500ms" }}>
+      <div className={`w-full max-w-6xl px-2 sm:px-4 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "500ms" }}>
         <a
           href="/le-materiel"
           className="inline-flex items-center justify-center gap-3 rounded-lg border-2 border-primary bg-transparent px-8 py-4 text-lg font-bold text-primary transition-all hover:bg-primary hover:text-black"

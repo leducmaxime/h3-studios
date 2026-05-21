@@ -53,7 +53,7 @@ export function Equipe() {
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
       <ScrollUp />
 
-      <div className="relative w-full px-4">
+      <div className="relative w-full px-2 sm:px-4">
         <div className="mx-auto max-w-6xl">
           <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
             <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">L'ÉQUIPE</h1>

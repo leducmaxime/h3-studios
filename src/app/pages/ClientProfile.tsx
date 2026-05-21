@@ -140,7 +140,7 @@ export function ClientProfile() {
   }
 
   return (
-    <div className="min-h-[80vh] bg-black px-4 pt-32 pb-16">
+    <div className="min-h-[80vh] bg-black px-2 sm:px-4 pt-32 pb-16">
       <div className="container max-w-3xl mx-auto">
         <div className="mb-10 text-center">
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON PROFIL</h1>
