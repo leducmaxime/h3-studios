@@ -44,15 +44,23 @@ export function Home() {
             <div className="mx-auto mt-6 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           </div>
 
-          <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
-            <a
-              href="/reservation"
-              className="inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 md:px-12 md:py-5 md:text-2xl"
-            >
-              <Music className="h-6 w-6 md:h-7 md:w-7" />
-              Réserver maintenant
-            </a>
-            <p className="mt-4 text-sm text-white/50">
+          <div className={`mb-8 flex flex-col items-center gap-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+            <div className="flex flex-col items-center gap-4 sm:flex-row">
+              <a
+                href="/reservation"
+                className="inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 md:px-12 md:py-5 md:text-2xl"
+              >
+                <Music className="h-6 w-6 md:h-7 md:w-7" />
+                Réserver maintenant
+              </a>
+              <a
+                href="/les-studios"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 px-8 py-4 text-base font-medium text-white transition-all hover:border-primary/60 hover:bg-white/5 hover:text-primary md:px-10 md:py-5 md:text-lg"
+              >
+                Découvrir les studios
+              </a>
+            </div>
+            <p className="mt-2 text-sm text-white/50">
               Ouvert 7j/7 • Uniquement sur réservation
             </p>
           </div>
