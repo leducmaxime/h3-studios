@@ -52,11 +52,15 @@ export function Header() {
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const root = document.getElementById("root");
     const handleStickyNavbar = () => {
-      setSticky(window.scrollY >= 80);
+      const scrollY = root ? root.scrollTop : window.scrollY;
+      setSticky(scrollY >= 10);
     };
-    window.addEventListener("scroll", handleStickyNavbar);
-    return () => window.removeEventListener("scroll", handleStickyNavbar);
+    handleStickyNavbar();
+    const target = root || window;
+    target.addEventListener("scroll", handleStickyNavbar);
+    return () => target.removeEventListener("scroll", handleStickyNavbar);
   }, []);
 
   useEffect(() => {
@@ -100,10 +104,10 @@ export function Header() {
   return (
     <header
       className={`fixed left-0 right-0 top-0 z-50 font-secondary transition-all duration-300 ${
-        sticky ? "bg-black border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)]" : "bg-transparent"
+        sticky ? "bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800" : "bg-transparent"
       }`}
     >
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto sm:px-6 lg:px-8">
         <div className="flex h-16 sm:h-20 items-center justify-between">
           <a
             href="/"
@@ -262,7 +266,7 @@ export function Header() {
             : "opacity-0 -translate-y-4 pointer-events-none"
         }`}
       >
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto py-4">
           <div className="flex flex-col gap-1">
             {menuData.map((menuItem) => (
               <a
@@ -273,7 +277,7 @@ export function Header() {
                   setNavbarOpen(false);
                   navigate(menuItem.path);
                 }}
-                className={`px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   currentPath === menuItem.path
                     ? "text-primary bg-primary/10"
                     : "text-white/70 hover:text-white hover:bg-white/10"
