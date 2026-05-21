@@ -11,6 +11,10 @@ import {
   Ban,
   Edit,
   Save,
+  Search,
+  Download,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,8 +24,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatDateISO } from "@/lib/utils";
-import { STUDIOS, formatPrice } from "@/lib/booking";
-import { type DbUser, type DbBooking } from "@/lib/db-types";
+import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
+import { type DbUser, type DbBooking, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
+import { exportBookingsCSV } from "@/lib/export";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -137,6 +142,18 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     country: "",
   });
 
+  // Filters (like /admin/bookings)
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
+  const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">("all");
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining">("all");
+  const [sortBy, setSortBy] = useState<BookingSortField>("date");
+  const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
+
   const fetchUser = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/users/${userId}`);
@@ -186,6 +203,13 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     };
     load();
   }, [fetchUser, fetchBookings]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const handleBlock = async () => {
     if (!user) return;
@@ -256,12 +280,74 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
   }
 
   const today = formatDateISO(new Date());
-  const upcomingBookings = bookings.filter(
-    (b) => b.status === "confirmed" && b.date >= today,
-  );
-  const pastBookings = bookings.filter(
-    (b) => b.status !== "confirmed" || b.date < today,
-  );
+
+  // Client-side filtering (all bookings already loaded)
+  const filteredBookings = bookings.filter((b) => {
+    if (statusFilter !== "all" && b.status !== statusFilter) return false;
+    if (studioFilter !== "all" && b.studio_id !== studioFilter) return false;
+    if (paymentStatusFilter !== "all") {
+      if (paymentStatusFilter === "paid" && b.payment_status !== "paid") return false;
+      if (paymentStatusFilter === "remaining" && b.payment_status === "paid") return false;
+    }
+    if (dateFilter !== "all") {
+      if (dateFilter === "today" && b.date !== today) return false;
+      if (dateFilter === "week") {
+        const d = new Date(b.date);
+        const weekStart = new Date();
+        weekStart.setDate(new Date().getDate() - new Date().getDay() + 1);
+        if (d < weekStart) return false;
+      }
+      if (dateFilter === "month") {
+        const d = new Date(b.date);
+        const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        if (d < monthStart) return false;
+      }
+      if (dateFilter === "upcoming" && b.date < today) return false;
+      if (dateFilter === "past" && b.date > today) return false;
+      if (dateFilter === "custom" && customDateFrom) {
+        if (b.date < customDateFrom) return false;
+        if (customDateTo && b.date > customDateTo) return false;
+      }
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      const match =
+        (b.booking_ref?.toLowerCase() || "").includes(q) ||
+        (b.band_name?.toLowerCase() || "").includes(q) ||
+        (b.studio_id?.toLowerCase() || "").includes(q) ||
+        b.date.includes(q) ||
+        (b.group_type?.toLowerCase() || "").includes(q);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  const sortedBookings = [...filteredBookings].sort((a, b) => {
+    const dir = sortOrder === "asc" ? 1 : -1;
+    switch (sortBy) {
+      case "date":
+        return (a.date > b.date ? 1 : -1) * dir;
+      case "start_time":
+        return (a.start_time > b.start_time ? 1 : -1) * dir;
+      case "total_price": {
+        const pa = (a.total_price || 0) - (a.promo_discount || 0);
+        const pb = (b.total_price || 0) - (b.promo_discount || 0);
+        return (pa > pb ? 1 : -1) * dir;
+      }
+      case "status":
+        return (a.status > b.status ? 1 : -1) * dir;
+      case "payment_status":
+        return ((a.payment_status || "") > (b.payment_status || "") ? 1 : -1) * dir;
+      case "created_at":
+        return ((a.created_at || "") > (b.created_at || "") ? 1 : -1) * dir;
+      default:
+        return (a.date > b.date ? 1 : -1) * dir;
+    }
+  });
+
+  const handleExportCSV = () => {
+    exportBookingsCSV(sortedBookings);
+  };
 
   const nonCancelledBookings = bookings.filter((b) => b.status !== "cancelled");
   const lastBooking = nonCancelledBookings.length > 0
@@ -314,10 +400,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
         <TabsList className="w-full justify-start">
           <TabsTrigger value="profile">Profil</TabsTrigger>
           <TabsTrigger value="bookings">
-            Réservations ({upcomingBookings.length})
-          </TabsTrigger>
-          <TabsTrigger value="history">
-            Historique ({pastBookings.length})
+            Réservations ({bookings.length})
           </TabsTrigger>
         </TabsList>
 
@@ -557,132 +640,184 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
         </TabsContent>
 
         <TabsContent value="bookings">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">
-              Réservations à venir ({upcomingBookings.length})
-            </h2>
-            {upcomingBookings.length === 0 ? (
-              <p className="text-zinc-400">Aucune réservation à venir</p>
-            ) : (
-              <div className="overflow-hidden rounded-lg border border-zinc-800">
-                <table className="w-full">
-                  <thead className="border-b border-zinc-800 bg-zinc-900/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Référence</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Créneau</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Studio</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Paiement</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400">Montant</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800">
-                    {upcomingBookings.map((b) => (
-                      <tr key={b.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
-                        <td className="px-4 py-3">
-                          <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline">
-                            {b.booking_ref}
-                          </a>
-                        </td>
-                        <td className="px-4 py-3 text-sm">{formatDate(b.date)}</td>
-                        <td className="px-4 py-3 text-sm">{b.start_time} - {b.end_time}</td>
-                        <td className="px-4 py-3 text-sm">{getStudioName(b.studio_id)}</td>
-                        <td className="px-4 py-3 text-sm capitalize">{b.group_type}</td>
-                        <td className="px-4 py-3">
-                          {b.payment_status === "paid" ? (
-                            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>
-                          ) : b.payment_status === "pay-on-site" ? (
-                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>
-                          ) : (
-                            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Reste à payer</Badge>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <span className="font-medium">{formatPrice((b.total_price || 0) - (b.promo_discount || 0))}</span>
-                          {b.promo_discount > 0 && (
-                            <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="history">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">
-              Historique ({pastBookings.length})
-            </h2>
-            {pastBookings.length === 0 ? (
-              <p className="text-zinc-400">Aucun historique</p>
-            ) : (
-              <div className="overflow-hidden rounded-lg border border-zinc-800">
-                <table className="w-full">
-                  <thead className="border-b border-zinc-800 bg-zinc-900/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Référence</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Créneau</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Studio</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Statut</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Paiement</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400">Montant</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800">
-                    {pastBookings.slice(0, 20).map((b) => (
-                      <tr key={b.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
-                        <td className="px-4 py-3">
-                          <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline">
-                            {b.booking_ref}
-                          </a>
-                        </td>
-                        <td className="px-4 py-3 text-sm">{formatDate(b.date)}</td>
-                        <td className="px-4 py-3 text-sm">{b.start_time} - {b.end_time}</td>
-                        <td className="px-4 py-3 text-sm">{getStudioName(b.studio_id)}</td>
-                        <td className="px-4 py-3 text-sm capitalize">{b.group_type}</td>
-                        <td className="px-4 py-3">
-                          <Badge className={`text-xs ${
-                            b.status === 'confirmed' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                            b.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
-                            b.status === 'cancelled' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                            'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                          }`}>
-                            {STATUS_LABELS[b.status] || b.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          {b.payment_status === "paid" ? (
-                            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>
-                          ) : b.payment_status === "pay-on-site" ? (
-                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>
-                          ) : (
-                            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Reste à payer</Badge>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <span className="font-medium">{formatPrice((b.total_price || 0) - (b.promo_discount || 0))}</span>
-                          {b.promo_discount > 0 && (
-                            <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {pastBookings.length > 20 && (
-                  <p className="text-center text-sm text-zinc-400 py-3 border-t border-zinc-800">
-                    + {pastBookings.length - 20} autres réservations
-                  </p>
+          <div className="space-y-4">
+            {/* Filters */}
+            <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div className="relative w-48">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
+                  />
+                </div>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                >
+                  <option value="all">Date</option>
+                  <option value="today">Auj.</option>
+                  <option value="week">Sem.</option>
+                  <option value="month">Mois</option>
+                  <option value="upcoming">À venir</option>
+                  <option value="past">Passées</option>
+                  <option value="custom">Perso.</option>
+                </select>
+                {dateFilter === "custom" && (
+                  <>
+                    <input
+                      type="date"
+                      value={customDateFrom}
+                      onChange={(e) => setCustomDateFrom(e.target.value)}
+                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                    />
+                    <input
+                      type="date"
+                      value={customDateTo}
+                      onChange={(e) => setCustomDateTo(e.target.value)}
+                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                    />
+                  </>
                 )}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as BookingStatus | "all")}
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                >
+                  <option value="all">Statut</option>
+                  <option value="confirmed">Confirmé</option>
+                  <option value="completed">Terminé</option>
+                  <option value="cancelled">Annulé</option>
+                  <option value="no-show">No-show</option>
+                </select>
+                <select
+                  value={studioFilter}
+                  onChange={(e) => setStudioFilter(e.target.value as StudioId | "all")}
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                >
+                  <option value="all">Studio</option>
+                  <option value="la-scene">La Scène</option>
+                  <option value="le-podium">Le Podium</option>
+                </select>
+                <select
+                  value={paymentStatusFilter}
+                  onChange={(e) => setPaymentStatusFilter(e.target.value as "all" | "paid" | "remaining")}
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                >
+                  <option value="all">Paiement</option>
+                  <option value="paid">Payé</option>
+                  <option value="remaining">Reste à payer</option>
+                </select>
+                <div className="ml-auto flex items-center gap-1">
+                  <span className="text-[10px] text-zinc-500">Tri</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as BookingSortField)}
+                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                  >
+                    <option value="date">Date</option>
+                    <option value="start_time">Heure</option>
+                    <option value="total_price">€</option>
+                    <option value="status">Statut</option>
+                    <option value="payment_status">Paiement</option>
+                    <option value="created_at">Créé</option>
+                  </select>
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as BookingSortOrder)}
+                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                  >
+                    <option value="desc">↓</option>
+                    <option value="asc">↑</option>
+                  </select>
+                </div>
               </div>
-            )}
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-semibold">
+                  Réservations ({sortedBookings.length})
+                </h2>
+                <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Exporter CSV
+                </Button>
+              </div>
+              {sortedBookings.length === 0 ? (
+                <p className="text-zinc-400">Aucune réservation trouvée</p>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-zinc-800">
+                  <table className="w-full">
+                    <thead className="border-b border-zinc-800 bg-zinc-900/50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "date") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("date"); } }}>
+                          Date {sortBy === "date" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "start_time") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("start_time"); } }}>
+                          Créneau {sortBy === "start_time" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Studio</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "status") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("status"); } }}>
+                          Statut {sortBy === "status" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "payment_status") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("payment_status"); } }}>
+                          Paiement {sortBy === "payment_status" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "total_price") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("total_price"); } }}>
+                          Montant {sortBy === "total_price" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                      {sortedBookings.map((b) => (
+                        <tr key={b.id} className={`bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors ${b.date < today ? "opacity-50" : ""}`}>
+                          <td className="px-4 py-3">
+                            <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline block">
+                              {b.booking_ref}
+                            </a>
+                            <span className="text-xs text-zinc-500">{formatDate(b.date)}</span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">{b.start_time} - {b.end_time}</td>
+                          <td className="px-4 py-3 text-sm">{getStudioName(b.studio_id)}</td>
+                          <td className="px-4 py-3 text-sm capitalize">{b.group_type}</td>
+                          <td className="px-4 py-3">
+                            <Badge className={`text-xs ${
+                              b.status === 'confirmed' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                              b.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                              b.status === 'cancelled' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                              'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                            }`}>
+                              {STATUS_LABELS[b.status] || b.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            {b.payment_status === "paid" ? (
+                              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>
+                            ) : b.payment_status === "pay-on-site" ? (
+                              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>
+                            ) : (
+                              <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Reste à payer</Badge>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="font-medium">{formatPrice((b.total_price || 0) - (b.promo_discount || 0))}</span>
+                            {b.promo_discount > 0 && (
+                              <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </TabsContent>
       </Tabs>
