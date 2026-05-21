@@ -74,6 +74,14 @@ function getStudioName(studioId: string): string {
   return STUDIOS[studioId as keyof typeof STUDIOS]?.name || studioId;
 }
 
+function calculateDurationHours(startTime: string, endTime: string): number {
+  const [startH, startM] = startTime.split(":").map(Number);
+  const [endH, endM] = endTime.split(":").map(Number);
+  let duration = (endH + endM / 60) - (startH + startM / 60);
+  if (duration <= 0) duration += 24; // handle midnight crossing
+  return duration;
+}
+
 function buildEquipmentList(equipment: EquipmentSelection[]): string {
   if (!equipment || equipment.length === 0) {
     return "Aucun matériel supplémentaire";
@@ -82,10 +90,41 @@ function buildEquipmentList(equipment: EquipmentSelection[]): string {
     .map((item) => {
       const eq = EQUIPMENT[item.id as keyof typeof EQUIPMENT];
       if (!eq) return null;
-      return `${eq.name} ×${item.quantity}`;
+      let label = `${eq.name} ×${item.quantity}`;
+      if (item.id === "mic" && item.quantity === 4) {
+        label += " (4ème offert)";
+      }
+      return label;
     })
     .filter(Boolean)
     .join(", ");
+}
+
+function buildEquipmentBreakdown(equipment: EquipmentSelection[], durationHours: number): string {
+  if (!equipment || equipment.length === 0) {
+    return "";
+  }
+  return equipment
+    .map((item) => {
+      const eq = EQUIPMENT[item.id as keyof typeof EQUIPMENT];
+      if (!eq) return null;
+      let price = 0;
+      if (eq.pricingType === "session" && eq.sessionPricing) {
+        price = eq.sessionPricing[item.quantity - 1] || 0;
+      } else {
+        price = eq.pricePerHour * item.quantity * durationHours;
+      }
+      let label = `${eq.name} ×${item.quantity}`;
+      if (item.id === "mic" && item.quantity === 4) {
+        label += " — 4ème offert";
+      }
+      return `<tr>
+        <td style="padding:4px 0;color:#aaaaaa;font-size:13px;">${label}</td>
+        <td align="right" style="padding:4px 0;color:#ffffff;font-size:13px;font-weight:500;">${formatPrice(price)}</td>
+      </tr>`;
+    })
+    .filter(Boolean)
+    .join("");
 }
 
 function buildEmailHtml(data: BookingConfirmationData): string {
@@ -96,6 +135,9 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   const paymentLabel = getPaymentMethodLabel(data.paymentMethod, data.paymentStatus, data.totalPrice);
   const equipmentLabel = buildEquipmentList(data.equipment);
   const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
+  const durationHours = calculateDurationHours(data.startTime, data.endTime);
+  const isGroup = data.groupType === "group";
+  const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, durationHours);
 
   return `
 <!DOCTYPE html>
@@ -114,8 +156,8 @@ function buildEmailHtml(data: BookingConfirmationData): string {
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:40px 30px;text-align:center;border-bottom:2px solid #facc15;">
-              <img src="https://h3-studios.fr/images/logo.png" alt="H3 Studios" width="140" style="display:block;margin:0 auto 12px auto;" />
-              <p style="margin:0;color:#888888;font-size:13px;letter-spacing:3px;text-transform:uppercase;">Salle de répétition &amp; studio d'enregistrement</p>
+              <img src="https://staging.h3-studios.fr/images/logo-email.png" alt="H3 Studios" width="180" style="display:block;margin:0 auto 12px;" />
+
             </td>
           </tr>
           
@@ -140,6 +182,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
               
               <!-- Details Grid -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+                ${isGroup ? `
                 <tr>
                   <td width="50%" valign="top" style="padding-right:8px;padding-bottom:16px;">
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
@@ -184,6 +227,42 @@ function buildEmailHtml(data: BookingConfirmationData): string {
                     </table>
                   </td>
                 </tr>
+                ` : `
+                <tr>
+                  <td width="50%" valign="top" style="padding-right:8px;padding-bottom:16px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
+                          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${groupLabel}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td width="50%" valign="top" style="padding-left:8px;padding-bottom:16px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Horaire</p>
+                          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${timeLabel}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td width="100%" valign="top" colspan="2">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Date</p>
+                          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${dateLabel}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                `}
               </table>
               
               <!-- Equipment -->
@@ -203,15 +282,10 @@ function buildEmailHtml(data: BookingConfirmationData): string {
                     <p style="margin:0 0 12px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Récapitulatif</p>
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Répétition (${studioName})</td>
+                        <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Répétition${isGroup ? ` (${studioName})` : ""}</td>
                         <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.totalPrice - data.equipmentPrice + (data.promoDiscount || 0))}</td>
                       </tr>
-                      ${data.equipmentPrice > 0 ? `
-                      <tr>
-                        <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Matériel</td>
-                        <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.equipmentPrice)}</td>
-                      </tr>
-                      ` : ""}
+                      ${equipmentBreakdown}
                       ${hasPromo ? `
                       <tr>
                         <td style="padding:6px 0;color:#facc15;font-size:14px;">
