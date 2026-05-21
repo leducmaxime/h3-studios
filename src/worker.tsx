@@ -3337,7 +3337,12 @@ const app = defineApp([
       const ONE_HOUR = 60 * 60 * 1000;
 
       if (cachedPosts.length > 0 && cacheAge < ONE_HOUR) {
-        return jsonSuccess(cachedPosts);
+        return new Response(JSON.stringify({ success: true, data: cachedPosts }), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=3600, s-maxage=3600",
+          },
+        });
       }
 
       // 3. If cache is stale or missing, refresh in background and return stale data if available
@@ -3362,9 +3367,16 @@ const app = defineApp([
 
       waitUntil(refreshPromise);
 
+      const cacheHeaders = {
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+      };
+
       // 4. Return cached data if available, otherwise wait for fresh data
       if (cachedPosts.length > 0) {
-        return jsonSuccess(cachedPosts);
+        return new Response(JSON.stringify({ success: true, data: cachedPosts }), {
+          headers: cacheHeaders,
+        });
       }
 
       // No cache at all — must wait for fresh data
@@ -3376,7 +3388,9 @@ const app = defineApp([
           data: posts,
           last_updated: new Date().toISOString()
         })).run();
-        return jsonSuccess(posts);
+        return new Response(JSON.stringify({ success: true, data: posts }), {
+          headers: cacheHeaders,
+        });
       }
       
       const posts = await fetchInstagramFeedFromRSS();
@@ -3386,7 +3400,9 @@ const app = defineApp([
         data: posts,
         last_updated: new Date().toISOString()
       })).run();
-      return jsonSuccess(posts);
+      return new Response(JSON.stringify({ success: true, data: posts }), {
+        headers: cacheHeaders,
+      });
     } catch (error) {
       console.error("GET /api/instagram/feed error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch feed", 500);
