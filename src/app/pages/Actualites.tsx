@@ -144,7 +144,11 @@ export function Actualites() {
                 >
                   <div className="relative aspect-square overflow-hidden bg-zinc-900">
                     <img
-                      src={`/api/instagram/proxy-image?url=${encodeURIComponent(currentImage.media_url || currentImage.thumbnail_url || '')}`}
+                      src={`/api/instagram/proxy-image?url=${encodeURIComponent(
+                        isVideo 
+                          ? (currentImage.thumbnail_url || currentImage.media_url)
+                          : (currentImage.media_url || currentImage.thumbnail_url || '')
+                      )}`}
                       alt={post.caption}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                       loading="lazy"
