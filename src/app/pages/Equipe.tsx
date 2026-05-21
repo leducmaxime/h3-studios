@@ -67,13 +67,14 @@ export function Equipe() {
             {team.map((member, i) => (
               <div
                 key={member.name}
-                className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_40px_rgba(249,176,53,0.15)] ${
+                className={`group relative overflow-hidden rounded-3xl border border-white/10 bg-black transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_40px_rgba(249,176,53,0.15)] ${
                   isVisible
                     ? "translate-y-0 opacity-100"
                     : "translate-y-10 opacity-0"
                 }`}
                 style={{ transitionDelay: `${i * 150}ms` }}
               >
+                <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
                 <div className="relative h-80 w-full overflow-hidden">
                   <img
                     src={member.image}
@@ -89,7 +90,7 @@ export function Equipe() {
                   <div className="absolute -right-2 -top-2 h-16 w-16 rounded-full bg-primary/20 blur-2xl transition-all duration-500 group-hover:bg-primary/40 group-hover:blur-3xl" />
                 </div>
 
-                <div className="p-6">
+                <div className="relative p-6">
                   <div className="space-y-3 text-sm text-white/70 leading-relaxed">
                     {member.bio.split("\n\n").map((paragraph, j) => (
                       <p key={j}>{paragraph}</p>
