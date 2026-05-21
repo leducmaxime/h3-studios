@@ -77,8 +77,6 @@ import {
   getBookingsByDate,
   getBookingsByDateRange,
   checkConflict,
-  checkConflictWithGroupType,
-  checkBlockedSlotConflict,
   moveBookingToOtherStudio,
   getUsers,
   getUserById,
@@ -96,6 +94,7 @@ import {
   getBlockedSlotsByDateRange,
   addBlockedSlot,
   removeBlockedSlot,
+  checkBlockedSlotConflict,
   getPricing,
   updatePricing,
   getPricingForBooking,
@@ -760,17 +759,17 @@ const app = defineApp([
       
       const user = { id: clientUser.id };
 
-      // Check for conflicts - groups can displace solo/duo bookings
-      const conflict = await checkConflictWithGroupType(env.DB, body.studioId, body.date, body.startTime, body.endTime);
+      // Check for conflicts
+      const conflict = await checkConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
       if (conflict) {
-        // If group booking conflicts with solo/duo, try to move the solo/duo
+        // For group bookings: try to displace a solo/duo booking to the other studio
         if (body.groupType === "group" && (conflict.group_type === "solo" || conflict.group_type === "duo")) {
           const otherStudioId = body.studioId === "la-scene" ? "le-podium" : "la-scene";
 
-          // Check if other studio is available for the full duration
-          const otherStudioConflict = await checkConflict(env.DB, otherStudioId, body.date, body.startTime, body.endTime, conflict.id);
+          // Check if other studio is strictly available for the full duration
+          const otherStudioConflict = await checkConflict(env.DB, otherStudioId, body.date, body.startTime, body.endTime);
           if (otherStudioConflict) {
-            return jsonError("Ce créneau n'est plus disponible - l'autre studio est également occupé", 409);
+            return jsonError("Ce créneau n'est plus disponible", 409);
           }
 
           // Move the solo/duo booking to the other studio
@@ -1326,7 +1325,28 @@ const app = defineApp([
 
         const conflict = await checkConflict(env.DB, body.studio_id, body.date, body.start_time, body.end_time);
         if (conflict) {
-          return jsonError("Conflit avec une autre réservation", 409);
+          // For group bookings: try to displace a solo/duo booking to the other studio
+          if (body.group_type === "group" && (conflict.group_type === "solo" || conflict.group_type === "duo")) {
+            const otherStudioId = body.studio_id === "la-scene" ? "le-podium" : "la-scene";
+
+            const otherStudioConflict = await checkConflict(env.DB, otherStudioId, body.date, body.start_time, body.end_time);
+            if (otherStudioConflict) {
+              return jsonError("Conflit avec une autre réservation", 409);
+            }
+
+            const moveResult = await moveBookingToOtherStudio(env.DB, conflict.id, otherStudioId);
+            if (!moveResult.success) {
+              return jsonError(`Impossible de déplacer la réservation existante: ${moveResult.error}`, 409);
+            }
+
+            await addAuditLog(env.DB, "booking", conflict.id, "move-for-group", {
+              fromStudio: body.studio_id,
+              toStudio: otherStudioId,
+              reason: "Group booking displaced solo/duo",
+            }, request.headers.get("X-Admin-User-Id") || "admin");
+          } else {
+            return jsonError("Conflit avec une autre réservation", 409);
+          }
         }
 
         // Check for blocked slots

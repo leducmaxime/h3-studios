@@ -355,7 +355,7 @@ export function useBookingWithRouter(urlStep?: string) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     fetch("/api/client/me", { credentials: "include" })
-      .then((res) => res.ok ? res.json() : null)
+      .then((res) => res.ok ? res.json() as Promise<{ data?: unknown }> : null)
       .then((data) => {
         if (data?.data) {
           const u = data.data as { name?: string; email?: string; phone?: string; band_name?: string; address_line1?: string; postal_code?: string; city?: string };
@@ -459,7 +459,11 @@ export function useBookingWithRouter(urlStep?: string) {
         if (s.flow === "time-first") {
           if (s.groupType === "solo" || s.groupType === "duo") {
             const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, mergedAvailability);
-            return { ...s, studioId: studio };
+            if (studio) {
+              return { ...s, studioId: studio };
+            }
+            // No studio available - reset selection (shouldn't happen if UI is correct)
+            return { ...s, startTime: null, endTime: null };
           }
           return s;
         }

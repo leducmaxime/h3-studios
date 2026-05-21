@@ -102,22 +102,39 @@ export function TimeSlotPicker({
       if (studioFilter) {
         const occupant = isOccupiedBy(studioFilter, time);
         if (!occupant) return false;
+
+        // Solo/Duo: any occupation = unavailable
         if (groupType !== "group") {
-          return occupant.groupType === "group" || occupant.groupType === "blocked";
+          return true;
         }
-        return true;
+
+        // Groupe
+        if (occupant.groupType === "group" || occupant.groupType === "blocked") {
+          return true;
+        }
+
+        // Occupied by solo/duo - available only if other studio is free
+        const otherStudio = studioFilter === "la-scene" ? "le-podium" : "la-scene";
+        const otherOccupant = isOccupiedBy(otherStudio, time);
+        return !!otherOccupant;
       }
+
+      // SANS studioFilter
       const sceneOccupant = isOccupiedBy("la-scene", time);
       const podiumOccupant = isOccupiedBy("le-podium", time);
 
       if (groupType !== "group") {
-        const sceneBlocked = sceneOccupant && (sceneOccupant.groupType === "group" || sceneOccupant.groupType === "blocked");
-        const podiumBlocked = podiumOccupant && (podiumOccupant.groupType === "group" || podiumOccupant.groupType === "blocked");
-        return !!(sceneBlocked && podiumBlocked);
+        // Solo/Duo: unavailable only if BOTH studios are occupied
+        return !!(sceneOccupant && podiumOccupant);
       }
-      const sceneBooked = !!sceneOccupant;
-      const podiumBooked = !!podiumOccupant;
-      return sceneBooked && podiumBooked;
+
+      // Groupe: unavailable if no studio is available
+      const sceneAvailable = !sceneOccupant ||
+        ((sceneOccupant.groupType === "solo" || sceneOccupant.groupType === "duo") && !podiumOccupant);
+      const podiumAvailable = !podiumOccupant ||
+        ((podiumOccupant.groupType === "solo" || podiumOccupant.groupType === "duo") && !sceneOccupant);
+
+      return !(sceneAvailable || podiumAvailable);
     },
     [isOccupiedBy, studioFilter, groupType]
   );

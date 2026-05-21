@@ -246,16 +246,14 @@ export function parseOccupancy(occupancy: Set<string | OccupancyInfo>): Set<Occu
 }
 
 /**
- * Check if a studio is available for the given time range.
- * Considers bookings by group type - solo/duo can overlap with other solo/duo
- * but groups cannot overlap with anyone.
+ * Check if a studio is strictly available for the given time range.
+ * Any occupation (group, solo, duo, or blocked) makes it unavailable.
  */
 export function isStudioAvailable(
   studioId: StudioId,
   startTime: string,
   endTime: string,
-  occupancy: Set<OccupancyInfo>,
-  requesterGroupType: GroupType
+  occupancy: Set<OccupancyInfo>
 ): boolean {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
@@ -264,37 +262,63 @@ export function isStudioAvailable(
 
   for (const slot of range) {
     const occupant = Array.from(occupancy).find(o => o.studioId === studioId && o.time === slot);
-    if (occupant && (occupant.groupType === "solo" || occupant.groupType === "duo") && occupant.bookingId) {
-      return occupant.bookingId;
+    if (occupant) {
+      return false;
     }
   }
 
-  return null;
+  return true;
 }
 
 /**
- * Find a conflicting solo/duo booking that could be moved.
- * Returns the bookingId if found, null otherwise.
+ * Check if a studio is available for a group booking.
+ * A studio is available if it's strictly free, or if it's occupied by a solo/duo
+ * that can be moved to the other studio (which must be strictly free).
  */
-export function findMoveableSoloDuoBooking(
+export function isStudioAvailableForGroup(
   studioId: StudioId,
   startTime: string,
   endTime: string,
   occupancy: Set<OccupancyInfo>
-): string | null {
+): boolean {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length - 1;
   const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
+
+  const otherStudioId = studioId === "la-scene" ? "le-podium" : "la-scene";
 
   for (const slot of range) {
     const occupant = Array.from(occupancy).find(o => o.studioId === studioId && o.time === slot);
-    if (occupant && (occupant.groupType === "solo" || occupant.groupType === "duo") && occupant.bookingId) {
-      return occupant.bookingId;
+    if (!occupant) continue; // Free slot, OK
+
+    if (occupant.groupType === "group" || occupant.groupType === "blocked") {
+      return false; // Group or blocked = not available
+    }
+
+    // Solo/duo - check if other studio is free at this slot
+    const otherOccupant = Array.from(occupancy).find(o => o.studioId === otherStudioId && o.time === slot);
+    if (otherOccupant) {
+      return false; // Other studio also occupied = can't displace
     }
   }
 
-  return null;
+  return true;
+}
+
+/**
+ * Check if any studio is available for a group booking (without studio filter).
+ * Returns true if at least one studio is available (free or with displaceable solo/duo).
+ */
+export function isAnyStudioAvailableForGroup(
+  startTime: string,
+  endTime: string,
+  occupancy: Set<OccupancyInfo>
+): boolean {
+  return (
+    isStudioAvailableForGroup("la-scene", startTime, endTime, occupancy) ||
+    isStudioAvailableForGroup("le-podium", startTime, endTime, occupancy)
+  );
 }
 
 /**
@@ -363,16 +387,17 @@ export function canBeEndTime(
 
 /**
  * Auto-assign studio for solo/duo bookings.
- * Groups have priority — solo/duo gets whatever is left.
- * Solo/duo can double-book (one on each studio) if both available.
- * If the slot extends past Le Podium's closing time, only La Scène is possible.
+ * No double-booking: solo/duo cannot overlap with anyone.
+ * If one studio is occupied, the other is assigned automatically.
+ * If both are available, La Scène is preferred (larger room, open later).
+ * Returns null if neither studio is available.
  */
 export function assignStudioForSoloDuo(
   date: Date,
   startTime: string,
   endTime: string,
   occupancy: Set<string | OccupancyInfo>
-): StudioId {
+): StudioId | null {
   const detailedOccupancy = parseOccupancy(occupancy);
   const podiumSlots = getStudioTimeSlots("le-podium", date);
   const sceneSlots = getStudioTimeSlots("la-scene", date);
@@ -383,24 +408,24 @@ export function assignStudioForSoloDuo(
   if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length - 1;
   const bookedRange = ALL_TIME_SLOTS.slice(startIdx, endIdx);
 
-  // Check if Le Podium can even cover this time range (opening hours)
+  // Check if each studio can cover this time range (opening hours)
   const podiumCoversRange = bookedRange.every((t) => podiumSlots.includes(t));
   const sceneCoversRange = bookedRange.every((t) => sceneSlots.includes(t));
 
-  // Check availability considering group types
-  const sceneAvailable = isStudioAvailable("la-scene", startTime, endTime, detailedOccupancy, "solo");
-  const podiumAvailable = isStudioAvailable("le-podium", startTime, endTime, detailedOccupancy, "solo");
+  // Check strict availability (no overlap with anyone)
+  const sceneAvailable = isStudioAvailable("la-scene", startTime, endTime, detailedOccupancy);
+  const podiumAvailable = isStudioAvailable("le-podium", startTime, endTime, detailedOccupancy);
 
-  // If only one studio covers the range, use that one
-  if (!podiumCoversRange && sceneCoversRange) return "la-scene";
-  if (!sceneCoversRange && podiumCoversRange) return "le-podium";
+  // If only one studio covers the range, use that one if available
+  if (!podiumCoversRange && sceneCoversRange && sceneAvailable) return "la-scene";
+  if (!sceneCoversRange && podiumCoversRange && podiumAvailable) return "le-podium";
 
-  // Prefer La Scène by default (larger room, open later)
+  // Prefer La Scène by default
   if (sceneAvailable && sceneCoversRange) return "la-scene";
   if (podiumAvailable && podiumCoversRange) return "le-podium";
 
-  // Fallback: if neither available (shouldn't happen if UI is correct)
-  return "la-scene";
+  // Neither available
+  return null;
 }
 
 let _publicHolidays: Set<string> = new Set();
