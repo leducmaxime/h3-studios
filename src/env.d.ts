@@ -4,5 +4,6 @@ declare namespace Cloudflare {
     STRIPE_SECRET_KEY: string;
     STRIPE_WEBHOOK_SECRET: string;
     RESEND_API_KEY: string;
+    INSTAGRAM_ACCESS_TOKEN: string;
   }
 }

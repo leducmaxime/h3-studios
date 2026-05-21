@@ -16,6 +16,9 @@ import { APropos } from "@/app/pages/APropos";
 import { Avis } from "@/app/pages/Avis";
 import { Equipe } from "@/app/pages/Equipe";
 import { Actualites } from "@/app/pages/Actualites";
+import { MentionsLegales } from "@/app/pages/MentionsLegales";
+import { PolitiqueConfidentialite } from "@/app/pages/PolitiqueConfidentialite";
+import { ConditionsVente } from "@/app/pages/ConditionsVente";
 import { generateSitemap, generateRobotsTxt } from "@/app/seo";
 import { AdminDashboard } from "@/app/pages/admin/Dashboard";
 import { AdminCalendar } from "@/app/pages/admin/Calendar";
@@ -127,6 +130,7 @@ import {
   syncGoogleReviews,
 } from "@/lib/google-reviews";
 import {
+  fetchInstagramFeedFromAPI,
   fetchInstagramFeedFromRSS,
   syncInstagram,
 } from "@/lib/instagram";
@@ -456,6 +460,24 @@ const app = defineApp([
   render(({ children, rw }) => <DocumentWithPath path="/actualites" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/actualites", Actualites),
+    ]),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/mentions-legales" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/mentions-legales", MentionsLegales),
+    ]),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/politique-confidentialite" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/politique-confidentialite", PolitiqueConfidentialite),
+    ]),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/conditions-de-vente" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/conditions-de-vente", ConditionsVente),
     ]),
   ]),
 
@@ -3299,6 +3321,12 @@ const app = defineApp([
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
 
     try {
+      const token = env.INSTAGRAM_ACCESS_TOKEN;
+      if (token) {
+        const posts = await fetchInstagramFeedFromAPI(token);
+        return jsonSuccess(posts);
+      }
+      // Fallback to RSS if no API token is configured
       const posts = await fetchInstagramFeedFromRSS();
       return jsonSuccess(posts);
     } catch (error) {
@@ -3346,7 +3374,8 @@ const app = defineApp([
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
 
     try {
-      const result = await syncInstagram(env.DB);
+      const token = env.INSTAGRAM_ACCESS_TOKEN;
+      const result = await syncInstagram(env.DB, token);
       if (!result.success) return jsonError(result.error || "Sync failed", 500);
 
       await addAuditLog(env.DB, "instagram", "feed", "sync", { count: result.count }, request.headers.get("X-Admin-User-Id") || "admin");
@@ -3367,7 +3396,7 @@ const app = defineApp([
       await setSetting(env.DB, "instagram_access_token", token);
       await addAuditLog(env.DB, "settings", "instagram", "update_token", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
-      const result = await syncInstagram(env.DB);
+      const result = await syncInstagram(env.DB, token);
 
       return jsonSuccess({ success: true, sync: result });
     } catch (error) {

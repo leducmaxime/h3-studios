@@ -15,11 +15,82 @@ export interface InstagramFeed {
 
 const RSS_APP_FEED_URL = "https://rss.app/feeds/wpmloa9fZdyyGMag.xml";
 
+export async function fetchInstagramFeedFromAPI(accessToken: string): Promise<InstagramPost[]> {
+  const response = await fetch(
+    `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&access_token=${accessToken}`,
+    {
+      cf: { cacheTtl: 3600 }
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.text();
+    throw new Error(`Instagram API error: ${response.status} ${errorData}`);
+  }
+
+  const data = await response.json() as {
+    data: Array<{
+      id: string;
+      caption: string;
+      media_type: string;
+      media_url: string;
+      permalink: string;
+      thumbnail_url?: string;
+      timestamp: string;
+    }>;
+  };
+
+  const posts: InstagramPost[] = [];
+
+  for (const item of data.data || []) {
+    let mediaUrl = item.media_url;
+    let thumbnailUrl = item.thumbnail_url;
+
+    // For carousel albums, fetch the first media item
+    if (item.media_type === "CAROUSEL_ALBUM") {
+      try {
+        const childrenResponse = await fetch(
+          `https://graph.instagram.com/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&access_token=${accessToken}`,
+          { cf: { cacheTtl: 3600 } }
+        );
+
+        if (childrenResponse.ok) {
+          const childrenData = await childrenResponse.json() as {
+            data: Array<{ id: string; media_type: string; media_url: string; thumbnail_url?: string }>;
+          };
+
+          if (childrenData.data && childrenData.data.length > 0) {
+            const firstChild = childrenData.data[0];
+            mediaUrl = firstChild.media_url;
+            if (firstChild.thumbnail_url) {
+              thumbnailUrl = firstChild.thumbnail_url;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch carousel children:", err);
+      }
+    }
+
+    posts.push({
+      id: item.id,
+      caption: item.caption || "",
+      media_type: item.media_type as "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM",
+      media_url: mediaUrl,
+      permalink: item.permalink,
+      thumbnail_url: thumbnailUrl,
+      timestamp: item.timestamp,
+    });
+  }
+
+  return posts;
+}
+
 export async function fetchInstagramFeedFromRSS(): Promise<InstagramPost[]> {
   const response = await fetch(RSS_APP_FEED_URL, {
     cf: { cacheTtl: 3600 }
   });
-  
+
   if (!response.ok) {
     throw new Error(`RSS feed error: ${response.statusText}`);
   }
@@ -31,24 +102,24 @@ export async function fetchInstagramFeedFromRSS(): Promise<InstagramPost[]> {
 
 function parseRSSFeed(xmlText: string): InstagramPost[] {
   const items = xmlText.match(/<item>[\s\S]*?<\/item>/g) || [];
-  
+
   const posts: InstagramPost[] = [];
-  
+
   items.slice(0, 12).forEach((itemXml) => {
     const titleMatch = itemXml.match(/<title>\s*<!\[CDATA\[(.*?)\]\]>\s*<\/title>/);
     const title = titleMatch ? titleMatch[1] : (itemXml.match(/<title>(.*?)<\/title>/)?.[1] || "");
-    
+
     const linkMatch = itemXml.match(/<link>(.*?)<\/link>/);
     const link = linkMatch ? linkMatch[1] : "";
-    
+
     const pubDateMatch = itemXml.match(/<pubDate>(.*?)<\/pubDate>/);
     const pubDate = pubDateMatch ? pubDateMatch[1] : "";
-    
+
     const guidMatch = itemXml.match(/<guid[^>]*>(.*?)<\/guid>/);
     const guid = guidMatch ? guidMatch[1] : "";
-    
+
     let mediaUrl = "";
-    
+
     const mediaContentMatch = itemXml.match(/<media:content[^>]*url="([^"]+)"/);
     if (mediaContentMatch) {
       mediaUrl = mediaContentMatch[1]
@@ -57,7 +128,7 @@ function parseRSSFeed(xmlText: string): InstagramPost[] {
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"');
     }
-    
+
     if (!mediaUrl) {
       const imgMatch = itemXml.match(/<img[^>]+src="([^"]+)"/);
       if (imgMatch) {
@@ -68,11 +139,11 @@ function parseRSSFeed(xmlText: string): InstagramPost[] {
           .replace(/&quot;/g, '"');
       }
     }
-    
+
     const mediaType = itemXml.includes('medium="video"') || title.toLowerCase().includes("reel")
       ? "VIDEO"
       : "IMAGE";
-    
+
     posts.push({
       id: guid || link,
       caption: title,
@@ -83,13 +154,15 @@ function parseRSSFeed(xmlText: string): InstagramPost[] {
       timestamp: new Date(pubDate).toISOString(),
     });
   });
-  
+
   return posts;
 }
 
-export async function syncInstagram(db: D1Database): Promise<{ success: boolean; count?: number; error?: string }> {
+export async function syncInstagram(db: D1Database, accessToken?: string): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
-    const posts = await fetchInstagramFeedFromRSS();
+    const posts = accessToken
+      ? await fetchInstagramFeedFromAPI(accessToken)
+      : await fetchInstagramFeedFromRSS();
 
     await db.prepare(
       "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
