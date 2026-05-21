@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Header } from "@/components/Header/Header";
+import { Footer } from "@/components/Footer";
 import { SplashScreen } from "@/components/common/SplashScreen";
 
 interface MainLayoutProps {
@@ -54,12 +55,13 @@ export function MainLayout({ children }: MainLayoutProps) {
   useClearBookingOnNavigate();
 
   return (
-    <>
+    <div className="flex grow flex-col">
       <SplashScreen />
       <Header />
-      <div className="container flex h-full flex-col justify-between">
+      <main className="container flex grow flex-col">
         {children}
-      </div>
-    </>
+      </main>
+      <Footer />
+    </div>
   );
 }

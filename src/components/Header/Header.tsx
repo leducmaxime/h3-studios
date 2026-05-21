@@ -107,7 +107,7 @@ export function Header() {
         sticky ? "bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800" : "bg-transparent"
       }`}
     >
-      <div className="container mx-auto sm:px-6 lg:px-8">
+      <div className="container">
         <div className="flex h-16 sm:h-20 items-center justify-between">
           <a
             href="/"
@@ -266,7 +266,7 @@ export function Header() {
             : "opacity-0 -translate-y-4 pointer-events-none"
         }`}
       >
-        <div className="container mx-auto py-4">
+        <div className="container py-4">
           <div className="flex flex-col gap-1">
             {menuData.map((menuItem) => (
               <a
