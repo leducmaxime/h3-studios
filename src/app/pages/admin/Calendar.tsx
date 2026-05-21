@@ -1078,10 +1078,10 @@ export function AdminCalendar() {
                   <User className="h-4 w-4 shrink-0 text-primary" />
                   <div>
                     <p className="text-[10px] uppercase text-zinc-500 font-bold">Client</p>
-                    <p className="text-sm font-medium">
-                      {b.user_name || "—"}
-                      {b.user_band_name && <span className="ml-1 text-zinc-400">({b.user_band_name})</span>}
-                    </p>
+                    <p className="text-sm font-medium">{b.user_name || "—"}</p>
+                    {b.user_band_name && (
+                      <p className="text-xs text-zinc-400">{b.user_band_name}</p>
+                    )}
                   </div>
                 </div>
 
