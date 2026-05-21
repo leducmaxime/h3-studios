@@ -83,9 +83,10 @@ describe("calculatePrice", () => {
   it("should handle midnight as end time", () => {
     const weekday = new Date("2026-02-13");
     const result = calculatePrice("la-scene", "solo", weekday, "22:00", "00:00");
-    
-    expect(result.breakdown).toHaveLength(4);
-    expect(result.total).toBe(12);
+
+    // 22:00, 22:30, 23:00, 23:30, 00:00 = 5 slots = 2.5 hours
+    expect(result.breakdown).toHaveLength(5);
+    expect(result.total).toBe(15);
   });
 });
 
@@ -121,9 +122,12 @@ describe("formatDuration", () => {
   });
 
   it("should handle midnight as end time", () => {
-    expect(formatDuration("22:00", "00:00")).toBe("2h");
-    expect(formatDuration("23:00", "00:00")).toBe("1h");
-    expect(formatDuration("23:30", "00:00")).toBe("30min");
+    // 22:00 -> 00:00 = 5 slots = 2.5h
+    expect(formatDuration("22:00", "00:00")).toBe("2h30");
+    // 23:00 -> 00:00 = 3 slots = 1.5h
+    expect(formatDuration("23:00", "00:00")).toBe("1h30");
+    // 23:30 -> 00:00 = 2 slots = 1h
+    expect(formatDuration("23:30", "00:00")).toBe("1h");
   });
 });
 

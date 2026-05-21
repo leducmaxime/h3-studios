@@ -14,6 +14,8 @@ import {
   ALL_TIME_SLOTS,
   canBeStartTime,
   canBeEndTime,
+  isSlotBooked as isSlotBookedUnified,
+  isRangeBookable,
   type GroupType,
   type StudioId,
   type OccupancyInfo,
@@ -21,7 +23,7 @@ import {
 
 interface TimeSlotPickerProps {
   date: Date;
-  availability: Set<string> | Set<OccupancyInfo>;
+  availability: Set<OccupancyInfo>;
   startTime: string | null;
   endTime: string | null;
   onSelectRange: (start: string, end: string) => void;
@@ -81,77 +83,12 @@ export function TimeSlotPicker({
     return sceneClose > podiumClose ? sceneClose : podiumClose;
   }, [studioFilter, date]);
 
-  const sceneTimeSlots = useMemo(() => getStudioTimeSlots("la-scene", date), [date]);
-  const podiumTimeSlots = useMemo(() => getStudioTimeSlots("le-podium", date), [date]);
-
-  const occupancyArray = useMemo(() => {
-    const items = Array.from(availability as Set<unknown>);
-    return items
-      .map((item): OccupancyInfo | null => {
-        if (typeof item === "string") {
-          const [studioId, time] = item.split("-");
-          if (studioId && time) {
-            return { studioId: studioId as StudioId, time, groupType: "blocked" };
-          }
-          return null;
-        }
-        return item as OccupancyInfo;
-      })
-      .filter((item): item is OccupancyInfo => item !== null);
-  }, [availability]);
-
-  const isOccupiedBy = useCallback(
-    (studioId: StudioId, time: string): OccupancyInfo | null => {
-      return occupancyArray.find((item) => item.studioId === studioId && item.time === time) || null;
-    },
-    [occupancyArray]
-  );
-
-  const isSlotBooked = useCallback(
+  // Unified slot booking check — single source of truth from booking.ts
+  const checkSlotBooked = useCallback(
     (time: string): boolean => {
-      if (studioFilter) {
-        const occupant = isOccupiedBy(studioFilter, time);
-        if (!occupant) return false;
-
-        // Solo/Duo: any occupation = unavailable
-        if (groupType !== "group") {
-          return true;
-        }
-
-        // Groupe
-        if (occupant.groupType === "group" || occupant.groupType === "blocked") {
-          return true;
-        }
-
-        // Occupied by solo/duo - available only if other studio is free and open
-        const otherStudio = studioFilter === "la-scene" ? "le-podium" : "la-scene";
-        const otherOccupant = isOccupiedBy(otherStudio, time);
-        const otherOpen = (otherStudio === "la-scene" ? sceneTimeSlots : podiumTimeSlots).includes(time);
-        return !!otherOccupant || !otherOpen;
-      }
-
-      // SANS studioFilter
-      const sceneOccupant = isOccupiedBy("la-scene", time);
-      const podiumOccupant = isOccupiedBy("le-podium", time);
-
-      if (groupType !== "group") {
-        // Solo/Duo: unavailable only if BOTH studios are occupied OR closed
-        const sceneAvailable = !sceneOccupant && sceneTimeSlots.includes(time);
-        const podiumAvailable = !podiumOccupant && podiumTimeSlots.includes(time);
-        return !(sceneAvailable || podiumAvailable);
-      }
-
-      // Groupe: unavailable if no studio is available (open and free, or displaceable to open studio)
-      const sceneOpen = sceneTimeSlots.includes(time);
-      const podiumOpen = podiumTimeSlots.includes(time);
-      const sceneAvailable = (!sceneOccupant && sceneOpen) ||
-        ((sceneOccupant?.groupType === "solo" || sceneOccupant?.groupType === "duo") && !podiumOccupant && podiumOpen);
-      const podiumAvailable = (!podiumOccupant && podiumOpen) ||
-        ((podiumOccupant?.groupType === "solo" || podiumOccupant?.groupType === "duo") && !sceneOccupant && sceneOpen);
-
-      return !(sceneAvailable || podiumAvailable);
+      return isSlotBookedUnified(time, groupType, availability, date, studioFilter);
     },
-    [isOccupiedBy, studioFilter, groupType]
+    [availability, date, groupType, studioFilter]
   );
 
   const isSlotStartOfBooking = useCallback(
@@ -159,9 +96,9 @@ export function TimeSlotPicker({
       const slotIdx = visibleSlots.indexOf(time);
       if (slotIdx <= 0) return false;
       const prevSlot = visibleSlots[slotIdx - 1];
-      return isSlotBooked(time) && !isSlotBooked(prevSlot);
+      return checkSlotBooked(time) && !checkSlotBooked(prevSlot);
     },
-    [isSlotBooked, visibleSlots]
+    [checkSlotBooked, visibleSlots]
   );
 
   const handleClear = useCallback(() => {
@@ -179,9 +116,9 @@ export function TimeSlotPicker({
 
     const slotIdx = visibleSlots.indexOf(slot);
     const prevSlot = slotIdx > 0 ? visibleSlots[slotIdx - 1] : null;
-    const isAfterOccupied = prevSlot ? isSlotBooked(prevSlot) : false;
+    const isAfterOccupied = prevSlot ? checkSlotBooked(prevSlot) : false;
 
-    if (isSlotBooked(slot)) {
+    if (checkSlotBooked(slot)) {
       if (selectionMode === "end" && isAfterOccupied) {
         setSelectedStart(slot);
         setSelectedEnd(null);
@@ -195,7 +132,7 @@ export function TimeSlotPicker({
     setSelectedStart(slot);
     setSelectedEnd(null);
     setSelectionMode("end");
-  }, [isSlotBooked, selectedStart, visibleSlots, selectionMode, handleClear]);
+  }, [checkSlotBooked, selectedStart, visibleSlots, selectionMode, handleClear]);
 
   const handleSelectEnd = useCallback((slot: string) => {
     if (!selectedStart) return;
@@ -211,19 +148,23 @@ export function TimeSlotPicker({
     }
     if (endIdx - startIdx < 2) return;
 
-    if (canBeEndTime(selectedStart, slot, visibleSlots, isSlotBooked)) {
-      setSelectedEnd(slot);
-      setSelectionMode("done");
-      onSelectRange(selectedStart, slot);
-      onConfirm();
-      return;
+    if (canBeEndTime(selectedStart, slot, visibleSlots, checkSlotBooked)) {
+      // Range-level validation: ensure the ENTIRE range can be booked in a single studio
+      const rangeCheck = isRangeBookable(selectedStart, slot, groupType, availability, date, studioFilter);
+      if (rangeCheck.bookable) {
+        setSelectedEnd(slot);
+        setSelectionMode("done");
+        onSelectRange(selectedStart, slot);
+        onConfirm();
+        return;
+      }
     }
 
     const slotIdx = visibleSlots.indexOf(slot);
     const prevSlot = slotIdx > 0 ? visibleSlots[slotIdx - 1] : null;
-    const isAfterOccupied = prevSlot ? isSlotBooked(prevSlot) : false;
+    const isAfterOccupied = prevSlot ? checkSlotBooked(prevSlot) : false;
 
-    if (!isSlotBooked(slot) && isAfterOccupied) {
+    if (!checkSlotBooked(slot) && isAfterOccupied) {
       setSelectedStart(slot);
       setSelectedEnd(null);
       setSelectionMode("end");
@@ -231,7 +172,7 @@ export function TimeSlotPicker({
     }
 
     handleClear();
-  }, [selectedStart, visibleSlots, isSlotBooked, onSelectRange, onConfirm, handleClear]);
+  }, [selectedStart, visibleSlots, checkSlotBooked, onSelectRange, onConfirm, handleClear, groupType, availability, date, studioFilter]);
 
   const handleSlotClick = useCallback((slot: string) => {
     if (selectionMode === "end" && slot === selectedStart) {
@@ -247,10 +188,13 @@ export function TimeSlotPicker({
 
   const handleSlotMouseEnter = useCallback((slot: string) => {
     if (selectionMode !== "end" || !selectedStart) return;
-    if (canBeEndTime(selectedStart, slot, visibleSlots, isSlotBooked)) {
-      setHoveredEndSlot(slot);
+    if (canBeEndTime(selectedStart, slot, visibleSlots, checkSlotBooked)) {
+      const rangeCheck = isRangeBookable(selectedStart, slot, groupType, availability, date, studioFilter);
+      if (rangeCheck.bookable) {
+        setHoveredEndSlot(slot);
+      }
     }
-  }, [selectionMode, selectedStart, visibleSlots, isSlotBooked]);
+  }, [selectionMode, selectedStart, visibleSlots, checkSlotBooked, groupType, availability, date, studioFilter]);
 
   const handleSlotMouseLeave = useCallback(() => {
     setHoveredEndSlot(null);
@@ -261,7 +205,7 @@ export function TimeSlotPicker({
       const durationSlots = durationHours * 2;
 
       const startIdx = visibleSlots.findIndex((slot) =>
-        canBeStartTime(slot, visibleSlots, isSlotBooked)
+        canBeStartTime(slot, visibleSlots, checkSlotBooked)
       );
       if (startIdx === -1) return;
 
@@ -272,9 +216,12 @@ export function TimeSlotPicker({
       let end: string | null = null;
       for (let i = maxEndIdx; i > startIdx + 1; i--) {
         const candidateEnd = i < visibleSlots.length ? visibleSlots[i] : closingTime;
-        if (canBeEndTime(start, candidateEnd, visibleSlots, isSlotBooked)) {
-          end = candidateEnd;
-          break;
+        if (canBeEndTime(start, candidateEnd, visibleSlots, checkSlotBooked)) {
+          const rangeCheck = isRangeBookable(start, candidateEnd, groupType, availability, date, studioFilter);
+          if (rangeCheck.bookable) {
+            end = candidateEnd;
+            break;
+          }
         }
       }
 
@@ -286,7 +233,7 @@ export function TimeSlotPicker({
       onSelectRange(start, end);
       onConfirm();
     },
-    [visibleSlots, isSlotBooked, closingTime, onSelectRange, onConfirm]
+    [visibleSlots, checkSlotBooked, closingTime, onSelectRange, onConfirm, groupType, availability, date, studioFilter]
   );
 
   const activeRange = useMemo(() => {
@@ -298,7 +245,7 @@ export function TimeSlotPicker({
 
   const getSlotStyle = useCallback(
     (slot: string) => {
-      const isBooked = isSlotBooked(slot);
+      const isBooked = checkSlotBooked(slot);
       const isPeak = hasPeakPricing && isPeakTime(date, slot);
       const slotIdx = visibleSlots.indexOf(slot);
       const isSelectedStart = selectedStart === slot;
@@ -349,7 +296,7 @@ export function TimeSlotPicker({
         ? "bg-primary/5 hover:bg-primary/10 border-white/10 cursor-pointer"
         : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer";
     },
-    [isSlotBooked, isSlotStartOfBooking, hasPeakPricing, date, activeRange, visibleSlots, closingTime, selectedStart, selectedEnd, selectionMode, hoveredEndSlot]
+    [checkSlotBooked, isSlotStartOfBooking, hasPeakPricing, date, activeRange, visibleSlots, closingTime, selectedStart, selectedEnd, selectionMode, hoveredEndSlot]
   );
 
   const priceInfo = useMemo(() => {
@@ -456,7 +403,7 @@ export function TimeSlotPicker({
           {rows.map((row, rowIdx) => (
             <div key={rowIdx} className="grid grid-cols-8 sm:grid-cols-16 gap-1">
               {row.map((slot) => {
-                const isBooked = isSlotBooked(slot);
+                const isBooked = checkSlotBooked(slot);
                 const isPeak = hasPeakPricing && isPeakTime(date, slot);
                 const style = getSlotStyle(slot);
                 const isStart = selectedStart === slot;

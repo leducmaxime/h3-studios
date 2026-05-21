@@ -16,6 +16,7 @@ import {
   calculateEquipmentPrice,
   generateBookingRef,
   assignStudioForSoloDuo,
+  isRangeBookable,
   loadUserPreferences,
   saveUserPreferences,
   TIME_SLOTS,
@@ -455,16 +456,29 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const confirmTimeSelection = useCallback(() => {
     setState((s) => {
-      if (s.startTime && s.endTime) {
+      if (s.startTime && s.endTime && s.selectedDate && s.groupType) {
+        // Unified range validation: ensure the selected range is actually bookable
+        const rangeCheck = isRangeBookable(
+          s.startTime,
+          s.endTime,
+          s.groupType,
+          mergedAvailability,
+          s.selectedDate
+        );
+        if (!rangeCheck.bookable) {
+          // Range is not bookable — reset selection (shouldn't happen if UI is correct)
+          return { ...s, startTime: null, endTime: null };
+        }
+
         if (s.flow === "time-first") {
           if (s.groupType === "solo" || s.groupType === "duo") {
-            const studio = assignStudioForSoloDuo(s.selectedDate!, s.startTime, s.endTime, mergedAvailability);
+            const studio = assignStudioForSoloDuo(s.selectedDate, s.startTime, s.endTime, mergedAvailability);
             if (studio) {
               return { ...s, studioId: studio };
             }
-            // No studio available - reset selection (shouldn't happen if UI is correct)
             return { ...s, startTime: null, endTime: null };
           }
+          // Group in time-first: studio chosen later, but range is validated above
           return s;
         }
         return s;

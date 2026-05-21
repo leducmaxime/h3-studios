@@ -2,7 +2,15 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { ALL_TIME_SLOTS, getStudioTimeSlots, MIN_BOOKING_SLOTS, type StudioId, type CompletedBooking } from "@/lib/booking";
+import {
+  ALL_TIME_SLOTS,
+  getStudioTimeSlots,
+  MIN_BOOKING_SLOTS,
+  type StudioId,
+  type CompletedBooking,
+  type OccupancyInfo,
+  isSlotAvailable,
+} from "@/lib/booking";
 import { formatDateISO } from "@/lib/utils";
 
 interface WeekCalendarProps {
@@ -62,11 +70,11 @@ function formatWeekRange(dates: Date[]): string {
   if (first.getMonth() === last.getMonth()) {
     return `${first.getDate()} - ${last.getDate()} ${MONTHS_FR[first.getMonth()]} ${first.getFullYear()}`;
   }
-  return `${first.getDate()} ${MONTHS_FR[first.getMonth()]} - ${last.getDate()} ${MONTHS_FR[last.getMonth()]} ${last.getFullYear()}`;
+  return `${first.getDate()} ${MONTHS_FR[first.getMonth()]} - ${last.getDate()} ${MONTHS_FR[last.getMonth()]} ${first.getFullYear()}`;
 }
 
-function getCartOccupancy(cart: CompletedBooking[], dateStr: string): Set<string> {
-  const set = new Set<string>();
+function getCartOccupancy(cart: CompletedBooking[], dateStr: string): Set<OccupancyInfo> {
+  const set = new Set<OccupancyInfo>();
   for (const booking of cart) {
     const d = booking.date instanceof Date ? booking.date : new Date(booking.date);
     const bookingDateStr = formatDateISO(d);
@@ -76,13 +84,22 @@ function getCartOccupancy(cart: CompletedBooking[], dateStr: string): Set<string
     if (endIdx === -1 && booking.endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
     if (startIdx === -1 || endIdx === -1) continue;
     for (let i = startIdx; i < endIdx; i++) {
-      set.add(`${booking.studioId}-${ALL_TIME_SLOTS[i]}`);
+      set.add({ studioId: booking.studioId, time: ALL_TIME_SLOTS[i], groupType: booking.groupType });
     }
   }
   return set;
 }
 
-function hasBookableAvailability(occupancy: Set<string>, date: Date, studioFilter?: StudioId | null): boolean {
+/**
+ * Check if a date has at least MIN_BOOKING_SLOTS consecutive available slots.
+ * Uses the unified availability engine with "solo" groupType (most restrictive)
+ * to ensure we never show a day as available when it can't actually be booked.
+ */
+function hasBookableAvailability(
+  occupancy: Set<OccupancyInfo>,
+  date: Date,
+  studioFilter?: StudioId | null
+): boolean {
   const studios: StudioId[] = studioFilter ? [studioFilter] : ["la-scene", "le-podium"];
 
   for (const studioId of studios) {
@@ -90,8 +107,9 @@ function hasBookableAvailability(occupancy: Set<string>, date: Date, studioFilte
     let consecutive = 0;
 
     for (const time of slots) {
-      const blocked = occupancy.has(`${studioId}-${time}`);
-      consecutive = blocked ? 0 : consecutive + 1;
+      // Use "solo" as the most restrictive check — no displacement allowed
+      const available = isSlotAvailable(time, "solo", occupancy, date, studioId);
+      consecutive = available ? consecutive + 1 : 0;
       if (consecutive >= MIN_BOOKING_SLOTS) return true;
     }
   }
@@ -102,7 +120,7 @@ function hasBookableAvailability(occupancy: Set<string>, date: Date, studioFilte
 export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = [] }: WeekCalendarProps) {
   const today = useMemo(() => new Date(), []);
   const [dayOffset, setDayOffset] = useState(0);
-  const [weekOccupancy, setWeekOccupancy] = useState<Map<string, Set<string>>>(new Map());
+  const [weekOccupancy, setWeekOccupancy] = useState<Map<string, Set<OccupancyInfo>>>(new Map());
 
   const weekDates = useMemo(() => getSlidingWeekDates(today, dayOffset), [dayOffset, today]);
 
@@ -116,9 +134,9 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
       fetch(`/api/availability?date=${dateStr}`)
         .then((res) => res.json())
         .then((data: unknown) => {
-          const json = data as { success: boolean; data: { studioId: string; time: string }[] };
+          const json = data as { success: boolean; data: OccupancyInfo[] };
           if (json.success && Array.isArray(json.data)) {
-            const set = new Set<string>(json.data.map((item) => `${item.studioId}-${item.time}`));
+            const set = new Set<OccupancyInfo>(json.data);
             setWeekOccupancy((prev) => new Map(prev).set(dateStr, set));
           }
         })
@@ -168,9 +186,9 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
           const tooFar = isTooFarInFuture(date);
           const todayDate = isToday(date);
           const selected = selectedDate && isSameDay(date, selectedDate);
-          const apiOccupancy = weekOccupancy.get(dateKey) ?? new Set<string>();
+          const apiOccupancy = weekOccupancy.get(dateKey) ?? new Set<OccupancyInfo>();
           const cartOccupancyForDate = getCartOccupancy(cart, dateKey);
-          const merged = new Set<string>([...apiOccupancy, ...cartOccupancyForDate]);
+          const merged = new Set<OccupancyInfo>([...apiOccupancy, ...cartOccupancyForDate]);
           const hasAvailability = hasBookableAvailability(merged, date, studioFilter);
           const isFull = !past && !tooFar && !hasAvailability;
           const disabled = past || tooFar || !hasAvailability;

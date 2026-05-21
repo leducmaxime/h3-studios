@@ -245,6 +245,161 @@ export function parseOccupancy(occupancy: Set<string | OccupancyInfo>): Set<Occu
   return result;
 }
 
+// =============================================================================
+// UNIFIED AVAILABILITY ENGINE
+// Single source of truth for slot/range availability across all components.
+// =============================================================================
+
+export interface SlotDetails {
+  studioId: StudioId;
+  time: string;
+  isOpen: boolean;
+  occupant: OccupancyInfo | null;
+}
+
+/**
+ * Get per-studio details for a single time slot.
+ */
+export function getSlotDetails(
+  time: string,
+  occupancy: Set<OccupancyInfo>,
+  date: Date
+): SlotDetails[] {
+  return (["la-scene", "le-podium"] as StudioId[]).map((studioId) => {
+    const isOpen = getStudioTimeSlots(studioId, date).includes(time);
+    const occupant =
+      Array.from(occupancy).find(
+        (o) => o.studioId === studioId && o.time === time
+      ) || null;
+    return { studioId, time, isOpen, occupant };
+  });
+}
+
+/**
+ * Get the list of studios that can accommodate a specific slot for the given group type.
+ * For solo/duo: studio must be open and strictly free.
+ * For group: studio must be open and either free OR occupied by solo/duo that can be
+ * displaced to the other studio (other studio must be strictly free and open).
+ */
+export function getAvailableStudiosForSlot(
+  time: string,
+  groupType: GroupType,
+  occupancy: Set<OccupancyInfo>,
+  date: Date
+): StudioId[] {
+  const details = getSlotDetails(time, occupancy, date);
+  const available: StudioId[] = [];
+
+  for (const studio of details) {
+    if (!studio.isOpen) continue;
+    if (!studio.occupant) {
+      available.push(studio.studioId);
+    } else if (
+      groupType === "group" &&
+      studio.occupant.groupType !== "group" &&
+      studio.occupant.groupType !== "blocked"
+    ) {
+      const otherStudio = details.find(
+        (d) => d.studioId !== studio.studioId
+      )!;
+      if (otherStudio.isOpen && !otherStudio.occupant) {
+        available.push(studio.studioId);
+      }
+    }
+  }
+
+  return available;
+}
+
+/**
+ * Unified per-slot availability check.
+ * With studioFilter: checks that specific studio.
+ * Without studioFilter: checks if ANY studio has the slot available.
+ */
+export function isSlotAvailable(
+  time: string,
+  groupType: GroupType,
+  occupancy: Set<OccupancyInfo>,
+  date: Date,
+  studioFilter?: StudioId
+): boolean {
+  const availableStudios = getAvailableStudiosForSlot(
+    time,
+    groupType,
+    occupancy,
+    date
+  );
+  if (studioFilter) {
+    return availableStudios.includes(studioFilter);
+  }
+  return availableStudios.length > 0;
+}
+
+/**
+ * Inverse of isSlotAvailable — for display (red = booked).
+ */
+export function isSlotBooked(
+  time: string,
+  groupType: GroupType,
+  occupancy: Set<OccupancyInfo>,
+  date: Date,
+  studioFilter?: StudioId
+): boolean {
+  return !isSlotAvailable(time, groupType, occupancy, date, studioFilter);
+}
+
+/**
+ * Check if a time range can be booked in a single studio for the given group type.
+ * Returns the studioId if bookable, or {bookable:false} if not.
+ * This is the SINGLE SOURCE OF TRUTH for range validity.
+ */
+export function isRangeBookable(
+  startTime: string,
+  endTime: string,
+  groupType: GroupType,
+  occupancy: Set<OccupancyInfo>,
+  date: Date,
+  studioFilter?: StudioId
+): { bookable: boolean; studioId?: StudioId } {
+  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
+  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    return { bookable: false };
+  }
+
+  const studiosToCheck = studioFilter
+    ? [studioFilter]
+    : (["la-scene", "le-podium"] as StudioId[]);
+
+  for (const studioId of studiosToCheck) {
+    let studioCanBook = true;
+    for (let i = startIdx; i < endIdx; i++) {
+      const time = ALL_TIME_SLOTS[i];
+      const availableStudios = getAvailableStudiosForSlot(
+        time,
+        groupType,
+        occupancy,
+        date
+      );
+      if (!availableStudios.includes(studioId)) {
+        studioCanBook = false;
+        break;
+      }
+    }
+    if (studioCanBook) {
+      return { bookable: true, studioId };
+    }
+  }
+
+  return { bookable: false };
+}
+
+// =============================================================================
+// LEGACY / RANGE-LEVEL AVAILABILITY (kept for backward compatibility)
+// =============================================================================
+
 /**
  * Check if a studio is strictly available for the given time range.
  * Any occupation (group, solo, duo, or blocked) makes it unavailable.
@@ -257,11 +412,13 @@ export function isStudioAvailable(
 ): boolean {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length - 1;
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
   const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
 
   for (const slot of range) {
-    const occupant = Array.from(occupancy).find(o => o.studioId === studioId && o.time === slot);
+    const occupant = Array.from(occupancy).find(
+      (o) => o.studioId === studioId && o.time === slot
+    );
     if (occupant) {
       return false;
     }
@@ -284,14 +441,16 @@ export function isStudioAvailableForGroup(
 ): boolean {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length - 1;
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
   const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
 
   const otherStudioId = studioId === "la-scene" ? "le-podium" : "la-scene";
   const otherStudioSlots = getStudioTimeSlots(otherStudioId, date);
 
   for (const slot of range) {
-    const occupant = Array.from(occupancy).find(o => o.studioId === studioId && o.time === slot);
+    const occupant = Array.from(occupancy).find(
+      (o) => o.studioId === studioId && o.time === slot
+    );
     if (!occupant) continue; // Free slot, OK
 
     if (occupant.groupType === "group" || occupant.groupType === "blocked") {
@@ -299,7 +458,9 @@ export function isStudioAvailableForGroup(
     }
 
     // Solo/duo - check if other studio is free AND open at this slot
-    const otherOccupant = Array.from(occupancy).find(o => o.studioId === otherStudioId && o.time === slot);
+    const otherOccupant = Array.from(occupancy).find(
+      (o) => o.studioId === otherStudioId && o.time === slot
+    );
     if (otherOccupant || !otherStudioSlots.includes(slot)) {
       return false; // Other studio occupied or closed = can't displace
     }
@@ -310,7 +471,6 @@ export function isStudioAvailableForGroup(
 
 /**
  * Check if any studio is available for a group booking (without studio filter).
- * Returns true if at least one studio is available (free or with displaceable solo/duo).
  */
 export function isAnyStudioAvailableForGroup(
   startTime: string,
@@ -328,8 +488,6 @@ export function isAnyStudioAvailableForGroup(
  * Check if a slot can be a valid start time.
  * A slot can start if it's not occupied and there are at least
  * MIN_BOOKING_SLOTS (2) available slots from it onward (including itself).
- * Respects closing time boundaries (e.g. "22:00" can't start at Le Podium
- * which closes at 22:30, but "23:00" CAN start at La Scène which closes at 00:00).
  */
 export function canBeStartTime(
   slot: string,
@@ -340,12 +498,9 @@ export function canBeStartTime(
   if (slotIdx === -1) return false;
   if (isSlotOccupied(slot)) return false;
 
-  // Count consecutive free slots from this position
   let freeCount = 0;
   for (let i = slotIdx; i < visibleSlots.length; i++) {
-    const currentSlot = visibleSlots[i];
-    if (i === visibleSlots.length - 1) break;
-    if (isSlotOccupied(currentSlot)) break;
+    if (isSlotOccupied(visibleSlots[i])) break;
     freeCount++;
   }
 
@@ -380,7 +535,6 @@ export function canBeEndTime(
   if (duration < MIN_BOOKING_SLOTS) return false;
 
   // All slots between start and end (exclusive of start, up to but not including end) must be free
-  // The end slot itself can be occupied or free — no check needed
   for (let i = startIdx + 1; i < endIdx; i++) {
     if (i < visibleSlots.length && isSlotOccupied(visibleSlots[i])) return false;
   }
@@ -402,33 +556,9 @@ export function assignStudioForSoloDuo(
   occupancy: Set<string | OccupancyInfo>
 ): StudioId | null {
   const detailedOccupancy = parseOccupancy(occupancy);
-  const podiumSlots = getStudioTimeSlots("le-podium", date);
-  const sceneSlots = getStudioTimeSlots("la-scene", date);
-
-  // Collect all slots in the booking range
-  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length - 1;
-  const bookedRange = ALL_TIME_SLOTS.slice(startIdx, endIdx);
-
-  // Check if each studio can cover this time range (opening hours)
-  const podiumCoversRange = bookedRange.every((t) => podiumSlots.includes(t));
-  const sceneCoversRange = bookedRange.every((t) => sceneSlots.includes(t));
-
-  // Check strict availability (no overlap with anyone)
-  const sceneAvailable = isStudioAvailable("la-scene", startTime, endTime, detailedOccupancy);
-  const podiumAvailable = isStudioAvailable("le-podium", startTime, endTime, detailedOccupancy);
-
-  // If only one studio covers the range, use that one if available
-  if (!podiumCoversRange && sceneCoversRange && sceneAvailable) return "la-scene";
-  if (!sceneCoversRange && podiumCoversRange && podiumAvailable) return "le-podium";
-
-  // Prefer La Scène by default
-  if (sceneAvailable && sceneCoversRange) return "la-scene";
-  if (podiumAvailable && podiumCoversRange) return "le-podium";
-
-  // Neither available
-  return null;
+  // Use unified range engine — prefers La Scène, checks opening hours + strict availability
+  const result = isRangeBookable(startTime, endTime, "solo", detailedOccupancy, date);
+  return result.bookable ? result.studioId ?? null : null;
 }
 
 let _publicHolidays: Set<string> = new Set();
@@ -483,14 +613,14 @@ export function calculatePrice(
 ): { total: number; breakdown: PriceSlot[] } {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
   let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.length - 1;
+  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.length;
 
   if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
     return { total: 0, breakdown: [] };
   }
 
   const breakdown: PriceSlot[] = [];
-  
+
   for (let i = startIndex; i < endIndex; i++) {
     const time = ALL_TIME_SLOTS[i];
     const isPeak = isPeakTime(date, time);
@@ -509,10 +639,10 @@ export function calculatePrice(
 export function formatDuration(startTime: string, endTime: string): string {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
   let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.length - 1;
+  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.length;
 
   if (startIndex === -1 || endIndex === -1) return "";
-  
+
   const slots = endIndex - startIndex;
   const totalMinutes = slots * SLOT_DURATION_MINUTES;
   const hours = Math.floor(totalMinutes / 60);

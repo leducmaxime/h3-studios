@@ -9,6 +9,7 @@ import {
   calculatePrice,
   formatPrice,
   formatDuration,
+  isRangeBookable,
 } from "@/lib/booking";
 
 interface StudioCardProps {
@@ -18,7 +19,7 @@ interface StudioCardProps {
   endTime: string;
   groupType: GroupType;
   onSelect: () => void;
-  availability: Set<string> | Set<OccupancyInfo>;
+  availability: Set<OccupancyInfo>;
 }
 
 export function StudioCard({
@@ -34,30 +35,9 @@ export function StudioCard({
   const { total, breakdown } = calculatePrice(studioId, groupType, date, startTime, endTime);
   const duration = formatDuration(startTime, endTime);
 
-  const occupancyArray = Array.from(availability as Set<unknown>).map((item): OccupancyInfo | null => {
-    if (typeof item === "string") {
-      const [sid, time] = item.split("-");
-      if (sid && time) {
-        return { studioId: sid as StudioId, time, groupType: "blocked" };
-      }
-      return null;
-    }
-    return item as OccupancyInfo;
-  }).filter((item): item is OccupancyInfo => item !== null);
-
-  const conflictingSlots = breakdown.map((slot) => {
-    const occupant = occupancyArray.find((o) => o.studioId === studioId && o.time === slot.time);
-    return { slot, occupant };
-  }).filter(({ occupant }) => occupant !== undefined);
-
-  const hasGroupConflict = conflictingSlots.some(({ occupant }) => occupant?.groupType === "group" || occupant?.groupType === "blocked");
-  const hasSoloDuoConflict = conflictingSlots.some(({ occupant }) => occupant?.groupType === "solo" || occupant?.groupType === "duo");
-
-  const isAvailable = groupType === "group"
-    ? !hasGroupConflict
-    : !hasGroupConflict && !hasSoloDuoConflict;
-
-  const canSelectWithMove = groupType === "group" && hasSoloDuoConflict && !hasGroupConflict;
+  // Unified range-level availability check — single source of truth
+  const rangeCheck = isRangeBookable(startTime, endTime, groupType, availability, date, studioId);
+  const isAvailable = rangeCheck.bookable;
 
   const hasPeakSlots = breakdown.some((slot) => slot.isPeak);
   const hasOffPeakSlots = breakdown.some((slot) => !slot.isPeak);
