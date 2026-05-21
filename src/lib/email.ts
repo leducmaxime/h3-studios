@@ -339,6 +339,9 @@ function buildEmailHtml(data: BookingConfirmationData): string {
           <tr>
             <td style="background-color:#0a0a0a;padding:30px;text-align:center;border-top:1px solid #222222;">
               <p style="margin:0 0 16px 0;color:#555555;font-size:12px;">3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie</p>
+              <p style="margin:0 0 20px 0;color:#aaaaaa;font-size:13px;line-height:1.5;">
+                Suivez-nous sur <a href="https://www.instagram.com/h3_studios_sucy/" target="_blank" rel="noopener noreferrer" style="color:#facc15;text-decoration:none;font-weight:600;">Instagram @h3_studios_sucy</a> pour découvrir nos actualités, les coulisses des studios et les artistes qui répètent chez nous !
+              </p>
               <p style="margin:0 0 16px 0;">
                 <a href="https://www.instagram.com/h3_studios_sucy/" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:0 8px;text-decoration:none;">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
