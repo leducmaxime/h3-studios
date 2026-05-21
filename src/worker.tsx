@@ -890,6 +890,7 @@ const app = defineApp([
           userPhone: phone,
           promoCode: body.promoCode,
           promoDiscount: body.promoDiscount,
+          promoType: promoType,
         }).catch((err) => {
           console.error("Failed to send booking confirmation email:", err);
         });

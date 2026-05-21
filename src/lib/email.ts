@@ -17,6 +17,7 @@ export interface BookingConfirmationData {
   userPhone: string;
   promoCode?: string | null;
   promoDiscount?: number;
+  promoType?: string | null;
 }
 
 function formatDateFrench(dateStr: string): string {
@@ -135,6 +136,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   const paymentLabel = getPaymentMethodLabel(data.paymentMethod, data.paymentStatus, data.totalPrice);
   const equipmentLabel = buildEquipmentList(data.equipment);
   const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
+  const promoLabel = data.promoType === "percentage" ? `${data.promoDiscount}%` : `${formatPrice(data.promoDiscount || 0)}`;
   const durationHours = calculateDurationHours(data.startTime, data.endTime);
   const isGroup = data.groupType === "group";
   const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, durationHours);
@@ -289,7 +291,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
                       ${hasPromo ? `
                       <tr>
                         <td style="padding:6px 0;color:#facc15;font-size:14px;">
-                          Code promo <strong>${data.promoCode}</strong>
+                          Code promo <strong>${data.promoCode}</strong> (-${promoLabel})
                         </td>
                         <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
                       </tr>
