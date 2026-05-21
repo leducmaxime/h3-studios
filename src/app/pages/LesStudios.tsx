@@ -86,7 +86,7 @@ export function LesStudios() {
         {studios.map((studio, i) => (
           <div
             key={i}
-            className={`group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/15 transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+            className={`group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-black transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
             style={{ transitionDelay: `${300 + i * 100}ms` }}
           >
             <div className="relative aspect-video">
