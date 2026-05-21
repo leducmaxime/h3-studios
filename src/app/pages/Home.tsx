@@ -1,7 +1,7 @@
 "use client";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
-import { Music, Radio, Calendar, Star } from "lucide-react";
+import { ArrowRight, Music, Radio, Calendar, Star, Wifi, TrainFront, MapPin, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const services = [
@@ -48,10 +48,10 @@ export function Home() {
             <div className="flex flex-col items-center gap-4 sm:flex-row">
               <a
                 href="/reservation"
-                className="inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 md:px-12 md:py-5 md:text-2xl"
+                className="group inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 md:px-12 md:py-5 md:text-2xl"
               >
-                <Music className="h-6 w-6 md:h-7 md:w-7" />
                 Réserver maintenant
+                <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1 md:h-7 md:w-7" />
               </a>
               <a
                 href="/les-studios"
@@ -60,9 +60,25 @@ export function Home() {
                 Découvrir les studios
               </a>
             </div>
-            <p className="mt-2 text-sm text-white/50">
-              Ouvert 7j/7 • Uniquement sur réservation
-            </p>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
+              {[
+                { icon: Wifi, text: "Wifi gratuit" },
+                { icon: TrainFront, text: "2 min du RER A Sucy-Bonneuil" },
+                { icon: MapPin, text: "20 min de Paris" },
+                { icon: Clock, text: "Ouvert 7j/7" },
+              ].map((h, i) => {
+                const Icon = h.icon;
+                return (
+                  <span
+                    key={i}
+                    className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-white/60 backdrop-blur-sm"
+                  >
+                    <Icon className="h-3.5 w-3.5 text-primary" />
+                    {h.text}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
 
