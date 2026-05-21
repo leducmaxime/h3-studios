@@ -25,7 +25,7 @@ const RSS_APP_FEED_URL = "https://rss.app/feeds/wpmloa9fZdyyGMag.xml";
 
 async function fetchMediaPosts(accessToken: string): Promise<InstagramPost[]> {
   const response = await fetch(
-    `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&access_token=${accessToken}`,
+    `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&limit=50&access_token=${accessToken}`,
     { cf: { cacheTtl: 3600 } }
   );
 
@@ -146,7 +146,7 @@ async function parseInstagramPosts(data: { data: Array<{ id: string; caption: st
 async function fetchTaggedPosts(accessToken: string): Promise<InstagramPost[]> {
   try {
     const response = await fetch(
-      `https://graph.instagram.com/me/tags?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&access_token=${accessToken}`,
+      `https://graph.instagram.com/me/tags?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&limit=50&access_token=${accessToken}`,
       { cf: { cacheTtl: 3600 } }
     );
 
@@ -174,49 +174,17 @@ async function fetchTaggedPosts(accessToken: string): Promise<InstagramPost[]> {
   }
 }
 
-async function fetchCollaborationPosts(accessToken: string): Promise<InstagramPost[]> {
-  try {
-    const response = await fetch(
-      `https://graph.instagram.com/me/collaborations?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&access_token=${accessToken}`,
-      { cf: { cacheTtl: 3600 } }
-    );
-
-    if (!response.ok) {
-      console.error("Instagram collaborations API error:", response.status, await response.text());
-      return [];
-    }
-
-    const data = await response.json() as {
-      data: Array<{
-        id: string;
-        caption: string;
-        media_type: string;
-        media_url: string;
-        permalink: string;
-        thumbnail_url?: string;
-        timestamp: string;
-      }>;
-    };
-
-    return parseInstagramPosts(data, accessToken);
-  } catch (err) {
-    console.error("Failed to fetch collaboration posts:", err);
-    return [];
-  }
-}
-
 export async function fetchInstagramFeedFromAPI(accessToken: string): Promise<InstagramPost[]> {
-  const [ownPosts, taggedPosts, collaborationPosts] = await Promise.all([
+  const [ownPosts, taggedPosts] = await Promise.all([
     fetchMediaPosts(accessToken),
     fetchTaggedPosts(accessToken),
-    fetchCollaborationPosts(accessToken),
   ]);
 
   // Combine and remove duplicates by id
   const seen = new Set<string>();
   const combined: InstagramPost[] = [];
 
-  for (const post of [...ownPosts, ...taggedPosts, ...collaborationPosts]) {
+  for (const post of [...ownPosts, ...taggedPosts]) {
     if (!seen.has(post.id)) {
       seen.add(post.id);
       combined.push(post);
