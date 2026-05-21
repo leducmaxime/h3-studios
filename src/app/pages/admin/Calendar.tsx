@@ -1069,7 +1069,7 @@ export function AdminCalendar() {
                 <div className="flex items-center gap-3 rounded-lg bg-zinc-800 p-3">
                   <Users className="h-4 w-4 shrink-0 text-primary" />
                   <div>
-                    <p className="text-[10px] uppercase text-zinc-500 font-bold">Type de groupe</p>
+                    <p className="text-[10px] uppercase text-zinc-500 font-bold">Type</p>
                     <p className="text-sm font-medium">{GROUP_LABELS[b.group_type] || b.group_type}</p>
                   </div>
                 </div>
