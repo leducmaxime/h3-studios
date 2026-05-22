@@ -134,7 +134,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-primary/20 border-primary/50 text-primary",
   completed: "bg-blue-500/20 border-blue-500/50 text-blue-400",
   cancelled: "bg-red-500/20 border-red-500/50 text-red-400",
-  "no-show": "bg-yellow-500/20 border-yellow-500/50 text-yellow-400",
+  "no-show": "bg-yellow-500/20 border-red-500/70 text-yellow-400",
 };
 
 const STATUS_LABELS: Record<string, string> = {
