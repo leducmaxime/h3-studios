@@ -32,7 +32,7 @@ export function Tarifs() {
       <div className={`mt-4 flex w-full max-w-[1048px] flex-col gap-8 px-2 sm:px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="flex w-full flex-col items-center gap-8 text-center">
-            <div className="text-center font-blanka text-2xl">GRILLE TARIFAIRE</div>
+            <h2 className="text-center font-blanka text-2xl">GRILLE TARIFAIRE</h2>
             <div className="flex w-full flex-col gap-4">
               <Table className="w-full border-8 border-primary text-center">
                 <TableHeader>
@@ -108,9 +108,9 @@ export function Tarifs() {
             </div>
             <span className="text-primary">Abonnement possible sur demande</span>
 
-            <div className="text-center font-blanka text-2xl">
+            <h2 className="text-center font-blanka text-2xl">
               ENREGISTREMENT ET LOCATIONS
-            </div>
+            </h2>
             <div className="flex w-full flex-col gap-4">
               <Table className="w-full border-8 border-primary text-center">
                 <TableBody>

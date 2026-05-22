@@ -1,4 +1,4 @@
-export const SITE_URL = "https://h3-studios.amis-harmonie-sucy.workers.dev";
+export const SITE_URL = "https://h3-studios.fr";
 export const SITE_NAME = "H3 STUDIOS";
 
 export interface PageSEO {
@@ -215,23 +215,33 @@ export function generateJsonLd() {
       "@type": "GeoCoordinates",
       ...businessInfo.geo,
     },
-    openingHoursSpecification: {
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday",
-      ],
-      opens: "10:00",
-      closes: "00:00",
-    },
+    openingHoursSpecification: [
+      {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: ["Monday"],
+        opens: "18:00",
+        closes: "00:00",
+      },
+      {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        opens: "10:00",
+        closes: "00:00",
+      },
+    ],
     priceRange: businessInfo.priceRange,
     image: businessInfo.image,
-    sameAs: [],
+    sameAs: [
+      "https://www.instagram.com/h3_studios_sucy/",
+      "https://www.facebook.com/profile.php?id=100089893392179",
+    ],
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: "4.9",
+      bestRating: "5",
+      worstRating: "1",
+      reviewCount: "43",
+    },
     amenityFeature: [
       { "@type": "LocationFeatureSpecification", name: "Sound Equipment" },
       { "@type": "LocationFeatureSpecification", name: "Recording Equipment" },
@@ -293,8 +303,9 @@ export function generateJsonLd() {
 
 export function generateSitemap(): string {
   const lastmod = new Date().toISOString().split("T")[0];
-  
-  const urls = routes.map((path) => {
+
+  const publicRoutes = routes.filter(path => !path.startsWith("/mon-compte"));
+  const urls = publicRoutes.map((path) => {
     const priority = path === "/" ? "1.0" : "0.8";
     const changefreq = path === "/" ? "weekly" : "monthly";
     return `  <url>
@@ -315,8 +326,9 @@ export function generateRobotsTxt(): string {
   return `User-agent: *
 Allow: /
 
-Sitemap: ${SITE_URL}/sitemap.xml
+Disallow: /mon-compte
+Disallow: /admin
 
-# Disallow admin/private paths (none currently)
+Sitemap: ${SITE_URL}/sitemap.xml
 `;
 }

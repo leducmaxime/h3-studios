@@ -41,6 +41,9 @@ export function Home() {
               alt="H3 Studios"
               className="mx-auto w-full max-w-2xl"
             />
+            <h1 className="mt-4 text-center text-lg font-medium tracking-widest text-white/70 uppercase">
+              Studios de répétition &amp; enregistrement · Sucy-en-Brie
+            </h1>
             <div className="mx-auto mt-6 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           </div>
 
