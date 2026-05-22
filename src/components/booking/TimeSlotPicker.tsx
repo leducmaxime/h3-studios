@@ -163,8 +163,7 @@ export function TimeSlotPicker({
       if (tryConfirmRange(selectedStart, slot)) return;
     }
 
-    const slotIdx = visibleSlots.indexOf(slot);
-    const prevSlot = slotIdx > 0 ? visibleSlots[slotIdx - 1] : null;
+    const prevSlot = endIdx > 0 ? visibleSlots[endIdx - 1] : null;
     const isAfterOccupied = prevSlot ? checkSlotBooked(prevSlot) : false;
 
     if (!checkSlotBooked(slot) && isAfterOccupied) {
@@ -188,7 +187,7 @@ export function TimeSlotPicker({
     } else {
       handleSelectEnd(slot);
     }
-  }, [selectedStart, handleSelectStart, handleSelectEnd, handleClear]);
+  }, [selectedStart, selectedEnd, handleSelectStart, handleSelectEnd, handleClear]);
 
   const handleSlotMouseEnter = useCallback((slot: string) => {
     if (selectionMode !== "end" || !selectedStart) return;
@@ -198,7 +197,7 @@ export function TimeSlotPicker({
         setHoveredEndSlot(slot);
       }
     }
-  }, [selectedStart, visibleSlots, checkSlotBooked, groupType, availability, date, studioFilter]);
+  }, [selectedStart, selectedEnd, visibleSlots, checkSlotBooked, groupType, availability, date, studioFilter]);
 
   const handleSlotMouseLeave = useCallback(() => {
     setHoveredEndSlot(null);
@@ -268,7 +267,7 @@ export function TimeSlotPicker({
         return "bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60";
       }
 
-      if (selectedStart && !selectedEnd && selectionMode === "end") {
+      if (selectionMode === "end" && selectedStart) {
         const startIdx = visibleSlots.indexOf(selectedStart);
 
         if (hoveredEndSlot) {
