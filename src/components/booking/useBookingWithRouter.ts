@@ -662,6 +662,7 @@ export function useBookingWithRouter(urlStep?: string) {
       try {
         const promoCodeToApply = appliedPromoRef.current?.code ?? null;
         let remainingPromo = totalPromoDiscount;
+        const allCartRefs = state.cart.map(b => b.bookingRef);
         for (let i = 0; i < state.cart.length; i++) {
           const booking = state.cart[i];
           const bookingPromoDiscount = Math.min(booking.price, remainingPromo);
@@ -695,6 +696,8 @@ export function useBookingWithRouter(urlStep?: string) {
               round_mode: i === 0 ? appliedPromoRef.current?.round_mode ?? null : null,
               promoDiscount: bookingPromoDiscount,
               notes: state.additionalInfo,
+              cartBookingRefs: allCartRefs,
+              isLastInCart: i === state.cart.length - 1,
             }),
           });
           const json = await res.json() as { success: boolean; error?: string };
@@ -743,6 +746,7 @@ export function useBookingWithRouter(urlStep?: string) {
       const promoCodeToApply = appliedPromoRef.current?.code ?? null;
       const totalPromoDiscount = state.promoDiscount || 0;
       let remainingPromo = totalPromoDiscount;
+      const allCartRefs = state.cart.map(b => b.bookingRef);
       for (let i = 0; i < state.cart.length; i++) {
         const booking = state.cart[i];
         const bookingPromoDiscount = Math.min(booking.price, remainingPromo);
@@ -776,6 +780,8 @@ export function useBookingWithRouter(urlStep?: string) {
             round_mode: i === 0 ? appliedPromoRef.current?.round_mode ?? null : null,
             promoDiscount: bookingPromoDiscount,
             notes: state.additionalInfo,
+            cartBookingRefs: allCartRefs,
+            isLastInCart: i === state.cart.length - 1,
           }),
         });
         const json = await res.json() as { success: boolean; error?: string };

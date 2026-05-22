@@ -45,7 +45,7 @@ import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
 import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
-import { sendBookingConfirmationEmail, type BookingConfirmationData } from "@/lib/email";
+import { sendBookingConfirmationEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
 import {
   type AdminRole,
   verifyPassword,
@@ -733,6 +733,8 @@ const app = defineApp([
         round_mode?: "down" | "up" | "none";
         promoDiscount?: number;
         notes?: string;
+        cartBookingRefs?: string[];
+        isLastInCart?: boolean;
       };
 
       const name = body.user?.name?.trim() || "";
@@ -875,28 +877,57 @@ const app = defineApp([
       // (cash/on-site or zero-total). For card payments, email is sent after
       // Stripe webhook confirms payment.
       if (env.RESEND_API_KEY && bookingPaymentStatus !== "pending") {
-        const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
-          bookingRef: booking.booking_ref,
-          studioId: body.studioId,
-          date: body.date,
-          startTime: body.startTime,
-          endTime: body.endTime,
-          groupType: body.groupType,
-          equipment: body.equipment,
-          equipmentPrice: body.equipmentPrice,
-          totalPrice: body.price,
-          paymentMethod: body.paymentMethod,
-          paymentStatus: bookingPaymentStatus,
-          userName: name,
-          userEmail: email,
-          userPhone: phone,
-          promoCode: body.promoCode,
-          promoDiscount: body.promoDiscount,
-          promoType: promoType,
-        }).catch((err) => {
-          console.error("Failed to send booking confirmation email:", err);
-        });
-        waitUntil(emailPromise);
+        const isLastInCart = body.isLastInCart === true;
+        const cartBookingRefs: string[] = Array.isArray(body.cartBookingRefs) ? body.cartBookingRefs : [booking.booking_ref];
+
+        if (isLastInCart) {
+          // Fetch all bookings in the cart to build consolidated email
+          let allSlots: BookingSlot[] = [];
+          if (cartBookingRefs.length > 1) {
+            for (const ref of cartBookingRefs) {
+              const b = await getBookingByRef(env.DB, ref);
+              if (b) {
+                allSlots.push({
+                  bookingRef: b.booking_ref,
+                  studioId: b.studio_id,
+                  date: b.date,
+                  startTime: b.start_time,
+                  endTime: b.end_time,
+                  groupType: b.group_type,
+                  equipment: b.equipment ? JSON.parse(b.equipment) : [],
+                  equipmentPrice: b.equipment_price,
+                  totalPrice: b.total_price,
+                });
+              }
+            }
+          }
+
+          const emailData: BookingConfirmationData = {
+            bookingRef: booking.booking_ref,
+            studioId: body.studioId,
+            date: body.date,
+            startTime: body.startTime,
+            endTime: body.endTime,
+            groupType: body.groupType,
+            equipment: body.equipment,
+            equipmentPrice: body.equipmentPrice,
+            totalPrice: body.price,
+            paymentMethod: body.paymentMethod,
+            paymentStatus: bookingPaymentStatus,
+            userName: name,
+            userEmail: email,
+            userPhone: phone,
+            promoCode: body.promoCode,
+            promoDiscount: body.promoDiscount,
+            promoType: promoType,
+            allSlots: allSlots.length > 1 ? allSlots : undefined,
+          };
+
+          const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, emailData)
+            .catch((err) => { console.error("Failed to send booking confirmation email:", err); });
+          waitUntil(emailPromise);
+        }
+        // else: not last in cart, skip email — consolidated email sent on last call
       }
 
       return jsonSuccess({ success: true, bookingId: booking.id, ref: booking.booking_ref });
@@ -3990,31 +4021,54 @@ const app = defineApp([
         await env.DB.prepare(
           "UPDATE bookings SET payment_status = 'paid' WHERE id = ?"
         ).bind(booking.id).run();
+      }
 
-        // Send booking confirmation email now that card payment is confirmed
-        if (env.RESEND_API_KEY) {
-          const user = await getUserById(env.DB, booking.user_id);
+      // After the for loop that processes payments, send ONE consolidated email
+      if (env.RESEND_API_KEY && bookingRefs.length > 0) {
+        // Fetch all bookings (already updated above)
+        const allBookings = [];
+        for (const ref of bookingRefs) {
+          const b = await getBookingByRef(env.DB, ref);
+          if (b) allBookings.push(b);
+        }
+
+        if (allBookings.length > 0) {
+          const firstBooking = allBookings[0];
+          const user = await getUserById(env.DB, firstBooking.user_id);
           if (user && user.email) {
+            const allSlots: BookingSlot[] = allBookings.map(b => ({
+              bookingRef: b.booking_ref,
+              studioId: b.studio_id,
+              date: b.date,
+              startTime: b.start_time,
+              endTime: b.end_time,
+              groupType: b.group_type,
+              equipment: b.equipment ? JSON.parse(b.equipment) : [],
+              equipmentPrice: b.equipment_price,
+              totalPrice: b.total_price,
+            }));
+
             const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
-              bookingRef: booking.booking_ref,
-              studioId: booking.studio_id,
-              date: booking.date,
-              startTime: booking.start_time,
-              endTime: booking.end_time,
-              groupType: booking.group_type,
-              equipment: booking.equipment ? JSON.parse(booking.equipment) : [],
-              equipmentPrice: booking.equipment_price,
-              totalPrice: booking.total_price,
+              bookingRef: firstBooking.booking_ref,
+              studioId: firstBooking.studio_id,
+              date: firstBooking.date,
+              startTime: firstBooking.start_time,
+              endTime: firstBooking.end_time,
+              groupType: firstBooking.group_type,
+              equipment: firstBooking.equipment ? JSON.parse(firstBooking.equipment) : [],
+              equipmentPrice: firstBooking.equipment_price,
+              totalPrice: allBookings.reduce((sum, b) => sum + b.total_price, 0),
               paymentMethod: "card",
               paymentStatus: "paid",
               userName: user.name,
               userEmail: user.email,
               userPhone: user.phone || "",
-              promoCode: booking.promo_code,
-              promoDiscount: booking.promo_discount,
-              promoType: booking.promo_type,
+              promoCode: firstBooking.promo_code,
+              promoDiscount: firstBooking.promo_discount,
+              promoType: firstBooking.promo_type,
+              allSlots: allSlots.length > 1 ? allSlots : undefined,
             }).catch((err) => {
-              console.error(`Webhook: Failed to send booking confirmation email for ${ref}:`, err);
+              console.error(`Webhook: Failed to send consolidated confirmation email:`, err);
             });
             waitUntil(emailPromise);
           }

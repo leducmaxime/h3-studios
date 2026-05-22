@@ -1,6 +1,19 @@
 import { type EquipmentSelection, STUDIOS, EQUIPMENT, formatPrice } from "@/lib/booking";
 
+export interface BookingSlot {
+  bookingRef: string;
+  studioId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  groupType: string;
+  equipment: EquipmentSelection[];
+  equipmentPrice: number;
+  totalPrice: number;
+}
+
 export interface BookingConfirmationData {
+  // Primary slot (kept for backward compat with single-booking)
   bookingRef: string;
   studioId: string;
   date: string;
@@ -18,6 +31,8 @@ export interface BookingConfirmationData {
   promoCode?: string | null;
   promoDiscount?: number;
   promoType?: string | null;
+  // Multi-booking: all slots in the cart
+  allSlots?: BookingSlot[];
 }
 
 function formatDateFrench(dateStr: string): string {
@@ -141,6 +156,176 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   const isGroup = data.groupType === "group";
   const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, durationHours);
 
+  const isMultiSlot = data.allSlots && data.allSlots.length > 1;
+  const multiSlotTotal = isMultiSlot ? data.allSlots!.reduce((sum, s) => sum + s.totalPrice, 0) : 0;
+
+  // Multi-slot: determine equipment display
+  let multiSlotEquipmentLabel = "Aucun matériel supplémentaire";
+  if (isMultiSlot) {
+    const slotsWithEquipment = data.allSlots!.filter(s => s.equipment && s.equipment.length > 0);
+    if (slotsWithEquipment.length > 0) {
+      const firstEq = JSON.stringify(slotsWithEquipment[0].equipment);
+      const allSame = slotsWithEquipment.every(s => JSON.stringify(s.equipment) === firstEq);
+      if (allSame) {
+        multiSlotEquipmentLabel = buildEquipmentList(slotsWithEquipment[0].equipment);
+      } else {
+        multiSlotEquipmentLabel = "Voir détails par créneau";
+      }
+    }
+  }
+
+  const bookingRefBadge = isMultiSlot
+    ? `<p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Références de réservation</p>
+<p style="margin:0;color:#facc15;font-size:16px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${data.allSlots!.map(s => s.bookingRef).join(" · ")}</p>`
+    : `<p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Référence de réservation</p>
+<p style="margin:0;color:#facc15;font-size:24px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${data.bookingRef}</p>`;
+
+  const detailsGrid = isMultiSlot
+    ? `<!-- Slots table -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;border-collapse:collapse;">
+  <tr>
+    <td style="padding:8px 12px;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333333;">Studio</td>
+    <td style="padding:8px 12px;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333333;">Date</td>
+    <td style="padding:8px 12px;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333333;">Horaire</td>
+    <td align="right" style="padding:8px 12px;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333333;">Prix</td>
+  </tr>
+  ${data.allSlots!.map(slot => `
+  <tr>
+    <td style="padding:10px 12px;color:#ffffff;font-size:13px;border-bottom:1px solid #222222;">${getStudioName(slot.studioId)}</td>
+    <td style="padding:10px 12px;color:#ffffff;font-size:13px;border-bottom:1px solid #222222;">${formatDateFrench(slot.date)}</td>
+    <td style="padding:10px 12px;color:#ffffff;font-size:13px;border-bottom:1px solid #222222;">${formatTimeRange(slot.startTime, slot.endTime)}</td>
+    <td align="right" style="padding:10px 12px;color:#facc15;font-size:13px;font-weight:600;border-bottom:1px solid #222222;">${formatPrice(slot.totalPrice)}</td>
+  </tr>
+  `).join("")}
+</table>`
+    : `<tr>
+  <td width="50%" valign="top" style="padding-right:8px;padding-bottom:16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">${isGroup ? "Studio" : "Type"}</p>
+          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${isGroup ? studioName : groupLabel}</p>
+        </td>
+      </tr>
+    </table>
+  </td>
+  <td width="50%" valign="top" style="padding-left:8px;padding-bottom:16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">${isGroup ? "Type" : "Horaire"}</p>
+          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${isGroup ? groupLabel : timeLabel}</p>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+  <td width="50%" valign="top" style="padding-right:8px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Date</p>
+          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${dateLabel}</p>
+        </td>
+      </tr>
+    </table>
+  </td>
+  <td width="50%" valign="top" style="padding-left:8px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">${isGroup ? "Horaire" : "Studio"}</p>
+          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${isGroup ? timeLabel : studioName}</p>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>`;
+
+  const equipmentSection = isMultiSlot
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+  <tr>
+    <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+      <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Matériel supplémentaire</p>
+      <p style="margin:0;color:#ffffff;font-size:14px;line-height:1.5;">${multiSlotEquipmentLabel}</p>
+    </td>
+  </tr>
+</table>`
+    : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+  <tr>
+    <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+      <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Matériel supplémentaire</p>
+      <p style="margin:0;color:#ffffff;font-size:14px;line-height:1.5;">${equipmentLabel}</p>
+    </td>
+  </tr>
+</table>`;
+
+  const priceBreakdown = isMultiSlot
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;border-top:1px solid #333333;padding-top:20px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 12px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Récapitulatif</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Total réservations (${data.allSlots!.length} créneaux)</td>
+          <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(multiSlotTotal)}</td>
+        </tr>
+        ${hasPromo ? `
+        <tr>
+          <td style="padding:6px 0;color:#facc15;font-size:14px;">
+            Code promo <strong>${data.promoCode}</strong> (-${promoLabel})
+          </td>
+          <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
+        </tr>
+        ` : ""}
+        <tr>
+          <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#ffffff;font-size:16px;font-weight:600;">Total</td>
+          <td align="right" style="padding:6px 0;color:#facc15;font-size:20px;font-weight:700;">${multiSlotTotal === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(multiSlotTotal)}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`
+    : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;border-top:1px solid #333333;padding-top:20px;">
+  <tr>
+    <td>
+      <p style="margin:0 0 12px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Récapitulatif</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Répétition${isGroup ? ` (${studioName})` : ""}</td>
+          <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.totalPrice - data.equipmentPrice + (data.promoDiscount || 0))}</td>
+        </tr>
+        ${equipmentBreakdown}
+        ${hasPromo ? `
+        <tr>
+          <td style="padding:6px 0;color:#facc15;font-size:14px;">
+            Code promo <strong>${data.promoCode}</strong> (-${promoLabel})
+          </td>
+          <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
+        </tr>
+        ` : ""}
+        <tr>
+          <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#ffffff;font-size:16px;font-weight:600;">Total</td>
+          <td align="right" style="padding:6px 0;color:#facc15;font-size:20px;font-weight:700;">${data.totalPrice === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(data.totalPrice)}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
+  const greetingLine = isMultiSlot
+    ? `Bonjour ${data.userName},<br>
+Nous avons bien enregistré vos <strong>${data.allSlots!.length} réservations</strong>. Voici les détails :`
+    : `Bonjour ${data.userName},<br>
+Nous avons bien enregistré votre réservation. Voici les détails :`;
+
   return `
 <!DOCTYPE html>
 <html lang="fr">
@@ -154,7 +339,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
     <tr>
       <td align="center" style="padding:40px 20px;">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#111111;border-radius:16px;overflow:hidden;border:1px solid #222222;">
-          
+
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:40px 30px;text-align:center;border-bottom:2px solid #facc15;">
@@ -162,152 +347,35 @@ function buildEmailHtml(data: BookingConfirmationData): string {
 
             </td>
           </tr>
-          
+
           <!-- Main Content -->
           <tr>
             <td style="padding:40px 30px 30px 30px;">
-              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;">Votre réservation est confirmée !</h2>
+              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;">${isMultiSlot ? "Vos réservations sont confirmées !" : "Votre réservation est confirmée !"}</h2>
               <p style="margin:0 0 30px 0;color:#aaaaaa;font-size:15px;line-height:1.6;">
-                Bonjour ${data.userName},<br>
-                Nous avons bien enregistré votre réservation. Voici les détails :
+                ${greetingLine}
               </p>
-              
+
               <!-- Booking Ref Badge -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
                 <tr>
                   <td style="background-color:#1a1a1a;border:1px solid #333333;border-radius:12px;padding:20px;text-align:center;">
-                    <p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Référence de réservation</p>
-                    <p style="margin:0;color:#facc15;font-size:24px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${data.bookingRef}</p>
+                    ${bookingRefBadge}
                   </td>
                 </tr>
               </table>
-              
+
               <!-- Details Grid -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
-                ${isGroup ? `
-                <tr>
-                  <td width="50%" valign="top" style="padding-right:8px;padding-bottom:16px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-                      <tr>
-                        <td>
-                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Studio</p>
-                          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${studioName}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                  <td width="50%" valign="top" style="padding-left:8px;padding-bottom:16px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-                      <tr>
-                        <td>
-                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
-                          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${groupLabel}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                <tr>
-                  <td width="50%" valign="top" style="padding-right:8px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-                      <tr>
-                        <td>
-                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Date</p>
-                          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${dateLabel}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                  <td width="50%" valign="top" style="padding-left:8px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-                      <tr>
-                        <td>
-                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Horaire</p>
-                          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${timeLabel}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                ` : `
-                <tr>
-                  <td width="50%" valign="top" style="padding-right:8px;padding-bottom:16px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-                      <tr>
-                        <td>
-                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
-                          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${groupLabel}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                  <td width="50%" valign="top" style="padding-left:8px;padding-bottom:16px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-                      <tr>
-                        <td>
-                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Horaire</p>
-                          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${timeLabel}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                <tr>
-                  <td width="100%" valign="top" colspan="2">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-                      <tr>
-                        <td>
-                          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Date</p>
-                          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${dateLabel}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                `}
+                ${detailsGrid}
               </table>
-              
+
               <!-- Equipment -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-                <tr>
-                  <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-                    <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Matériel supplémentaire</p>
-                    <p style="margin:0;color:#ffffff;font-size:14px;line-height:1.5;">${equipmentLabel}</p>
-                  </td>
-                </tr>
-              </table>
-              
+              ${equipmentSection}
+
               <!-- Price Breakdown -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;border-top:1px solid #333333;padding-top:20px;">
-                <tr>
-                  <td>
-                    <p style="margin:0 0 12px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Récapitulatif</p>
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Répétition${isGroup ? ` (${studioName})` : ""}</td>
-                        <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.totalPrice - data.equipmentPrice + (data.promoDiscount || 0))}</td>
-                      </tr>
-                      ${equipmentBreakdown}
-                      ${hasPromo ? `
-                      <tr>
-                        <td style="padding:6px 0;color:#facc15;font-size:14px;">
-                          Code promo <strong>${data.promoCode}</strong> (-${promoLabel})
-                        </td>
-                        <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
-                      </tr>
-                      ` : ""}
-                      <tr>
-                        <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0;color:#ffffff;font-size:16px;font-weight:600;">Total</td>
-                        <td align="right" style="padding:6px 0;color:#facc15;font-size:20px;font-weight:700;">${data.totalPrice === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(data.totalPrice)}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-              
+              ${priceBreakdown}
+
               <!-- Payment Method -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
                 <tr>
@@ -317,7 +385,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
                   </td>
                 </tr>
               </table>
-              
+
               <!-- Important Info -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
@@ -334,7 +402,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
               </table>
             </td>
           </tr>
-          
+
           <!-- Footer -->
           <tr>
             <td style="background-color:#0a0a0a;padding:30px;text-align:center;border-top:1px solid #222222;">
@@ -362,7 +430,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
               </p>
             </td>
           </tr>
-          
+
         </table>
       </td>
     </tr>
@@ -378,6 +446,11 @@ export async function sendBookingConfirmationEmail(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const html = buildEmailHtml(data);
+    const isMultiSlot = data.allSlots && data.allSlots.length > 1;
+    const subject = isMultiSlot
+      ? `✅ ${data.allSlots!.length} réservations confirmées — H3 Studios`
+      : `✅ Réservation confirmée — ${formatDateShort(data.date)} · ${data.startTime}→${data.endTime === "00:00" ? "00:00" : data.endTime} — H3 Studios`;
+
     const resendResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -387,7 +460,7 @@ export async function sendBookingConfirmationEmail(
       body: JSON.stringify({
         from: "H3 Studios <contact@h3-studios.fr>",
         to: data.userEmail,
-        subject: `✅ Réservation confirmée — ${formatDateShort(data.date)} · ${data.startTime}→${data.endTime === '00:00' ? '00:00' : data.endTime} — H3 Studios`,
+        subject,
         html,
         reply_to: "contact@h3-studios.fr",
       }),
