@@ -1235,7 +1235,8 @@ const app = defineApp([
             const totalPaid = payments
               .filter((p) => p.status === "paid")
               .reduce((acc, p) => acc + p.amount, 0);
-            const isFullyPaid = totalPaid >= booking.total_price;
+            const finalTotal = Math.max(0, booking.total_price - (booking.promo_discount || 0));
+            const isFullyPaid = totalPaid >= finalTotal;
 
             return {
               ...booking,

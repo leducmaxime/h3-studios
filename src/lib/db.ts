@@ -654,7 +654,7 @@ export async function getPayments(
         SELECT
           'on-site:' || b.id as id,
           b.id as booking_id,
-          (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+          (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) as amount,
           '' as method,
           'pending' as status,
           0 as refunded_amount,
@@ -671,7 +671,7 @@ export async function getPayments(
         LEFT JOIN users u ON u.id = b.user_id
         WHERE b.status != 'cancelled'
           AND b.payment_status = 'pay-on-site'
-          AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
+          AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
       ),
       payments_enriched AS (
         SELECT
@@ -722,7 +722,7 @@ export async function getPayments(
         SELECT
           'on-site:' || b.id as id,
           b.id as booking_id,
-          (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+          (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) as amount,
           '' as method,
           'pending' as status,
           0 as refunded_amount,
@@ -739,7 +739,7 @@ export async function getPayments(
         LEFT JOIN users u ON u.id = b.user_id
         WHERE b.status != 'cancelled'
           AND b.payment_status = 'pay-on-site'
-          AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
+          AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
       ),
       payments_enriched AS (
         SELECT
@@ -865,14 +865,17 @@ export async function addPayment(
     const payments = await getPaymentsByBookingId(db, data.booking_id);
     const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
     
-    const booking = await db.prepare("SELECT total_price, payment_status FROM bookings WHERE id = ?")
+    const booking = await db.prepare("SELECT total_price, promo_discount, payment_status FROM bookings WHERE id = ?")
       .bind(data.booking_id)
-      .first<{ total_price: number; payment_status: string | null }>();
+      .first<{ total_price: number; promo_discount: number; payment_status: string | null }>();
 
-    if (booking && totalPaid >= booking.total_price) {
-      await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
-        .bind(timestamp, data.booking_id)
-        .run();
+    if (booking) {
+      const finalTotal = Math.max(0, booking.total_price - (booking.promo_discount || 0));
+      if (totalPaid >= finalTotal) {
+        await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
+          .bind(timestamp, data.booking_id)
+          .run();
+      }
     }
   }
 
@@ -1504,7 +1507,7 @@ export async function getDashboardStats(
       LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
       WHERE b.status != 'cancelled'
         AND b.payment_status = 'pay-on-site'
-        AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0`,
+        AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0`,
     ),
     db.prepare(
       "SELECT studio_id, start_time, end_time FROM bookings WHERE date = ? AND status != 'cancelled'",
@@ -1553,7 +1556,7 @@ export async function getDashboardStats(
       WHERE b.status != 'cancelled'
         AND b.payment_status = 'pay-on-site'
         AND b.date >= ? AND b.date <= ?
-        AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0`,
+        AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0`,
     ).bind(rangeFrom, rangeTo),
 
     db.prepare(
