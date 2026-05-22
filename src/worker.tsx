@@ -113,6 +113,7 @@ import {
   addAuditLog,
   getAuditLogs,
   getDashboardStats,
+  resolveStatsRange,
   getMonthlyReportData,
   getSetting,
 } from "@/lib/db";
@@ -2896,14 +2897,23 @@ const app = defineApp([
       const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
       const week = weekRaw ? parseInt(weekRaw, 10) : undefined;
 
-      const mode = (modeRaw === "today" || modeRaw === "rolling" || modeRaw === "week" || modeRaw === "month" || modeRaw === "year")
+      const mode = (modeRaw === "today" || modeRaw === "rolling" || modeRaw === "week" || modeRaw === "month" || modeRaw === "year" || modeRaw === "custom")
         ? modeRaw
         : undefined;
       const period = (periodRaw === "week" || periodRaw === "month" || periodRaw === "quarter" || periodRaw === "year")
         ? periodRaw
         : undefined;
 
-      const stats = await getDashboardStats(env.DB, { month, year, week, mode, period });
+      const dateFromRaw = url.searchParams.get("dateFrom");
+      const dateToRaw = url.searchParams.get("dateTo");
+      const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+      const dateFrom = dateFromRaw && ISO_DATE_RE.test(dateFromRaw) ? dateFromRaw : undefined;
+      const dateTo = dateToRaw && ISO_DATE_RE.test(dateToRaw) ? dateToRaw : undefined;
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        return jsonError("dateFrom must be <= dateTo", 400);
+      }
+
+      const stats = await getDashboardStats(env.DB, { month, year, week, mode, period, dateFrom, dateTo });
       return jsonSuccess(stats);
     } catch (error) {
       console.error("GET /api/admin/stats error:", error);
@@ -2926,49 +2936,24 @@ const app = defineApp([
       const weekRaw = url.searchParams.get("week");
       const week = weekRaw ? parseInt(weekRaw, 10) : undefined;
 
-      const today = getParisDateISO();
-      let fromStr = today;
-      let toStr = today;
-      let groupByMonth = false;
-
-      if (mode === "today") {
-        fromStr = today;
-        toStr = today;
-      } else if (mode === "month" && month && year) {
-        const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
-        const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
-        fromStr = getParisDateISO(from);
-        toStr = getParisDateISO(to);
-      } else if (mode === "week" && week && year) {
-        const monday = getISOWeekStartUTCNoon(year, week);
-        const sunday = new Date(monday);
-        sunday.setUTCDate(monday.getUTCDate() + 6);
-        fromStr = getParisDateISO(monday);
-        toStr = getParisDateISO(sunday);
-      } else if (mode === "year" && year) {
-        const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
-        const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
-        fromStr = getParisDateISO(from);
-        toStr = getParisDateISO(to);
-        groupByMonth = true;
-      } else {
-        let days: number;
-        switch (period) {
-          case "week": days = 7; break;
-          case "month": days = 30; break;
-          case "quarter": days = 90; break;
-          case "year": days = 365; break;
-          default: days = 30; break;
-        }
-
-        if (period === "year") {
-          groupByMonth = true;
-        }
-        const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - Math.max(days - 1, 0));
-        fromStr = getParisDateISO(fromDate);
-        toStr = today;
+      const dateFromRaw = url.searchParams.get("dateFrom");
+      const dateToRaw = url.searchParams.get("dateTo");
+      const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+      const dateFrom = dateFromRaw && ISO_DATE_RE.test(dateFromRaw) ? dateFromRaw : undefined;
+      const dateTo = dateToRaw && ISO_DATE_RE.test(dateToRaw) ? dateToRaw : undefined;
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        return jsonError("dateFrom must be <= dateTo", 400);
       }
+
+      const { from: fromStr, to: toStr, groupByMonth } = resolveStatsRange({
+        mode: mode as any,
+        period: period as any,
+        year,
+        month,
+        week,
+        dateFrom,
+        dateTo,
+      });
 
       if (groupByMonth) {
         const rows = await env.DB.prepare(
@@ -3008,43 +2993,24 @@ const app = defineApp([
       const weekRaw = url.searchParams.get("week");
       const week = weekRaw ? parseInt(weekRaw, 10) : undefined;
 
-      const today = getParisDateISO();
-      let fromStr = today;
-      let toStr = today;
-
-      if (mode === "today") {
-        fromStr = today;
-        toStr = today;
-      } else if (mode === "month" && month && year) {
-        const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
-        const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
-        fromStr = getParisDateISO(from);
-        toStr = getParisDateISO(to);
-      } else if (mode === "week" && week && year) {
-        const monday = getISOWeekStartUTCNoon(year, week);
-        const sunday = new Date(monday);
-        sunday.setUTCDate(monday.getUTCDate() + 6);
-        fromStr = getParisDateISO(monday);
-        toStr = getParisDateISO(sunday);
-      } else if (mode === "year" && year) {
-        const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
-        const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
-        fromStr = getParisDateISO(from);
-        toStr = getParisDateISO(to);
-      } else {
-        let days: number;
-        switch (period) {
-          case "week": days = 7; break;
-          case "quarter": days = 90; break;
-          case "year": days = 365; break;
-          default: days = 30; break;
-        }
-
-        const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - Math.max(days - 1, 0));
-        fromStr = getParisDateISO(fromDate);
-        toStr = today;
+      const dateFromRaw = url.searchParams.get("dateFrom");
+      const dateToRaw = url.searchParams.get("dateTo");
+      const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+      const dateFrom = dateFromRaw && ISO_DATE_RE.test(dateFromRaw) ? dateFromRaw : undefined;
+      const dateTo = dateToRaw && ISO_DATE_RE.test(dateToRaw) ? dateToRaw : undefined;
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        return jsonError("dateFrom must be <= dateTo", 400);
       }
+
+      const { from: fromStr, to: toStr } = resolveStatsRange({
+        mode: mode as any,
+        period: period as any,
+        year,
+        month,
+        week,
+        dateFrom,
+        dateTo,
+      });
 
       const occupancyStmt = env.DB.prepare(
         `SELECT date, studio_id, start_time, end_time

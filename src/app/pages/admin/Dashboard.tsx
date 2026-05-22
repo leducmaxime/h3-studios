@@ -681,7 +681,7 @@ function OccupancyTooltip({
   active?: boolean;
   payload?: TooltipPayload<OccupancyPoint>;
   label?: unknown;
-  rangeMode: "today" | "rolling" | "week" | "month" | "year";
+  rangeMode: "today" | "rolling" | "week" | "month" | "year" | "custom";
 }) {
   if (!active || !payload?.length) return null;
   const p = payload[0]?.payload;
@@ -910,7 +910,16 @@ export function AdminDashboard() {
   });
   const [activityCalendarView, setActivityCalendarView] = useState<ActivityCalendarView>("month");
   const [period, setPeriod] = useState<Period>("month");
-  const [rangeMode, setRangeMode] = useState<"today" | "rolling" | "week" | "month" | "year">("month");
+  const [rangeMode, setRangeMode] = useState<"today" | "rolling" | "week" | "month" | "year" | "custom">("month");
+  const [customDateFrom, setCustomDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  const [customDateTo, setCustomDateTo] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
   const [selectedYear, setSelectedYear] = useState(() => String(nowISO.year));
   const [selectedWeek, setSelectedWeek] = useState(() => String(nowISO.week));
   const [loading, setLoading] = useState(true);
@@ -993,6 +1002,11 @@ export function AdminDashboard() {
       } else if (rangeMode === "rolling") {
         url.searchParams.set("mode", "rolling");
         url.searchParams.set("period", period);
+      } else if (rangeMode === "custom") {
+        if (customDateFrom && customDateTo && customDateFrom <= customDateTo) {
+          url.searchParams.set("dateFrom", customDateFrom);
+          url.searchParams.set("dateTo", customDateTo);
+        }
       } else if (rangeMode === "month") {
         url.searchParams.set("mode", "month");
         const [y, m] = reportMonth.split("-").map(Number);
@@ -1013,7 +1027,7 @@ export function AdminDashboard() {
     } catch (err) {
       console.error("Failed to fetch stats:", err);
     }
-  }, [rangeMode, reportMonth, selectedYear, selectedWeek, period]);
+  }, [rangeMode, reportMonth, selectedYear, selectedWeek, period, customDateFrom, customDateTo]);
 
   const fetchCharts = useCallback(async (p: Period) => {
     try {
@@ -1023,6 +1037,13 @@ export function AdminDashboard() {
       if (rangeMode === "today") {
         chartsUrl.searchParams.set("mode", "today");
         revenueUrl.searchParams.set("mode", "today");
+      } else if (rangeMode === "custom") {
+        if (customDateFrom && customDateTo && customDateFrom <= customDateTo) {
+          chartsUrl.searchParams.set("dateFrom", customDateFrom);
+          chartsUrl.searchParams.set("dateTo", customDateTo);
+          revenueUrl.searchParams.set("dateFrom", customDateFrom);
+          revenueUrl.searchParams.set("dateTo", customDateTo);
+        }
       } else if (rangeMode === "month") {
         const [y, m] = reportMonth.split("-").map(Number);
         chartsUrl.searchParams.set("mode", "month");
@@ -1074,7 +1095,7 @@ export function AdminDashboard() {
     } catch (err) {
       console.error("Failed to fetch chart data:", err);
     }
-  }, [rangeMode, reportMonth, selectedYear, selectedWeek]);
+  }, [rangeMode, reportMonth, selectedYear, selectedWeek, customDateFrom, customDateTo]);
 
   const activityRange = useMemo(() => {
     if (stats) return { from: stats.rangeFrom, to: stats.rangeTo };
@@ -1095,8 +1116,22 @@ export function AdminDashboard() {
       setActivityCalendarView("year");
       return;
     }
+    if (rangeMode === "custom") {
+      if (customDateFrom && customDateTo) {
+        const fromD = new Date(customDateFrom + "T12:00:00Z");
+        const toD = new Date(customDateTo + "T12:00:00Z");
+        const days = Math.round((toD.getTime() - fromD.getTime()) / 86400000) + 1;
+        if (days <= 1) setActivityCalendarView("day");
+        else if (days <= 8) setActivityCalendarView("week");
+        else if (days <= 62) setActivityCalendarView("month");
+        else setActivityCalendarView("year");
+      } else {
+        setActivityCalendarView("month");
+      }
+      return;
+    }
     setActivityCalendarView("month");
-  }, [rangeMode]);
+  }, [rangeMode, customDateFrom, customDateTo]);
 
   useEffect(() => {
     if (activityCalendarView !== "month") return;
@@ -1208,6 +1243,9 @@ export function AdminDashboard() {
     if (rangeMode === "year") {
       return selectedYear;
     }
+    if (rangeMode === "custom") {
+      return "Personnalisé";
+    }
     return PERIOD_OPTIONS.find((p) => p.value === period)?.label || period;
   })();
 
@@ -1249,7 +1287,7 @@ export function AdminDashboard() {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as "today" | "rolling" | "week" | "month" | "year")}>
+            <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as "today" | "rolling" | "week" | "month" | "year" | "custom")}>
               <SelectTrigger className="w-[130px]">
                 <SelectValue />
               </SelectTrigger>
@@ -1259,6 +1297,7 @@ export function AdminDashboard() {
                 <SelectItem value="week">Semaine</SelectItem>
                 <SelectItem value="month">Mois</SelectItem>
                 <SelectItem value="year">Année</SelectItem>
+                <SelectItem value="custom">Personnalisé</SelectItem>
               </SelectContent>
             </Select>
 
@@ -1289,7 +1328,7 @@ export function AdminDashboard() {
             </Select>
 
             <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-[100px]" disabled={rangeMode === "rolling" || rangeMode === "today"}>
+              <SelectTrigger className="w-[100px]" disabled={rangeMode === "rolling" || rangeMode === "today" || rangeMode === "custom"}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1301,11 +1340,31 @@ export function AdminDashboard() {
               </SelectContent>
             </Select>
 
+            {rangeMode === "custom" && (
+              <>
+                <input
+                  type="date"
+                  value={customDateFrom}
+                  onChange={(e) => setCustomDateFrom(e.target.value)}
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                />
+                <span className="text-xs text-zinc-500">→</span>
+                <input
+                  type="date"
+                  value={customDateTo}
+                  min={customDateFrom}
+                  onChange={(e) => setCustomDateTo(e.target.value)}
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                />
+              </>
+            )}
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleGenerateMonthlyReport}
-              className="border-primary/30 text-primary hover:bg-primary/10"
+              disabled={rangeMode === "custom"}
+              className="border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Download className="h-4 w-4" />
             </Button>

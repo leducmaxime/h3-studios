@@ -1360,6 +1360,84 @@ function minusDaysParisISO(todayISO: string, days: number): string {
   return getParisDateISO(d);
 }
 
+export function resolveStatsRange(opts: {
+  mode?: "today" | "rolling" | "week" | "month" | "year" | "custom";
+  period?: "week" | "month" | "quarter" | "year";
+  year?: number;
+  month?: number;
+  week?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  today?: string;
+}): { from: string; to: string; groupByMonth: boolean } {
+  const today = opts.today ?? getParisDateISO();
+
+  // Custom date range — use directly
+  if (opts.dateFrom && opts.dateTo && opts.dateFrom <= opts.dateTo) {
+    const from = opts.dateFrom;
+    const to = opts.dateTo;
+    const fromD = parseDateISOToUTCNoon(from);
+    const toD = parseDateISOToUTCNoon(to);
+    const days = Math.round((toD.getTime() - fromD.getTime()) / 86400000) + 1;
+    return { from, to, groupByMonth: days > 90 };
+  }
+
+  const inferredMode = (() => {
+    if (opts.mode) return opts.mode;
+    if (opts.year && opts.week) return "week";
+    if (opts.year && opts.month) return "month";
+    if (opts.year) return "year";
+    return "rolling";
+  })();
+  const inferredPeriod = opts.period ?? "month";
+
+  if (inferredMode === "today") {
+    return { from: today, to: today, groupByMonth: false };
+  }
+  if (inferredMode === "month" && opts.year && opts.month) {
+    const year = Math.round(opts.year);
+    const month = Math.round(opts.month);
+    if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12) {
+      const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
+      const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
+      return { from: getParisDateISO(from), to: getParisDateISO(to), groupByMonth: false };
+    }
+  }
+  if (inferredMode === "week" && opts.year && opts.week) {
+    const year = Math.round(opts.year);
+    const week = Math.round(opts.week);
+    if (year >= 2000 && year <= 2100 && week >= 1 && week <= 53) {
+      const monday = getISOWeekStartUTCNoon(year, week);
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+      return { from: getParisDateISO(monday), to: getParisDateISO(sunday), groupByMonth: false };
+    }
+  }
+  if (inferredMode === "year" && opts.year) {
+    const year = Math.round(opts.year);
+    if (year >= 2000 && year <= 2100) {
+      const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
+      const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
+      return { from: getParisDateISO(from), to: getParisDateISO(to), groupByMonth: true };
+    }
+  }
+
+  // Rolling (default)
+  const days = (() => {
+    switch (inferredPeriod) {
+      case "week": return 7;
+      case "quarter": return 90;
+      case "year": return 365;
+      default: return 30;
+    }
+  })();
+  return {
+    from: minusDaysParisISO(today, days - 1),
+    to: today,
+    groupByMonth: inferredPeriod === "year",
+  };
+}
+
 function getStudioOpenSlotsCount(studioId: StudioId, dayOfWeek: number): number {
   const hours = STUDIO_HOURS[studioId][dayOfWeek];
   const openIdx = ALL_TIME_SLOTS.indexOf(hours.open);
@@ -1375,13 +1453,15 @@ export async function getDashboardStats(
     month?: number;
     year?: number;
     week?: number;
-    mode?: "today" | "rolling" | "week" | "month" | "year";
+    mode?: "today" | "rolling" | "week" | "month" | "year" | "custom";
     period?: "week" | "month" | "quarter" | "year";
+    dateFrom?: string;
+    dateTo?: string;
   },
 ): Promise<DashboardStats> {
   const today = getParisDateISO();
 
-  const inferredMode: "today" | "rolling" | "week" | "month" | "year" = (() => {
+  const inferredMode: "today" | "rolling" | "week" | "month" | "year" | "custom" = (() => {
     if (opts?.mode) return opts.mode;
     if (opts?.year && opts?.week) return "week";
     if (opts?.year && opts?.month) return "month";
@@ -1390,51 +1470,16 @@ export async function getDashboardStats(
   })();
   const inferredPeriod: "week" | "month" | "quarter" | "year" = opts?.period || "month";
 
-  let rangeFrom = today;
-  let rangeTo = today;
-  if (inferredMode === "today") {
-    rangeFrom = today;
-    rangeTo = today;
-  } else if (inferredMode === "month" && opts?.year && opts?.month) {
-    const year = Math.round(opts.year);
-    const month = Math.round(opts.month);
-    if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12) {
-      const from = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0));
-      const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
-      rangeFrom = getParisDateISO(from);
-      rangeTo = getParisDateISO(to);
-    }
-  } else if (inferredMode === "week" && opts?.year && opts?.week) {
-    const year = Math.round(opts.year);
-    const week = Math.round(opts.week);
-    if (year >= 2000 && year <= 2100 && week >= 1 && week <= 53) {
-      const monday = getISOWeekStartUTCNoon(year, week);
-      const sunday = new Date(monday);
-      sunday.setUTCDate(monday.getUTCDate() + 6);
-      rangeFrom = getParisDateISO(monday);
-      rangeTo = getParisDateISO(sunday);
-    }
-  } else if (inferredMode === "year" && opts?.year) {
-    const year = Math.round(opts.year);
-    if (year >= 2000 && year <= 2100) {
-      const from = new Date(Date.UTC(year, 0, 1, 12, 0, 0));
-      const to = new Date(Date.UTC(year, 11, 31, 12, 0, 0));
-      rangeFrom = getParisDateISO(from);
-      rangeTo = getParisDateISO(to);
-    }
-  } else {
-    const days = (() => {
-      switch (inferredPeriod) {
-        case "week": return 7;
-        case "quarter": return 90;
-        case "year": return 365;
-        default: return 30;
-      }
-    })();
-
-    rangeFrom = minusDaysParisISO(today, days - 1);
-    rangeTo = today;
-  }
+  const { from: rangeFrom, to: rangeTo } = resolveStatsRange({
+    mode: opts?.mode as any,
+    period: inferredPeriod,
+    year: opts?.year,
+    month: opts?.month,
+    week: opts?.week,
+    dateFrom: opts?.dateFrom,
+    dateTo: opts?.dateTo,
+    today,
+  });
 
   const rangeDays = (() => {
     const from = parseDateISOToUTCNoon(rangeFrom);
