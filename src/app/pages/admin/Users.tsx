@@ -402,7 +402,7 @@ export function AdminUsers() {
                       className="accent-primary"
                     />
                     <div className="flex-1">
-                      <p className="font-medium">{user.name}</p>
+                      <p className="font-medium">{[user.first_name, user.last_name].filter(Boolean).join(" ") || user.name || user.email || "—"}</p>
                       <p className="text-sm text-zinc-400">{user.email || "Pas d'email"}</p>
                       {user.band_name && (
                         <p className="text-sm text-zinc-500">{user.band_name}</p>
@@ -490,7 +490,7 @@ export function AdminUsers() {
                           <User className="h-4 w-4" />
                         </div>
                         <div className="flex items-center gap-2">
-                          <p className="font-medium">{user.name}</p>
+                          <p className="font-medium">{[user.first_name, user.last_name].filter(Boolean).join(" ") || user.name || user.email || "—"}</p>
                           {user.is_blocked === 1 && (
                             <Badge variant="destructive" className="text-[10px]">
                               Bloqué

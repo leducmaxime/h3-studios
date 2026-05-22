@@ -379,8 +379,8 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     ? (nonCancelledBookings.length / monthsSinceFirst).toFixed(1)
     : nonCancelledBookings.length.toString();
 
-  const displayName = user.name?.trim()
-    || [user.first_name, user.last_name].filter(Boolean).join(" ")
+  const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ")
+    || user.name?.trim()
     || user.email
     || "—";
 
