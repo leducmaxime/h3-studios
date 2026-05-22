@@ -141,7 +141,7 @@ const STATUS_LABELS: Record<string, string> = {
   confirmed: "Confirmée",
   completed: "Terminée",
   cancelled: "Annulée",
-  "no-show": "No-show",
+  "no-show": "Absent",
 };
 
 const GROUP_LABELS: Record<string, string> = {

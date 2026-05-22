@@ -57,7 +57,7 @@ const STATUS_CONFIG: Record<BookingStatus, { label: string }> = {
   confirmed: { label: "Confirmé" },
   completed: { label: "Terminé" },
   cancelled: { label: "Annulé" },
-  "no-show": { label: "No-show" },
+  "no-show": { label: "Absent" },
 };
 
 const STATUS_CLASSES: Record<BookingStatus, string> = {
@@ -229,11 +229,11 @@ export function AdminBookings() {
       });
       const json = (await res.json()) as { success: boolean; error?: string };
       if (json.success) {
-        toast.success(`Réservation ${noShowDialog.bookingRef} marquée no-show`);
+        toast.success(`Réservation ${noShowDialog.bookingRef} marquée absente`);
         setNoShowDialog({ open: false, bookingId: "", bookingRef: "" });
         fetchBookings();
       } else {
-        toast.error(json.error || "Erreur lors du marquage no-show");
+        toast.error(json.error || "Erreur lors du marquage absent");
       }
     } catch {
       toast.error("Erreur réseau");
@@ -345,7 +345,7 @@ export function AdminBookings() {
             <option value="confirmed">Confirmé</option>
             <option value="completed">Terminé</option>
             <option value="cancelled">Annulé</option>
-            <option value="no-show">No-show</option>
+            <option value="no-show">Absent</option>
           </select>
           <select
             value={studioFilter}
@@ -509,7 +509,7 @@ export function AdminBookings() {
                                   className="text-yellow-400 focus:text-yellow-400"
                                 >
                                   <AlertTriangle className="h-4 w-4" />
-                                  Marquer no-show
+                                  Marquer absent
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   variant="destructive"
@@ -598,16 +598,16 @@ export function AdminBookings() {
         </DialogContent>
       </Dialog>
 
-      {/* No-Show Dialog */}
+      {/* Absent Dialog */}
       <Dialog
         open={noShowDialog.open}
         onOpenChange={(open) => { if (!open) setNoShowDialog({ open: false, bookingId: "", bookingRef: "" }); }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Marquer comme no-show</DialogTitle>
+            <DialogTitle>Marquer comme absent</DialogTitle>
             <DialogDescription>
-              Confirmez le no-show pour la réservation <strong>{noShowDialog.bookingRef}</strong>.
+              Confirmez le marquage absent pour la réservation <strong>{noShowDialog.bookingRef}</strong>.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -623,7 +623,7 @@ export function AdminBookings() {
               disabled={noShowLoading}
               className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30"
             >
-              {noShowLoading ? "En cours..." : "Confirmer no-show"}
+              {noShowLoading ? "En cours..." : "Confirmer"}
             </Button>
           </DialogFooter>
         </DialogContent>

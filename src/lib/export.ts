@@ -73,7 +73,7 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
       confirmed: "Confirmé",
       completed: "Terminé",
       cancelled: "Annulé",
-      "no-show": "No-show",
+      "no-show": "Absent",
     };
 
     const groupTypeLabels: Record<string, string> = {

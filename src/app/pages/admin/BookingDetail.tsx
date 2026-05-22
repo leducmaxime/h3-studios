@@ -75,7 +75,7 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   confirmed: "Confirmé",
   completed: "Terminé",
   cancelled: "Annulé",
-  "no-show": "No-show",
+  "no-show": "Absent",
 };
 
 interface BookingDetailProps {
@@ -240,7 +240,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       });
       const json = (await res.json()) as { success: boolean; error?: string };
       if (json.success) {
-        toast.success("Marqué no-show");
+        toast.success("Marqué absent");
         setNoShowOpen(false);
         fetchBooking();
       } else {
@@ -811,9 +811,9 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       <Dialog open={noShowOpen} onOpenChange={(open) => { if (!open) setNoShowOpen(false); }}>
         <DialogContent className="bg-zinc-900 border-zinc-800">
           <DialogHeader>
-            <DialogTitle>Marquer comme no-show</DialogTitle>
+            <DialogTitle>Marquer comme absent</DialogTitle>
             <DialogDescription>
-              Confirmez le no-show pour <strong>{booking.booking_ref}</strong>.
+              Confirmez le marquage absent pour <strong>{booking.booking_ref}</strong>.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -825,7 +825,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               disabled={noShowLoading}
               className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30"
             >
-              {noShowLoading ? "En cours..." : "Confirmer no-show"}
+              {noShowLoading ? "En cours..." : "Confirmer"}
             </Button>
           </DialogFooter>
         </DialogContent>

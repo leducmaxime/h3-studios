@@ -99,7 +99,7 @@ const ACTION_LABELS: Record<string, { label: string; variant: "default" | "secon
   update: { label: "Modification", variant: "secondary" },
   delete: { label: "Suppression", variant: "destructive" },
   cancel: { label: "Annulation", variant: "destructive" },
-  "no-show": { label: "No-show", variant: "destructive" },
+  "no-show": { label: "Absent", variant: "destructive" },
   "mark-paid": { label: "Payé", variant: "default" },
   refund: { label: "Remboursement", variant: "destructive" },
   block: { label: "Blocage", variant: "destructive" },
@@ -436,7 +436,7 @@ export function AdminAuditLog() {
             <option value="update">Modification</option>
             <option value="delete">Suppression</option>
             <option value="cancel">Annulation</option>
-            <option value="no-show">No-show</option>
+            <option value="no-show">Absent</option>
             <option value="mark-paid">Payé</option>
             <option value="refund">Remboursement</option>
             <option value="block">Blocage</option>

@@ -1597,7 +1597,7 @@ const app = defineApp([
       return jsonSuccess(updated);
     } catch (error) {
       console.error("PUT /api/admin/bookings/:id/no-show error:", error);
-      return jsonError(error instanceof Error ? error.message : "Failed to mark no-show", 500);
+      return jsonError(error instanceof Error ? error.message : "Failed to mark absent", 500);
     }
   }),
 

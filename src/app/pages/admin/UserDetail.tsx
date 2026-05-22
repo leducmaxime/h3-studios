@@ -51,7 +51,7 @@ const STATUS_LABELS: Record<string, string> = {
   confirmed: "Confirmée",
   cancelled: "Annulée",
   completed: "Terminée",
-  "no-show": "No-show",
+  "no-show": "Absent",
 };
 
 // ─── Studio Pie Chart ─────────────────────────────────────────────────────
@@ -692,7 +692,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <option value="confirmed">Confirmé</option>
                   <option value="completed">Terminé</option>
                   <option value="cancelled">Annulé</option>
-                  <option value="no-show">No-show</option>
+                  <option value="no-show">Absent</option>
                 </select>
                 <select
                   value={studioFilter}
