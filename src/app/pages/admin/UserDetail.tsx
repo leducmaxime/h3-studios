@@ -379,6 +379,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     ? (nonCancelledBookings.length / monthsSinceFirst).toFixed(1)
     : nonCancelledBookings.length.toString();
 
+  const displayName = user.name?.trim()
+    || [user.first_name, user.last_name].filter(Boolean).join(" ")
+    || user.email
+    || "—";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -387,7 +392,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
         </a>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{user.name}</h1>
+            <h1 className="text-2xl font-bold">{displayName}</h1>
             {user.is_blocked === 1 && (
               <Badge variant="destructive">Bloqué</Badge>
             )}
