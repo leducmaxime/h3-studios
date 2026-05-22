@@ -40,7 +40,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { STUDIOS, formatPrice, ALL_TIME_SLOTS, EQUIPMENT, type StudioId } from "@/lib/booking";
+import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, EQUIPMENT, type StudioId } from "@/lib/booking";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -150,8 +150,39 @@ const GROUP_LABELS: Record<string, string> = {
   group: "Groupe",
 };
 
-// Approximate max bookings per day (both studios, ~14 bookings worth of slots)
-const MAX_BOOKINGS_PER_DAY = 14;
+// Compute real occupancy rate from booked slots vs available slots per studio
+function computeDayOccupancyRate(dayBookings: CalendarBooking[], date: Date): number {
+  // dayOfWeek: 0=Sun, 1=Mon, ..., 6=Sat
+  const dow = date.getDay();
+  const studios: StudioId[] = ["la-scene", "le-podium"];
+
+  let totalOpen = 0;
+  let totalBooked = 0;
+
+  for (const studioId of studios) {
+    const hours = STUDIO_HOURS[studioId]?.[dow];
+    if (!hours) continue;
+    const openIdx = ALL_TIME_SLOTS.indexOf(hours.open);
+    const closeIdx = hours.close === "00:00" ? ALL_TIME_SLOTS.length : ALL_TIME_SLOTS.indexOf(hours.close);
+    if (openIdx === -1) continue;
+    const safeClose = closeIdx === -1 ? ALL_TIME_SLOTS.length : closeIdx;
+    const openSlots = Math.max(0, safeClose - openIdx);
+    totalOpen += openSlots;
+
+    // Count booked 30-min slots for this studio
+    for (const b of dayBookings) {
+      if (b.studio_id !== studioId) continue;
+      const startIdx = ALL_TIME_SLOTS.indexOf(b.start_time);
+      let endIdx = ALL_TIME_SLOTS.indexOf(b.end_time);
+      if (endIdx === -1 && b.end_time === "00:00") endIdx = ALL_TIME_SLOTS.length;
+      if (startIdx === -1 || endIdx <= startIdx) continue;
+      totalBooked += endIdx - startIdx;
+    }
+  }
+
+  if (totalOpen === 0) return 0;
+  return Math.min(totalBooked / totalOpen, 1);
+}
 
 // ─── API fetch ──────────────────────────────────────────────────────────────
 
@@ -964,7 +995,7 @@ export function AdminCalendar() {
                 const dayBookings = bookingsByDate.get(dateStr) || [];
                 const dayBlocked = blockedByDate.get(dateStr) || [];
                 const count = dayBookings.length;
-                const occupancyRate = count > 0 ? Math.min(count / MAX_BOOKINGS_PER_DAY, 1) : 0;
+                const occupancyRate = computeDayOccupancyRate(dayBookings, date);
                 const { bg, text } = getOccupancyColor(occupancyRate);
                 const isToday = isSameDay(date, today);
                 const fullyBlocked = isAllStudiosWholeDay(dateStr);
