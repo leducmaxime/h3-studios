@@ -86,6 +86,7 @@ interface EquipmentInfo {
   id: string;
   name: string;
   quantity: number;
+  price: number;
 }
 
 export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
@@ -147,12 +148,24 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         // Fetch equipment and match with booking equipment
         if (json.data.equipment) {
           const equipmentRes = await fetch("/api/equipment");
-          const equipmentJson = await equipmentRes.json() as { success: boolean; equipment?: Array<{ id: string; name: string }> };
+          const equipmentJson = await equipmentRes.json() as { success: boolean; equipment?: Array<{ id: string; name: string; pricingType: "session" | "per_hour"; sessionPricing: number[] | null; pricePerHour: number }> };
           if (equipmentJson.success && equipmentJson.equipment) {
             const bookingEquipment = JSON.parse(json.data.equipment) as Array<{ id: string; quantity: number }>;
+            const startIdx = TIME_SLOTS.indexOf(json.data.start_time);
+            let endIdx = TIME_SLOTS.indexOf(json.data.end_time);
+            if (endIdx === -1) endIdx = TIME_SLOTS.length;
+            const durationHours = (endIdx - startIdx) * 0.5;
             const matchedEquipment = bookingEquipment.map((eq) => {
               const eqData = equipmentJson.equipment!.find((e) => e.id === eq.id);
-              return { id: eq.id, name: eqData?.name || eq.id, quantity: eq.quantity };
+              let price = 0;
+              if (eqData) {
+                if (eqData.pricingType === "session" && Array.isArray(eqData.sessionPricing)) {
+                  price = eqData.sessionPricing[eq.quantity - 1] ?? 0;
+                } else {
+                  price = eqData.pricePerHour * eq.quantity * durationHours;
+                }
+              }
+              return { id: eq.id, name: eqData?.name || eq.id, quantity: eq.quantity, price };
             });
             setEquipment(matchedEquipment);
           }
@@ -438,9 +451,30 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     <span className="font-medium">{formatPrice(booking.base_price)}</span>
                   </div>
                   {booking.equipment_price > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-zinc-400">Équipements</span>
-                      <span className="font-medium">{formatPrice(booking.equipment_price)}</span>
+                    <div className="space-y-1.5">
+                      {equipment.length > 0 ? (
+                        <>
+                          {equipment.map((eq) => (
+                            <div key={eq.id} className="flex justify-between items-center">
+                              <span className="text-sm text-zinc-400">
+                                {eq.name}{eq.quantity > 1 ? ` ×${eq.quantity}` : ""}
+                              </span>
+                              <span className="text-sm font-medium">{formatPrice(eq.price)}</span>
+                            </div>
+                          ))}
+                          {equipment.length > 1 && (
+                            <div className="flex justify-between items-center pt-1 border-t border-zinc-700/50">
+                              <span className="text-sm text-zinc-500">Total équipements</span>
+                              <span className="font-medium">{formatPrice(booking.equipment_price)}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-zinc-400">Équipements</span>
+                          <span className="font-medium">{formatPrice(booking.equipment_price)}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                   {booking.promo_discount > 0 && (
