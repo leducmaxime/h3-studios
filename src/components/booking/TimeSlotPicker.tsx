@@ -50,18 +50,17 @@ export function TimeSlotPicker({
   hideHeader = false,
   groupType = "group",
 }: TimeSlotPickerProps) {
-  const [selectionMode, setSelectionMode] = useState<"start" | "end" | "done">(
-    startTime && endTime ? "done" : "start"
-  );
   const [selectedStart, setSelectedStart] = useState<string | null>(startTime);
   const [selectedEnd, setSelectedEnd] = useState<string | null>(endTime);
   const [hoveredEndSlot, setHoveredEndSlot] = useState<string | null>(null);
+
+  // Derived from state — no useState needed: null/null→"start", start/null→"end", start/end→"done"
+  const selectionMode = selectedStart && selectedEnd ? "done" : selectedStart ? "end" : "start";
 
   // Sync local state with parent props when they reset (e.g. studio assignment failed)
   useEffect(() => {
     setSelectedStart(startTime);
     setSelectedEnd(endTime);
-    setSelectionMode(startTime && endTime ? "done" : startTime ? "end" : "start");
   }, [startTime, endTime]);
 
   const hasPeakPricing = groupType === "group";
@@ -101,12 +100,34 @@ export function TimeSlotPicker({
     [checkSlotBooked, visibleSlots]
   );
 
+  // Memoized set of slots that can be valid start times — avoids O(n²) in render
+  const validStartSlots = useMemo(() => {
+    const valid = new Set<string>();
+    for (const slot of visibleSlots) {
+      if (canBeStartTime(slot, visibleSlots, checkSlotBooked)) {
+        valid.add(slot);
+      }
+    }
+    return valid;
+  }, [visibleSlots, checkSlotBooked]);
+
   const handleClear = useCallback(() => {
     setSelectedStart(null);
     setSelectedEnd(null);
-    setSelectionMode("start");
     onClear();
   }, [onClear]);
+
+  const tryConfirmRange = useCallback((start: string, end: string): boolean => {
+    const rangeCheck = isRangeBookable(start, end, groupType, availability, date, studioFilter);
+    if (rangeCheck.bookable) {
+      setSelectedStart(start);
+      setSelectedEnd(end);
+      onSelectRange(start, end);
+      onConfirm();
+      return true;
+    }
+    return false;
+  }, [groupType, availability, date, studioFilter, onSelectRange, onConfirm]);
 
   const handleSelectStart = useCallback((slot: string) => {
     if (slot === selectedStart) {
@@ -114,25 +135,14 @@ export function TimeSlotPicker({
       return;
     }
 
-    const slotIdx = visibleSlots.indexOf(slot);
-    const prevSlot = slotIdx > 0 ? visibleSlots[slotIdx - 1] : null;
-    const isAfterOccupied = prevSlot ? checkSlotBooked(prevSlot) : false;
-
     if (checkSlotBooked(slot)) {
-      if (selectionMode === "end" && isAfterOccupied) {
-        setSelectedStart(slot);
-        setSelectedEnd(null);
-        setSelectionMode("end");
-        return;
-      }
       handleClear();
       return;
     }
 
     setSelectedStart(slot);
     setSelectedEnd(null);
-    setSelectionMode("end");
-  }, [checkSlotBooked, selectedStart, visibleSlots, selectionMode, handleClear]);
+  }, [checkSlotBooked, selectedStart, handleClear]);
 
   const handleSelectEnd = useCallback((slot: string) => {
     if (!selectedStart) return;
@@ -141,23 +151,16 @@ export function TimeSlotPicker({
     const endIdx = visibleSlots.indexOf(slot);
 
     if (endIdx <= startIdx) {
-      setSelectedStart(slot);
-      setSelectedEnd(null);
-      setSelectionMode("end");
+      if (canBeStartTime(slot, visibleSlots, checkSlotBooked)) {
+        setSelectedStart(slot);
+        setSelectedEnd(null);
+      }
       return;
     }
     if (endIdx - startIdx < 2) return;
 
     if (canBeEndTime(selectedStart, slot, visibleSlots, checkSlotBooked)) {
-      // Range-level validation: ensure the ENTIRE range can be booked in a single studio
-      const rangeCheck = isRangeBookable(selectedStart, slot, groupType, availability, date, studioFilter);
-      if (rangeCheck.bookable) {
-        setSelectedEnd(slot);
-        setSelectionMode("done");
-        onSelectRange(selectedStart, slot);
-        onConfirm();
-        return;
-      }
+      if (tryConfirmRange(selectedStart, slot)) return;
     }
 
     const slotIdx = visibleSlots.indexOf(slot);
@@ -165,14 +168,15 @@ export function TimeSlotPicker({
     const isAfterOccupied = prevSlot ? checkSlotBooked(prevSlot) : false;
 
     if (!checkSlotBooked(slot) && isAfterOccupied) {
-      setSelectedStart(slot);
-      setSelectedEnd(null);
-      setSelectionMode("end");
+      if (canBeStartTime(slot, visibleSlots, checkSlotBooked)) {
+        setSelectedStart(slot);
+        setSelectedEnd(null);
+      }
       return;
     }
 
     handleClear();
-  }, [selectedStart, visibleSlots, checkSlotBooked, onSelectRange, onConfirm, handleClear, groupType, availability, date, studioFilter]);
+  }, [selectedStart, visibleSlots, checkSlotBooked, tryConfirmRange, handleClear]);
 
   const handleSlotClick = useCallback((slot: string) => {
     if (selectionMode === "end" && slot === selectedStart) {
@@ -184,7 +188,7 @@ export function TimeSlotPicker({
     } else {
       handleSelectEnd(slot);
     }
-  }, [selectionMode, selectedStart, handleSelectStart, handleSelectEnd, handleClear]);
+  }, [selectedStart, handleSelectStart, handleSelectEnd, handleClear]);
 
   const handleSlotMouseEnter = useCallback((slot: string) => {
     if (selectionMode !== "end" || !selectedStart) return;
@@ -194,7 +198,7 @@ export function TimeSlotPicker({
         setHoveredEndSlot(slot);
       }
     }
-  }, [selectionMode, selectedStart, visibleSlots, checkSlotBooked, groupType, availability, date, studioFilter]);
+  }, [selectedStart, visibleSlots, checkSlotBooked, groupType, availability, date, studioFilter]);
 
   const handleSlotMouseLeave = useCallback(() => {
     setHoveredEndSlot(null);
@@ -226,14 +230,9 @@ export function TimeSlotPicker({
       }
 
       if (!end) return;
-
-      setSelectedStart(start);
-      setSelectedEnd(end);
-      setSelectionMode("done");
-      onSelectRange(start, end);
-      onConfirm();
+      tryConfirmRange(start, end);
     },
-    [visibleSlots, checkSlotBooked, closingTime, onSelectRange, onConfirm, groupType, availability, date, studioFilter]
+    [visibleSlots, checkSlotBooked, closingTime, tryConfirmRange]
   );
 
   const activeRange = useMemo(() => {
@@ -292,17 +291,23 @@ export function TimeSlotPicker({
         }
       }
 
+      // Dim slots that can't be a start time (e.g. closing time slot with < MIN_BOOKING_SLOTS ahead)
+      if (selectionMode === "start" && !isBooked && !validStartSlots.has(slot)) {
+        return "bg-white/5 border-white/5 cursor-not-allowed opacity-40";
+      }
+
       return isPeak
         ? "bg-primary/5 hover:bg-primary/10 border-white/10 cursor-pointer"
         : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer";
     },
-    [checkSlotBooked, isSlotStartOfBooking, hasPeakPricing, date, activeRange, visibleSlots, closingTime, selectedStart, selectedEnd, selectionMode, hoveredEndSlot]
+    [checkSlotBooked, isSlotStartOfBooking, hasPeakPricing, date, activeRange, visibleSlots, closingTime, selectedStart, selectedEnd, hoveredEndSlot, validStartSlots, selectionMode]
   );
 
   const priceInfo = useMemo(() => {
     if (!activeRange) return null;
     const startIdx = ALL_TIME_SLOTS.indexOf(activeRange.start);
-    const endIdx = ALL_TIME_SLOTS.indexOf(activeRange.end);
+    let endIdx = ALL_TIME_SLOTS.indexOf(activeRange.end);
+    if (activeRange.end === "00:00") endIdx = ALL_TIME_SLOTS.length;
     const durationSlots = endIdx - startIdx;
     const durationHours = durationSlots * 0.5;
     const durationLabel = durationHours % 1 === 0 ? `${durationHours}h` : `${Math.floor(durationHours)}h30`;
@@ -330,7 +335,7 @@ export function TimeSlotPicker({
       duration: durationLabel,
       price: priceDisplay,
     };
-  }, [activeRange, visibleSlots, closingTime, studioFilter, groupType, date, hasPeakPricing]);
+  }, [activeRange, studioFilter, groupType, date, hasPeakPricing]);
 
   const hourlyRates = useMemo(() => {
     if (studioFilter) {

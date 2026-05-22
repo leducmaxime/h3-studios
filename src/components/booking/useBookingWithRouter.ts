@@ -910,7 +910,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
   return {
     state,
-    availability: mergedAvailability,
+    mergedAvailability,
     pricing,
     cartTotal,
     canProceedToStudio,

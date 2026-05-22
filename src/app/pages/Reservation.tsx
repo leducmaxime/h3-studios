@@ -49,7 +49,7 @@ interface ReservationProps {
 export function Reservation({ step }: ReservationProps) {
   const {
     state,
-    availability,
+    mergedAvailability,
     pricing,
     cartTotal,
     canProceedToStudio,
@@ -431,7 +431,7 @@ export function Reservation({ step }: ReservationProps) {
                   <div ref={timeSlotRef}>
                     <TimeSlotPicker
                       date={state.selectedDate}
-                      availability={availability}
+                      availability={mergedAvailability}
                       startTime={state.startTime}
                       endTime={state.endTime}
                       onSelectRange={selectTimeRange}
@@ -460,7 +460,7 @@ export function Reservation({ step }: ReservationProps) {
                           startTime={state.startTime!}
                           endTime={state.endTime!}
                           groupType={state.groupType || "group"}
-                          availability={availability}
+                          availability={mergedAvailability}
                           onSelect={() => selectStudio(sid)}
                         />
                       ))}
@@ -564,7 +564,7 @@ export function Reservation({ step }: ReservationProps) {
                   <div ref={timeSlotRef}>
                     <TimeSlotPicker
                       date={state.selectedDate}
-                      availability={availability}
+                      availability={mergedAvailability}
                       startTime={state.startTime}
                       endTime={state.endTime}
                       onSelectRange={selectTimeRange}
