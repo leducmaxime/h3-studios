@@ -25,7 +25,7 @@ const RSS_APP_FEED_URL = "https://rss.app/feeds/wpmloa9fZdyyGMag.xml";
 
 async function fetchMediaPosts(accessToken: string): Promise<InstagramPost[]> {
   const response = await fetch(
-    `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&limit=50&access_token=${accessToken}`,
+    `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&limit=51&access_token=${accessToken}`,
     { cf: { cacheTtl: 3600 } }
   );
 
