@@ -1434,6 +1434,42 @@ const app = defineApp([
           end_time: booking.end_time,
         }, request.headers.get("X-Admin-User-Id") || "admin");
 
+        // Send booking confirmation email to client
+        if (env.RESEND_API_KEY) {
+          const userRow = await env.DB.prepare(
+            "SELECT name, email, phone FROM users WHERE id = ?"
+          ).bind(body.user_id).first<{ name: string; email: string | null; phone: string | null }>();
+
+          if (userRow?.email) {
+            const equipmentSelections: EquipmentSelection[] = body.equipment
+              ? JSON.parse(body.equipment) as EquipmentSelection[]
+              : [];
+
+            const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
+              bookingRef: booking.booking_ref,
+              studioId: body.studio_id,
+              date: body.date,
+              startTime: body.start_time,
+              endTime: body.end_time,
+              groupType: body.group_type,
+              equipment: equipmentSelections,
+              equipmentPrice,
+              totalPrice: subtotal - promoDiscount,
+              paymentMethod: body.payment_method || "cash",
+              paymentStatus: body.payment_method === "card" ? "paid" : "pay-on-site",
+              userName: userRow.name,
+              userEmail: userRow.email,
+              userPhone: userRow.phone || "",
+              promoCode,
+              promoDiscount,
+              promoType,
+            }).catch((err) => {
+              console.error("Failed to send admin booking confirmation email:", err);
+            });
+            waitUntil(emailPromise);
+          }
+        }
+
         return jsonSuccess(booking);
       } catch (error) {
         console.error("POST /api/admin/bookings error:", error);
