@@ -183,10 +183,12 @@ function buildEmailHtml(data: BookingConfirmationData): string {
     <td style="padding:14px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
         <tr>
+          ${slot.groupType === "group" ? `
           <td width="50%" style="padding-bottom:8px;">
             <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Studio</p>
             <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">${slotStudio}</p>
           </td>
+          ` : ""}
           <td width="50%" style="padding-bottom:8px;">
             <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
             <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">${getGroupTypeLabel(slot.groupType)}</p>
