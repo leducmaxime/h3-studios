@@ -909,8 +909,7 @@ export function AdminDashboard() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
   const [activityCalendarView, setActivityCalendarView] = useState<ActivityCalendarView>("month");
-  const [period, setPeriod] = useState<Period>("month");
-  const [rangeMode, setRangeMode] = useState<"today" | "rolling" | "week" | "month" | "year" | "custom">("month");
+  const [rangeMode, setRangeMode] = useState<"today" | "week" | "month" | "year" | "custom">("month");
   const [customDateFrom, setCustomDateFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 29);
@@ -999,9 +998,6 @@ export function AdminDashboard() {
 
       if (rangeMode === "today") {
         url.searchParams.set("mode", "today");
-      } else if (rangeMode === "rolling") {
-        url.searchParams.set("mode", "rolling");
-        url.searchParams.set("period", period);
       } else if (rangeMode === "custom") {
         if (customDateFrom && customDateTo && customDateFrom <= customDateTo) {
           url.searchParams.set("dateFrom", customDateFrom);
@@ -1027,9 +1023,9 @@ export function AdminDashboard() {
     } catch (err) {
       console.error("Failed to fetch stats:", err);
     }
-  }, [rangeMode, reportMonth, selectedYear, selectedWeek, period, customDateFrom, customDateTo]);
+  }, [rangeMode, reportMonth, selectedYear, selectedWeek, customDateFrom, customDateTo]);
 
-  const fetchCharts = useCallback(async (p: Period) => {
+  const fetchCharts = useCallback(async () => {
     try {
       const chartsUrl = new URL("/api/admin/stats/charts", window.location.origin);
       const revenueUrl = new URL("/api/admin/stats/revenue", window.location.origin);
@@ -1064,9 +1060,6 @@ export function AdminDashboard() {
         chartsUrl.searchParams.set("year", selectedYear);
         revenueUrl.searchParams.set("mode", "year");
         revenueUrl.searchParams.set("year", selectedYear);
-      } else {
-        chartsUrl.searchParams.set("period", p);
-        revenueUrl.searchParams.set("period", p);
       }
 
       const [revenueRes, chartsRes] = await Promise.all([
@@ -1191,8 +1184,8 @@ export function AdminDashboard() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchStats(), fetchCharts(period)]).finally(() => setLoading(false));
-  }, [fetchStats, fetchCharts, period]);
+    Promise.all([fetchStats(), fetchCharts()]).finally(() => setLoading(false));
+  }, [fetchStats, fetchCharts]);
 
   const handleGenerateMonthlyReport = async () => {
     const [year, month] = reportMonth.split("-").map(Number);
@@ -1246,7 +1239,7 @@ export function AdminDashboard() {
     if (rangeMode === "custom") {
       return "Personnalisé";
     }
-    return PERIOD_OPTIONS.find((p) => p.value === period)?.label || period;
+    return "";
   })();
 
   const rangeSubtitle = stats ? formatRange(stats.rangeFrom, stats.rangeTo) : "";
@@ -1287,13 +1280,12 @@ export function AdminDashboard() {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as "today" | "rolling" | "week" | "month" | "year" | "custom")}>
+            <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as "today" | "week" | "month" | "year" | "custom")}>
               <SelectTrigger className="w-[130px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="today">Aujourd'hui</SelectItem>
-                <SelectItem value="rolling">Période</SelectItem>
                 <SelectItem value="week">Semaine</SelectItem>
                 <SelectItem value="month">Mois</SelectItem>
                 <SelectItem value="year">Année</SelectItem>
@@ -1301,44 +1293,64 @@ export function AdminDashboard() {
               </SelectContent>
             </Select>
 
-            <Select value={reportMonth} onValueChange={setReportMonth}>
-              <SelectTrigger className="w-[140px]" disabled={rangeMode !== "month"}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {monthOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {rangeMode === "month" && (
+              <Select value={reportMonth} onValueChange={setReportMonth}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
-            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-              <SelectTrigger className="w-[160px]" disabled={rangeMode !== "week"}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {weekOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {rangeMode === "week" && (
+              <>
+                <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weekOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {yearOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
 
-            <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-[100px]" disabled={rangeMode === "rolling" || rangeMode === "today" || rangeMode === "custom"}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {yearOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {rangeMode === "year" && (
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             {rangeMode === "custom" && (
               <>
@@ -1460,20 +1472,7 @@ export function AdminDashboard() {
       )}
 
       <div className="space-y-4">
-        {rangeMode === "rolling" && (
-          <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIOD_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
               <div className="mb-4 flex items-center justify-between">
