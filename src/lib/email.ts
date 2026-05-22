@@ -205,7 +205,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
       </table>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #2a2a2a;padding-top:10px;">
         <tr>
-          <td style="padding:3px 0;color:#aaaaaa;font-size:12px;">Répétition (${slotStudio})</td>
+          <td style="padding:3px 0;color:#aaaaaa;font-size:12px;">Répétition${slot.groupType === "group" ? ` (${slotStudio})` : ""}</td>
           <td align="right" style="padding:3px 0;color:#ffffff;font-size:12px;">${formatPrice(slotBasePrice)}</td>
         </tr>
         ${slotEquipBreakdown ? `
@@ -318,7 +318,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
       <p style="margin:0 0 12px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Récapitulatif</p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Répétition${isGroup ? ` (${studioName})` : ""}</td>
+          <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Répétition</td>
           <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.totalPrice - data.equipmentPrice + (data.promoDiscount || 0))}</td>
         </tr>
         ${equipmentBreakdown}
