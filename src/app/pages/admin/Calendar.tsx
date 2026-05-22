@@ -462,6 +462,9 @@ export function AdminCalendar() {
   };
 
   function getPaymentStatusColor(booking: CalendarBooking): { bg: string; text: string; border: string } {
+    if (booking.status === "no-show") {
+      return { bg: "bg-yellow-500/15", text: "text-yellow-400", border: "border-red-500/70" };
+    }
     if (booking.payment_status === "paid") {
       return { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30" };
     }
@@ -671,6 +674,7 @@ export function AdminCalendar() {
                         const leftPos = studioId === "la-scene" ? "4px" : studioId === "le-podium" ? "50%" : "4px";
                         const width = studioId === "la-scene" || studioId === "le-podium" ? "calc(50% - 8px)" : "calc(100% - 8px)";
 
+                        const consultColors = booking.status === "no-show" ? getPaymentStatusColor(booking) : CONSULTATION_COLORS;
                         return (
                           <button
                             key={booking.id}
@@ -678,7 +682,7 @@ export function AdminCalendar() {
                             onClick={() => setSelectedBooking(booking)}
                             onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setTooltip(null)}
-                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
+                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
                             style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
                           >
                             <p className="truncate text-[11px] font-medium leading-tight">
@@ -875,6 +879,7 @@ export function AdminCalendar() {
                         const leftPos = "4px";
                         const width = "calc(100% - 8px)";
 
+                        const consultColors = booking.status === "no-show" ? getPaymentStatusColor(booking) : CONSULTATION_COLORS;
                         return (
                           <button
                             key={booking.id}
@@ -882,7 +887,7 @@ export function AdminCalendar() {
                             onClick={() => setSelectedBooking(booking)}
                             onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setTooltip(null)}
-                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${CONSULTATION_COLORS.bg} ${CONSULTATION_COLORS.border} ${CONSULTATION_COLORS.text}`}
+                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
                             style={{
                               top: `${top}px`,
                               height: `${Math.max(height, 28)}px`,
