@@ -55,27 +55,24 @@ export function LesStudios() {
           </p>
         </div>
 
-        <div className={`flex flex-wrap items-center justify-center gap-6 text-sm text-white/50 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
-          <span className="flex items-center gap-2">
+        <div className={`flex flex-wrap items-center justify-center gap-3 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+          <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm">
             <Wifi className="h-4 w-4 text-primary" />
             Wifi gratuit
           </span>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm">
             <TrainFront className="h-4 w-4 text-primary" />
             2 min du RER A
           </span>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm">
             <MapPin className="h-4 w-4 text-primary" />
             20 min de Paris
           </span>
-        </div>
-
-        <div className={`flex flex-wrap items-center justify-center gap-6 text-sm text-white/50 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm">
             <Calendar className="h-4 w-4 text-primary" />
             Ouvert 7j/7
           </span>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm">
             <Clock className="h-4 w-4 text-primary" />
             Uniquement sur réservation
           </span>
