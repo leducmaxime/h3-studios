@@ -211,9 +211,6 @@ function buildEmailHtml(data: BookingConfirmationData): string {
           <td align="right" style="padding:3px 0;color:#ffffff;font-size:12px;">${formatPrice(slotBasePrice)}</td>
         </tr>
         ${slotEquipBreakdown ? `
-        <tr>
-          <td colspan="2" style="padding:4px 0 2px 0;color:#888888;font-size:11px;">Matériel : ${slotEquipLabel}</td>
-        </tr>
         ${slotEquipBreakdown}
         ` : `
         <tr>
