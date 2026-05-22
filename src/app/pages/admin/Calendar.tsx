@@ -124,6 +124,12 @@ const VISIBLE_HOURS = [
   "21:00", "22:00", "23:00",
 ];
 
+function getNextHour(hour: string): string {
+  const idx = VISIBLE_HOURS.indexOf(hour);
+  if (idx === -1 || idx === VISIBLE_HOURS.length - 1) return "00:00";
+  return VISIBLE_HOURS[idx + 1];
+}
+
 const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-primary/20 border-primary/50 text-primary",
   completed: "bg-blue-500/20 border-blue-500/50 text-blue-400",
@@ -541,6 +547,33 @@ export function AdminCalendar() {
                       <div key={hour} className="h-[60px] border-b border-zinc-800" />
                     ))}
 
+                    {/* Clickable empty slots */}
+                    {studios.map((studioId) => {
+                      const leftPos = studioId === "la-scene" ? "0" : "50%";
+                      const width = "50%";
+                      return VISIBLE_HOURS.map((hour, hourIdx) => {
+                        const nextHour = getNextHour(hour);
+                        const hasBooking = bookings.some(
+                          (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.start_time < nextHour && b.end_time > hour
+                        );
+                        const hasBlocked = blockedSlots.some(
+                          (s) => s.date === dateStr && (s.studio_id === null || s.studio_id === studioId) && s.start_time < nextHour && s.end_time > hour
+                        );
+                        if (hasBooking || hasBlocked) return null;
+                        return (
+                          <a
+                            key={`empty-${dateStr}-${studioId}-${hour}`}
+                            href={`/admin/bookings/new?date=${dateStr}&studio=${studioId}&startTime=${hour}`}
+                            className="absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 hover:bg-primary/5"
+                            style={{ top: `${hourIdx * 60}px`, height: "60px", left: leftPos, width }}
+                            title={`Nouvelle réservation - ${studioId === "la-scene" ? "La Scène" : "Le Podium"} ${hour}`}
+                          >
+                            <Plus className="h-4 w-4 text-primary/40" />
+                          </a>
+                        );
+                      });
+                    })}
+
                     {studios.map((studioId) => {
                       const studioBlocked = expandedBlocked(dateStr, studioId);
                       const studioBookings = bookings.filter(
@@ -736,6 +769,29 @@ export function AdminCalendar() {
                       </div>
                     ))}
 
+                    {/* Clickable empty slots */}
+                    {VISIBLE_HOURS.map((hour, hourIdx) => {
+                      const nextHour = getNextHour(hour);
+                      const hasBooking = bookings.some(
+                        (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.start_time < nextHour && b.end_time > hour
+                      );
+                      const hasBlocked = blockedSlots.some(
+                        (s) => s.date === dateStr && (s.studio_id === null || s.studio_id === studioId) && s.start_time < nextHour && s.end_time > hour
+                      );
+                      if (hasBooking || hasBlocked) return null;
+                      return (
+                        <a
+                          key={`empty-${dateStr}-${studioId}-${hour}`}
+                          href={`/admin/bookings/new?date=${dateStr}&studio=${studioId}&startTime=${hour}`}
+                          className="absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 hover:bg-primary/5"
+                          style={{ top: `${hourIdx * 60}px`, height: "60px", left: 0, width: "100%" }}
+                          title={`Nouvelle réservation - ${studioId === "la-scene" ? "La Scène" : "Le Podium"} ${hour}`}
+                        >
+                          <Plus className="h-4 w-4 text-primary/40" />
+                        </a>
+                      );
+                    })}
+
                     {/* Blocked slots */}
                     {studioBlocked.map((slot) => {
                       const startIdx = ALL_TIME_SLOTS.indexOf(slot.start_time);
@@ -816,6 +872,8 @@ export function AdminCalendar() {
                         if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
                         const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
                         const height = (endIdx - startIdx) * 30;
+                        const leftPos = "4px";
+                        const width = "calc(100% - 8px)";
 
                         return (
                           <button

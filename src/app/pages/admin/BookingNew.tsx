@@ -54,6 +54,18 @@ const GROUP_TYPES: { value: GroupType; label: string }[] = [
 
 
 export function AdminBookingNew() {
+  // Read query params for pre-fill from calendar
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const qDate = params.get("date");
+    const qStudio = params.get("studio");
+    const qStartTime = params.get("startTime");
+    if (qDate) setDate(qDate);
+    if (qStudio && (qStudio === "la-scene" || qStudio === "le-podium")) setStudioId(qStudio);
+    if (qStartTime) setStartTime(qStartTime);
+  }, []);
+
   // User selection
   const [userSearch, setUserSearch] = useState("");
   const [userResults, setUserResults] = useState<DbUser[]>([]);
