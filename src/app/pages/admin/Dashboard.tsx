@@ -1280,7 +1280,15 @@ export function AdminDashboard() {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as "today" | "week" | "month" | "year" | "custom")}>
+            <Select value={rangeMode} onValueChange={(v) => {
+              const mode = v as "today" | "week" | "month" | "year" | "custom";
+              if (mode === "week") {
+                const now = getISOWeekYearAndNumber(new Date());
+                setSelectedWeek(String(now.week));
+                setSelectedYear(String(now.year));
+              }
+              setRangeMode(mode);
+            }}>
               <SelectTrigger className="w-[130px]">
                 <SelectValue />
               </SelectTrigger>
