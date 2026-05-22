@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { formatPrice } from "@/lib/booking";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -158,7 +159,7 @@ function formatChangesPreview(changes: unknown, entityType?: string): string {
     
     // Payment-specific formatting
     if (entityType === "payment" || entityType === "payments") {
-      if (obj.amount) return `Montant: ${Number(obj.amount) / 100}€`;
+      if (obj.amount) return `Montant: ${formatPrice(Number(obj.amount))}`;
     }
     
     // Setting-specific formatting
