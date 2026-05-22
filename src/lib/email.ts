@@ -159,45 +159,78 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   const isMultiSlot = data.allSlots && data.allSlots.length > 1;
   const multiSlotTotal = isMultiSlot ? data.allSlots!.reduce((sum, s) => sum + s.totalPrice, 0) : 0;
 
-  // Multi-slot: determine equipment display
-  let multiSlotEquipmentLabel = "Aucun matériel supplémentaire";
-  if (isMultiSlot) {
-    const slotsWithEquipment = data.allSlots!.filter(s => s.equipment && s.equipment.length > 0);
-    if (slotsWithEquipment.length > 0) {
-      const firstEq = JSON.stringify(slotsWithEquipment[0].equipment);
-      const allSame = slotsWithEquipment.every(s => JSON.stringify(s.equipment) === firstEq);
-      if (allSame) {
-        multiSlotEquipmentLabel = buildEquipmentList(slotsWithEquipment[0].equipment);
-      } else {
-        multiSlotEquipmentLabel = "Voir détails par créneau";
-      }
-    }
-  }
-
   const bookingRefBadge = isMultiSlot
     ? `<p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Références de réservation</p>
 <p style="margin:0;color:#facc15;font-size:16px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${data.allSlots!.map(s => s.bookingRef).join(" · ")}</p>`
     : `<p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Référence de réservation</p>
 <p style="margin:0;color:#facc15;font-size:24px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${data.bookingRef}</p>`;
 
+  // Multi-slot: one card per slot with its own price breakdown + equipment
+  const multiSlotCards = isMultiSlot ? data.allSlots!.map((slot, idx) => {
+    const slotDuration = calculateDurationHours(slot.startTime, slot.endTime);
+    const slotEquipBreakdown = buildEquipmentBreakdown(slot.equipment, slotDuration);
+    const slotEquipLabel = buildEquipmentList(slot.equipment);
+    const slotStudio = getStudioName(slot.studioId);
+    const slotBasePrice = slot.totalPrice - slot.equipmentPrice;
+    return `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:16px;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;">
+  <tr>
+    <td style="background-color:#1a1a1a;padding:12px 16px;border-bottom:1px solid #2a2a2a;">
+      <p style="margin:0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Créneau ${idx + 1} · <span style="color:#facc15;font-family:'Courier New',monospace;">${slot.bookingRef}</span></p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:14px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
+        <tr>
+          <td width="50%" style="padding-bottom:8px;">
+            <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Studio</p>
+            <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">${slotStudio}</p>
+          </td>
+          <td width="50%" style="padding-bottom:8px;">
+            <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
+            <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">${getGroupTypeLabel(slot.groupType)}</p>
+          </td>
+        </tr>
+        <tr>
+          <td width="50%">
+            <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Date</p>
+            <p style="margin:0;color:#ffffff;font-size:13px;">${formatDateFrench(slot.date)}</p>
+          </td>
+          <td width="50%">
+            <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Horaire</p>
+            <p style="margin:0;color:#ffffff;font-size:13px;">${formatTimeRange(slot.startTime, slot.endTime)}</p>
+          </td>
+        </tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #2a2a2a;padding-top:10px;">
+        <tr>
+          <td style="padding:3px 0;color:#aaaaaa;font-size:12px;">Répétition (${slotStudio})</td>
+          <td align="right" style="padding:3px 0;color:#ffffff;font-size:12px;">${formatPrice(slotBasePrice)}</td>
+        </tr>
+        ${slotEquipBreakdown ? `
+        <tr>
+          <td colspan="2" style="padding:4px 0 2px 0;color:#888888;font-size:11px;">Matériel : ${slotEquipLabel}</td>
+        </tr>
+        ${slotEquipBreakdown}
+        ` : `
+        <tr>
+          <td style="padding:3px 0;color:#555555;font-size:12px;">Aucun matériel supplémentaire</td>
+          <td></td>
+        </tr>
+        `}
+        <tr>
+          <td style="padding:6px 0 2px 0;color:#ffffff;font-size:13px;font-weight:600;border-top:1px solid #2a2a2a;">Sous-total</td>
+          <td align="right" style="padding:6px 0 2px 0;color:#facc15;font-size:13px;font-weight:700;border-top:1px solid #2a2a2a;">${formatPrice(slot.totalPrice)}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+  }).join("") : "";
+
   const detailsGrid = isMultiSlot
-    ? `<!-- Slots table -->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;border-collapse:collapse;">
-  <tr>
-    <td style="padding:8px 12px;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333333;">Studio</td>
-    <td style="padding:8px 12px;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333333;">Date</td>
-    <td style="padding:8px 12px;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333333;">Horaire</td>
-    <td align="right" style="padding:8px 12px;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #333333;">Prix</td>
-  </tr>
-  ${data.allSlots!.map(slot => `
-  <tr>
-    <td style="padding:10px 12px;color:#ffffff;font-size:13px;border-bottom:1px solid #222222;">${getStudioName(slot.studioId)}</td>
-    <td style="padding:10px 12px;color:#ffffff;font-size:13px;border-bottom:1px solid #222222;">${formatDateFrench(slot.date)}</td>
-    <td style="padding:10px 12px;color:#ffffff;font-size:13px;border-bottom:1px solid #222222;">${formatTimeRange(slot.startTime, slot.endTime)}</td>
-    <td align="right" style="padding:10px 12px;color:#facc15;font-size:13px;font-weight:600;border-bottom:1px solid #222222;">${formatPrice(slot.totalPrice)}</td>
-  </tr>
-  `).join("")}
-</table>`
+    ? multiSlotCards
     : `<tr>
   <td width="50%" valign="top" style="padding-right:8px;padding-bottom:16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
@@ -243,15 +276,9 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   </td>
 </tr>`;
 
+  // Multi-slot: equipment is shown per-slot in the cards above — no separate section needed
   const equipmentSection = isMultiSlot
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
-  <tr>
-    <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
-      <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Matériel supplémentaire</p>
-      <p style="margin:0;color:#ffffff;font-size:14px;line-height:1.5;">${multiSlotEquipmentLabel}</p>
-    </td>
-  </tr>
-</table>`
+    ? ""
     : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
   <tr>
     <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
@@ -262,15 +289,10 @@ function buildEmailHtml(data: BookingConfirmationData): string {
 </table>`;
 
   const priceBreakdown = isMultiSlot
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;border-top:1px solid #333333;padding-top:20px;">
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;border-top:2px solid #333333;padding-top:20px;">
   <tr>
     <td>
-      <p style="margin:0 0 12px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Récapitulatif</p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Total réservations (${data.allSlots!.length} créneaux)</td>
-          <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(multiSlotTotal)}</td>
-        </tr>
         ${hasPromo ? `
         <tr>
           <td style="padding:6px 0;color:#facc15;font-size:14px;">
@@ -278,13 +300,13 @@ function buildEmailHtml(data: BookingConfirmationData): string {
           </td>
           <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
         </tr>
+        <tr>
+          <td colspan="2" style="border-top:1px solid #333333;padding-top:8px;"></td>
+        </tr>
         ` : ""}
         <tr>
-          <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#ffffff;font-size:16px;font-weight:600;">Total</td>
-          <td align="right" style="padding:6px 0;color:#facc15;font-size:20px;font-weight:700;">${multiSlotTotal === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(multiSlotTotal)}</td>
+          <td style="padding:6px 0;color:#ffffff;font-size:17px;font-weight:700;">Total (${data.allSlots!.length} créneaux)</td>
+          <td align="right" style="padding:6px 0;color:#facc15;font-size:22px;font-weight:700;">${multiSlotTotal === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(multiSlotTotal - (data.promoDiscount || 0))}</td>
         </tr>
       </table>
     </td>
@@ -366,9 +388,10 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
               </table>
 
               <!-- Details Grid -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
-                ${detailsGrid}
-              </table>
+              ${isMultiSlot
+                ? `<div style="margin-bottom:20px;">${detailsGrid}</div>`
+                : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">${detailsGrid}</table>`
+              }
 
               <!-- Equipment -->
               ${equipmentSection}
