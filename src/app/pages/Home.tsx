@@ -55,7 +55,7 @@ export function Home() {
               </a>
               <a
                 href="/les-studios"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 px-8 py-4 text-base font-medium text-white transition-all hover:border-primary/60 hover:bg-white/5 hover:text-primary md:px-10 md:py-5 md:text-lg"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 bg-black px-8 py-4 text-base font-medium text-white transition-all hover:border-primary/60 hover:bg-black/80 hover:text-primary md:px-10 md:py-5 md:text-lg"
               >
                 Découvrir les studios
               </a>
