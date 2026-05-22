@@ -462,13 +462,12 @@ export function AdminCalendar() {
   };
 
   function getPaymentStatusColor(booking: CalendarBooking): { bg: string; text: string; border: string } {
-    if (booking.status === "no-show") {
-      return { bg: "bg-yellow-500/15", text: "text-yellow-400", border: "border-red-500/70" };
-    }
+    const isNoShow = booking.status === "no-show";
+    const border = isNoShow ? "border-red-500/70" : booking.payment_status === "paid" ? "border-emerald-500/30" : "border-orange-500/30";
     if (booking.payment_status === "paid") {
-      return { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30" };
+      return { bg: "bg-emerald-500/15", text: "text-emerald-400", border };
     }
-    return { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30" };
+    return { bg: "bg-orange-500/15", text: "text-orange-400", border };
   }
 
   const renderWeekView = () => {
