@@ -792,7 +792,6 @@ export async function getPaymentsByBookingId(
       p.booking_id as booking_id,
       p.amount as amount,
       CASE
-        WHEN b.payment_status != 'pay-on-site' THEN 'card'
         WHEN p.method IN ('cheque', 'check') THEN 'check'
         ELSE p.method
       END as method,
@@ -820,7 +819,6 @@ export async function getPaymentByBookingId(
       p.booking_id as booking_id,
       p.amount as amount,
       CASE
-        WHEN b.payment_status != 'pay-on-site' THEN 'card'
         WHEN p.method IN ('cheque', 'check') THEN 'check'
         ELSE p.method
       END as method,
