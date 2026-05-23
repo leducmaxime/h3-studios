@@ -63,8 +63,8 @@ export function ClientLogin() {
     e.preventDefault();
     setError("");
 
-    if (!firstName || !lastName || !email || !password || !addressLine1 || !postalCode || !city) {
-      setError("Prénom, nom, email, mot de passe, adresse, code postal et ville sont obligatoires");
+    if (!firstName || !lastName || !email || !password || !phone || !addressLine1 || !postalCode || !city) {
+      setError("Prénom, nom, email, mot de passe, téléphone, adresse, code postal et ville sont obligatoires");
       return;
     }
 
@@ -229,7 +229,7 @@ export function ClientLogin() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="reg-phone" className="text-zinc-300">Téléphone</Label>
+              <Label htmlFor="reg-phone" className="text-zinc-300">Téléphone <span className="text-primary">*</span></Label>
               <Input
                 id="reg-phone"
                 type="tel"

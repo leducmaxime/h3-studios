@@ -3595,8 +3595,8 @@ const app = defineApp([
       const city = body.city?.trim() || "";
       const name = `${firstName} ${lastName}`.trim();
 
-      if (!firstName || !lastName || !body.email || !body.password || !addressLine1 || !postalCode || !city) {
-        return jsonError("Prénom, nom, email, mot de passe, adresse, code postal et ville requis", 400);
+      if (!firstName || !lastName || !body.email || !body.password || !body.phone?.trim() || !addressLine1 || !postalCode || !city) {
+        return jsonError("Prénom, nom, email, mot de passe, téléphone, adresse, code postal et ville requis", 400);
       }
 
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {

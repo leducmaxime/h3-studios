@@ -57,7 +57,9 @@ export function BookingForm({
     }
 
     const phoneDigits = userPhone.replace(/\D/g, "");
-    if (userPhone && phoneDigits.length !== 10) {
+    if (!userPhone.trim()) {
+      errors.userPhone = "Le numéro de téléphone est obligatoire";
+    } else if (phoneDigits.length !== 10) {
       errors.userPhone = "Le numéro de téléphone est invalide";
     }
 
