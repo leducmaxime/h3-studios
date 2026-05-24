@@ -360,7 +360,7 @@ export function APropos() {
 
       {/* FAQ */}
       <section className="py-16 sm:py-20">
-        <div className="mx-auto w-full max-w-3xl px-4">
+        <div className="mx-auto w-full max-w-4xl px-4">
           <h2 className="mb-2 text-center font-blanka text-3xl sm:text-4xl">FAQ</h2>
           <p className="mb-10 text-center text-white/60">Questions fréquentes</p>
           <div className="flex flex-col gap-3">
