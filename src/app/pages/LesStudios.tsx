@@ -2,7 +2,7 @@
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { ImageCarousel } from "@/components/common/ImageCarousel";
-import { Wifi, TrainFront, MapPin, Music, Calendar, Clock, Wrench } from "lucide-react";
+import { Wifi, TrainFront, MapPin, ArrowRight, Calendar, Clock, Wrench } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const studios = [
@@ -109,7 +109,7 @@ export function LesStudios() {
                   href="/reservation"
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-black transition-all hover:bg-primary/90"
                 >
-                  <Music className="h-4 w-4" />
+                  <ArrowRight className="h-4 w-4" />
                   Réserver
                 </a>
               </div>
