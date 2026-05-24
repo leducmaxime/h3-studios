@@ -11,6 +11,7 @@ import {
   Merge,
   Eye,
   UserPlus,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -517,6 +518,13 @@ export function AdminUsers() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="border-zinc-800 bg-zinc-900">
+                          <DropdownMenuItem asChild>
+                            <a href={`/admin/bookings/new?userId=${user.id}`} className="cursor-pointer gap-2">
+                              <Plus className="h-4 w-4" />
+                              Nouvelle réservation
+                            </a>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem asChild>
                             <a href={`/admin/users/${user.id}`} className="cursor-pointer gap-2">
                               <Eye className="h-4 w-4" />
