@@ -143,6 +143,7 @@ interface NowBooking {
   start_time: string;
   end_time: string;
   payment_status: string;
+  remaining: number;
 }
 
 type Period = "week" | "month" | "quarter" | "year";
@@ -1469,7 +1470,7 @@ export function AdminDashboard() {
                   <p className="text-xs text-zinc-400">{b.start_time} – {b.end_time} · {b.studio_id === "la-scene" ? "La Scène" : "Le Podium"}</p>
                 </div>
                 <span className={`text-xs font-medium px-2 py-1 rounded-full ${b.payment_status === "paid" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>
-                  {b.payment_status === "paid" ? "Payé" : "À encaisser"}
+                  {b.payment_status === "paid" ? "Payé" : b.remaining > 0 ? `À encaisser ${formatPrice(b.remaining)}` : "À encaisser"}
                 </span>
               </a>
             ))}
