@@ -175,7 +175,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Y a-t-il un parking à proximité ?",
-    a: "Oui, un parking gratuit est disponible à proximité immédiate du studio. Vous pouvez également vous garer dans les rues environnantes sans restriction."
+    a: "Vous avez la possibilité de vous garer dans la rue en respectant le voisinage."
   },
   {
     q: "Le studio est-il accessible aux personnes à mobilité réduite ?",
