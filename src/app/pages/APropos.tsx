@@ -200,6 +200,26 @@ const FAQ_ITEMS = [
   {
     q: "Le matériel est-il vraiment inclus dans le prix ?",
     a: "Oui, le matériel de base est inclus : batterie, amplis guitare et basse, sono, micros, pupitres et pied synthé. Des options supplémentaires (crash, micros additionnels, etc.) sont disponibles à la réservation."
+  },
+  {
+    q: "Comment réserver en ligne ?",
+    a: "Rendez-vous sur la page Réservation, choisissez votre créneau, votre studio et votre formule. La réservation est confirmée après validation du paiement ou de votre choix de règlement sur place."
+  },
+  {
+    q: "Quels modes de paiement sont acceptés ?",
+    a: "Nous acceptons le paiement en ligne par carte bancaire (Visa, Mastercard) via notre plateforme sécurisée, ainsi que le règlement sur place en espèces ou par carte."
+  },
+  {
+    q: "Puis-je payer sur place ?",
+    a: "Oui, vous pouvez choisir de régler sur place le jour de votre session, en espèces ou par carte bancaire. Le créneau est réservé dès la validation de votre demande."
+  },
+  {
+    q: "Ma réservation est-elle confirmée immédiatement ?",
+    a: "Oui, votre réservation est confirmée instantanément. Vous recevrez un email de confirmation avec tous les détails de votre session."
+  },
+  {
+    q: "Que se passe-t-il si je ne me présente pas ?",
+    a: "En cas d'absence sans annulation préalable, le créneau vous sera facturé. Pensez à nous prévenir au plus tôt au 06 13 44 08 75 si vous ne pouvez pas venir."
   }
 ];
 
