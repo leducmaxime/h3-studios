@@ -1435,14 +1435,6 @@ export function AdminCalendar() {
               </>
             )}
             <div className="ml-auto flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedBooking(null)}
-                className="h-9 border-zinc-700 bg-transparent text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
-              >
-                Fermer
-              </Button>
               <a
                 href={`/admin/bookings/${b.id}`}
                 className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-black transition-colors hover:bg-primary/90"
