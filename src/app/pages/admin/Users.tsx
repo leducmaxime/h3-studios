@@ -63,10 +63,14 @@ export function AdminUsers() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createForm, setCreateForm] = useState({
-    name: "",
+    first_name: "",
+    last_name: "",
     email: "",
     phone: "",
     band_name: "",
+    address_line1: "",
+    postal_code: "",
+    city: "",
   });
   const perPage = 20;
 
@@ -175,10 +179,13 @@ export function AdminUsers() {
   };
 
   const handleCreate = async () => {
-    if (!createForm.name.trim()) {
-      toast.error("Le nom est obligatoire");
-      return;
-    }
+    if (!createForm.first_name.trim()) { toast.error("Le prénom est obligatoire"); return; }
+    if (!createForm.last_name.trim()) { toast.error("Le nom est obligatoire"); return; }
+    if (!createForm.email.trim()) { toast.error("L'email est obligatoire"); return; }
+    if (!createForm.phone.trim()) { toast.error("Le téléphone est obligatoire"); return; }
+    if (!createForm.address_line1.trim()) { toast.error("L'adresse est obligatoire"); return; }
+    if (!createForm.postal_code.trim()) { toast.error("Le code postal est obligatoire"); return; }
+    if (!createForm.city.trim()) { toast.error("La ville est obligatoire"); return; }
     setCreating(true);
 
     try {
@@ -186,16 +193,21 @@ export function AdminUsers() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: createForm.name.trim(),
-          email: createForm.email.trim() || undefined,
-          phone: createForm.phone.trim() || undefined,
+          first_name: createForm.first_name.trim(),
+          last_name: createForm.last_name.trim(),
+          name: `${createForm.first_name.trim()} ${createForm.last_name.trim()}`,
+          email: createForm.email.trim(),
+          phone: createForm.phone.trim(),
           band_name: createForm.band_name.trim() || undefined,
+          address_line1: createForm.address_line1.trim(),
+          postal_code: createForm.postal_code.trim(),
+          city: createForm.city.trim(),
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
       if (json.success) {
-        toast.success(`Client "${createForm.name}" créé`);
-        setCreateForm({ name: "", email: "", phone: "", band_name: "" });
+        toast.success(`Client "${createForm.first_name} ${createForm.last_name}" créé`);
+        setCreateForm({ first_name: "", last_name: "", email: "", phone: "", band_name: "", address_line1: "", postal_code: "", city: "" });
         setShowCreateDialog(false);
         fetchUsers();
       } else {
@@ -259,48 +271,55 @@ export function AdminUsers() {
             <DialogHeader>
               <DialogTitle>Nouveau client</DialogTitle>
               <DialogDescription>
-                Créer un nouveau client rapidement. Seul le nom est obligatoire.
+                Les champs marqués * sont obligatoires.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-2">
-              <div className="grid gap-2">
-                <Label htmlFor="create-name">Nom *</Label>
-                <Input
-                  id="create-name"
-                  placeholder="Jean Dupont"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="create-email">Email</Label>
-                <Input
-                  id="create-email"
-                  type="email"
-                  placeholder="jean@exemple.fr"
-                  value={createForm.email}
-                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="create-phone">Téléphone</Label>
-                  <Input
-                    id="create-phone"
-                    type="tel"
-                    placeholder="06 12 34 56 78"
-                    value={createForm.phone}
-                    onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                  />
+              {/* Prénom + Nom */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-first-name">Prénom <span className="text-primary">*</span></Label>
+                  <Input id="create-first-name" value={createForm.first_name} onChange={(e) => setCreateForm({ ...createForm, first_name: e.target.value })} placeholder="Jean" className="bg-zinc-800 border-zinc-700" />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="create-band">Groupe / Artiste</Label>
-                  <Input
-                    id="create-band"
-                    placeholder="Les Rockers"
-                    value={createForm.band_name}
-                    onChange={(e) => setCreateForm({ ...createForm, band_name: e.target.value })}
-                  />
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-last-name">Nom <span className="text-primary">*</span></Label>
+                  <Input id="create-last-name" value={createForm.last_name} onChange={(e) => setCreateForm({ ...createForm, last_name: e.target.value })} placeholder="Dupont" className="bg-zinc-800 border-zinc-700" />
+                </div>
+              </div>
+
+              {/* Email + Téléphone */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-email">Email <span className="text-primary">*</span></Label>
+                  <Input id="create-email" type="email" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} placeholder="jean@exemple.fr" className="bg-zinc-800 border-zinc-700" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-phone">Téléphone <span className="text-primary">*</span></Label>
+                  <Input id="create-phone" type="tel" value={createForm.phone} onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })} placeholder="0612345678" className="bg-zinc-800 border-zinc-700" />
+                </div>
+              </div>
+
+              {/* Nom du groupe */}
+              <div className="space-y-1.5">
+                <Label htmlFor="create-band">Nom du groupe <span className="text-zinc-500 text-xs">(optionnel)</span></Label>
+                <Input id="create-band" value={createForm.band_name} onChange={(e) => setCreateForm({ ...createForm, band_name: e.target.value })} placeholder="Les Rockers" className="bg-zinc-800 border-zinc-700" />
+              </div>
+
+              {/* Adresse */}
+              <div className="space-y-1.5">
+                <Label htmlFor="create-address">Adresse <span className="text-primary">*</span></Label>
+                <Input id="create-address" value={createForm.address_line1} onChange={(e) => setCreateForm({ ...createForm, address_line1: e.target.value })} placeholder="12 Rue de la Musique" className="bg-zinc-800 border-zinc-700" />
+              </div>
+
+              {/* Code postal + Ville */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-postal">Code postal <span className="text-primary">*</span></Label>
+                  <Input id="create-postal" value={createForm.postal_code} onChange={(e) => setCreateForm({ ...createForm, postal_code: e.target.value })} placeholder="94370" maxLength={5} className="bg-zinc-800 border-zinc-700" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-city">Ville <span className="text-primary">*</span></Label>
+                  <Input id="create-city" value={createForm.city} onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })} placeholder="Sucy-en-Brie" className="bg-zinc-800 border-zinc-700" />
                 </div>
               </div>
             </div>
@@ -312,7 +331,7 @@ export function AdminUsers() {
               >
                 Annuler
               </Button>
-              <Button onClick={handleCreate} disabled={creating || !createForm.name.trim()}>
+              <Button onClick={handleCreate} disabled={creating}>
                 {creating ? "Création..." : "Créer"}
               </Button>
             </DialogFooter>
