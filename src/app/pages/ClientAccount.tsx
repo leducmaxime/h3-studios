@@ -54,7 +54,7 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; b
 
 const PAYMENT_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
   paid: { label: "Payé", bg: "bg-emerald-600/10", text: "text-emerald-400", border: "border-emerald-600/20" },
-  "pay-on-site": { label: "Sur place", bg: "bg-orange-600/10", text: "text-orange-400", border: "border-orange-600/20" },
+  "pay-on-site": { label: "À payer sur place", bg: "bg-orange-600/10", text: "text-orange-400", border: "border-orange-600/20" },
   pending: { label: "En attente", bg: "bg-amber-600/10", text: "text-amber-400", border: "border-amber-600/20" },
   refunded: { label: "Remboursé", bg: "bg-blue-600/10", text: "text-blue-400", border: "border-blue-600/20" },
 };
