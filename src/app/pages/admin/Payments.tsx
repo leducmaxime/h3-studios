@@ -268,7 +268,7 @@ function EditPaymentDialog({
 
   useEffect(() => {
     if (open && payment) {
-      setAmount((payment.amount / 100).toFixed(2).replace(".", ","));
+      setAmount(payment.amount.toFixed(2).replace(".", ","));
       setMethod((payment.method as "cash" | "card" | "transfer" | "check") || "cash");
       setSubmitting(false);
     }
@@ -281,7 +281,7 @@ function EditPaymentDialog({
     e.preventDefault();
     if (!payment || !isValid) return;
     setSubmitting(true);
-    onConfirm(payment.id, Math.round(parsedAmount * 100), method);
+    onConfirm(payment.id, parsedAmount, method);
   }
 
   return (

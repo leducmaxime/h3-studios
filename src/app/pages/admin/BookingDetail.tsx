@@ -334,7 +334,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       const res = await fetch(`/api/admin/payments/${editPayment.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: Math.round(amount * 100), method: editPaymentMethod }),
+        body: JSON.stringify({ amount, method: editPaymentMethod }),
       });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
@@ -587,7 +587,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                               className="h-7 px-2 text-xs text-zinc-400 hover:text-white"
                               onClick={() => {
                                 setEditPayment(p);
-                                setEditPaymentAmount((p.amount / 100).toFixed(2).replace(".", ","));
+                                setEditPaymentAmount(p.amount.toFixed(2).replace(".", ","));
                                 setEditPaymentMethod((p.method as "cash" | "card" | "transfer" | "check") || "cash");
                                 setEditPaymentOpen(true);
                               }}
