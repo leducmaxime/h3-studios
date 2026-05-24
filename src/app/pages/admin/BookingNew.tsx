@@ -466,25 +466,18 @@ export function AdminBookingNew() {
                 ) : (
                   <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-800 p-4">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label htmlFor="newUserFirstName" className="mb-1 block text-xs text-zinc-400">Prénom <span className="text-primary">*</span></label>
+                      <div className="sm:col-span-2">
+                        <label htmlFor="newUserName" className="mb-1 block text-xs text-zinc-400">Prénom et Nom <span className="text-primary">*</span></label>
                         <input
-                          id="newUserFirstName"
+                          id="newUserName"
                           type="text"
-                          value={newUserFirstName}
-                          onChange={(e) => setNewUserFirstName(e.target.value)}
-                          placeholder="Jean"
-                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="newUserLastName" className="mb-1 block text-xs text-zinc-400">Nom <span className="text-primary">*</span></label>
-                        <input
-                          id="newUserLastName"
-                          type="text"
-                          value={newUserLastName}
-                          onChange={(e) => setNewUserLastName(e.target.value)}
-                          placeholder="Dupont"
+                          value={newUserFirstName && newUserLastName ? `${newUserFirstName} ${newUserLastName}` : newUserFirstName || newUserLastName}
+                          onChange={(e) => {
+                            const parts = e.target.value.split(" ");
+                            setNewUserFirstName(parts[0] || "");
+                            setNewUserLastName(parts.slice(1).join(" ") || "");
+                          }}
+                          placeholder="Jean Dupont"
                           className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                         />
                       </div>
@@ -505,13 +498,14 @@ export function AdminBookingNew() {
                           id="newUserPhone"
                           type="tel"
                           value={newUserPhone}
-                          onChange={(e) => setNewUserPhone(e.target.value)}
+                          onChange={(e) => setNewUserPhone(e.target.value.replace(/\D/g, ""))}
                           placeholder="0612345678"
+                          maxLength={10}
                           className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label htmlFor="newUserBand" className="mb-1 block text-xs text-zinc-400">Groupe / Projet <span className="text-zinc-500">(optionnel)</span></label>
+                        <label htmlFor="newUserBand" className="mb-1 block text-xs text-zinc-400">Nom du groupe <span className="text-zinc-500">(optionnel)</span></label>
                         <input
                           id="newUserBand"
                           type="text"
@@ -522,39 +516,18 @@ export function AdminBookingNew() {
                         />
                       </div>
                     </div>
-                    <div>
-                      <label htmlFor="newUserNotes" className="mb-1 block text-xs text-zinc-400">Notes</label>
-                      <textarea
-                        id="newUserNotes"
-                        value={newUserNotes}
-                        onChange={(e) => setNewUserNotes(e.target.value)}
-                        rows={2}
-                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
-                      />
-                    </div>
 
                     <div className="border-t border-zinc-700 pt-3">
-                      <p className="mb-2 text-xs font-medium text-zinc-400">Adresse</p>
+                      <p className="mb-2 text-xs font-medium text-zinc-400">Adresse de facturation</p>
                       <div className="grid gap-3">
                         <div>
-                          <label htmlFor="newUserAddressLine1" className="mb-1 block text-xs text-zinc-500">Adresse <span className="text-primary">*</span></label>
+                          <label htmlFor="newUserAddressLine1" className="mb-1 block text-xs text-zinc-500">Nom et numéro de rue <span className="text-primary">*</span></label>
                           <input
                             id="newUserAddressLine1"
                             type="text"
                             value={newUserAddressLine1}
                             onChange={(e) => setNewUserAddressLine1(e.target.value)}
-                            placeholder="Rue, numéro"
-                            className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="newUserAddressLine2" className="mb-1 block text-xs text-zinc-500">Adresse ligne 2 (optionnel)</label>
-                          <input
-                            id="newUserAddressLine2"
-                            type="text"
-                            value={newUserAddressLine2}
-                            onChange={(e) => setNewUserAddressLine2(e.target.value)}
-                            placeholder="Appartement, bâtiment, etc."
+                            placeholder="12 Rue de la Musique"
                             className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                           />
                         </div>
@@ -564,8 +537,11 @@ export function AdminBookingNew() {
                             <input
                               id="newUserPostalCode"
                               type="text"
+                              inputMode="numeric"
                               value={newUserPostalCode}
-                              onChange={(e) => setNewUserPostalCode(e.target.value)}
+                              onChange={(e) => setNewUserPostalCode(e.target.value.replace(/\D/g, ""))}
+                              placeholder="94370"
+                              maxLength={5}
                               className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                             />
                           </div>
@@ -576,21 +552,24 @@ export function AdminBookingNew() {
                               type="text"
                               value={newUserCity}
                               onChange={(e) => setNewUserCity(e.target.value)}
+                              placeholder="Sucy-en-Brie"
                               className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                             />
                           </div>
                         </div>
-                        <div>
-                          <label htmlFor="newUserCountry" className="mb-1 block text-xs text-zinc-500">Pays</label>
-                          <input
-                            id="newUserCountry"
-                            type="text"
-                            value={newUserCountry}
-                            onChange={(e) => setNewUserCountry(e.target.value)}
-                            className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                          />
-                        </div>
-                      </div>
+                       </div>
+                     </div>
+
+                    <div>
+                      <label htmlFor="newUserNotes" className="mb-1 block text-xs text-zinc-400">Informations supplémentaires</label>
+                      <textarea
+                        id="newUserNotes"
+                        value={newUserNotes}
+                        onChange={(e) => setNewUserNotes(e.target.value)}
+                        placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
+                        rows={2}
+                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
+                      />
                     </div>
 
                     <div className="flex gap-2">
