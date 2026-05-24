@@ -889,9 +889,9 @@ export async function markPaymentPaid(
   const payment = await db.prepare("SELECT * FROM payments WHERE id = ?").bind(paymentId).first<DbPayment>();
   if (!payment) return { success: false, error: "Paiement introuvable" };
 
-  const booking = await db.prepare("SELECT total_price, payment_status FROM bookings WHERE id = ?")
+  const booking = await db.prepare("SELECT total_price, promo_discount, payment_status FROM bookings WHERE id = ?")
     .bind(payment.booking_id)
-    .first<{ total_price: number; payment_status: string | null }>();
+    .first<{ total_price: number; promo_discount: number; payment_status: string | null }>();
   if (!booking) return { success: false, error: "Réservation introuvable" };
 
   const timestamp = now();
@@ -902,8 +902,9 @@ export async function markPaymentPaid(
 
   const payments = await getPaymentsByBookingId(db, payment.booking_id);
   const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+  const finalTotal = Math.max(0, booking.total_price - (booking.promo_discount || 0));
 
-  if (totalPaid >= booking.total_price) {
+  if (totalPaid >= finalTotal) {
     if (booking.payment_status !== "pay-on-site") {
       await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
         .bind(timestamp, payment.booking_id)
