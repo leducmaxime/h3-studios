@@ -406,7 +406,7 @@ export function APropos() {
                 </button>
                 {openFaq === i && (
                   <div className="border-t border-white/10 px-5 py-4">
-                    <p className="text-sm leading-relaxed text-white/70">{item.a}</p>
+                    <p className="text-sm leading-relaxed text-primary">{item.a}</p>
                   </div>
                 )}
               </div>
