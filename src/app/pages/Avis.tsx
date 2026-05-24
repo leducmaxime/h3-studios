@@ -81,8 +81,12 @@ function StarRating({ rating }: { rating: number }) {
 export function Avis() {
   const [isVisible, setIsVisible] = useState(false);
   const [reviews, setReviews] = useState<Review[]>(FALLBACK_REVIEWS);
-  const [totalReviews, setTotalReviews] = useState(43);
-  const [averageRating, setAverageRating] = useState(4.9);
+
+  // Calculé dynamiquement depuis les avis chargés
+  const totalReviews = reviews.length;
+  const averageRating = reviews.length > 0
+    ? Math.round((reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length) * 10) / 10
+    : 0;
 
   useEffect(() => {
     setIsVisible(true);
@@ -102,8 +106,6 @@ export function Avis() {
           }));
           if (apiReviews.length > 0) {
             setReviews(apiReviews);
-            setTotalReviews(typedData.data.totalReviews);
-            setAverageRating(typedData.data.averageRating);
           }
         }
       })
@@ -143,25 +145,27 @@ export function Avis() {
           </a>
         </div>
 
-        <div className={`mb-8 flex flex-col items-center gap-4 rounded-2xl border-4 border-primary bg-black/90 p-6 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
-          <div className="flex items-center gap-3">
-            <span className="text-4xl font-bold text-primary">{averageRating}</span>
-            <div className="flex flex-col items-start gap-1">
-              <StarRating rating={5} />
-              <span className="text-sm text-white/60">
-                Basé sur {totalReviews} avis Google
-              </span>
+        {reviews.length > 0 && (
+          <div className={`mb-8 flex flex-col items-center gap-4 rounded-2xl border-4 border-primary bg-black/90 p-6 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
+            <div className="flex items-center gap-3">
+              <span className="text-4xl font-bold text-primary">{averageRating}</span>
+              <div className="flex flex-col items-start gap-1">
+                <StarRating rating={5} />
+                <span className="text-sm text-white/60">
+                  Basé sur {totalReviews} avis Google
+                </span>
+              </div>
             </div>
+            <a
+              href="https://www.google.com/search?q=H3+studios+sucy+en+brie+avis"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-primary underline hover:text-primary/80"
+            >
+              Voir tous les avis sur Google
+            </a>
           </div>
-          <a
-            href="https://www.google.com/search?q=H3+studios+sucy+en+brie+avis"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-primary underline hover:text-primary/80"
-          >
-            Voir tous les avis sur Google
-          </a>
-        </div>
+        )}
 
         <div className="flex flex-col gap-4">
           {reviews.slice(0, 20).map((review, index) => (

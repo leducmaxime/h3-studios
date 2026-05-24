@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { navigate } from "rwsdk/client";
-import { Facebook, Instagram, User, LogOut, UserCircle, CalendarDays } from "lucide-react";
+import { Facebook, Instagram, User, LogOut, UserCircle, CalendarDays, Phone } from "lucide-react";
 
 const menuData = [
   { id: 1, title: "Réservation", path: "/reservation" },
@@ -168,6 +168,14 @@ export function Header() {
                 <Instagram className="h-5 w-5" />
               </a>
             </div>
+
+            <a
+              href="tel:0613440875"
+              className="lg:hidden flex items-center justify-center rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-primary"
+              aria-label="Téléphone"
+            >
+              <Phone className="h-5 w-5" />
+            </a>
 
             <div className="relative" ref={profileRef}>
               <button

@@ -1,7 +1,7 @@
 "use client";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
-import { Mail, Phone, MapPin, Train, Car, Music, GraduationCap, Calendar, Send, User, AtSign, MessageSquare } from "lucide-react";
+import { Mail, Phone, MapPin, Train, Car, Music, GraduationCap, Calendar, Send, User, AtSign, MessageSquare, ChevronDown } from "lucide-react";
 import { useState, useEffect } from "react";
 
 function ContactForm() {
@@ -168,8 +168,44 @@ function ContactForm() {
   );
 }
 
+const FAQ_ITEMS = [
+  {
+    q: "Peut-on annuler ou modifier une réservation ?",
+    a: "Oui, vous pouvez modifier ou annuler votre réservation en nous contactant au 06 13 44 08 75 ou par email. Nous vous demandons de nous prévenir le plus tôt possible afin de libérer le créneau pour d'autres musiciens."
+  },
+  {
+    q: "Y a-t-il un parking à proximité ?",
+    a: "Oui, un parking gratuit est disponible à proximité immédiate du studio. Vous pouvez également vous garer dans les rues environnantes sans restriction."
+  },
+  {
+    q: "Le studio est-il accessible aux personnes à mobilité réduite ?",
+    a: "Nos studios sont situés au rez-de-chaussée et sont accessibles. N'hésitez pas à nous contacter pour toute question spécifique concernant l'accessibilité."
+  },
+  {
+    q: "Les mineurs peuvent-ils réserver ?",
+    a: "Les mineurs sont les bienvenus, accompagnés d'un adulte responsable. Pour les groupes composés uniquement de mineurs, une autorisation parentale est requise."
+  },
+  {
+    q: "Peut-on apporter son propre matériel ?",
+    a: "Absolument ! Vous pouvez apporter votre propre matériel en complément de celui fourni. Nos studios sont équipés de tout le nécessaire, mais vous êtes libres d'utiliser vos instruments et effets personnels."
+  },
+  {
+    q: "Proposez-vous des abonnements ou tarifs dégressifs ?",
+    a: "Oui, nous proposons des arrangements pour les musiciens réguliers. Contactez-nous au 06 13 44 08 75 pour discuter d'une formule adaptée à votre pratique."
+  },
+  {
+    q: "Quelle est la durée minimale de réservation ?",
+    a: "La durée minimale est de 1 heure (2 créneaux de 30 minutes). Les réservations se font par tranches de 30 minutes."
+  },
+  {
+    q: "Le matériel est-il vraiment inclus dans le prix ?",
+    a: "Oui, le matériel de base est inclus : batterie, amplis guitare et basse, sono, micros, pupitres et pied synthé. Des options supplémentaires (crash, micros additionnels, etc.) sont disponibles à la réservation."
+  }
+];
+
 export function APropos() {
   const [isVisible, setIsVisible] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   useEffect(() => {
     setIsVisible(true);
@@ -321,6 +357,34 @@ export function APropos() {
           </div>
         </div>
       </div>
+
+      {/* FAQ */}
+      <section className="py-16 sm:py-20">
+        <div className="mx-auto max-w-3xl px-4">
+          <h2 className="mb-2 text-center font-blanka text-3xl sm:text-4xl">FAQ</h2>
+          <p className="mb-10 text-center text-white/60">Questions fréquentes</p>
+          <div className="space-y-3">
+            {FAQ_ITEMS.map((item, i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                <button
+                  className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5"
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                >
+                  <span className="font-medium text-white/90">{item.q}</span>
+                  <ChevronDown
+                    className={`h-5 w-5 shrink-0 text-primary transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {openFaq === i && (
+                  <div className="border-t border-white/10 px-5 py-4">
+                    <p className="text-sm leading-relaxed text-white/70">{item.a}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
