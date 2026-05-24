@@ -764,7 +764,7 @@ export function AdminCalendar() {
                               <button
                                 key={booking.id}
                                 type="button"
-                                onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                                onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                                 onMouseLeave={() => setTooltip(null)}
                                 onClick={() => setSelectedBooking(booking)}
                                 className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
@@ -813,7 +813,7 @@ export function AdminCalendar() {
                             key={booking.id}
                             type="button"
                             onClick={() => setSelectedBooking(booking)}
-                            onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                            onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setTooltip(null)}
                             className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
                             style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
@@ -855,6 +855,23 @@ export function AdminCalendar() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-4 border-t border-zinc-800 px-4 py-3">
+          <span className="text-xs text-zinc-500">Occupation :</span>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            <span className="text-xs text-zinc-400">&lt; 50%</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+            <span className="text-xs text-zinc-400">50–80%</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
+            <span className="text-xs text-zinc-400">&gt; 80%</span>
           </div>
         </div>
       </div>
@@ -993,7 +1010,7 @@ export function AdminCalendar() {
                           key={booking.id}
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
-                          onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                          onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                           onMouseLeave={() => setTooltip(null)}
                           className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
                           style={{
@@ -1038,7 +1055,7 @@ export function AdminCalendar() {
                             key={booking.id}
                             type="button"
                             onClick={() => setSelectedBooking(booking)}
-                            onMouseMove={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                            onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setTooltip(null)}
                             className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
                             style={{
@@ -1084,6 +1101,23 @@ export function AdminCalendar() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-4 border-t border-zinc-800 px-4 py-3">
+          <span className="text-xs text-zinc-500">Occupation :</span>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            <span className="text-xs text-zinc-400">&lt; 50%</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+            <span className="text-xs text-zinc-400">50–80%</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
+            <span className="text-xs text-zinc-400">&gt; 80%</span>
           </div>
         </div>
       </div>

@@ -144,6 +144,12 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [discountValue, setDiscountValue] = useState("");
   const [savingDiscount, setSavingDiscount] = useState(false);
 
+  // Studio / group_type editing
+  const [editingStudio, setEditingStudio] = useState(false);
+  const [editStudioId, setEditStudioId] = useState<"la-scene" | "le-podium">("la-scene");
+  const [editGroupType, setEditGroupType] = useState<"solo" | "duo" | "group">("group");
+  const [savingStudio, setSavingStudio] = useState(false);
+
   const fetchBooking = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/bookings/${bookingId}`);
@@ -364,6 +370,27 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     finally { setSavingDiscount(false); }
   };
 
+  const handleSaveStudio = async () => {
+    if (!booking) return;
+    setSavingStudio(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studio_id: editStudioId, group_type: editGroupType }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Studio et formule mis à jour");
+        setEditingStudio(false);
+        fetchBooking();
+      } else {
+        toast.error(json.error || "Erreur");
+      }
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSavingStudio(false); }
+  };
+
   const handleAddPayment = async () => {
     if (!booking || !newPayment.amount) return;
     const n = parseFloat(newPayment.amount.replace(/\s/g, "").replace(",", "."));
@@ -525,8 +552,42 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               <div className="grid grid-cols-3 gap-6 mb-8">
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Studio</p>
-                  <p className="text-lg font-semibold">{studio?.name || booking.studio_id}</p>
-                  {studio && <p className="text-sm text-zinc-400">{studio.size}</p>}
+                  {editingStudio ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Select value={editStudioId} onValueChange={(v) => setEditStudioId(v as "la-scene" | "le-podium")}>
+                        <SelectTrigger className="h-8 w-36 bg-zinc-800 border-zinc-700 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                          <SelectItem value="la-scene">La Scène</SelectItem>
+                          <SelectItem value="le-podium">Le Podium</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={editGroupType} onValueChange={(v) => setEditGroupType(v as "solo" | "duo" | "group")}>
+                        <SelectTrigger className="h-8 w-28 bg-zinc-800 border-zinc-700 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                          <SelectItem value="solo">Solo</SelectItem>
+                          <SelectItem value="duo">Duo</SelectItem>
+                          <SelectItem value="group">Groupe</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" onClick={handleSaveStudio} disabled={savingStudio} className="h-8 text-xs px-2">
+                        {savingStudio ? <Loader2 className="h-3 w-3 animate-spin" /> : "OK"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingStudio(false)} className="h-8 text-xs px-2">✕</Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <p className="text-lg font-semibold">{studio?.name || booking.studio_id}</p>
+                      {studio && <p className="text-sm text-zinc-400">{studio.size}</p>}
+                      <Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500"
+                        onClick={() => { setEditStudioId(booking.studio_id as "la-scene" | "le-podium"); setEditGroupType(booking.group_type as "solo" | "duo" | "group"); setEditingStudio(true); }}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Horaire</p>

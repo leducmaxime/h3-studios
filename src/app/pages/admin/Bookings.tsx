@@ -506,6 +506,11 @@ export function AdminBookings() {
                         >
                           <p className="font-medium">{displayName}</p>
                           <p className="text-sm text-zinc-400">{booking.user_email || "—"}</p>
+                          {booking.user_phone && (
+                            <a href={`tel:${booking.user_phone}`} className="text-xs text-zinc-500 hover:text-primary" onClick={(e) => e.stopPropagation()}>
+                              {booking.user_phone}
+                            </a>
+                          )}
                         </a>
                       </td>
                       <td className="px-4 py-3 text-sm">
