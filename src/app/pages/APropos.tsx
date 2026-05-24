@@ -187,7 +187,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Peut-on apporter son propre matériel ?",
-    a: "Absolument ! Vous pouvez apporter votre propre matériel en complément de celui fourni. Nos studios sont équipés de tout le nécessaire, mais vous êtes libres d'utiliser vos instruments et effets personnels."
+    a: "Absolument ! Vous pouvez apporter votre propre matériel en complément de celui fourni. Vous êtes libres d'utiliser vos instruments et effets personnels."
   },
   {
     q: "Proposez-vous des abonnements ou tarifs dégressifs ?",
