@@ -517,7 +517,7 @@ export function TimeSlotPicker({
         )}
 
         <Dialog open={minAdvanceDialogOpen} onOpenChange={setMinAdvanceDialogOpen}>
-          <DialogContent className="border-zinc-800 bg-zinc-900 max-w-lg">
+          <DialogContent className="border-zinc-800 bg-zinc-900 max-w-xl">
             <DialogHeader>
               <DialogTitle>Réservation de dernière minute</DialogTitle>
               <DialogDescription className="text-zinc-300 leading-relaxed">
