@@ -490,7 +490,9 @@ export function AdminPayments() {
   const [methodFilter, setMethodFilter] = useState<"all" | "card" | "cash" | "transfer" | "check">(
     "all",
   );
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
   const [sortBy, setSortBy] = useState<"created_at" | "booking_date" | "amount" | "status" | "method" | "payment_type">("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -560,7 +562,9 @@ export function AdminPayments() {
       params.set("sortBy", sortBy);
       params.set("sortOrder", sortOrder);
 
-      const dateParams = getDateFilterParams(dateFilter);
+      const dateParams = dateFilter === "custom"
+        ? { dateFrom: customDateFrom || undefined, dateTo: customDateTo || undefined }
+        : getDateFilterParams(dateFilter);
       if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
       if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
 
@@ -577,7 +581,7 @@ export function AdminPayments() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, paymentTypeFilter, methodFilter, dateFilter, search, sortBy, sortOrder]);
+  }, [page, statusFilter, paymentTypeFilter, methodFilter, dateFilter, customDateFrom, customDateTo, search, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchPayments();
@@ -847,7 +851,9 @@ export function AdminPayments() {
     params.set("sortBy", sortBy);
     params.set("sortOrder", sortOrder);
 
-    const dateParams = getDateFilterParams(dateFilter);
+    const dateParams = dateFilter === "custom"
+      ? { dateFrom: customDateFrom || undefined, dateTo: customDateTo || undefined }
+      : getDateFilterParams(dateFilter);
     if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
     if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
 
@@ -934,7 +940,25 @@ export function AdminPayments() {
             <option value="today">Auj.</option>
             <option value="week">Sem.</option>
             <option value="month">Mois</option>
+            <option value="custom">Plage</option>
           </select>
+          {dateFilter === "custom" && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={customDateFrom}
+                onChange={e => { setCustomDateFrom(e.target.value); setPage(1); }}
+                className="h-8 text-xs bg-zinc-900 border-zinc-700 w-36"
+              />
+              <span className="text-zinc-500 text-xs">→</span>
+              <Input
+                type="date"
+                value={customDateTo}
+                onChange={e => { setCustomDateTo(e.target.value); setPage(1); }}
+                className="h-8 text-xs bg-zinc-900 border-zinc-700 w-36"
+              />
+            </div>
+          )}
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
