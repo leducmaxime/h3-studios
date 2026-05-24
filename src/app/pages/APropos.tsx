@@ -222,6 +222,10 @@ const FAQ_ITEMS = [
     a: "Votre créneau est réservé pour la durée que vous avez choisie. En cas de retard, la session se terminera à l'heure prévue sans prolongation possible, afin de respecter les réservations suivantes."
   },
   {
+    q: "Comment venir en transports en commun ?",
+    a: "Le studio est situé à 2 minutes à pied de la gare de Sucy-Bonneuil (RER A). Vous pouvez également venir en bus : lignes 393, 308 et 104. Adresse : 3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie."
+  },
+  {
     q: "Que se passe-t-il si je ne me présente pas ?",
     a: "En cas d'absence sans annulation préalable, le créneau vous sera facturé. Pensez à nous prévenir au plus tôt au 06 13 44 08 75 si vous ne pouvez pas venir."
   }
