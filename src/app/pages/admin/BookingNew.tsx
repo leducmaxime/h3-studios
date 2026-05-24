@@ -71,6 +71,8 @@ export function AdminBookingNew() {
   const [userResults, setUserResults] = useState<DbUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<DbUser | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
+  const [newUserFirstName, setNewUserFirstName] = useState("");
+  const [newUserLastName, setNewUserLastName] = useState("");
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPhone, setNewUserPhone] = useState("");
@@ -252,25 +254,31 @@ export function AdminBookingNew() {
   }, [date, startTime, endTime, studioId, groupType, selectedEquipment, promoDiscount, recalculatePromo]);
 
   const handleCreateUser = async () => {
-    if (!newUserName.trim()) {
-      toast.error("Le nom est obligatoire");
-      return;
-    }
+    if (!newUserFirstName.trim()) { toast.error("Le prénom est obligatoire"); return; }
+    if (!newUserLastName.trim()) { toast.error("Le nom est obligatoire"); return; }
+    if (!newUserEmail.trim()) { toast.error("L'email est obligatoire"); return; }
+    if (!newUserPhone.trim()) { toast.error("Le téléphone est obligatoire"); return; }
+    if (!newUserAddressLine1.trim()) { toast.error("L'adresse est obligatoire"); return; }
+    if (!newUserPostalCode.trim()) { toast.error("Le code postal est obligatoire"); return; }
+    if (!newUserCity.trim()) { toast.error("La ville est obligatoire"); return; }
+    const fullName = `${newUserFirstName.trim()} ${newUserLastName.trim()}`;
     setCreatingUser(true);
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newUserName.trim(),
-          email: newUserEmail.trim() || undefined,
-          phone: newUserPhone.trim() || undefined,
+          first_name: newUserFirstName.trim(),
+          last_name: newUserLastName.trim(),
+          name: fullName,
+          email: newUserEmail.trim(),
+          phone: newUserPhone.trim(),
           band_name: newUserBand.trim() || undefined,
           notes: newUserNotes.trim() || undefined,
-          address_line1: newUserAddressLine1.trim() || undefined,
+          address_line1: newUserAddressLine1.trim(),
           address_line2: newUserAddressLine2.trim() || undefined,
-          postal_code: newUserPostalCode.trim() || undefined,
-          city: newUserCity.trim() || undefined,
+          postal_code: newUserPostalCode.trim(),
+          city: newUserCity.trim(),
           country: newUserCountry.trim() || undefined,
         }),
       });
@@ -459,42 +467,57 @@ export function AdminBookingNew() {
                   <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-800 p-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
-                        <label htmlFor="newUserName" className="mb-1 block text-xs text-zinc-400">Nom *</label>
+                        <label htmlFor="newUserFirstName" className="mb-1 block text-xs text-zinc-400">Prénom <span className="text-primary">*</span></label>
                         <input
-                          id="newUserName"
+                          id="newUserFirstName"
                           type="text"
-                          value={newUserName}
-                          onChange={(e) => setNewUserName(e.target.value)}
+                          value={newUserFirstName}
+                          onChange={(e) => setNewUserFirstName(e.target.value)}
+                          placeholder="Jean"
                           className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label htmlFor="newUserEmail" className="mb-1 block text-xs text-zinc-400">Email</label>
+                        <label htmlFor="newUserLastName" className="mb-1 block text-xs text-zinc-400">Nom <span className="text-primary">*</span></label>
+                        <input
+                          id="newUserLastName"
+                          type="text"
+                          value={newUserLastName}
+                          onChange={(e) => setNewUserLastName(e.target.value)}
+                          placeholder="Dupont"
+                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="newUserEmail" className="mb-1 block text-xs text-zinc-400">Email <span className="text-primary">*</span></label>
                         <input
                           id="newUserEmail"
                           type="email"
                           value={newUserEmail}
                           onChange={(e) => setNewUserEmail(e.target.value)}
+                          placeholder="jean@exemple.fr"
                           className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label htmlFor="newUserPhone" className="mb-1 block text-xs text-zinc-400">Téléphone</label>
+                        <label htmlFor="newUserPhone" className="mb-1 block text-xs text-zinc-400">Téléphone <span className="text-primary">*</span></label>
                         <input
                           id="newUserPhone"
                           type="tel"
                           value={newUserPhone}
                           onChange={(e) => setNewUserPhone(e.target.value)}
+                          placeholder="0612345678"
                           className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                         />
                       </div>
-                      <div>
-                        <label htmlFor="newUserBand" className="mb-1 block text-xs text-zinc-400">Groupe / Projet</label>
+                      <div className="sm:col-span-2">
+                        <label htmlFor="newUserBand" className="mb-1 block text-xs text-zinc-400">Groupe / Projet <span className="text-zinc-500">(optionnel)</span></label>
                         <input
                           id="newUserBand"
                           type="text"
                           value={newUserBand}
                           onChange={(e) => setNewUserBand(e.target.value)}
+                          placeholder="Les Rockers"
                           className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                         />
                       </div>
@@ -514,7 +537,7 @@ export function AdminBookingNew() {
                       <p className="mb-2 text-xs font-medium text-zinc-400">Adresse</p>
                       <div className="grid gap-3">
                         <div>
-                          <label htmlFor="newUserAddressLine1" className="mb-1 block text-xs text-zinc-500">Adresse ligne 1</label>
+                          <label htmlFor="newUserAddressLine1" className="mb-1 block text-xs text-zinc-500">Adresse <span className="text-primary">*</span></label>
                           <input
                             id="newUserAddressLine1"
                             type="text"
@@ -537,7 +560,7 @@ export function AdminBookingNew() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label htmlFor="newUserPostalCode" className="mb-1 block text-xs text-zinc-500">Code postal</label>
+                            <label htmlFor="newUserPostalCode" className="mb-1 block text-xs text-zinc-500">Code postal <span className="text-primary">*</span></label>
                             <input
                               id="newUserPostalCode"
                               type="text"
@@ -547,7 +570,7 @@ export function AdminBookingNew() {
                             />
                           </div>
                           <div>
-                            <label htmlFor="newUserCity" className="mb-1 block text-xs text-zinc-500">Ville</label>
+                            <label htmlFor="newUserCity" className="mb-1 block text-xs text-zinc-500">Ville <span className="text-primary">*</span></label>
                             <input
                               id="newUserCity"
                               type="text"
