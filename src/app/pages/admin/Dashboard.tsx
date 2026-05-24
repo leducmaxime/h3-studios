@@ -968,8 +968,8 @@ export function AdminDashboard() {
     fetch("/api/admin/bookings?dateDirection=now&limit=10&sortBy=start_time&sortOrder=asc")
       .then(r => r.json())
       .then((d: unknown) => {
-        const data = d as { success: boolean; data?: { bookings?: NowBooking[] } };
-        if (data.success && data.data?.bookings) setNowBookings(data.data.bookings);
+        const data = d as { success: boolean; data?: { data?: NowBooking[] } };
+        if (data.success && data.data?.data) setNowBookings(data.data.data);
       })
       .catch(console.error);
   }, []);
