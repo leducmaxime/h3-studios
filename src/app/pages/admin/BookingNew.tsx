@@ -803,7 +803,7 @@ export function AdminBookingNew() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">Type</span>
-                <span className="capitalize">{groupType}</span>
+                <span>{GROUP_TYPES.find((g) => g.value === groupType)?.label ?? groupType}</span>
               </div>
               {selectedUser && (
                 <div className="flex justify-between text-sm">
