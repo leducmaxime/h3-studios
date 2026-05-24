@@ -189,6 +189,8 @@ export function useBookingWithRouter(urlStep?: string) {
   const appliedPromoRef = useRef<PromoCode | null>(null);
   appliedPromoRef.current = state.appliedPromo;
   const [availability, setAvailability] = useState<Set<OccupancyInfo>>(new Set());
+  const [minAdvanceHours, setMinAdvanceHours] = useState<number>(0);
+  const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clientUser, setClientUser] = useState<{
     id: string;
@@ -235,9 +237,11 @@ export function useBookingWithRouter(urlStep?: string) {
     fetch(`/api/availability?date=${dateStr}`)
       .then((res) => res.json())
       .then((data) => {
-        const json = data as { success: boolean; data: OccupancyInfo[] };
-        if (json.success && Array.isArray(json.data)) {
-          setAvailability(new Set(json.data));
+        const json = data as { success: boolean; data: { slots: OccupancyInfo[]; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
+        if (json.success && json.data) {
+          setAvailability(new Set(json.data.slots));
+          setMinAdvanceHours(json.data.minAdvanceHours ?? 0);
+          setMinAdvanceCutoffTime(json.data.minAdvanceCutoffTime ?? null);
         }
       })
       .catch(console.error);
@@ -917,6 +921,8 @@ export function useBookingWithRouter(urlStep?: string) {
   return {
     state,
     mergedAvailability,
+    minAdvanceHours,
+    minAdvanceCutoffTime,
     pricing,
     cartTotal,
     canProceedToStudio,

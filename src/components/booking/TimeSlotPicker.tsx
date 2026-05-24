@@ -3,6 +3,15 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { ChevronLeft, Clock, Zap, ArrowRight } from "lucide-react";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
   getStudioTimeSlots,
   getUnionTimeSlots,
   getStudioClosingTime,
@@ -34,6 +43,8 @@ interface TimeSlotPickerProps {
   studioFilter?: StudioId;
   hideHeader?: boolean;
   groupType?: GroupType;
+  minAdvanceHours?: number;
+  minAdvanceCutoffTime?: string | null;
 }
 
 export function TimeSlotPicker({
@@ -49,10 +60,13 @@ export function TimeSlotPicker({
   studioFilter,
   hideHeader = false,
   groupType = "group",
+  minAdvanceHours = 0,
+  minAdvanceCutoffTime = null,
 }: TimeSlotPickerProps) {
   const [selectedStart, setSelectedStart] = useState<string | null>(startTime);
   const [selectedEnd, setSelectedEnd] = useState<string | null>(endTime);
   const [hoveredEndSlot, setHoveredEndSlot] = useState<string | null>(null);
+  const [minAdvanceDialogOpen, setMinAdvanceDialogOpen] = useState(false);
 
   // Derived from state — no useState needed: null/null→"start", start/null→"end", start/end→"done"
   const selectionMode = selectedStart && selectedEnd ? "done" : selectedStart ? "end" : "start";
@@ -83,6 +97,13 @@ export function TimeSlotPicker({
   }, [studioFilter, date]);
 
   // Unified slot booking check — single source of truth from booking.ts
+  const isSlotTooSoon = useCallback((slot: string): boolean => {
+    if (!minAdvanceCutoffTime) return false;
+    const [slotH, slotM] = slot.split(":").map(Number);
+    const [cutH, cutM] = minAdvanceCutoffTime.split(":").map(Number);
+    return slotH * 60 + slotM < cutH * 60 + cutM;
+  }, [minAdvanceCutoffTime]);
+
   const checkSlotBooked = useCallback(
     (time: string): boolean => {
       return isSlotBookedUnified(time, groupType, availability, date, studioFilter);
@@ -137,6 +158,11 @@ export function TimeSlotPicker({
 
     if (checkSlotBooked(slot)) {
       handleClear();
+      return;
+    }
+
+    if (isSlotTooSoon(slot)) {
+      setMinAdvanceDialogOpen(true);
       return;
     }
 
@@ -490,6 +516,23 @@ export function TimeSlotPicker({
           </div>
         )}
 
+        <Dialog open={minAdvanceDialogOpen} onOpenChange={setMinAdvanceDialogOpen}>
+          <DialogContent className="border-zinc-800 bg-zinc-900 max-w-md">
+            <DialogHeader>
+              <DialogTitle>Réservation de dernière minute</DialogTitle>
+              <DialogDescription className="text-zinc-300 leading-relaxed">
+                Les réservations en ligne ne sont plus possibles moins de {minAdvanceHours}h avant le début de la session. Nous vous invitons à nous contacter au{" "}
+                <span className="font-semibold text-white">06 13 44 08 75</span>{" "}
+                afin de vérifier ensemble si une réservation reste possible.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={() => setMinAdvanceDialogOpen(false)} className="w-full">
+                Fermer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       </div>
     </div>

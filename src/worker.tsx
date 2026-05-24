@@ -681,22 +681,21 @@ const app = defineApp([
         }
       }
 
-      // Block slots that fall within min_advance_hours from now
+      // Compute min_advance info (no longer blocks slots — frontend shows a warning instead)
       const paris = getParisNow();
+      let minAdvanceHours = 0;
+      let minAdvanceCutoffTime: string | null = null;
       if (date === paris.dateISO) {
-        const minAdvanceHours = parseInt(await getSetting(env.DB, "booking.min_advance_hours") || "2", 10);
+        minAdvanceHours = parseInt(await getSetting(env.DB, "booking.min_advance_hours") || "2", 10);
         const cutoffMinutes = (paris.hours * 60 + paris.minutes) + minAdvanceHours * 60;
-
-        for (const slot of ALL_TIME_SLOTS) {
-          const [h, m] = slot.split(":").map(Number);
-          if (h * 60 + m < cutoffMinutes) {
-            bookedSlots.push({ studioId: "la-scene", time: slot, groupType: "blocked" });
-            bookedSlots.push({ studioId: "le-podium", time: slot, groupType: "blocked" });
-          }
+        const cutoffH = Math.floor(cutoffMinutes / 60);
+        const cutoffM = cutoffMinutes % 60;
+        if (cutoffH < 24) {
+          minAdvanceCutoffTime = `${String(cutoffH).padStart(2, "0")}:${String(cutoffM).padStart(2, "0")}`;
         }
       }
 
-      return jsonSuccess(bookedSlots);
+      return jsonSuccess({ slots: bookedSlots, minAdvanceHours, minAdvanceCutoffTime });
     } catch (error) {
       console.error("GET /api/availability error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch availability", 500);

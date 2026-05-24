@@ -81,6 +81,8 @@ export function Reservation({ step }: ReservationProps) {
     navigateToStep,
     selectPaymentMethod,
     processPayment,
+    minAdvanceHours,
+    minAdvanceCutoffTime,
   } = useBookingWithRouter(step);
 
   const { getEquipmentName } = useEquipment();
@@ -459,6 +461,8 @@ export function Reservation({ step }: ReservationProps) {
                       canConfirm={canProceedToStudio}
                       hideHeader
                       groupType={state.groupType || "group"}
+                      minAdvanceHours={minAdvanceHours}
+                      minAdvanceCutoffTime={minAdvanceCutoffTime}
                     />
                   </div>
                 )}
@@ -593,6 +597,8 @@ export function Reservation({ step }: ReservationProps) {
                       studioFilter={state.studioId}
                       hideHeader
                       groupType={state.groupType || "group"}
+                      minAdvanceHours={minAdvanceHours}
+                      minAdvanceCutoffTime={minAdvanceCutoffTime}
                     />
                   </div>
                 )}

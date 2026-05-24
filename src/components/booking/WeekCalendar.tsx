@@ -134,9 +134,9 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
       fetch(`/api/availability?date=${dateStr}`)
         .then((res) => res.json())
         .then((data: unknown) => {
-          const json = data as { success: boolean; data: OccupancyInfo[] };
-          if (json.success && Array.isArray(json.data)) {
-            const set = new Set<OccupancyInfo>(json.data);
+          const json = data as { success: boolean; data: { slots: OccupancyInfo[]; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
+          if (json.success && json.data && Array.isArray(json.data.slots)) {
+            const set = new Set<OccupancyInfo>(json.data.slots);
             setWeekOccupancy((prev) => new Map(prev).set(dateStr, set));
           }
         })
