@@ -51,7 +51,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
 
     const params = new URLSearchParams({
       action: "TEMPLATE",
-      text: `H3 Studios - répétition ${booking.bookingRef}`,
+      text: `H3 Studios - répétition - ${booking.bookingRef}`,
       dates: `${formatGoogleDate(startDate)}/${formatGoogleDate(endDate)}`,
       details: `Réservation ${booking.bookingRef} chez H3 Studios`,
       location: "3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie",
