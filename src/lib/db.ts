@@ -85,8 +85,13 @@ export async function getBookings(
       params.push(today);
       const parisNow = getParisNow();
       const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
+      // Disparaît 15 min après la fin : end_time + 15min > now → end_time > now - 15min
+      const nowMinus15 = parisNow.hours * 60 + parisNow.minutes - 15;
+      const nm15H = Math.floor(Math.max(0, nowMinus15) / 60);
+      const nm15M = Math.max(0, nowMinus15) % 60;
+      const nowMinus15Str = `${String(nm15H).padStart(2, "0")}:${String(nm15M).padStart(2, "0")}`;
       conditions.push("b.start_time <= ? AND b.end_time > ?");
-      params.push(nowTimeStr, nowTimeStr);
+      params.push(nowTimeStr, nowMinus15Str);
       conditions.push("b.status NOT IN ('cancelled', 'no-show')");
     }
   }
