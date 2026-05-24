@@ -517,13 +517,11 @@ export function TimeSlotPicker({
         )}
 
         <Dialog open={minAdvanceDialogOpen} onOpenChange={setMinAdvanceDialogOpen}>
-          <DialogContent className="border-zinc-800 bg-zinc-900 max-w-md">
+          <DialogContent className="border-zinc-800 bg-zinc-900 max-w-lg">
             <DialogHeader>
               <DialogTitle>Réservation de dernière minute</DialogTitle>
               <DialogDescription className="text-zinc-300 leading-relaxed">
-                Les réservations en ligne ne sont pas possibles moins de {minAdvanceHours}h avant le début de la session. Nous vous invitons à nous contacter au{" "}
-                <span className="font-semibold text-white">06 13 44 08 75</span>{" "}
-                afin de vérifier ensemble si une réservation reste possible.
+                Les réservations en ligne ne sont pas possibles moins de {minAdvanceHours}h avant le début de la session. Nous vous invitons à nous contacter au <span className="font-semibold text-white whitespace-nowrap">06 13 44 08 75</span> afin de vérifier ensemble si une réservation reste possible.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
