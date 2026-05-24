@@ -286,6 +286,12 @@ export function AdminCalendar() {
 
   // Detect mobile viewport
   const [isMobile, setIsMobile] = useState(false);
+
+  const [nowTime, setNowTime] = useState<string>(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 640);
     checkMobile();
@@ -318,20 +324,15 @@ export function AdminCalendar() {
     method: "cash" | "card" | "transfer" | "check";
   }>({ amount: "", method: "cash" });
 
-  const [nowTime, setNowTime] = useState<string>(() => {
-    const now = new Date();
-    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  });
-
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
-  const [rescheduleDate, setRescheduleDate] = useState("");
-  const [rescheduleStart, setRescheduleStart] = useState("");
-  const [rescheduleEnd, setRescheduleEnd] = useState("");
-  const [rescheduleLoading, setRescheduleLoading] = useState(false);
-  const [rescheduleError, setRescheduleError] = useState("");
+  const [calCancelOpen, setCalCancelOpen] = useState(false);
+  const [calCancelReason, setCalCancelReason] = useState("");
+  const [calCancelLoading, setCalCancelLoading] = useState(false);
+  const [calRescheduleOpen, setCalRescheduleOpen] = useState(false);
+  const [calRescheduleDate, setCalRescheduleDate] = useState("");
+  const [calRescheduleStart, setCalRescheduleStart] = useState("");
+  const [calRescheduleEnd, setCalRescheduleEnd] = useState("");
+  const [calRescheduleLoading, setCalRescheduleLoading] = useState(false);
+  const [calRescheduleError, setCalRescheduleError] = useState("");
 
   useEffect(() => {
     if (selectedBooking) {
@@ -394,49 +395,49 @@ export function AdminCalendar() {
     }
   };
 
-  const handleCancelBooking = async () => {
+  const handleCalCancel = async () => {
     if (!selectedBooking) return;
-    setCancelLoading(true);
+    setCalCancelLoading(true);
     try {
       const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/cancel`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: cancelReason }),
+        body: JSON.stringify({ reason: calCancelReason }),
       });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
         toast.success("Réservation annulée");
-        setCancelDialogOpen(false);
+        setCalCancelOpen(false);
         setSelectedBooking(null);
         loadBookings();
       } else {
         toast.error(json.error || "Erreur");
       }
     } catch { toast.error("Erreur réseau"); }
-    finally { setCancelLoading(false); }
+    finally { setCalCancelLoading(false); }
   };
 
-  const handleReschedule = async () => {
-    if (!selectedBooking || !rescheduleDate || !rescheduleStart || !rescheduleEnd) return;
-    setRescheduleLoading(true);
-    setRescheduleError("");
+  const handleCalReschedule = async () => {
+    if (!selectedBooking || !calRescheduleDate || !calRescheduleStart || !calRescheduleEnd) return;
+    setCalRescheduleLoading(true);
+    setCalRescheduleError("");
     try {
       const res = await fetch(`/api/admin/bookings/${selectedBooking.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: rescheduleDate, start_time: rescheduleStart, end_time: rescheduleEnd }),
+        body: JSON.stringify({ date: calRescheduleDate, start_time: calRescheduleStart, end_time: calRescheduleEnd }),
       });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
         toast.success("Réservation déplacée");
-        setRescheduleDialogOpen(false);
+        setCalRescheduleOpen(false);
         setSelectedBooking(null);
         loadBookings();
       } else {
-        setRescheduleError(json.error || "Conflit détecté");
+        setCalRescheduleError(json.error || "Conflit détecté");
       }
-    } catch { setRescheduleError("Erreur réseau"); }
-    finally { setRescheduleLoading(false); }
+    } catch { setCalRescheduleError("Erreur réseau"); }
+    finally { setCalRescheduleLoading(false); }
   };
 
   // ─── Derived dates ──────────────────────────────────────────────────────
@@ -800,15 +801,19 @@ export function AdminCalendar() {
                     {/* Current time indicator */}
                     {isToday && (() => {
                       const [h, m] = nowTime.split(":").map(Number);
-                      if (h < 9 || h >= 24) return null;
-                      const minutesSince9am = (h - 9) * 60 + m;
+                      const startHour = parseInt(VISIBLE_HOURS[0].split(":")[0], 10);
+                      const totalMinutes = VISIBLE_HOURS.length * 60;
+                      const nowMinutes = (h - startHour) * 60 + m;
+                      if (nowMinutes < 0 || nowMinutes > totalMinutes) return null;
+                      const topPercent = (nowMinutes / totalMinutes) * 100;
                       return (
                         <div
+                          key="now-line"
                           className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
-                          style={{ top: `${minutesSince9am}px` }}
+                          style={{ top: `${topPercent}%` }}
                         >
-                          <div className="h-2 w-2 rounded-full bg-red-500 -ml-1 shrink-0" />
-                          <div className="h-px flex-1 bg-red-500" />
+                          <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                          <div className="h-px flex-1 bg-red-500 opacity-80" />
                         </div>
                       );
                     })()}
@@ -1021,6 +1026,26 @@ export function AdminCalendar() {
                           </button>
                         );
                       })}
+
+                    {/* Current time indicator */}
+                    {isToday && (() => {
+                      const [h, m] = nowTime.split(":").map(Number);
+                      const startHour = parseInt(VISIBLE_HOURS[0].split(":")[0], 10);
+                      const totalMinutes = VISIBLE_HOURS.length * 60;
+                      const nowMinutes = (h - startHour) * 60 + m;
+                      if (nowMinutes < 0 || nowMinutes > totalMinutes) return null;
+                      const topPercent = (nowMinutes / totalMinutes) * 100;
+                      return (
+                        <div
+                          key="now-line"
+                          className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
+                          style={{ top: `${topPercent}%` }}
+                        >
+                          <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                          <div className="h-px flex-1 bg-red-500 opacity-80" />
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -1383,18 +1408,18 @@ export function AdminCalendar() {
             </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-3 border-t border-zinc-800 pt-6">
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-6">
             {b.status === "confirmed" && (
               <>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-zinc-700 text-zinc-300"
+                  className="h-9 border-zinc-700 bg-transparent text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
                   onClick={() => {
-                    setRescheduleDate(b.date);
-                    setRescheduleStart(b.start_time);
-                    setRescheduleEnd(b.end_time);
-                    setRescheduleDialogOpen(true);
+                    setCalRescheduleDate(b.date);
+                    setCalRescheduleStart(b.start_time);
+                    setCalRescheduleEnd(b.end_time);
+                    setCalRescheduleOpen(true);
                   }}
                 >
                   Déplacer
@@ -1402,27 +1427,29 @@ export function AdminCalendar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-red-800 text-red-400 hover:bg-red-900/20"
-                  onClick={() => setCancelDialogOpen(true)}
+                  className="h-9 border-red-900 bg-transparent text-red-400 hover:border-red-700 hover:bg-red-950/40 hover:text-red-300"
+                  onClick={() => setCalCancelOpen(true)}
                 >
                   Annuler
                 </Button>
               </>
             )}
-            <a
-              href={`/admin/bookings/${b.id}`}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700"
-            >
-              Détails complets
-              <ChevronRight className="h-4 w-4" />
-            </a>
-            <Button
-              variant="outline"
-              onClick={() => setSelectedBooking(null)}
-              className="flex-1 bg-transparent border-zinc-700 text-zinc-400 hover:text-zinc-100"
-            >
-              Fermer
-            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedBooking(null)}
+                className="h-9 border-zinc-700 bg-transparent text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+              >
+                Fermer
+              </Button>
+              <a
+                href={`/admin/bookings/${b.id}`}
+                className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-black transition-colors hover:bg-primary/90"
+              >
+                Détails complets
+              </a>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1511,7 +1538,7 @@ export function AdminCalendar() {
       {renderBookingDialog()}
 
       {/* Cancel dialog */}
-      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+      <Dialog open={calCancelOpen} onOpenChange={setCalCancelOpen}>
         <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Annuler la réservation</DialogTitle>
@@ -1519,12 +1546,12 @@ export function AdminCalendar() {
           </DialogHeader>
           <div className="space-y-2">
             <Label>Motif (optionnel)</Label>
-            <Input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Motif d'annulation..." className="bg-zinc-800 border-zinc-700" />
+            <Input value={calCancelReason} onChange={e => setCalCancelReason(e.target.value)} placeholder="Motif d'annulation..." className="bg-zinc-800 border-zinc-700" />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelDialogOpen(false)} className="border-zinc-700">Fermer</Button>
-            <Button variant="destructive" onClick={handleCancelBooking} disabled={cancelLoading}>
-              {cancelLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button variant="outline" onClick={() => setCalCancelOpen(false)} className="border-zinc-700">Fermer</Button>
+            <Button variant="destructive" onClick={handleCalCancel} disabled={calCancelLoading}>
+              {calCancelLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirmer l'annulation
             </Button>
           </DialogFooter>
@@ -1532,7 +1559,7 @@ export function AdminCalendar() {
       </Dialog>
 
       {/* Reschedule dialog */}
-      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
+      <Dialog open={calRescheduleOpen} onOpenChange={setCalRescheduleOpen}>
         <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Déplacer la réservation</DialogTitle>
@@ -1541,24 +1568,24 @@ export function AdminCalendar() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Nouvelle date</Label>
-              <Input type="date" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)} className="bg-zinc-800 border-zinc-700" />
+              <Input type="date" value={calRescheduleDate} onChange={e => setCalRescheduleDate(e.target.value)} className="bg-zinc-800 border-zinc-700" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Début</Label>
-                <Input type="time" value={rescheduleStart} onChange={e => setRescheduleStart(e.target.value)} step="1800" className="bg-zinc-800 border-zinc-700" />
+                <Input type="time" value={calRescheduleStart} onChange={e => setCalRescheduleStart(e.target.value)} step="1800" className="bg-zinc-800 border-zinc-700" />
               </div>
               <div className="space-y-2">
                 <Label>Fin</Label>
-                <Input type="time" value={rescheduleEnd} onChange={e => setRescheduleEnd(e.target.value)} step="1800" className="bg-zinc-800 border-zinc-700" />
+                <Input type="time" value={calRescheduleEnd} onChange={e => setCalRescheduleEnd(e.target.value)} step="1800" className="bg-zinc-800 border-zinc-700" />
               </div>
             </div>
-            {rescheduleError && <p className="text-sm text-destructive">{rescheduleError}</p>}
+            {calRescheduleError && <p className="text-sm text-destructive">{calRescheduleError}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRescheduleDialogOpen(false)} className="border-zinc-700">Annuler</Button>
-            <Button onClick={handleReschedule} disabled={rescheduleLoading || !rescheduleDate || !rescheduleStart || !rescheduleEnd}>
-              {rescheduleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button variant="outline" onClick={() => setCalRescheduleOpen(false)} className="border-zinc-700">Annuler</Button>
+            <Button onClick={handleCalReschedule} disabled={calRescheduleLoading || !calRescheduleDate || !calRescheduleStart || !calRescheduleEnd}>
+              {calRescheduleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Déplacer
             </Button>
           </DialogFooter>
