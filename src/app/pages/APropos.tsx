@@ -370,15 +370,15 @@ export function APropos() {
                     className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                 >
-                  <span className="font-medium text-white/90">{item.q}</span>
+                  <span className="min-w-0 flex-1 font-medium text-white/90">{item.q}</span>
                   <ChevronDown
                     className={`h-5 w-5 shrink-0 text-primary transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`}
                   />
                 </button>
                 {openFaq === i && (
-                  <div className="border-t border-white/10 px-5 py-4">
-                    <p className="text-sm leading-relaxed text-white/70">{item.a}</p>
-                  </div>
+                   <div className="w-full border-t border-white/10 px-5 py-4">
+                     <p className="text-sm leading-relaxed text-white/70">{item.a}</p>
+                   </div>
                 )}
               </div>
             ))}
