@@ -860,18 +860,18 @@ export function AdminCalendar() {
 
         {/* Legend */}
         <div className="flex items-center gap-4 border-t border-zinc-800 px-4 py-3">
-          <span className="text-xs text-zinc-500">Occupation :</span>
+          <span className="text-xs text-zinc-500">Légende :</span>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            <span className="text-xs text-zinc-400">&lt; 50%</span>
+            <div className="h-3 w-5 rounded-sm bg-emerald-500/15 border border-emerald-500/30" />
+            <span className="text-xs text-zinc-400">Payé</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-            <span className="text-xs text-zinc-400">50–80%</span>
+            <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-orange-500/30" />
+            <span className="text-xs text-zinc-400">Reste à payer</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
-            <span className="text-xs text-zinc-400">&gt; 80%</span>
+            <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-red-500/70" />
+            <span className="text-xs text-zinc-400">No-show</span>
           </div>
         </div>
       </div>
@@ -1106,18 +1106,18 @@ export function AdminCalendar() {
 
         {/* Legend */}
         <div className="flex items-center gap-4 border-t border-zinc-800 px-4 py-3">
-          <span className="text-xs text-zinc-500">Occupation :</span>
+          <span className="text-xs text-zinc-500">Légende :</span>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            <span className="text-xs text-zinc-400">&lt; 50%</span>
+            <div className="h-3 w-5 rounded-sm bg-emerald-500/15 border border-emerald-500/30" />
+            <span className="text-xs text-zinc-400">Payé</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-            <span className="text-xs text-zinc-400">50–80%</span>
+            <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-orange-500/30" />
+            <span className="text-xs text-zinc-400">Reste à payer</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
-            <span className="text-xs text-zinc-400">&gt; 80%</span>
+            <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-red-500/70" />
+            <span className="text-xs text-zinc-400">No-show</span>
           </div>
         </div>
       </div>
