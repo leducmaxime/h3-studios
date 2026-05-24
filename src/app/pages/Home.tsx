@@ -41,10 +41,7 @@ export function Home() {
               alt="H3 Studios"
               className="mx-auto w-full max-w-2xl"
             />
-            <h1 className="mt-4 text-center text-lg font-medium tracking-widest text-white/70 uppercase">
-              Studios de répétition &amp; enregistrement · Sucy-en-Brie
-            </h1>
-            <div className="mx-auto mt-6 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+
           </div>
 
           <div className={`mb-8 flex flex-col items-center gap-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
@@ -111,7 +108,7 @@ export function Home() {
         </div>
 
         {/* Quote */}
-        <div className={`mx-auto mt-20 max-w-3xl text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "600ms" }}>
+        <div className={`mx-auto mt-20 max-w-5xl text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "600ms" }}>
           <div className="mb-6 flex justify-center">
             <Star className="h-8 w-8 text-primary/60" />
           </div>
