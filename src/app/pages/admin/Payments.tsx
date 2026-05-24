@@ -1057,24 +1057,28 @@ export function AdminPayments() {
                     className="bg-zinc-900/50 hover:bg-zinc-800/50"
                   >
                     <td className="px-4 py-3">
-                      {payment.booking_ref ? (
-                        <span className="font-mono text-sm text-primary">
+                      {payment.booking_ref && payment.booking_id ? (
+                        <a href={`/admin/bookings/${payment.booking_id}`} className="font-mono text-sm text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                           {payment.booking_ref}
-                        </span>
+                        </a>
                       ) : (
                         "—"
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {payment.user_name ? (
-                        <p className="font-medium">{payment.user_name}</p>
+                      {payment.user_name && payment.user_id ? (
+                        <a href={`/admin/users/${payment.user_id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
+                          {payment.user_name}
+                        </a>
                       ) : (
                         "—"
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {payment.user_band_name ? (
-                        <p className="text-sm text-zinc-200">{payment.user_band_name}</p>
+                      {payment.user_band_name && payment.user_id ? (
+                        <a href={`/admin/users/${payment.user_id}`} className="text-sm text-zinc-200 hover:underline" onClick={(e) => e.stopPropagation()}>
+                          {payment.user_band_name}
+                        </a>
                       ) : (
                         <span className="text-zinc-500">—</span>
                       )}
