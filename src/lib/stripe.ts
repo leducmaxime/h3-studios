@@ -1,9 +1,5 @@
 // Stripe Checkout Session API (no SDK needed for Cloudflare Workers)
 
-export interface StripeConfig {
-  secretKey: string;
-}
-
 export interface CreateCheckoutSessionParams {
   amountCents: number;
   customerEmail: string;
@@ -16,6 +12,7 @@ export interface CreateCheckoutSessionParams {
 export interface StripeCheckoutSession {
   id: string;
   url: string;
+  amount_total?: number;
   payment_status: "paid" | "unpaid" | "no_payment_required";
   status: "open" | "complete" | "expired";
   metadata: Record<string, string>;
@@ -31,19 +28,10 @@ export interface StripeWebhookEvent {
 }
 
 const STRIPE_API_URL = "https://api.stripe.com/v1";
-
-export function getStripeConfig(env: { STRIPE_SECRET_KEY?: string }): StripeConfig {
-  return {
-    secretKey: env.STRIPE_SECRET_KEY || "",
-  };
-}
-
-export function isTestMode(secretKey: string): boolean {
-  return secretKey.startsWith("sk_test_");
-}
+const STRIPE_API_VERSION = "2024-06-20";
 
 export async function createCheckoutSession(
-  config: StripeConfig,
+  secretKey: string,
   params: CreateCheckoutSessionParams
 ): Promise<StripeCheckoutSession> {
   const body = new URLSearchParams({
@@ -65,8 +53,10 @@ export async function createCheckoutSession(
   const response = await fetch(`${STRIPE_API_URL}/checkout/sessions`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${config.secretKey}`,
+      "Authorization": `Bearer ${secretKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      "Stripe-Version": STRIPE_API_VERSION,
+      "Idempotency-Key": [...params.bookingRefs].sort().join(","),
     },
     body: body.toString(),
   });
@@ -80,13 +70,14 @@ export async function createCheckoutSession(
 }
 
 export async function getCheckoutSession(
-  config: StripeConfig,
+  secretKey: string,
   sessionId: string
 ): Promise<StripeCheckoutSession> {
   const response = await fetch(`${STRIPE_API_URL}/checkout/sessions/${sessionId}`, {
     method: "GET",
     headers: {
-      "Authorization": `Bearer ${config.secretKey}`,
+      "Authorization": `Bearer ${secretKey}`,
+      "Stripe-Version": STRIPE_API_VERSION,
     },
   });
 
@@ -106,9 +97,9 @@ export async function verifyWebhookSignature(
   payload: string,
   signatureHeader: string,
   webhookSecret: string
-): Promise<{ valid: boolean; timestamp?: number }> {
+): Promise<boolean> {
   if (!signatureHeader || !webhookSecret) {
-    return { valid: false };
+    return false;
   }
 
   // Parse the signature header (format: t=timestamp,v1=signature,v1=signature2,...)
@@ -129,14 +120,14 @@ export async function verifyWebhookSignature(
   }
 
   if (!timestamp || !signatureMap["v1"] || signatureMap["v1"].length === 0) {
-    return { valid: false };
+    return false;
   }
 
   // Check timestamp tolerance (5 minutes)
   const tolerance = 300; // seconds
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - timestamp) > tolerance) {
-    return { valid: false, timestamp };
+    return false;
   }
 
   // Compute expected signature
@@ -149,7 +140,7 @@ export async function verifyWebhookSignature(
     false,
     ["sign"]
   );
-  
+
   const signatureBuffer = await crypto.subtle.sign(
     "HMAC",
     key,
@@ -164,7 +155,7 @@ export async function verifyWebhookSignature(
   // Compare signatures (timing-safe comparison)
   const valid = signatureMap["v1"].some(sig => timingSafeEqual(sig, expectedSignature));
 
-  return { valid, timestamp };
+  return valid;
 }
 
 /**
@@ -174,12 +165,12 @@ function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) {
     return false;
   }
-  
+
   let result = 0;
   for (let i = 0; i < a.length; i++) {
     result |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
-  
+
   return result === 0;
 }
 
@@ -191,18 +182,12 @@ export async function constructWebhookEvent(
   signatureHeader: string,
   webhookSecret: string
 ): Promise<{ event: StripeWebhookEvent | null; error?: string }> {
-  // If no webhook secret configured, skip verification (dev mode)
   if (!webhookSecret) {
-    try {
-      return { event: JSON.parse(payload) };
-    } catch {
-      return { event: null, error: "Invalid JSON payload" };
-    }
+    return { event: null, error: "Webhook secret not configured" };
   }
 
-  const verification = await verifyWebhookSignature(payload, signatureHeader, webhookSecret);
-  
-  if (!verification.valid) {
+  const valid = await verifyWebhookSignature(payload, signatureHeader, webhookSecret);
+  if (!valid) {
     return { event: null, error: "Invalid webhook signature" };
   }
 

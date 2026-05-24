@@ -35,7 +35,6 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: total,
           firstName,
           lastName,
           email: userEmail,

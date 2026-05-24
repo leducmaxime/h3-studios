@@ -43,7 +43,7 @@ import { ClientAccount } from "@/app/pages/ClientAccount";
 import { ClientProfile } from "@/app/pages/ClientProfile";
 import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
-import { getStripeConfig, createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
+import { createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
 import { sendBookingConfirmationEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
 import {
@@ -87,6 +87,7 @@ import {
   mergeUsers,
   getPayments,
   getPaymentsByBookingId,
+  getPaymentByBookingId,
   addPayment,
   markPaymentPaid,
   refundPayment,
@@ -524,7 +525,7 @@ const app = defineApp([
 
   route("/api/payment/create", async (info) => {
     const { request } = info;
-    
+
     if (request.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,
@@ -534,16 +535,35 @@ const app = defineApp([
 
     try {
       const body = await request.json() as {
-        amount: number;
         firstName: string;
         lastName: string;
         email: string;
         bookingRefs: string[];
       };
 
-      const config = getStripeConfig({ STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY });
-      
-      if (!config.secretKey) {
+      if (!body.bookingRefs || body.bookingRefs.length === 0) {
+        return new Response(JSON.stringify({ error: "No booking references provided" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Look up bookings server-side — never trust client-supplied amount
+      const bookings = [];
+      for (const ref of body.bookingRefs) {
+        const booking = await getBookingByRef(env.DB, ref);
+        if (!booking) {
+          return new Response(JSON.stringify({ error: `Booking not found: ${ref}` }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        bookings.push(booking);
+      }
+      const totalCents = bookings.reduce((sum, b) => sum + Math.round(b.total_price * 100), 0);
+
+      const secretKey = env.STRIPE_SECRET_KEY || "";
+      if (!secretKey) {
         return new Response(JSON.stringify({ error: "Stripe not configured" }), {
           status: 500,
           headers: { "Content-Type": "application/json" },
@@ -551,13 +571,15 @@ const app = defineApp([
       }
 
       const baseUrl = new URL(request.url).origin;
-      
-      const session = await createCheckoutSession(config, {
-        amountCents: Math.round(body.amount * 100),
+
+      const refsParam = encodeURIComponent(body.bookingRefs.join(","));
+      const emailParam = encodeURIComponent(body.email);
+      const session = await createCheckoutSession(secretKey, {
+        amountCents: totalCents,
         customerEmail: body.email,
         customerName: `${body.firstName} ${body.lastName}`,
         bookingRefs: body.bookingRefs,
-        successUrl: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        successUrl: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}&refs=${refsParam}&total=${totalCents}&email=${emailParam}`,
         cancelUrl: `${baseUrl}/payment/cancel`,
       });
 
@@ -570,8 +592,8 @@ const app = defineApp([
       });
     } catch (error) {
       console.error("Payment creation error:", error);
-      return new Response(JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Payment creation failed" 
+      return new Response(JSON.stringify({
+        error: error instanceof Error ? error.message : "Payment creation failed"
       }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
@@ -4253,6 +4275,18 @@ const app = defineApp([
       
       console.log("Payment confirmed for refs:", bookingRefs);
 
+      let alreadyProcessed = false;
+
+      // Validate session total against sum of per-booking prices (once, outside loop)
+      const expectedTotalCents = bookingRefs.length > 0
+        ? (await Promise.all(bookingRefs.map(ref => getBookingByRef(env.DB, ref))))
+            .filter(Boolean)
+            .reduce((sum, b) => sum + Math.round(b!.total_price * 100), 0)
+        : 0;
+      if (session.amount_total && session.amount_total !== expectedTotalCents) {
+        console.warn(`Webhook: total mismatch — Stripe: ${session.amount_total}, DB sum: ${expectedTotalCents}`);
+      }
+
       for (const ref of bookingRefs) {
         const booking = await getBookingByRef(env.DB, ref);
         if (!booking) {
@@ -4260,9 +4294,20 @@ const app = defineApp([
           continue;
         }
 
+        // Idempotency: skip if this booking already has a paid payment
+        const existingPayment = await getPaymentByBookingId(env.DB, booking.id);
+        if (existingPayment?.status === "paid") {
+          console.log(`Webhook: booking ${ref} already paid, skipping duplicate`);
+          alreadyProcessed = true;
+          continue;
+        }
+
+        // Record per-booking amount (not session grand total)
+        const bookingCents = Math.round(booking.total_price * 100);
+
         await addPayment(env.DB, {
           booking_id: booking.id,
-          amount: booking.total_price,
+          amount: bookingCents,
           method: "card",
           status: "paid",
           paid_at: new Date().toISOString().replace("T", " ").slice(0, 19),
@@ -4274,7 +4319,7 @@ const app = defineApp([
       }
 
       // After the for loop that processes payments, send ONE consolidated email
-      if (env.RESEND_API_KEY && bookingRefs.length > 0) {
+      if (!alreadyProcessed && env.RESEND_API_KEY && bookingRefs.length > 0) {
         // Fetch all bookings (already updated above)
         const allBookings = [];
         for (const ref of bookingRefs) {
@@ -4328,7 +4373,7 @@ const app = defineApp([
       return new Response("OK", { status: 200 });
     } catch (error) {
       console.error("Webhook error:", error);
-      return new Response("OK", { status: 200 });
+      return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
     }
   }),
 ]);

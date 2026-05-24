@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, Calendar, Download, Home, Loader2 } from "lucide-react";
+import { CheckCircle, Calendar, Home, Loader2 } from "lucide-react";
 import { formatPrice } from "@/lib/booking";
 
 interface PaymentSuccessProps {
@@ -18,18 +18,35 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const storedData = localStorage.getItem("h3-pending-payment");
-    if (storedData) {
-      try {
-        const data = JSON.parse(storedData);
-        setBookingData(data);
-        localStorage.removeItem("h3-pending-payment");
-        
-        localStorage.removeItem("h3-booking-state");
-      } catch {
-        console.error("Failed to parse booking data");
+    // Try query params first (more reliable than localStorage across tabs/browsers)
+    const params = new URLSearchParams(window.location.search);
+    const refsParam = params.get("refs");
+    const totalParam = params.get("total");
+    const emailParam = params.get("email");
+
+    if (refsParam && totalParam && emailParam) {
+      setBookingData({
+        refs: refsParam.split(",").filter(Boolean),
+        email: decodeURIComponent(emailParam),
+        total: parseInt(totalParam, 10) / 100,
+      });
+    } else {
+      // Fallback: localStorage (same browser, same tab flow)
+      const storedData = localStorage.getItem("h3-pending-payment");
+      if (storedData) {
+        try {
+          const data = JSON.parse(storedData);
+          setBookingData(data);
+        } catch {
+          console.error("Failed to parse booking data");
+        }
       }
     }
+
+    // Always clear localStorage
+    localStorage.removeItem("h3-pending-payment");
+    localStorage.removeItem("h3-booking-state");
+
     setLoading(false);
     setTimeout(() => setIsVisible(true), 50);
   }, []);
