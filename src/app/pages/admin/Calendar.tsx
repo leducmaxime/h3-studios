@@ -375,7 +375,6 @@ export function AdminCalendar() {
   const weekDates = useMemo(() => {
     const dates: Date[] = [];
     const start = new Date(currentDate);
-    start.setDate(start.getDate() - start.getDay() + 1);
     for (let i = 0; i < 7; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
