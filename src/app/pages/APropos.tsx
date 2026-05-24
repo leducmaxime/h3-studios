@@ -179,7 +179,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Le studio est-il accessible aux personnes à mobilité réduite ?",
-    a: "Nos studios sont situés au rez-de-chaussée et sont accessibles. N'hésitez pas à nous contacter pour toute question spécifique concernant l'accessibilité."
+    a: "Nos studios sont situés au rez-de-chaussée mais ne respectent pas les normes d'accessibilité pour les personnes à mobilité réduite. Pour toute interrogation, veuillez nous contacter au 0613440875."
   },
   {
     q: "Les mineurs peuvent-ils réserver ?",
