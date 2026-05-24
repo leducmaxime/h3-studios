@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPrice, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
+import { formatDbTimestamp } from "@/lib/utils";
 
 interface BookingWithPromo extends DbBooking {
   promo_code_type?: string | null;
@@ -864,7 +865,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <div>
                             <p className="font-semibold">{formatPrice(p.amount)}</p>
                             <p className="text-xs text-zinc-500">
-                              {methodLabels[p.method] || p.method} · {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                              {methodLabels[p.method] || p.method} · {formatDbTimestamp(p.created_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                             </p>
                           </div>
                         </div>
