@@ -365,9 +365,9 @@ export function APropos() {
           <p className="mb-10 text-center text-white/60">Questions fréquentes</p>
           <div className="w-full space-y-3">
             {FAQ_ITEMS.map((item, i) => (
-              <div key={i} className="w-full rounded-xl border border-white/10 bg-white/5 overflow-hidden">
-                <button
-                  className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5"
+              <div key={i} className="w-full rounded-xl border border-white/10 bg-black overflow-hidden">
+                  <button
+                    className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                 >
                   <span className="font-medium text-white/90">{item.q}</span>
