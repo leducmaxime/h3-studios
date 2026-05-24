@@ -449,7 +449,7 @@ export function AdminBookings() {
                   const displayName = booking.band_name || booking.user_name || "—";
 
                   return (
-                    <tr key={booking.id} className={`bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors ${isBookingPast(booking) ? "opacity-50" : ""}`}>
+                    <tr key={booking.id} className={`bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors cursor-pointer ${isBookingPast(booking) ? "opacity-50" : ""}`} onClick={() => { window.location.href = `/admin/bookings/${booking.id}`; }}>
                       <td className="px-4 py-3">
                         <a
                           href={`/admin/bookings/${booking.id}`}
@@ -458,7 +458,7 @@ export function AdminBookings() {
                           {booking.booking_ref}
                         </a>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <a
                           href={`/admin/users/${booking.user_id}`}
                           className="hover:underline"
@@ -487,7 +487,7 @@ export function AdminBookings() {
                       <td className="px-4 py-3 text-right font-medium">
                         {formatPrice(Math.max(0, booking.total_price - (booking.promo_discount || 0)))}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button type="button" className="rounded-lg p-1.5 hover:bg-zinc-700 focus:outline-none">
