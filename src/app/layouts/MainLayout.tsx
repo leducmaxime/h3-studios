@@ -55,7 +55,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   useClearBookingOnNavigate();
 
   return (
-    <div className="flex grow flex-col">
+    <div className="flex grow flex-col justify-between">
       <SplashScreen />
       <Header />
       <main className="container flex grow flex-col">
