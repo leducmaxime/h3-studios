@@ -1228,13 +1228,11 @@ export function AdminCalendar() {
     return (
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
         <DialogContent className="max-w-2xl w-[95vw] border-zinc-800 bg-zinc-900 text-zinc-100">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between gap-2 text-xl font-bold">
-              <div className="flex items-center gap-2">
-                <CalendarDays className="h-6 w-6 text-primary" />
-                        {b.band_name || b.user_name || b.booking_ref}
-              </div>
-              <Badge className={`${STATUS_COLORS[b.status] || ""} border px-3 py-1 text-xs uppercase tracking-wider`}>
+          <DialogHeader className="pr-8">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <CalendarDays className="h-6 w-6 shrink-0 text-primary" />
+              <span className="truncate">{b.band_name || b.user_name || b.booking_ref}</span>
+              <Badge className={`${STATUS_COLORS[b.status] || ""} shrink-0 border px-3 py-1 text-xs uppercase tracking-wider`}>
                 {STATUS_LABELS[b.status] || b.status}
               </Badge>
             </DialogTitle>
