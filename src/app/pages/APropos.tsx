@@ -218,6 +218,10 @@ const FAQ_ITEMS = [
     a: "Oui, votre réservation est confirmée instantanément. Vous recevrez un email de confirmation avec tous les détails de votre session."
   },
   {
+    q: "Que se passe t-il si j'arrive en retard ?",
+    a: "Votre créneau est réservé pour la durée que vous avez choisie. En cas de retard, la session se terminera à l'heure prévue sans prolongation possible, afin de respecter les réservations suivantes."
+  },
+  {
     q: "Que se passe-t-il si je ne me présente pas ?",
     a: "En cas d'absence sans annulation préalable, le créneau vous sera facturé. Pensez à nous prévenir au plus tôt au 06 13 44 08 75 si vous ne pouvez pas venir."
   }
