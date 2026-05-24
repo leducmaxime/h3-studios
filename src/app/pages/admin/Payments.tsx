@@ -940,7 +940,7 @@ export function AdminPayments() {
             <option value="today">Auj.</option>
             <option value="week">Sem.</option>
             <option value="month">Mois</option>
-            <option value="custom">Plage</option>
+            <option value="custom">Perso.</option>
           </select>
           {dateFilter === "custom" && (
             <div className="flex items-center gap-2">
