@@ -16,7 +16,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check, PackageCheck } from "lucide-react";
+import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check, PackageCheck, WrenchIcon } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -88,9 +88,14 @@ export function Reservation({ step }: ReservationProps) {
   const { getEquipmentName } = useEquipment();
 
   const [isVisible, setIsVisible] = useState(false);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
 
   useEffect(() => {
     setIsVisible(true);
+    fetch("/api/status")
+      .then(r => r.json() as Promise<{ success: boolean; data: { maintenanceMode: boolean } }>)
+      .then(json => { if (json.success) setMaintenanceMode(json.data.maintenanceMode); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -323,6 +328,21 @@ export function Reservation({ step }: ReservationProps) {
       </div>
     );
   };
+
+  if (maintenanceMode) {
+    return (
+      <div className="flex min-h-fit grow flex-col items-center justify-center gap-6 pb-16 pt-32 text-center px-4">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <WrenchIcon className="h-10 w-10" />
+        </div>
+        <h1 className="font-blanka text-3xl md:text-4xl">MAINTENANCE</h1>
+        <p className="max-w-md text-zinc-400 leading-relaxed">
+          Les réservations en ligne sont temporairement indisponibles. Pour toute réservation, veuillez nous contacter au{" "}
+          <a href="tel:0613440875" className="font-semibold text-primary hover:underline">06 13 44 08 75</a>.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">

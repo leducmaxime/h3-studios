@@ -636,6 +636,14 @@ const app = defineApp([
     }
   }),
 
+  // ─── Public Status API ───────────────────────────────────────────────────────
+
+  route("/api/status", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+    const maintenance = await getSetting(env.DB, "site.maintenance_mode");
+    return jsonSuccess({ maintenanceMode: maintenance === "true" });
+  }),
+
   // ─── Public Booking API ──────────────────────────────────────────────────────
 
   route("/api/availability", async ({ request }) => {
