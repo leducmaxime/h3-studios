@@ -16,7 +16,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check } from "lucide-react";
+import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check, PackageCheck } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -196,6 +196,24 @@ export function Reservation({ step }: ReservationProps) {
 
     return (
       <div className="flex flex-col gap-5 pb-24 md:pb-0">
+        <div className="rounded-xl border border-primary/40 bg-primary/8 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20">
+              <PackageCheck className="h-4 w-4 text-primary" />
+            </div>
+            <span className="text-sm font-semibold text-primary">Inclus dans votre réservation</span>
+            <span className="ml-auto rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-primary uppercase">Sans surcoût</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 md:flex-nowrap md:overflow-x-auto md:scrollbar-none">
+            {["Batterie (sans crash)", "Sono", "Amplis guitare", "Amplis basse", "4 micros", "Pupitres", "Pied synthé"].map((item) => (
+              <span key={item} className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/75">
+                <Check className="h-3 w-3 shrink-0 text-primary" />
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+
         <div className="mt-2 border-t border-white/10 pt-5">
           <h4 className="mb-3 text-sm font-semibold text-white/80">Options supplémentaires</h4>
           <EquipmentSelector
