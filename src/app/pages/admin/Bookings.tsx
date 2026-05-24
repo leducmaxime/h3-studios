@@ -498,6 +498,11 @@ export function AdminBookings() {
                         >
                           {booking.booking_ref}
                         </a>
+                        {sortBy === "created_at" && booking.created_at && (
+                          <p className="text-[10px] text-zinc-500 mt-0.5">
+                            {new Date(booking.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <a
