@@ -391,21 +391,21 @@ export function APropos() {
         <div className="mx-auto w-full max-w-4xl px-4">
           <h2 className="mb-2 text-center font-blanka text-3xl sm:text-4xl">FAQ</h2>
           <p className="mb-10 text-center text-white/60">Questions fréquentes</p>
-          <div className="flex flex-col items-stretch gap-3">
+          <div className="space-y-3">
             {FAQ_ITEMS.map((item, i) => (
-              <div key={i} style={{ width: "100%" }} className="rounded-xl border border-white/10 bg-black box-border">
+              <div key={i} className="w-full rounded-xl border border-white/10 bg-black overflow-hidden">
                 <button
-                  style={{ width: "100%", boxSizing: "border-box" }}
-                  className="flex items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5 rounded-xl"
+                  type="button"
+                  className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                 >
-                  <span className="min-w-0 flex-1 pr-4 font-medium text-white/90">{item.q}</span>
+                  <span className="flex-1 min-w-0 pr-4 font-medium text-white/90">{item.q}</span>
                   <ChevronDown
                     className={`h-5 w-5 shrink-0 text-primary transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`}
                   />
                 </button>
                 {openFaq === i && (
-                  <div style={{ width: "100%", boxSizing: "border-box" }} className="border-t border-white/10 px-5 py-4">
+                  <div className="border-t border-white/10 px-5 py-4">
                     <p className="text-sm leading-relaxed text-white/70">{item.a}</p>
                   </div>
                 )}
