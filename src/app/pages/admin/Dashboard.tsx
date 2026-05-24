@@ -1519,7 +1519,7 @@ export function AdminDashboard() {
                   {booking.payment_status === "paid" ? (
                     <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">Payé</Badge>
                   ) : (
-                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px]">Reste à payer</Badge>
+                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px]">{(booking as any).remaining > 0 ? `Reste ${formatPrice((booking as any).remaining)}` : "Reste à payer"}</Badge>
                   )}
                   <span className="text-sm font-medium text-primary">{formatPrice(booking.total_price)}</span>
                 </div>
