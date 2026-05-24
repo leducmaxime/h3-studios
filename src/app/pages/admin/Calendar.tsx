@@ -871,7 +871,8 @@ export function AdminCalendar() {
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-red-500/70" />
-            <span className="text-xs text-zinc-400">No-show</span>
+            <span className="text-xs text-zinc-400">Absent</span>
+
           </div>
         </div>
       </div>
@@ -1117,7 +1118,7 @@ export function AdminCalendar() {
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-red-500/70" />
-            <span className="text-xs text-zinc-400">No-show</span>
+            <span className="text-xs text-zinc-400">Absent</span>
           </div>
         </div>
       </div>
