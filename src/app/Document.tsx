@@ -84,7 +84,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
 
         <link rel="modulepreload" href="/src/client.tsx" />
       </head>
-      <body className="flex h-screen flex-col bg-[url('/images/background.webp')] bg-[length:500px] bg-repeat font-secondary">
+      <body className="flex min-h-screen flex-col bg-[url('/images/background.webp')] bg-[length:500px] bg-repeat font-secondary">
         <noscript>
           <iframe
             src="https://www.googletagmanager.com/ns.html?id=G-B3TYEET971"
