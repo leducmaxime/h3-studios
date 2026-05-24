@@ -96,7 +96,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
         
         <div
           id="root"
-          className="flex grow w-screen flex-col overflow-x-hidden text-white"
+          className="flex min-h-screen w-screen flex-col overflow-x-hidden text-white"
         >
           {children}
         </div>
