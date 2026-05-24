@@ -183,7 +183,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Les mineurs peuvent-ils réserver ?",
-    a: "Les mineurs sont les bienvenus, accompagnés d'un adulte responsable. Pour les groupes composés uniquement de mineurs, une autorisation parentale est requise."
+    a: "Les mineurs sont les bienvenus, accompagnés d'un adulte responsable."
   },
   {
     q: "Peut-on apporter son propre matériel ?",
