@@ -428,18 +428,26 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
           <!-- Footer -->
           <tr>
             <td style="background-color:#0a0a0a;padding:30px;text-align:center;border-top:1px solid #222222;">
-              <p style="margin:0 0 16px 0;color:#555555;font-size:12px;">3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie</p>
-              <p style="margin:0 0 20px 0;color:#aaaaaa;font-size:13px;line-height:1.5;">
-                Suivez-nous sur <a href="https://www.instagram.com/h3_studios_sucy/" target="_blank" rel="noopener noreferrer" style="color:#facc15;text-decoration:none;font-weight:600;">Instagram @h3_studios_sucy</a> pour découvrir nos actualités, les coulisses des studios et les artistes qui répètent chez nous !
+              <p style="margin:0 0 20px 0;">
+                <a href="https://www.instagram.com/h3_studios_sucy/" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);border-radius:14px;padding:14px 24px;">
+                  <table cellpadding="0" cellspacing="0" border="0" style="display:inline-table;">
+                    <tr>
+                      <td style="vertical-align:middle;padding-right:10px;">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
+                          <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
+                          <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                          <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+                        </svg>
+                      </td>
+                      <td style="vertical-align:middle;">
+                        <span style="color:#ffffff;font-size:15px;font-weight:700;display:block;line-height:1.2;">Suivez-nous sur Instagram</span>
+                        <span style="color:rgba(255,255,255,0.85);font-size:12px;">@h3_studios_sucy · coulisses, artistes &amp; actus</span>
+                      </td>
+                    </tr>
+                  </table>
+                </a>
               </p>
               <p style="margin:0 0 16px 0;">
-                <a href="https://www.instagram.com/h3_studios_sucy/" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:0 8px;text-decoration:none;">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
-                    <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
-                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-                    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
-                  </svg>
-                </a>
                 <a href="https://www.facebook.com/profile.php?id=100089893392179" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:0 8px;text-decoration:none;">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
                     <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
