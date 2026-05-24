@@ -315,6 +315,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       toast.error("Montant invalide");
       return;
     }
+    if (amount > balance) {
+      toast.error(`Le montant ne peut pas dépasser le reste à payer (${formatPrice(balance)})`);
+      return;
+    }
 
     setAddingPayment(true);
     try {
@@ -350,9 +354,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     if (!editPayment) return;
     const amount = parseFloat(editPaymentAmount.replace(",", "."));
     if (isNaN(amount) || amount <= 0) return;
-    const maxAmount = booking ? Math.max(0, booking.total_price - (booking.promo_discount || 0)) : undefined;
+    // max = reste à payer + montant actuel de ce paiement (puisqu'on le remplace)
+    const maxAmount = booking ? balance + (editPayment?.amount ?? 0) : undefined;
     if (maxAmount !== undefined && amount > maxAmount) {
-      toast.error(`Le montant ne peut pas dépasser ${formatPrice(maxAmount)}`);
+      toast.error(`Le montant ne peut pas dépasser le reste à payer (${formatPrice(maxAmount)})`);
       return;
     }
     setEditingPayment(true);
@@ -677,10 +682,14 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       <Input
                         type="number"
                         step="0.01"
+                        max={balance}
                         value={newPayment.amount}
                         onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
                         className="bg-zinc-800 border-zinc-700 h-11"
                       />
+                      {newPayment.amount && parseFloat(newPayment.amount.replace(",", ".")) > balance && (
+                        <p className="text-xs text-destructive mt-1">Maximum : {formatPrice(balance)} (reste à payer)</p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-xs text-zinc-500 mb-1.5 block">Mode</Label>
@@ -962,15 +971,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 type="number"
                 step="0.01"
                 min="0.01"
-                max={booking ? Math.max(0, booking.total_price - (booking.promo_discount || 0)) : undefined}
+                max={booking ? balance + (editPayment?.amount ?? 0) : undefined}
                 value={editPaymentAmount}
                 onChange={(e) => setEditPaymentAmount(e.target.value)}
                 className="border-zinc-700 bg-zinc-800"
                 autoFocus
               />
-              {booking && parseFloat(editPaymentAmount.replace(",", ".")) > Math.max(0, booking.total_price - (booking.promo_discount || 0)) && (
+              {booking && parseFloat(editPaymentAmount.replace(",", ".")) > balance + (editPayment?.amount ?? 0) && (
                 <p className="text-xs text-destructive">
-                  Montant maximum : {Math.max(0, booking.total_price - (booking.promo_discount || 0))}€
+                  Maximum : {formatPrice(balance + (editPayment?.amount ?? 0))} (reste à payer)
                 </p>
               )}
             </div>
@@ -993,7 +1002,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
             <Button variant="outline" onClick={() => setEditPaymentOpen(false)} className="border-zinc-700">
               Annuler
             </Button>
-            <Button onClick={handleEditPayment} disabled={editingPayment || (booking && parseFloat(editPaymentAmount.replace(",", ".")) > Math.max(0, booking.total_price - (booking.promo_discount || 0)))}>
+            <Button onClick={handleEditPayment} disabled={editingPayment || (booking !== null && parseFloat(editPaymentAmount.replace(",", ".")) > balance + (editPayment?.amount ?? 0))}>
               {editingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Enregistrer
             </Button>
