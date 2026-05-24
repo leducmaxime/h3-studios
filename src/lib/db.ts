@@ -976,6 +976,17 @@ export async function updatePayment(
     return { success: false, error: "Le montant doit être supérieur à 0" };
   }
 
+  if (data.amount !== undefined) {
+    const booking = await db.prepare("SELECT total_price, promo_discount FROM bookings WHERE id = ?")
+      .bind(payment.booking_id).first<{ total_price: number; promo_discount: number }>();
+    if (booking) {
+      const maxAmount = Math.max(0, booking.total_price - (booking.promo_discount || 0));
+      if (data.amount > maxAmount) {
+        return { success: false, error: `Le montant ne peut pas dépasser le prix de la réservation (${maxAmount}€)` };
+      }
+    }
+  }
+
   const newAmount = data.amount ?? payment.amount;
   const newMethod = data.method ?? payment.method;
 
@@ -984,6 +995,41 @@ export async function updatePayment(
   ).bind(newAmount, newMethod, paymentId).run();
 
   await addAuditLog(db, "payment", paymentId, "update", { amount: newAmount, method: newMethod, previousAmount: payment.amount, previousMethod: payment.method });
+
+  return { success: true };
+}
+
+export async function deletePayment(
+  db: D1Database,
+  paymentId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const payment = await db.prepare(`
+    SELECT p.*, b.payment_status as booking_payment_status, b.total_price, b.promo_discount
+    FROM payments p
+    JOIN bookings b ON b.id = p.booking_id
+    WHERE p.id = ?
+  `).bind(paymentId).first<DbPayment & { booking_payment_status: string; total_price: number; promo_discount: number }>();
+
+  if (!payment) return { success: false, error: "Paiement introuvable" };
+
+  const isOnline = payment.booking_payment_status !== "pay-on-site" && payment.method === "card";
+  if (isOnline) return { success: false, error: "Impossible de supprimer un paiement en ligne" };
+
+  await db.prepare("DELETE FROM payments WHERE id = ?").bind(paymentId).run();
+
+  // Recalcule le payment_status du booking
+  const remaining = await db.prepare(
+    "SELECT COALESCE(SUM(amount), 0) as total_paid FROM payments WHERE booking_id = ? AND status = 'paid'"
+  ).bind(payment.booking_id).first<{ total_paid: number }>();
+
+  const finalTotal = Math.max(0, payment.total_price - (payment.promo_discount || 0));
+  const totalPaid = remaining?.total_paid ?? 0;
+  if (totalPaid < finalTotal && payment.booking_payment_status === "paid") {
+    await db.prepare("UPDATE bookings SET payment_status = 'pay-on-site', updated_at = ? WHERE id = ?")
+      .bind(now(), payment.booking_id).run();
+  }
+
+  await addAuditLog(db, "payment", paymentId, "delete", { bookingId: payment.booking_id, amount: payment.amount });
 
   return { success: true };
 }

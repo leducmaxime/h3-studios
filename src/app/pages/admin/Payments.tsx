@@ -16,6 +16,7 @@ import {
   Loader2,
   Search,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -337,6 +338,62 @@ function EditPaymentDialog({
   );
 }
 
+// ─── Delete Payment Dialog ──────────────────────────────────────────────────────
+
+function DeletePaymentDialog({
+  payment,
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  payment: ApiPayment | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (paymentId: string) => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) setSubmitting(false);
+  }, [open]);
+
+  function handleConfirm() {
+    if (!payment) return;
+    setSubmitting(true);
+    onConfirm(payment.id);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="border-zinc-800 bg-zinc-900">
+        <DialogHeader>
+          <DialogTitle>Supprimer le paiement</DialogTitle>
+          <DialogDescription>
+            {payment && (
+              <>
+                Êtes-vous sûr de vouloir supprimer le paiement de{" "}
+                <span className="font-semibold text-foreground">{formatPrice(payment.amount)}</span>{" "}
+                ({payment.method}) pour la réservation{" "}
+                <span className="font-semibold text-foreground">{payment.booking_ref}</span> ?{" "}
+                Cette action est irréversible.
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-zinc-700">
+            Annuler
+          </Button>
+          <Button variant="destructive" onClick={handleConfirm} disabled={submitting}>
+            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Supprimer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Payment Row Actions ────────────────────────────────────────────────────────
 
 function PaymentActions({
@@ -345,20 +402,23 @@ function PaymentActions({
   onRefund,
   onAddPayment,
   onEdit,
+  onDelete,
 }: {
   payment: ApiPayment;
   onMarkPaid: (id: string) => void;
   onRefund: (payment: ApiPayment) => void;
   onAddPayment: (bookingId: string) => void;
   onEdit: (payment: ApiPayment) => void;
+  onDelete: (payment: ApiPayment) => void;
 }) {
   const isSynthetic = payment.id.startsWith("on-site:") && payment.method === "";
   const canPay = payment.status === "pending" && !isSynthetic;
   const canRefund = !isSynthetic && payment.status === "paid" && payment.refunded_amount < payment.amount;
   const canEdit = payment.payment_type === "on-site" && !isSynthetic;
+  const canDelete = payment.payment_type === "on-site" && !isSynthetic;
   const canAddPayment = !!payment.booking_id;
 
-  if (!canPay && !canRefund && !canAddPayment && !canEdit) return null;
+  if (!canPay && !canRefund && !canAddPayment && !canEdit && !canDelete) return null;
 
   return (
     <DropdownMenu>
@@ -375,7 +435,14 @@ function PaymentActions({
             <span>Modifier</span>
           </DropdownMenuItem>
         )}
-        {canEdit && (canAddPayment || canPay || canRefund) && <DropdownMenuSeparator />}
+        {canEdit && (canAddPayment || canPay || canRefund || canDelete) && <DropdownMenuSeparator />}
+        {canDelete && (
+          <DropdownMenuItem variant="destructive" onClick={() => onDelete(payment)}>
+            <Trash2 className="h-4 w-4" />
+            <span>Supprimer</span>
+          </DropdownMenuItem>
+        )}
+        {canDelete && (canAddPayment || canPay || canRefund) && <DropdownMenuSeparator />}
         {canAddPayment && (
           <DropdownMenuItem onClick={() => onAddPayment(payment.booking_id)}>
             <Banknote className="h-4 w-4" />
@@ -425,6 +492,9 @@ export function AdminPayments() {
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<ApiPayment | null>(null);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingPayment, setDeletingPayment] = useState<ApiPayment | null>(null);
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -729,6 +799,29 @@ export function AdminPayments() {
         fetchPayments();
       } else {
         toast.error(json.error || "Erreur lors de la modification");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    }
+  };
+
+  const openDeleteDialog = (payment: ApiPayment) => {
+    setDeletingPayment(payment);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    try {
+      const res = await fetch(`/api/admin/payments/${paymentId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Paiement supprimé");
+        setDeleteDialogOpen(false);
+        fetchPayments();
+      } else {
+        toast.error(json.error || "Erreur lors de la suppression");
       }
     } catch {
       toast.error("Erreur réseau");
@@ -1055,6 +1148,7 @@ export function AdminPayments() {
                           onRefund={openRefundDialog}
                           onAddPayment={openCollectDialog}
                           onEdit={openEditDialog}
+                          onDelete={openDeleteDialog}
                         />
                       )}
                     </td>
@@ -1116,6 +1210,13 @@ export function AdminPayments() {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         onConfirm={handleEditPayment}
+      />
+
+      <DeletePaymentDialog
+        payment={deletingPayment}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDeletePayment}
       />
 
       <Dialog

@@ -19,6 +19,7 @@ import {
   Banknote,
   Wallet,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -110,6 +111,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [editPaymentMethod, setEditPaymentMethod] = useState<"cash" | "card" | "transfer" | "check">("cash");
   const [editingPayment, setEditingPayment] = useState(false);
 
+  // Delete payment dialog
+  const [deletePaymentTarget, setDeletePaymentTarget] = useState<DbPayment | null>(null);
+  const [deletePaymentOpen, setDeletePaymentOpen] = useState(false);
+  const [deletingPayment, setDeletingPayment] = useState(false);
+
   // Reschedule dialog
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
@@ -187,6 +193,21 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       toast.error("Erreur lors du chargement");
     } finally {
       setLoading(false);
+    }
+  }, [bookingId]);
+
+  const fetchPayments = useCallback(async () => {
+    setLoadingPayments(true);
+    try {
+      const paymentRes = await fetch(`/api/admin/bookings/${bookingId}/payments`);
+      const paymentJson = (await paymentRes.json()) as { success: boolean; data?: DbPayment[] };
+      if (paymentJson.success && paymentJson.data) {
+        setPayments(paymentJson.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch payments:", error);
+    } finally {
+      setLoadingPayments(false);
     }
   }, [bookingId]);
 
@@ -329,6 +350,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     if (!editPayment) return;
     const amount = parseFloat(editPaymentAmount.replace(",", "."));
     if (isNaN(amount) || amount <= 0) return;
+    const maxAmount = booking ? Math.max(0, booking.total_price - (booking.promo_discount || 0)) : undefined;
+    if (maxAmount !== undefined && amount > maxAmount) {
+      toast.error(`Le montant ne peut pas dépasser ${formatPrice(maxAmount)}`);
+      return;
+    }
     setEditingPayment(true);
     try {
       const res = await fetch(`/api/admin/payments/${editPayment.id}`, {
@@ -348,6 +374,30 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       toast.error("Erreur réseau");
     } finally {
       setEditingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = async () => {
+    if (!deletePaymentTarget) return;
+    setDeletingPayment(true);
+    try {
+      const res = await fetch(`/api/admin/payments/${deletePaymentTarget.id}`, {
+        method: "DELETE",
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Paiement supprimé");
+        setDeletePaymentOpen(false);
+        setDeletePaymentTarget(null);
+        fetchPayments();
+        fetchBooking();
+      } else {
+        toast.error(json.error || "Erreur lors de la suppression");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setDeletingPayment(false);
     }
   };
 
@@ -594,6 +644,20 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                             >
                               <Pencil className="h-3 w-3 mr-1" />
                               Modifier
+                            </Button>
+                          )}
+                          {(p.method !== "card" || booking?.payment_status === "pay-on-site") && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs text-red-400 hover:text-red-300"
+                              onClick={() => {
+                                setDeletePaymentTarget(p);
+                                setDeletePaymentOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Supprimer
                             </Button>
                           )}
                         </div>
@@ -898,11 +962,17 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 type="number"
                 step="0.01"
                 min="0.01"
+                max={booking ? Math.max(0, booking.total_price - (booking.promo_discount || 0)) : undefined}
                 value={editPaymentAmount}
                 onChange={(e) => setEditPaymentAmount(e.target.value)}
                 className="border-zinc-700 bg-zinc-800"
                 autoFocus
               />
+              {booking && parseFloat(editPaymentAmount.replace(",", ".")) > Math.max(0, booking.total_price - (booking.promo_discount || 0)) && (
+                <p className="text-xs text-destructive">
+                  Montant maximum : {Math.max(0, booking.total_price - (booking.promo_discount || 0))}€
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-payment-method">Mode de paiement</Label>
@@ -923,9 +993,32 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
             <Button variant="outline" onClick={() => setEditPaymentOpen(false)} className="border-zinc-700">
               Annuler
             </Button>
-            <Button onClick={handleEditPayment} disabled={editingPayment}>
+            <Button onClick={handleEditPayment} disabled={editingPayment || (booking && parseFloat(editPaymentAmount.replace(",", ".")) > Math.max(0, booking.total_price - (booking.promo_discount || 0)))}>
               {editingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Payment Dialog */}
+      <Dialog open={deletePaymentOpen} onOpenChange={setDeletePaymentOpen}>
+        <DialogContent className="border-zinc-800 bg-zinc-900">
+          <DialogHeader>
+            <DialogTitle>Supprimer le paiement</DialogTitle>
+            <DialogDescription>
+              {deletePaymentTarget && (
+                <>Êtes-vous sûr de vouloir supprimer le paiement de <span className="font-semibold text-foreground">{formatPrice(deletePaymentTarget.amount)}</span> ({methodLabels[deletePaymentTarget.method] || deletePaymentTarget.method}) ? Cette action est irréversible.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletePaymentOpen(false)} className="border-zinc-700">
+              Annuler
+            </Button>
+            <Button variant="destructive" onClick={handleDeletePayment} disabled={deletingPayment}>
+              {deletingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Supprimer
             </Button>
           </DialogFooter>
         </DialogContent>

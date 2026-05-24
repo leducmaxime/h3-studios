@@ -91,6 +91,7 @@ import {
   markPaymentPaid,
   refundPayment,
   updatePayment,
+  deletePayment,
   getBlockedSlots,
   getBlockedSlotsByDateRange,
   addBlockedSlot,
@@ -2033,27 +2034,42 @@ const app = defineApp([
   }),
 
   route("/api/admin/payments/:id", async ({ request, params }) => {
-    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
-
-    try {
-      const body = await request.json() as { amount?: number; method?: string };
-      if (!body.amount && !body.method) {
-        return jsonError("Au moins un champ à modifier est requis (amount ou method)", 400);
+    if (request.method === "DELETE") {
+      try {
+        const result = await deletePayment(env.DB, params.id);
+        if (!result.success) {
+          return jsonError(result.error || "Delete failed", 400);
+        }
+        return jsonSuccess({ id: params.id, deleted: true });
+      } catch (error) {
+        console.error("DELETE /api/admin/payments/:id error:", error);
+        return jsonError(error instanceof Error ? error.message : "Failed to delete payment", 500);
       }
-      if (body.amount !== undefined && (typeof body.amount !== "number" || body.amount <= 0)) {
-        return jsonError("Le montant doit être un nombre positif", 400);
-      }
-
-      const result = await updatePayment(env.DB, params.id, body);
-      if (!result.success) {
-        return jsonError(result.error || "Update failed", 400);
-      }
-
-      return jsonSuccess({ id: params.id, updated: true });
-    } catch (error) {
-      console.error("PUT /api/admin/payments/:id error:", error);
-      return jsonError(error instanceof Error ? error.message : "Failed to update payment", 500);
     }
+
+    if (request.method === "PUT") {
+      try {
+        const body = await request.json() as { amount?: number; method?: string };
+        if (!body.amount && !body.method) {
+          return jsonError("Au moins un champ à modifier est requis (amount ou method)", 400);
+        }
+        if (body.amount !== undefined && (typeof body.amount !== "number" || body.amount <= 0)) {
+          return jsonError("Le montant doit être un nombre positif", 400);
+        }
+
+        const result = await updatePayment(env.DB, params.id, body);
+        if (!result.success) {
+          return jsonError(result.error || "Update failed", 400);
+        }
+
+        return jsonSuccess({ id: params.id, updated: true });
+      } catch (error) {
+        console.error("PUT /api/admin/payments/:id error:", error);
+        return jsonError(error instanceof Error ? error.message : "Failed to update payment", 500);
+      }
+    }
+
+    return jsonError("Method not allowed", 405);
   }),
 
   route("/api/admin/payments/:id/pay", async ({ request, params }) => {
