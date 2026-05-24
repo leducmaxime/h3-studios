@@ -956,11 +956,20 @@ export function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/admin/bookings?dateDirection=upcoming&limit=3&sortBy=date&sortOrder=asc")
+    fetch("/api/admin/bookings?dateDirection=upcoming&limit=20&sortBy=date&sortOrder=asc")
       .then((res) => res.json())
       .then((json: any) => {
         if (json?.success && json?.data?.data) {
-          setUpcomingBookings(json.data.data.slice(0, 3));
+          const now = new Date();
+          const todayISO = now.toLocaleDateString("en-CA");
+          const nowTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+          // Exclure les réservations passées (aujourd'hui avec end_time déjà passée)
+          const filtered = json.data.data.filter((b: any) => {
+            if (b.date < todayISO) return false;
+            if (b.date === todayISO && b.end_time <= nowTimeStr) return false;
+            return true;
+          });
+          setUpcomingBookings(filtered.slice(0, 3));
         }
       })
       .catch((err) => console.error("Failed to fetch upcoming bookings:", err));
@@ -1482,7 +1491,7 @@ export function AdminDashboard() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <h2 className="mb-3 text-sm font-semibold text-zinc-300">Prochaines réservations</h2>
           <div className="space-y-2">
-            {upcomingBookings.map((booking) => (
+            {upcomingBookings.filter(b => !nowBookings.some(n => n.id === b.id)).map((booking) => (
               <a
                 key={booking.id}
                 href={`/admin/bookings/${booking.id}`}
