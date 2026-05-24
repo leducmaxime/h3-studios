@@ -116,7 +116,9 @@ export function Home() {
             <Star className="h-8 w-8 text-primary/60" />
           </div>
           <blockquote className="text-xl font-light italic leading-relaxed text-white/80 md:text-2xl">
-            "La musique est le langage universel qui transcende les mots. Notre mission est de vous offrir un espace où chaque note trouve sa place."
+            "La musique est le langage universel qui transcende les mots.
+            <br />
+            Notre mission est de vous offrir un espace où chaque note trouve sa place."
           </blockquote>
           <div className="mt-4 h-1 w-16 mx-auto rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           <p className="mt-4 text-sm font-semibold text-primary">H3 Studios</p>
