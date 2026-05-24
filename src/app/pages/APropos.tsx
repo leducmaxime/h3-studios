@@ -360,14 +360,15 @@ export function APropos() {
 
       {/* FAQ */}
       <section className="py-16 sm:py-20">
-        <div className="mx-auto max-w-3xl px-4">
+        <div className="mx-auto w-full max-w-3xl px-4">
           <h2 className="mb-2 text-center font-blanka text-3xl sm:text-4xl">FAQ</h2>
           <p className="mb-10 text-center text-white/60">Questions fréquentes</p>
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             {FAQ_ITEMS.map((item, i) => (
-              <div key={i} className="rounded-xl border border-white/10 bg-black">
+              <div key={i} style={{ width: "100%" }} className="rounded-xl border border-white/10 bg-black box-border">
                 <button
-                  className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5 rounded-xl"
+                  style={{ width: "100%", boxSizing: "border-box" }}
+                  className="flex items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5 rounded-xl"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                 >
                   <span className="min-w-0 flex-1 pr-4 font-medium text-white/90">{item.q}</span>
@@ -376,7 +377,7 @@ export function APropos() {
                   />
                 </button>
                 {openFaq === i && (
-                  <div className="border-t border-white/10 px-5 py-4">
+                  <div style={{ width: "100%", boxSizing: "border-box" }} className="border-t border-white/10 px-5 py-4">
                     <p className="text-sm leading-relaxed text-white/70">{item.a}</p>
                   </div>
                 )}
