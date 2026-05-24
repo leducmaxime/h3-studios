@@ -134,6 +134,17 @@ interface PendingPayment {
   kind?: "on-site" | "card";
 }
 
+interface NowBooking {
+  id: string;
+  booking_ref: string;
+  user_name: string | null;
+  band_name: string | null;
+  studio_id: string;
+  start_time: string;
+  end_time: string;
+  payment_status: string;
+}
+
 type Period = "week" | "month" | "quarter" | "year";
 
 type ActivityCalendarView = "day" | "week" | "month" | "year";
@@ -923,6 +934,7 @@ export function AdminDashboard() {
   const [selectedWeek, setSelectedWeek] = useState(() => String(nowISO.week));
   const [loading, setLoading] = useState(true);
   const [upcomingBookings, setUpcomingBookings] = useState<UpcomingBooking[]>([]);
+  const [nowBookings, setNowBookings] = useState<NowBooking[]>([]);
   const [reportMonth, setReportMonth] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -951,6 +963,15 @@ export function AdminDashboard() {
         }
       })
       .catch((err) => console.error("Failed to fetch upcoming bookings:", err));
+
+    // Fetch bookings en cours maintenant
+    fetch("/api/admin/bookings?dateDirection=now&limit=10&sortBy=start_time&sortOrder=asc")
+      .then(r => r.json())
+      .then((d: unknown) => {
+        const data = d as { success: boolean; data?: { bookings?: NowBooking[] } };
+        if (data.success && data.data?.bookings) setNowBookings(data.data.bookings);
+      })
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -1422,14 +1443,39 @@ export function AdminDashboard() {
           icon={ShoppingCart}
           color="green"
         />
-        <StatCard
-          title="Sur place à encaisser"
-          value={stats?.rangePendingPayments ?? 0}
-          subValue={formatPrice(stats?.rangePendingAmount ?? 0)}
-          icon={CreditCard}
-          color={(stats?.rangePendingPayments ?? 0) > 0 ? "red" : "blue"}
-        />
+        <a href="/admin/payments?paymentType=on-site&status=pending" className="block">
+          <StatCard
+            title="Sur place à encaisser"
+            value={stats?.rangePendingPayments ?? 0}
+            subValue={formatPrice(stats?.rangePendingAmount ?? 0)}
+            icon={CreditCard}
+            color={(stats?.rangePendingPayments ?? 0) > 0 ? "red" : "blue"}
+          />
+        </a>
       </div>
+
+      {/* Widget En cours maintenant */}
+      {nowBookings.length > 0 && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            <h3 className="font-semibold text-primary">En cours maintenant</h3>
+          </div>
+          <div className="space-y-3">
+            {nowBookings.map((b) => (
+              <a key={b.id} href={`/admin/bookings/${b.id}`} className="flex items-center justify-between rounded-xl bg-zinc-800/50 px-4 py-3 hover:bg-zinc-800 transition-colors">
+                <div>
+                  <p className="font-medium text-sm">{b.band_name || b.user_name || "—"}</p>
+                  <p className="text-xs text-zinc-400">{b.start_time} – {b.end_time} · {b.studio_id === "la-scene" ? "La Scène" : "Le Podium"}</p>
+                </div>
+                <span className={`text-xs font-medium px-2 py-1 rounded-full ${b.payment_status === "paid" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>
+                  {b.payment_status === "paid" ? "Payé" : "À encaisser"}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {upcomingBookings.length > 0 && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">

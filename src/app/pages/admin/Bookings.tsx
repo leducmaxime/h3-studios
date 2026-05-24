@@ -13,6 +13,8 @@ import {
   Plus,
   ChevronUp,
   ChevronDown,
+  CheckCircle2,
+  Banknote,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -242,6 +244,40 @@ export function AdminBookings() {
     }
   };
 
+  const handleMarkCompleted = async (bookingId: string) => {
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/complete`, { method: "PUT" });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Réservation marquée comme terminée");
+        fetchBookings();
+      } else {
+        toast.error(json.error || "Erreur");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    }
+  };
+
+  const handleMarkPaid = async (bookingId: string) => {
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/mark-paid`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "cash" }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Réservation soldée");
+        fetchBookings();
+      } else {
+        toast.error(json.error || "Erreur");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    }
+  };
+
   const handleExportCSV = async () => {
     const params = new URLSearchParams();
     params.set("all", "true");
@@ -443,7 +479,12 @@ export function AdminBookings() {
                   if (paymentStatus === "paid") {
                     paymentBadge = <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Payé</Badge>;
                   } else {
-                    paymentBadge = <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Reste à payer</Badge>;
+                    const remaining = (booking as any).remaining;
+                    paymentBadge = (
+                      <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
+                        {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : "Reste à payer"}
+                      </Badge>
+                    );
                   }
 
                   const displayName = booking.band_name || booking.user_name || "—";
@@ -502,8 +543,20 @@ export function AdminBookings() {
                               </a>
                             </DropdownMenuItem>
                             {booking.status === "confirmed" && (
+                              <DropdownMenuItem onClick={() => handleMarkCompleted(booking.id)}>
+                                <CheckCircle2 className="h-4 w-4 text-blue-400" />
+                                <span>Marquer terminé</span>
+                              </DropdownMenuItem>
+                            )}
+                            {booking.payment_status !== "paid" && booking.status !== "cancelled" && (
+                              <DropdownMenuItem onClick={() => handleMarkPaid(booking.id)}>
+                                <Banknote className="h-4 w-4 text-emerald-400" />
+                                <span>Encaisser le solde</span>
+                              </DropdownMenuItem>
+                            )}
+                            {(booking.status === "confirmed" || booking.payment_status !== "paid") && booking.status !== "cancelled" && <DropdownMenuSeparator />}
+                            {booking.status === "confirmed" && (
                               <>
-                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={() => setNoShowDialog({ open: true, bookingId: booking.id, bookingRef: booking.booking_ref })}
                                   className="text-yellow-400 focus:text-yellow-400"

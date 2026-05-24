@@ -75,6 +75,12 @@ interface PaymentsResponse {
     total: number;
     page: number;
     limit: number;
+    stats?: {
+      pendingCount: number;
+      pendingAmount: number;
+      paidCount: number;
+      paidAmount: number;
+    };
   };
 }
 
@@ -510,6 +516,8 @@ export function AdminPayments() {
     { id: crypto.randomUUID(), amount: "", method: "cash" },
   ]);
 
+  const [serverStats, setServerStats] = useState<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number } | null>(null);
+
   const collectTotals = useMemo(() => {
     const entries = collectEntries.map((e) => {
       const n = parseFloat(e.amount.replace(/\s/g, "").replace(",", "."));
@@ -561,6 +569,7 @@ export function AdminPayments() {
       if (json.success) {
         setPayments(json.data.data);
         setTotal(json.data.total);
+        if (json.data.stats) setServerStats(json.data.stats);
       }
     } catch (error) {
       console.error("Failed to fetch payments:", error);
@@ -584,18 +593,18 @@ export function AdminPayments() {
 
   const totalPages = Math.ceil(total / perPage);
 
-  // Stats from current page data
   const stats = useMemo(() => {
+    if (serverStats) return serverStats;
+    // Fallback sur page courante si pas encore chargé
     const pending = payments.filter((p) => p.status === "pending");
     const paid = payments.filter((p) => p.status === "paid");
-
     return {
-      pending: pending.length,
-      pendingAmount: pending.reduce((sum, p) => sum + p.amount, 0),
-      paid: paid.length,
-      paidAmount: paid.reduce((sum, p) => sum + p.amount, 0),
+      pendingCount: pending.length,
+      pendingAmount: pending.reduce((acc, p) => acc + p.amount, 0),
+      paidCount: paid.length,
+      paidAmount: paid.reduce((acc, p) => acc + p.amount, 0),
     };
-  }, [payments]);
+  }, [serverStats, payments]);
 
   // ─── Actions ────────────────────────────────────────────────────────────────
 
@@ -886,7 +895,7 @@ export function AdminPayments() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-sm text-zinc-400">En attente</p>
           <p className="mt-1 text-2xl font-bold text-yellow-400">
-            {stats.pending}
+            {stats.pendingCount}
           </p>
           <p className="text-sm text-zinc-500">
             {formatPrice(stats.pendingAmount)}
@@ -895,7 +904,7 @@ export function AdminPayments() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-sm text-zinc-400">Payés</p>
           <p className="mt-1 text-2xl font-bold text-green-400">
-            {stats.paid}
+            {stats.paidCount}
           </p>
           <p className="text-sm text-zinc-500">
             {formatPrice(stats.paidAmount)}

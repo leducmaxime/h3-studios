@@ -35,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -132,6 +133,16 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   // No-show dialog
   const [noShowOpen, setNoShowOpen] = useState(false);
   const [noShowLoading, setNoShowLoading] = useState(false);
+
+  // Notes editing
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+
+  // Discount editing
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [discountValue, setDiscountValue] = useState("");
+  const [savingDiscount, setSavingDiscount] = useState(false);
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -305,6 +316,52 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     } finally {
       setRescheduleLoading(false);
     }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!booking) return;
+    setSavingNotes(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: notesValue.trim() || null }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Notes sauvegardées");
+        setEditingNotes(false);
+        fetchBooking();
+      } else {
+        toast.error(json.error || "Erreur");
+      }
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSavingNotes(false); }
+  };
+
+  const handleSaveDiscount = async () => {
+    if (!booking) return;
+    const discount = parseFloat(discountValue.replace(",", "."));
+    if (isNaN(discount) || discount < 0) { toast.error("Montant invalide"); return; }
+    if (discount > booking.total_price) { toast.error("La remise ne peut pas dépasser le prix total"); return; }
+    setSavingDiscount(true);
+    try {
+      const newTotal = Math.max(0, booking.base_price + (booking.equipment_price || 0) - discount);
+      const res = await fetch(`/api/admin/bookings/${booking.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ promo_discount: discount, total_price: newTotal }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Remise appliquée");
+        setEditingDiscount(false);
+        fetchBooking();
+      } else {
+        toast.error(json.error || "Erreur");
+      }
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSavingDiscount(false); }
   };
 
   const handleAddPayment = async () => {
@@ -501,12 +558,33 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               )}
 
               {/* Notes */}
-              <div className="bg-zinc-800/30 rounded-xl p-4">
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Informations supplémentaires</p>
-                {booking.notes ? (
-                  <p className="text-sm text-zinc-300 whitespace-pre-wrap">{booking.notes}</p>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Notes internes</p>
+                  {!editingNotes && (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-400" onClick={() => { setNotesValue(booking?.notes || ""); setEditingNotes(true); }}>
+                      <Pencil className="h-3 w-3 mr-1" />Modifier
+                    </Button>
+                  )}
+                </div>
+                {editingNotes ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={notesValue}
+                      onChange={e => setNotesValue(e.target.value)}
+                      placeholder="Notes internes..."
+                      className="bg-zinc-800 border-zinc-700 text-sm min-h-[80px]"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSaveNotes} disabled={savingNotes} className="h-7 text-xs">
+                        {savingNotes && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}Sauvegarder
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingNotes(false)} className="h-7 text-xs border-zinc-700">Annuler</Button>
+                    </div>
+                  </div>
                 ) : (
-                  <p className="text-sm text-zinc-500 italic">Aucune information supplémentaire</p>
+                  <p className="text-sm text-zinc-400 whitespace-pre-wrap">{booking?.notes || <span className="italic text-zinc-600">Aucune note</span>}</p>
                 )}
               </div>
             </div>
@@ -591,6 +669,34 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       <span className="font-medium text-zinc-500">-</span>
                     </div>
                   )}
+                  {/* Remise manuelle */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-500">Remise</span>
+                    {editingDiscount ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number" step="0.01" min="0"
+                          value={discountValue}
+                          onChange={e => setDiscountValue(e.target.value)}
+                          className="h-7 w-24 text-xs bg-zinc-800 border-zinc-700"
+                          autoFocus
+                        />
+                        <Button size="sm" onClick={handleSaveDiscount} disabled={savingDiscount} className="h-7 text-xs px-2">
+                          {savingDiscount ? <Loader2 className="h-3 w-3 animate-spin" /> : "OK"}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingDiscount(false)} className="h-7 text-xs px-2">✕</Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className={booking?.promo_discount ? "text-emerald-400" : "text-zinc-600"}>
+                          {booking?.promo_discount ? `-${formatPrice(booking.promo_discount)}` : "—"}
+                        </span>
+                        <Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
                     <span className="font-semibold">Total</span>
                     <span className="text-xl font-bold text-primary">{formatPrice(finalTotal)}</span>

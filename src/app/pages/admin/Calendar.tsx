@@ -38,6 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, EQUIPMENT, type StudioId } from "@/lib/booking";
@@ -301,6 +302,14 @@ export function AdminCalendar() {
     }
   }, [isMobile]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      setNowTime(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const [selectedBooking, setSelectedBooking] = useState<CalendarBooking | null>(null);
   const [bookingPayments, setBookingPayments] = useState<DbPayment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -308,6 +317,21 @@ export function AdminCalendar() {
     amount: string;
     method: "cash" | "card" | "transfer" | "check";
   }>({ amount: "", method: "cash" });
+
+  const [nowTime, setNowTime] = useState<string>(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleStart, setRescheduleStart] = useState("");
+  const [rescheduleEnd, setRescheduleEnd] = useState("");
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState("");
 
   useEffect(() => {
     if (selectedBooking) {
@@ -368,6 +392,51 @@ export function AdminCalendar() {
     } catch {
       toast.error("Erreur réseau");
     }
+  };
+
+  const handleCancelBooking = async () => {
+    if (!selectedBooking) return;
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/cancel`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: cancelReason }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Réservation annulée");
+        setCancelDialogOpen(false);
+        setSelectedBooking(null);
+        loadBookings();
+      } else {
+        toast.error(json.error || "Erreur");
+      }
+    } catch { toast.error("Erreur réseau"); }
+    finally { setCancelLoading(false); }
+  };
+
+  const handleReschedule = async () => {
+    if (!selectedBooking || !rescheduleDate || !rescheduleStart || !rescheduleEnd) return;
+    setRescheduleLoading(true);
+    setRescheduleError("");
+    try {
+      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: rescheduleDate, start_time: rescheduleStart, end_time: rescheduleEnd }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Réservation déplacée");
+        setRescheduleDialogOpen(false);
+        setSelectedBooking(null);
+        loadBookings();
+      } else {
+        setRescheduleError(json.error || "Conflit détecté");
+      }
+    } catch { setRescheduleError("Erreur réseau"); }
+    finally { setRescheduleLoading(false); }
   };
 
   // ─── Derived dates ──────────────────────────────────────────────────────
@@ -726,6 +795,22 @@ export function AdminCalendar() {
                           </button>
                         );
                       });
+                    })()}
+
+                    {/* Current time indicator */}
+                    {isToday && (() => {
+                      const [h, m] = nowTime.split(":").map(Number);
+                      if (h < 9 || h >= 24) return null;
+                      const minutesSince9am = (h - 9) * 60 + m;
+                      return (
+                        <div
+                          className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
+                          style={{ top: `${minutesSince9am}px` }}
+                        >
+                          <div className="h-2 w-2 rounded-full bg-red-500 -ml-1 shrink-0" />
+                          <div className="h-px flex-1 bg-red-500" />
+                        </div>
+                      );
                     })()}
                   </div>
                 </div>
@@ -1298,7 +1383,32 @@ export function AdminCalendar() {
             </div>
           </div>
 
-          <div className="mt-2 flex gap-3 border-t border-zinc-800 pt-6">
+          <div className="mt-2 flex flex-wrap gap-3 border-t border-zinc-800 pt-6">
+            {b.status === "confirmed" && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-zinc-700 text-zinc-300"
+                  onClick={() => {
+                    setRescheduleDate(b.date);
+                    setRescheduleStart(b.start_time);
+                    setRescheduleEnd(b.end_time);
+                    setRescheduleDialogOpen(true);
+                  }}
+                >
+                  Déplacer
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-red-800 text-red-400 hover:bg-red-900/20"
+                  onClick={() => setCancelDialogOpen(true)}
+                >
+                  Annuler
+                </Button>
+              </>
+            )}
             <a
               href={`/admin/bookings/${b.id}`}
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700"
@@ -1399,6 +1509,61 @@ export function AdminCalendar() {
 
       {/* Booking detail dialog */}
       {renderBookingDialog()}
+
+      {/* Cancel dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Annuler la réservation</DialogTitle>
+            <DialogDescription>{selectedBooking?.booking_ref}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Motif (optionnel)</Label>
+            <Input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Motif d'annulation..." className="bg-zinc-800 border-zinc-700" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)} className="border-zinc-700">Fermer</Button>
+            <Button variant="destructive" onClick={handleCancelBooking} disabled={cancelLoading}>
+              {cancelLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmer l'annulation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reschedule dialog */}
+      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
+        <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Déplacer la réservation</DialogTitle>
+            <DialogDescription>{selectedBooking?.booking_ref}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nouvelle date</Label>
+              <Input type="date" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)} className="bg-zinc-800 border-zinc-700" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Début</Label>
+                <Input type="time" value={rescheduleStart} onChange={e => setRescheduleStart(e.target.value)} step="1800" className="bg-zinc-800 border-zinc-700" />
+              </div>
+              <div className="space-y-2">
+                <Label>Fin</Label>
+                <Input type="time" value={rescheduleEnd} onChange={e => setRescheduleEnd(e.target.value)} step="1800" className="bg-zinc-800 border-zinc-700" />
+              </div>
+            </div>
+            {rescheduleError && <p className="text-sm text-destructive">{rescheduleError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleDialogOpen(false)} className="border-zinc-700">Annuler</Button>
+            <Button onClick={handleReschedule} disabled={rescheduleLoading || !rescheduleDate || !rescheduleStart || !rescheduleEnd}>
+              {rescheduleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Déplacer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

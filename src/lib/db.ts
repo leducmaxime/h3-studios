@@ -19,7 +19,7 @@ import {
   type DbPaymentStatus,
   type CreateBooking,
 } from "./db-types";
-import { getParisDateISO } from "./utils";
+import { getParisDateISO, getParisNow } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
 
 function generateId(): string {
@@ -80,6 +80,14 @@ export async function getBookings(
     } else if (filters.dateDirection === "past") {
       conditions.push("b.date < ?");
       params.push(today);
+    } else if (filters.dateDirection === "now") {
+      conditions.push("b.date = ?");
+      params.push(today);
+      const parisNow = getParisNow();
+      const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
+      conditions.push("b.start_time <= ? AND b.end_time > ?");
+      params.push(nowTimeStr, nowTimeStr);
+      conditions.push("b.status NOT IN ('cancelled', 'no-show')");
     }
   }
 
@@ -144,7 +152,7 @@ export async function createBooking(
 export async function updateBooking(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason">>,
+  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "promo_discount">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -710,6 +718,77 @@ export async function getPayments(
   ).bind(...params).first<{ total: number }>();
   const total = countResult?.total ?? 0;
 
+  const statsResult = await db.prepare(
+    `
+      WITH paid_by_booking AS (
+        SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+        FROM payments
+        GROUP BY booking_id
+      ),
+      pay_on_site_pending AS (
+        SELECT
+          'on-site:' || b.id as id,
+          b.id as booking_id,
+          (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) as amount,
+          '' as method,
+          'pending' as status,
+          0 as refunded_amount,
+          NULL as paid_at,
+          b.created_at as created_at,
+          b.booking_ref as booking_ref,
+          COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
+          u.band_name as user_band_name,
+          u.id as user_id,
+          b.date as booking_date,
+          'on-site' as payment_type
+        FROM bookings b
+        LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+        LEFT JOIN users u ON u.id = b.user_id
+        WHERE b.status != 'cancelled'
+          AND b.payment_status = 'pay-on-site'
+          AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
+      ),
+      payments_enriched AS (
+        SELECT
+          p.id as id,
+          p.booking_id as booking_id,
+          p.amount as amount,
+          CASE
+            WHEN p.method IN ('cheque', 'check') THEN 'check'
+            ELSE p.method
+          END as method,
+          p.status as status,
+          p.refunded_amount as refunded_amount,
+          p.paid_at as paid_at,
+          p.created_at as created_at,
+          b.booking_ref as booking_ref,
+          COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
+          u.band_name as user_band_name,
+          u.id as user_id,
+          b.date as booking_date,
+          CASE
+            WHEN b.payment_status = 'pay-on-site' THEN 'on-site'
+            WHEN p.method = 'card' THEN 'online'
+            ELSE 'on-site'
+          END as payment_type
+        FROM payments p
+        JOIN bookings b ON b.id = p.booking_id
+        LEFT JOIN users u ON u.id = b.user_id
+      )
+      SELECT
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
+        COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
+        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paidCount,
+        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paidAmount
+      FROM (
+        SELECT * FROM payments_enriched
+        UNION ALL
+        SELECT * FROM pay_on_site_pending
+      )
+      ${where}
+    `,
+  ).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number }>();
+
   const offset = (page - 1) * limit;
   const result = await db.prepare(
     `
@@ -779,7 +858,18 @@ export async function getPayments(
     `,
   ).bind(...params, limit, offset).all<AdminPaymentRow>();
 
-  return { data: result.results, total, page, limit };
+  return {
+    data: result.results,
+    total,
+    page,
+    limit,
+    stats: {
+      pendingCount: statsResult?.pendingCount ?? 0,
+      pendingAmount: statsResult?.pendingAmount ?? 0,
+      paidCount: statsResult?.paidCount ?? 0,
+      paidAmount: statsResult?.paidAmount ?? 0,
+    },
+  };
 }
 
 export async function getPaymentsByBookingId(

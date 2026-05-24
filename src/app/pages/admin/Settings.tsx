@@ -230,6 +230,21 @@ function BookingRulesTab({ settings, onUpdate }: {
           }}
         />
       </div>
+
+      {/* Mode maintenance */}
+      <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+        <div>
+          <p className="font-medium text-sm">Mode maintenance</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Désactive les réservations en ligne pour les clients</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => persistSetting("site.maintenance_mode", settings["site.maintenance_mode"] === "true" ? "false" : "true")}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings["site.maintenance_mode"] === "true" ? "bg-primary" : "bg-zinc-700"}`}
+        >
+          <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${settings["site.maintenance_mode"] === "true" ? "translate-x-5" : "translate-x-0.5"}`} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -266,7 +281,7 @@ function ToggleCard({ icon, label, description, checked, saving, onToggle }: {
         checked ? "bg-primary" : "bg-zinc-700"
       }`}>
         <div className={`h-5 w-5 translate-y-0.5 rounded-full bg-white shadow-sm transition-transform ${
-          checked ? "translate-x-5.5" : "translate-x-0.5"
+          checked ? "translate-x-5" : "translate-x-0.5"
         }`} />
       </div>
     </button>
@@ -282,7 +297,39 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; user: AdminUserRow | null }>({ open: false, user: null });
   const [deleting, setDeleting] = useState(false);
 
+  // Change password
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
   const canManage = currentUser?.role === "super-admin";
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess(false);
+    if (newPassword !== confirmPassword) { setPasswordError("Les mots de passe ne correspondent pas"); return; }
+    if (newPassword.length < 8) { setPasswordError("Le mot de passe doit contenir au moins 8 caractères"); return; }
+    setChangingPassword(true);
+    try {
+      const res = await fetch("/api/admin/change-password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        setPasswordSuccess(true);
+        setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+      } else {
+        setPasswordError(json.error || "Erreur");
+      }
+    } catch { setPasswordError("Erreur réseau"); }
+    finally { setChangingPassword(false); }
+  };
 
   const fetchAdminUsers = useCallback(async () => {
     try {
@@ -403,6 +450,31 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
 
   return (
     <div className="space-y-6">
+      {/* Changer mot de passe */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 mb-6">
+        <h3 className="font-semibold mb-4">Changer mon mot de passe</h3>
+        <form onSubmit={handleChangePassword} className="space-y-3 max-w-sm">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-zinc-400">Mot de passe actuel</Label>
+            <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-zinc-400">Nouveau mot de passe</Label>
+            <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required minLength={8} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-zinc-400">Confirmer le nouveau mot de passe</Label>
+            <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required />
+          </div>
+          {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
+          {passwordSuccess && <p className="text-xs text-emerald-400">Mot de passe modifié avec succès</p>}
+          <Button type="submit" disabled={changingPassword} size="sm">
+            {changingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Modifier le mot de passe
+          </Button>
+        </form>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold">Comptes administrateurs</h3>

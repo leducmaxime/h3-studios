@@ -1247,7 +1247,9 @@ const app = defineApp([
         if (search) filters.search = search;
         const paymentStatus = url.searchParams.get("paymentStatus");
         const dateDirection = url.searchParams.get("dateDirection");
-        if (dateDirection) filters.dateDirection = dateDirection as BookingFilters["dateDirection"];
+        if (dateDirection) {
+          (filters as Record<string, unknown>).dateDirection = dateDirection;
+        }
         const sortBy = url.searchParams.get("sortBy");
         if (sortBy) filters.sortBy = sortBy as BookingFilters["sortBy"];
         const sortOrder = url.searchParams.get("sortOrder");
@@ -1275,6 +1277,7 @@ const app = defineApp([
               ...booking,
               payment_status: isFullyPaid ? "paid" : booking.payment_status,
               total_paid: totalPaid,
+              remaining: Math.max(0, finalTotal - totalPaid),
             };
           })
         );
@@ -1631,6 +1634,72 @@ const app = defineApp([
     } catch (error) {
       console.error("PUT /api/admin/bookings/:id/no-show error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to mark absent", 500);
+    }
+  }),
+
+  route("/api/admin/bookings/:id/complete", async ({ request, params }) => {
+    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
+    try {
+      const booking = await getBookingById(env.DB, params.id);
+      if (!booking) return jsonError("Réservation introuvable", 404);
+      if (booking.status === "cancelled" || booking.status === "no-show") {
+        return jsonError("Impossible de marquer une réservation annulée ou absente comme terminée", 400);
+      }
+      // Refuse si la réservation est dans le futur
+      const paris = getParisNow();
+      const nowMinutes = paris.hours * 60 + paris.minutes;
+      const [endH, endM] = booking.end_time.split(":").map(Number);
+      const endMinutes = endH * 60 + endM;
+      if (booking.date > paris.dateISO || (booking.date === paris.dateISO && endMinutes > nowMinutes)) {
+        return jsonError("Impossible de marquer comme terminée une réservation qui n'est pas encore passée", 400);
+      }
+      const result = await updateBooking(env.DB, params.id, { status: "completed" });
+      if (!result.success) return jsonError(result.error || "Échec", 400);
+      await addAuditLog(env.DB, "booking", params.id, "complete", {}, request.headers.get("X-Admin-User-Id") || "admin");
+      return jsonSuccess({ id: params.id, status: "completed" });
+    } catch (error) {
+      console.error("PUT /api/admin/bookings/:id/complete error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed", 500);
+    }
+  }),
+
+  route("/api/admin/bookings/:id/mark-paid", async ({ request, params }) => {
+    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
+    try {
+      const body = await request.json() as { method?: string };
+      const method = body.method || "cash";
+      const validMethods = ["cash", "transfer", "check"];
+      if (!validMethods.includes(method)) {
+        return jsonError("Méthode invalide (cash, transfer, check)", 400);
+      }
+      const booking = await getBookingById(env.DB, params.id);
+      if (!booking) return jsonError("Réservation introuvable", 404);
+      if (booking.status === "cancelled") return jsonError("Impossible de payer une réservation annulée", 400);
+
+      // Recompute remaining server-side
+      const payments = await getPaymentsByBookingId(env.DB, params.id);
+      const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+      const finalTotal = Math.max(0, booking.total_price - (booking.promo_discount || 0));
+      const remaining = finalTotal - totalPaid;
+
+      if (remaining <= 0) return jsonError("Cette réservation est déjà soldée", 400);
+
+      const paymentResult = await addPayment(env.DB, {
+        booking_id: params.id,
+        amount: remaining,
+        method,
+        status: "paid",
+      });
+      if (!paymentResult.success) return jsonError("Échec de l'enregistrement du paiement", 500);
+
+      // Persist payment_status on booking
+      await updateBooking(env.DB, params.id, { payment_status: "paid" });
+
+      await addAuditLog(env.DB, "booking", params.id, "mark-paid", { amount: remaining, method }, request.headers.get("X-Admin-User-Id") || "admin");
+      return jsonSuccess({ id: params.id, paymentId: paymentResult.id, amount: remaining });
+    } catch (error) {
+      console.error("PUT /api/admin/bookings/:id/mark-paid error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed", 500);
     }
   }),
 
@@ -2025,7 +2094,104 @@ const app = defineApp([
       if (sortOrder) filters.sortOrder = sortOrder as typeof filters.sortOrder;
 
       const result = await getPayments(env.DB, filters, all ? 1 : page, all ? 9999 : limit);
-      return jsonSuccess(result);
+
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+
+      if (filters.status) {
+        if (filters.status === "refunded") {
+          conditions.push("status IN ('refunded', 'partial-refund')");
+        } else {
+          conditions.push("status = ?");
+          params.push(filters.status);
+        }
+      }
+      if (filters.method) {
+        conditions.push("method = ?");
+        params.push(filters.method);
+      }
+      if (filters.paymentType) {
+        conditions.push("payment_type = ?");
+        params.push(filters.paymentType);
+      }
+      if (filters.search) {
+        conditions.push("(booking_ref LIKE ? OR user_name LIKE ? OR user_band_name LIKE ?)");
+        const term = `%${filters.search}%`;
+        params.push(term, term, term);
+      }
+      if (filters.dateFrom) {
+        conditions.push("booking_date >= ?");
+        params.push(filters.dateFrom);
+      }
+      if (filters.dateTo) {
+        conditions.push("booking_date <= ?");
+        params.push(filters.dateTo);
+      }
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+      // Stats sur l'ensemble filtré (pas paginé)
+      const statsResult = await env.DB.prepare(`
+        WITH paid_by_booking AS (
+          SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+          FROM payments GROUP BY booking_id
+        ),
+        pay_on_site_pending AS (
+          SELECT
+            'on-site:' || b.id as id,
+            b.id as booking_id,
+            (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) as amount,
+            '' as method,
+            'pending' as status,
+            0 as refunded_amount,
+            NULL as paid_at,
+            b.created_at as created_at,
+            b.booking_ref as booking_ref,
+            COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
+            u.band_name as user_band_name,
+            u.id as user_id,
+            b.date as booking_date,
+            'on-site' as payment_type
+          FROM bookings b
+          LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+          LEFT JOIN users u ON u.id = b.user_id
+          WHERE b.status != 'cancelled'
+            AND b.payment_status = 'pay-on-site'
+            AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
+        ),
+        payments_enriched AS (
+          SELECT
+            p.id as id,
+            p.booking_id as booking_id,
+            p.amount as amount,
+            CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
+            p.status as status,
+            p.refunded_amount as refunded_amount,
+            p.paid_at as paid_at,
+            p.created_at as created_at,
+            b.booking_ref as booking_ref,
+            COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
+            u.band_name as user_band_name,
+            u.id as user_id,
+            b.date as booking_date,
+            CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' WHEN p.method = 'card' THEN 'online' ELSE 'on-site' END as payment_type
+          FROM payments p
+          JOIN bookings b ON b.id = p.booking_id
+          LEFT JOIN users u ON u.id = b.user_id
+        ),
+        all_payments AS (
+          SELECT * FROM payments_enriched
+          UNION ALL
+          SELECT * FROM pay_on_site_pending
+        )
+        SELECT
+          COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
+          COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
+          COUNT(CASE WHEN status = 'paid' THEN 1 END) as paidCount,
+          COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paidAmount
+        FROM all_payments ${where}
+      `).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number }>();
+
+      return jsonSuccess({ ...result, stats: statsResult ?? { pendingCount: 0, pendingAmount: 0, paidCount: 0, paidAmount: 0 } });
     } catch (error) {
       console.error("GET /api/admin/payments error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch payments", 500);
@@ -2533,6 +2699,42 @@ const app = defineApp([
     } catch (error) {
       console.error("PUT /api/admin/admin-users/:id/toggle error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to toggle admin user", 500);
+    }
+  }),
+
+  route("/api/admin/change-password", async ({ request }) => {
+    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
+    try {
+      const adminUserId = request.headers.get("X-Admin-User-Id");
+      if (!adminUserId) return jsonError("Non authentifié", 401);
+
+      const body = await request.json() as { currentPassword?: string; newPassword?: string };
+      if (!body.currentPassword || !body.newPassword) {
+        return jsonError("Champs obligatoires manquants: currentPassword, newPassword", 400);
+      }
+      if (body.newPassword.length < 8) {
+        return jsonError("Le nouveau mot de passe doit contenir au moins 8 caractères", 400);
+      }
+
+      // Fetch current admin user
+      const adminUser = await env.DB.prepare("SELECT * FROM admin_users WHERE id = ?")
+        .bind(adminUserId).first<{ id: string; email: string; password_hash: string; name: string }>();
+      if (!adminUser) return jsonError("Utilisateur introuvable", 404);
+
+      // Verify current password
+      const isValid = await verifyPassword(body.currentPassword, adminUser.password_hash);
+      if (!isValid) return jsonError("Mot de passe actuel incorrect", 400);
+
+      // Hash new password
+      const newHash = await hashPassword(body.newPassword);
+      await env.DB.prepare("UPDATE admin_users SET password_hash = ?, updated_at = ? WHERE id = ?")
+        .bind(newHash, new Date().toISOString(), adminUserId).run();
+
+      await addAuditLog(env.DB, "admin_user", adminUserId, "change-password", {}, adminUserId);
+      return jsonSuccess({ success: true });
+    } catch (error) {
+      console.error("PUT /api/admin/change-password error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed", 500);
     }
   }),
 
