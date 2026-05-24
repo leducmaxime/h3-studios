@@ -521,7 +521,7 @@ export function TimeSlotPicker({
             <DialogHeader>
               <DialogTitle>Réservation de dernière minute</DialogTitle>
               <DialogDescription className="text-zinc-300 leading-relaxed">
-                Les réservations en ligne ne sont plus possibles moins de {minAdvanceHours}h avant le début de la session. Nous vous invitons à nous contacter au{" "}
+                Les réservations en ligne ne sont pas possibles moins de {minAdvanceHours}h avant le début de la session. Nous vous invitons à nous contacter au{" "}
                 <span className="font-semibold text-white">06 13 44 08 75</span>{" "}
                 afin de vérifier ensemble si une réservation reste possible.
               </DialogDescription>
