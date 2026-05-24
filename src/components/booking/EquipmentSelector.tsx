@@ -119,10 +119,6 @@ export function EquipmentSelector({
 
   return (
     <div className="rounded-xl border border-white/20 bg-white/15 p-4">
-      <p className="mb-4 text-xs font-medium text-primary">
-        Compris dans votre réservation : Batterie (sans crash), sono, amplis guitare, amplis basse, 4 micros, pupitres, pied synthé
-      </p>
-
       <div className="flex flex-col gap-3">
         {availableEquipment.map((eq) => {
           const quantity = getQuantity(equipment, eq.id);

@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, EQUIPMENT, type StudioId } from "@/lib/booking";
+import { formatDbTimestamp } from "@/lib/utils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1419,7 +1420,7 @@ export function AdminCalendar() {
                         {p.status === "paid" ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Clock className="h-3 w-3 text-amber-500" />}
                         <div>
                           <p className="font-medium text-zinc-200">{formatPrice(p.amount)} · {methodLabels[p.method] || p.method}</p>
-                          <p className="text-[10px] text-zinc-500">{new Date(p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</p>
+                          <p className="text-[10px] text-zinc-500">{formatDbTimestamp(p.created_at, { day: "numeric", month: "short" })}</p>
                         </div>
                       </div>
                       <Badge variant="secondary" className="text-[9px] h-4">

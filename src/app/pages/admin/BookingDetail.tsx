@@ -14,6 +14,7 @@ import {
   Music,
   FileText,
   Plus,
+  Minus,
   CheckCircle2,
   Loader2,
   Banknote,
@@ -43,7 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId } from "@/lib/booking";
+import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPrice, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 
 interface BookingWithPromo extends DbBooking {
@@ -144,6 +145,20 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [discountValue, setDiscountValue] = useState("");
   const [savingDiscount, setSavingDiscount] = useState(false);
 
+  // Equipment editing
+  const [equipmentCatalogue, setEquipmentCatalogue] = useState<Array<{
+    id: string;
+    name: string;
+    maxPerSession: number;
+    pricingType: "session" | "per_hour";
+    sessionPricing: number[] | null;
+    pricePerHour: number;
+  }>>([]);
+  const [durationHours, setDurationHours] = useState(0);
+  const [editingEquipment, setEditingEquipment] = useState(false);
+  const [equipmentDraft, setEquipmentDraft] = useState<EquipmentSelection[]>([]);
+  const [savingEquipment, setSavingEquipment] = useState(false);
+
   const fetchBooking = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/bookings/${bookingId}`);
@@ -171,15 +186,18 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         setLoadingPayments(false);
 
         // Fetch equipment and match with booking equipment
-        if (json.data.equipment) {
-          const equipmentRes = await fetch("/api/equipment");
-          const equipmentJson = await equipmentRes.json() as { success: boolean; equipment?: Array<{ id: string; name: string; pricingType: "session" | "per_hour"; sessionPricing: number[] | null; pricePerHour: number }> };
-          if (equipmentJson.success && equipmentJson.equipment) {
+        const equipmentRes = await fetch("/api/equipment");
+        const equipmentJson = await equipmentRes.json() as { success: boolean; equipment?: Array<{ id: string; name: string; maxPerSession: number; pricingType: "session" | "per_hour"; sessionPricing: number[] | null; pricePerHour: number }> };
+        if (equipmentJson.success && equipmentJson.equipment) {
+          setEquipmentCatalogue(equipmentJson.equipment);
+          const startIdx = TIME_SLOTS.indexOf(json.data.start_time);
+          let endIdx = TIME_SLOTS.indexOf(json.data.end_time);
+          if (endIdx === -1) endIdx = TIME_SLOTS.length;
+          const durHours = (endIdx - startIdx) * 0.5;
+          setDurationHours(durHours);
+
+          if (json.data.equipment) {
             const bookingEquipment = JSON.parse(json.data.equipment) as Array<{ id: string; quantity: number }>;
-            const startIdx = TIME_SLOTS.indexOf(json.data.start_time);
-            let endIdx = TIME_SLOTS.indexOf(json.data.end_time);
-            if (endIdx === -1) endIdx = TIME_SLOTS.length;
-            const durationHours = (endIdx - startIdx) * 0.5;
             const matchedEquipment = bookingEquipment.map((eq) => {
               const eqData = equipmentJson.equipment!.find((e) => e.id === eq.id);
               let price = 0;
@@ -187,7 +205,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 if (eqData.pricingType === "session" && Array.isArray(eqData.sessionPricing)) {
                   price = eqData.sessionPricing[eq.quantity - 1] ?? 0;
                 } else {
-                  price = eqData.pricePerHour * eq.quantity * durationHours;
+                  price = eqData.pricePerHour * eq.quantity * durHours;
                 }
               }
               return { id: eq.id, name: eqData?.name || eq.id, quantity: eq.quantity, price };
@@ -362,6 +380,33 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       }
     } catch { toast.error("Erreur réseau"); }
     finally { setSavingDiscount(false); }
+  };
+
+  const handleSaveEquipment = async () => {
+    if (!booking) return;
+    setSavingEquipment(true);
+    try {
+      const newEquipmentPrice = calculateEquipmentPrice(equipmentDraft, durationHours, equipmentCatalogue);
+      const newTotalPrice = booking.base_price + newEquipmentPrice - (booking.promo_discount || 0);
+      const res = await fetch(`/api/admin/bookings/${booking.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          equipment: JSON.stringify(equipmentDraft.filter(e => e.quantity > 0)),
+          equipment_price: newEquipmentPrice,
+          total_price: newTotalPrice,
+        }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Équipements mis à jour");
+        setEditingEquipment(false);
+        fetchBooking();
+      } else {
+        toast.error(json.error || "Erreur");
+      }
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSavingEquipment(false); }
   };
 
   const handleAddPayment = async () => {
@@ -540,20 +585,106 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               </div>
 
               {/* Équipements */}
-              {equipment.length > 0 && (
+              {equipmentCatalogue.length > 0 && (
                 <div className="mb-6">
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Équipements</p>
-                  <div className="flex flex-wrap gap-2">
-                    {equipment.map((eq) => (
-                      <span 
-                        key={eq.id} 
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 text-sm"
-                      >
-                        <span className="text-zinc-300">{eq.name}</span>
-                        <span className="text-zinc-500">×{eq.quantity}</span>
-                      </span>
-                    ))}
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Équipements</p>
+                    {!editingEquipment && (
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-400" onClick={() => { setEquipmentDraft(equipment.map(e => ({ id: e.id, quantity: e.quantity }))); setEditingEquipment(true); }}>
+                        <Pencil className="h-3 w-3 mr-1" />Modifier
+                      </Button>
+                    )}
                   </div>
+                  <div className="space-y-2">
+                    {equipmentCatalogue.map((eq) => {
+                      const draftQty = editingEquipment
+                        ? (equipmentDraft.find((d) => d.id === eq.id)?.quantity ?? 0)
+                        : (equipment.find((e) => e.id === eq.id)?.quantity ?? 0);
+
+                      let itemPrice = 0;
+                      if (draftQty > 0) {
+                        if (eq.pricingType === "session" && Array.isArray(eq.sessionPricing)) {
+                          itemPrice = eq.sessionPricing[draftQty - 1] ?? 0;
+                        } else {
+                          itemPrice = eq.pricePerHour * draftQty * durationHours;
+                        }
+                      }
+
+                      return (
+                        <div key={eq.id} className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 ${draftQty > 0 ? "bg-zinc-800/50" : "bg-zinc-800/20"}`}>
+                          <div className="flex flex-col">
+                            <span className={`text-sm font-medium ${draftQty > 0 ? "text-zinc-200" : "text-zinc-500"}`}>{eq.name}</span>
+                            <span className="text-xs text-zinc-500">
+                              {eq.pricingType === "session" && eq.sessionPricing
+                                ? `à partir de ${eq.sessionPricing[0]}€/séance`
+                                : `+${eq.pricePerHour}€/h`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {itemPrice > 0 && (
+                              <span className="text-xs font-medium text-zinc-300">{formatPrice(itemPrice)}</span>
+                            )}
+                            {editingEquipment ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const current = equipmentDraft.find((d) => d.id === eq.id)?.quantity ?? 0;
+                                    if (current > 0) {
+                                      setEquipmentDraft(prev => {
+                                        const existing = prev.filter((e) => e.id !== eq.id);
+                                        if (current - 1 > 0) {
+                                          return [...existing, { id: eq.id, quantity: current - 1 }];
+                                        }
+                                        return existing;
+                                      });
+                                    }
+                                  }}
+                                  disabled={draftQty === 0}
+                                  className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-700 transition-colors hover:bg-zinc-600 disabled:opacity-30 disabled:hover:bg-zinc-700"
+                                  aria-label={`Retirer ${eq.name}`}
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="w-6 text-center text-sm font-medium tabular-nums text-zinc-200">
+                                  {draftQty}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const current = equipmentDraft.find((d) => d.id === eq.id)?.quantity ?? 0;
+                                    if (current < eq.maxPerSession) {
+                                      setEquipmentDraft(prev => {
+                                        const existing = prev.filter((e) => e.id !== eq.id);
+                                        return [...existing, { id: eq.id, quantity: current + 1 }];
+                                      });
+                                    }
+                                  }}
+                                  disabled={draftQty >= eq.maxPerSession}
+                                  className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-700 transition-colors hover:bg-zinc-600 disabled:opacity-30 disabled:hover:bg-zinc-700"
+                                  aria-label={`Ajouter ${eq.name}`}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className={`text-sm ${draftQty > 0 ? "text-zinc-300" : "text-zinc-600"}`}>
+                                {draftQty > 0 ? `×${draftQty}` : "—"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {editingEquipment && (
+                    <div className="flex gap-2 mt-3">
+                      <Button size="sm" onClick={handleSaveEquipment} disabled={savingEquipment} className="h-7 text-xs">
+                        {savingEquipment && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}Sauvegarder
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingEquipment(false)} className="h-7 text-xs border-zinc-700">Annuler</Button>
+                    </div>
+                  )}
                 </div>
               )}
 

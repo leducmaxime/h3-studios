@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDateISO } from "@/lib/utils";
+import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus, type BookingWithUser, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
@@ -500,7 +500,7 @@ export function AdminBookings() {
                         </a>
                         {sortBy === "created_at" && booking.created_at && (
                           <p className="text-[10px] text-zinc-500 mt-0.5">
-                            {new Date(booking.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            {formatDbTimestamp(booking.created_at)}
                           </p>
                         )}
                       </td>
