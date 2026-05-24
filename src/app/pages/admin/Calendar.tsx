@@ -821,16 +821,16 @@ export function AdminCalendar() {
                             <p className="truncate text-[11px] font-medium leading-tight">
                               {booking.start_time} · {GROUP_LABELS[booking.group_type]}
                             </p>
-                            <p className="truncate text-[10px] leading-tight opacity-90">
-                              {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                            </p>
+                             <p className="truncate text-[10px] leading-tight opacity-90">
+                               {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                             </p>
                              {hasOptions(booking.equipment) && (
                                <span className="inline-block rounded bg-primary/20 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary">Options</span>
                              )}
                            </button>
                          );
                        });
-
+                     })()}
 
                     {/* Current time indicator */}
                     {isToday && (() => {
