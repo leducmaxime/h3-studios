@@ -475,8 +475,8 @@ export function AdminUsers() {
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user.id} className="bg-zinc-900/50 transition-colors hover:bg-zinc-800/50">
-                    <td className="px-4 py-3">
+                  <tr key={user.id} className="bg-zinc-900/50 transition-colors hover:bg-zinc-800/50 cursor-pointer" onClick={() => { window.location.href = `/admin/users/${user.id}`; }}>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedIds.has(user.id)}
@@ -508,7 +508,7 @@ export function AdminUsers() {
                     <td className="px-4 py-3 text-right font-medium text-primary">
                       {formatPrice(user.total_spent)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
