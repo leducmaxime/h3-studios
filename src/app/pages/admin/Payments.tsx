@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Loader2,
   Search,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,6 +38,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatPrice } from "@/lib/booking";
 import { exportPaymentsCSV } from "@/lib/export";
 
@@ -241,6 +249,94 @@ function RefundDialog({
   );
 }
 
+// ─── Edit Payment Dialog ────────────────────────────────────────────────────────
+
+function EditPaymentDialog({
+  payment,
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  payment: ApiPayment | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (paymentId: string, amount: number, method: string) => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState<"cash" | "card" | "transfer" | "check">("cash");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open && payment) {
+      setAmount((payment.amount / 100).toFixed(2).replace(".", ","));
+      setMethod((payment.method as "cash" | "card" | "transfer" | "check") || "cash");
+      setSubmitting(false);
+    }
+  }, [open, payment]);
+
+  const parsedAmount = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
+  const isValid = !isNaN(parsedAmount) && parsedAmount > 0;
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!payment || !isValid) return;
+    setSubmitting(true);
+    onConfirm(payment.id, Math.round(parsedAmount * 100), method);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="border-zinc-800 bg-zinc-900">
+        <DialogHeader>
+          <DialogTitle>Modifier le paiement</DialogTitle>
+          <DialogDescription>
+            {payment && <>Réservation <span className="font-semibold text-foreground">{payment.booking_ref}</span></>}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-amount">Montant (€)</Label>
+            <Input
+              id="edit-amount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              className="border-zinc-700 bg-zinc-800"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-method">Mode de paiement</Label>
+            <Select value={method} onValueChange={(v) => setMethod(v as "cash" | "card" | "transfer" | "check")}>
+              <SelectTrigger id="edit-method" className="bg-zinc-800 border-zinc-700">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-900 border-zinc-800">
+                <SelectItem value="card">Carte Bancaire</SelectItem>
+                <SelectItem value="cash">Espèces</SelectItem>
+                <SelectItem value="transfer">Virement</SelectItem>
+                <SelectItem value="check">Chèque</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-zinc-700">
+              Annuler
+            </Button>
+            <Button type="submit" disabled={!isValid || submitting}>
+              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Payment Row Actions ────────────────────────────────────────────────────────
 
 function PaymentActions({
@@ -248,19 +344,21 @@ function PaymentActions({
   onMarkPaid,
   onRefund,
   onAddPayment,
+  onEdit,
 }: {
   payment: ApiPayment;
   onMarkPaid: (id: string) => void;
   onRefund: (payment: ApiPayment) => void;
   onAddPayment: (bookingId: string) => void;
+  onEdit: (payment: ApiPayment) => void;
 }) {
   const isSynthetic = payment.id.startsWith("on-site:") && payment.method === "";
   const canPay = payment.status === "pending" && !isSynthetic;
   const canRefund = !isSynthetic && payment.status === "paid" && payment.refunded_amount < payment.amount;
-
+  const canEdit = payment.payment_type === "on-site" && !isSynthetic;
   const canAddPayment = !!payment.booking_id;
 
-  if (!canPay && !canRefund && !canAddPayment) return null;
+  if (!canPay && !canRefund && !canAddPayment && !canEdit) return null;
 
   return (
     <DropdownMenu>
@@ -271,6 +369,13 @@ function PaymentActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="border-zinc-800 bg-zinc-900">
+        {canEdit && (
+          <DropdownMenuItem onClick={() => onEdit(payment)}>
+            <Pencil className="h-4 w-4" />
+            <span>Modifier</span>
+          </DropdownMenuItem>
+        )}
+        {canEdit && (canAddPayment || canPay || canRefund) && <DropdownMenuSeparator />}
         {canAddPayment && (
           <DropdownMenuItem onClick={() => onAddPayment(payment.booking_id)}>
             <Banknote className="h-4 w-4" />
@@ -317,6 +422,9 @@ export function AdminPayments() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const perPage = 20;
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<ApiPayment | null>(null);
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -601,6 +709,31 @@ export function AdminPayments() {
     setRefundTarget(payment);
     setRefundOpen(true);
   }
+
+  const openEditDialog = (payment: ApiPayment) => {
+    setEditingPayment(payment);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditPayment = async (paymentId: string, amount: number, method: string) => {
+    try {
+      const res = await fetch(`/api/admin/payments/${paymentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, method }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Paiement modifié");
+        setEditDialogOpen(false);
+        fetchPayments();
+      } else {
+        toast.error(json.error || "Erreur lors de la modification");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    }
+  };
 
   async function handleExportCSV() {
     const params = new URLSearchParams();
@@ -921,6 +1054,7 @@ export function AdminPayments() {
                           onMarkPaid={handleMarkPaid}
                           onRefund={openRefundDialog}
                           onAddPayment={openCollectDialog}
+                          onEdit={openEditDialog}
                         />
                       )}
                     </td>
@@ -975,6 +1109,13 @@ export function AdminPayments() {
         open={refundOpen}
         onOpenChange={setRefundOpen}
         onConfirm={handleRefundConfirm}
+      />
+
+      <EditPaymentDialog
+        payment={editingPayment}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onConfirm={handleEditPayment}
       />
 
       <Dialog

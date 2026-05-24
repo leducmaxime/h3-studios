@@ -948,6 +948,46 @@ export async function refundPayment(
   return { success: true };
 }
 
+export async function updatePayment(
+  db: D1Database,
+  paymentId: string,
+  data: { amount?: number; method?: string },
+): Promise<{ success: boolean; error?: string }> {
+  const payment = await db.prepare(`
+    SELECT p.*, b.payment_status as booking_payment_status
+    FROM payments p
+    JOIN bookings b ON b.id = p.booking_id
+    WHERE p.id = ?
+  `).bind(paymentId).first<DbPayment & { booking_payment_status: string }>();
+
+  if (!payment) return { success: false, error: "Paiement introuvable" };
+
+  const paymentType = payment.booking_payment_status === "pay-on-site"
+    ? "on-site"
+    : (payment.method === "card" ? "online" : "on-site");
+
+  if (paymentType === "online") return { success: false, error: "Impossible de modifier un paiement en ligne" };
+
+  const validMethods = ["card", "cash", "transfer", "check"];
+  if (data.method && !validMethods.includes(data.method)) {
+    return { success: false, error: "Méthode de paiement invalide" };
+  }
+  if (data.amount !== undefined && data.amount <= 0) {
+    return { success: false, error: "Le montant doit être supérieur à 0" };
+  }
+
+  const newAmount = data.amount ?? payment.amount;
+  const newMethod = data.method ?? payment.method;
+
+  await db.prepare(
+    "UPDATE payments SET amount = ?, method = ? WHERE id = ?",
+  ).bind(newAmount, newMethod, paymentId).run();
+
+  await addAuditLog(db, "payment", paymentId, "update", { amount: newAmount, method: newMethod, previousAmount: payment.amount, previousMethod: payment.method });
+
+  return { success: true };
+}
+
 // ─── Blocked Slots ───────────────────────────────────────────────────────────
 
 export async function getBlockedSlots(

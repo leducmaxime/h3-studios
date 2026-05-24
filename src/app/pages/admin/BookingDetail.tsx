@@ -18,6 +18,7 @@ import {
   Loader2,
   Banknote,
   Wallet,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -101,6 +102,13 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     method: "cash" | "card" | "transfer" | "check";
   }>({ amount: "", method: "cash" });
   const [addingPayment, setAddingPayment] = useState(false);
+
+  // Edit payment dialog
+  const [editPayment, setEditPayment] = useState<DbPayment | null>(null);
+  const [editPaymentOpen, setEditPaymentOpen] = useState(false);
+  const [editPaymentAmount, setEditPaymentAmount] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState<"cash" | "card" | "transfer" | "check">("cash");
+  const [editingPayment, setEditingPayment] = useState(false);
 
   // Reschedule dialog
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -317,6 +325,32 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     }
   };
 
+  const handleEditPayment = async () => {
+    if (!editPayment) return;
+    const amount = parseFloat(editPaymentAmount.replace(",", "."));
+    if (isNaN(amount) || amount <= 0) return;
+    setEditingPayment(true);
+    try {
+      const res = await fetch(`/api/admin/payments/${editPayment.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: Math.round(amount * 100), method: editPaymentMethod }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success("Paiement modifié");
+        setEditPaymentOpen(false);
+        fetchBooking();
+      } else {
+        toast.error(json.error || "Erreur lors de la modification");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setEditingPayment(false);
+    }
+  };
+
   if (loading || !booking) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -527,8 +561,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 ) : (
                   <div className="space-y-2">
                     {payments.map((p) => (
-                      <div 
-                        key={p.id} 
+                      <div
+                        key={p.id}
                         className="flex items-center justify-between p-4 rounded-xl bg-zinc-800/20 hover:bg-zinc-800/40 transition-colors"
                       >
                         <div className="flex items-center gap-3">
@@ -542,9 +576,27 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                             </p>
                           </div>
                         </div>
-                        <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
-                          {p.status === "paid" ? "Payé" : "En attente"}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
+                            {p.status === "paid" ? "Payé" : "En attente"}
+                          </Badge>
+                          {(p.method !== "card" || booking?.payment_status === "pay-on-site") && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs text-zinc-400 hover:text-white"
+                              onClick={() => {
+                                setEditPayment(p);
+                                setEditPaymentAmount((p.amount / 100).toFixed(2).replace(".", ","));
+                                setEditPaymentMethod((p.method as "cash" | "card" | "transfer" | "check") || "cash");
+                                setEditPaymentOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-3 w-3 mr-1" />
+                              Modifier
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -826,6 +878,54 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               className="bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30"
             >
               {noShowLoading ? "En cours..." : "Confirmer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={editPaymentOpen} onOpenChange={setEditPaymentOpen}>
+        <DialogContent className="border-zinc-800 bg-zinc-900">
+          <DialogHeader>
+            <DialogTitle>Modifier le paiement</DialogTitle>
+            <DialogDescription>Modifiez le montant ou le mode de paiement.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-payment-amount">Montant (&euro;)</Label>
+              <Input
+                id="edit-payment-amount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={editPaymentAmount}
+                onChange={(e) => setEditPaymentAmount(e.target.value)}
+                className="border-zinc-700 bg-zinc-800"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-payment-method">Mode de paiement</Label>
+              <Select value={editPaymentMethod} onValueChange={(v) => setEditPaymentMethod(v as "cash" | "card" | "transfer" | "check")}>
+                <SelectTrigger id="edit-payment-method" className="bg-zinc-800 border-zinc-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800">
+                  <SelectItem value="card">Carte Bancaire</SelectItem>
+                  <SelectItem value="cash">Esp&egrave;ces</SelectItem>
+                  <SelectItem value="transfer">Virement</SelectItem>
+                  <SelectItem value="check">Ch&egrave;que</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditPaymentOpen(false)} className="border-zinc-700">
+              Annuler
+            </Button>
+            <Button onClick={handleEditPayment} disabled={editingPayment}>
+              {editingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enregistrer
             </Button>
           </DialogFooter>
         </DialogContent>
