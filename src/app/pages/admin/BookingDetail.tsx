@@ -868,36 +868,32 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
                             {p.status === "paid" ? "Payé" : "En attente"}
                           </Badge>
-                          {(p.method !== "card" || booking?.payment_status === "pay-on-site") && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 px-2 text-xs text-zinc-400 hover:text-white"
-                              onClick={() => {
-                                setEditPayment(p);
-                                setEditPaymentAmount(p.amount.toFixed(2).replace(".", ","));
-                                setEditPaymentMethod((p.method as "cash" | "card" | "transfer" | "check") || "cash");
-                                setEditPaymentOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-3 w-3 mr-1" />
-                              Modifier
-                            </Button>
-                          )}
-                          {(p.method !== "card" || booking?.payment_status === "pay-on-site") && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 px-2 text-xs text-red-400 hover:text-red-300"
-                              onClick={() => {
-                                setDeletePaymentTarget(p);
-                                setDeletePaymentOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" />
-                              Supprimer
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-zinc-400 hover:text-white"
+                            onClick={() => {
+                              setEditPayment(p);
+                              setEditPaymentAmount(p.amount.toFixed(2).replace(".", ","));
+                              setEditPaymentMethod((p.method as "cash" | "card" | "transfer" | "check") || "cash");
+                              setEditPaymentOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-3 w-3 mr-1" />
+                            Modifier
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-red-400 hover:text-red-300"
+                            onClick={() => {
+                              setDeletePaymentTarget(p);
+                              setDeletePaymentOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Supprimer
+                          </Button>
                         </div>
                       </div>
                     ))}
