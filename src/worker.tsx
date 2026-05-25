@@ -127,6 +127,7 @@ import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "@/lib/booking";
 import {
   getParisDateISO,
   getParisNow,
+  getISOWeekStartUTCNoon,
 } from "@/lib/utils";
 import {
   getStoredReviews,
@@ -236,17 +237,6 @@ function validateAdminSettingValue(key: string, rawValue: string): { ok: true; v
     default:
       return { ok: true, value: rawValue };
   }
-}
-
-function getISOWeekStartUTCNoon(year: number, week: number): Date {
-  const jan4 = new Date(Date.UTC(year, 0, 4, 12, 0, 0));
-  const day = jan4.getUTCDay() || 7;
-  const mondayWeek1 = new Date(jan4);
-  mondayWeek1.setUTCDate(jan4.getUTCDate() - (day - 1));
-
-  const monday = new Date(mondayWeek1);
-  monday.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
-  return monday;
 }
 
 // ─── Auth Middleware ──────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ import {
   type DbPaymentStatus,
   type CreateBooking,
 } from "./db-types";
-import { getParisDateISO, getParisNow } from "./utils";
+import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 
@@ -1441,17 +1441,6 @@ export interface DashboardStats {
   rangeEquipmentRevenue: number;
   rangeMinPrice: number;
   rangeMaxPrice: number;
-}
-
-function getISOWeekStartUTCNoon(year: number, week: number): Date {
-  const jan4 = new Date(Date.UTC(year, 0, 4, 12, 0, 0));
-  const day = jan4.getUTCDay() || 7;
-  const mondayWeek1 = new Date(jan4);
-  mondayWeek1.setUTCDate(jan4.getUTCDate() - (day - 1));
-
-  const monday = new Date(mondayWeek1);
-  monday.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
-  return monday;
 }
 
 function parseDateISOToUTCNoon(dateISO: string): Date {

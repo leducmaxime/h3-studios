@@ -44,6 +44,17 @@ export function formatDbTimestamp(
   return date.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", ...options });
 }
 
+/** Retourne le lundi de la semaine ISO (year, week) à midi UTC */
+export function getISOWeekStartUTCNoon(year: number, week: number): Date {
+  const jan4 = new Date(Date.UTC(year, 0, 4, 12, 0, 0));
+  const day = jan4.getUTCDay() || 7;
+  const mondayWeek1 = new Date(jan4);
+  mondayWeek1.setUTCDate(jan4.getUTCDate() - (day - 1));
+  const monday = new Date(mondayWeek1);
+  monday.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
+  return monday;
+}
+
 /** Get current hours and minutes in Paris timezone */
 export function getParisNow(): { hours: number; minutes: number; dateISO: string } {
   const now = new Date();
