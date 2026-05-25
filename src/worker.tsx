@@ -1568,7 +1568,14 @@ const app = defineApp([
 
     if (request.method === "PUT") {
       try {
-        const body = await request.json() as {
+        const rawBody = await request.json() as Record<string, unknown>;
+
+        // Whitelist runtime — empêche la modification de champs sensibles (payment_status, user_id, id, etc.)
+        const ALLOWED_BOOKING_FIELDS = ["date", "start_time", "end_time", "notes", "base_price",
+          "equipment_price", "total_price", "equipment", "promo_discount", "cancelled_at", "cancel_reason"] as const;
+        const body = Object.fromEntries(
+          Object.entries(rawBody).filter(([k]) => (ALLOWED_BOOKING_FIELDS as readonly string[]).includes(k))
+        ) as {
           date?: string;
           start_time?: string;
           end_time?: string;
@@ -1577,6 +1584,9 @@ const app = defineApp([
           equipment_price?: number;
           total_price?: number;
           equipment?: string;
+          promo_discount?: number;
+          cancelled_at?: string;
+          cancel_reason?: string;
         };
 
         // If rescheduling, check for conflicts
@@ -1761,9 +1771,10 @@ const app = defineApp([
           return jsonError("Méthode de paiement invalide", 400);
         }
 
-        const validStatus = ["pending", "paid", "refunded", "partial-refund"] as const;
+        // Seuls pending/paid autorisés à la création — les refunds passent par /refund
+        const validStatus = ["pending", "paid"] as const;
         if (!validStatus.includes(body.status as (typeof validStatus)[number])) {
-          return jsonError("Statut de paiement invalide", 400);
+          return jsonError("Statut invalide — utiliser 'pending' ou 'paid' (les remboursements passent par /refund)", 400);
         }
 
         const result = await addPayment(env.DB, {
@@ -2045,8 +2056,17 @@ const app = defineApp([
 
     if (request.method === "PUT") {
       try {
-        const body = await request.json() as {
+        const rawBody = await request.json() as Record<string, unknown>;
+
+        // Whitelist runtime — empêche la modification de password_hash, total_bookings, total_spent, etc.
+        const ALLOWED_USER_FIELDS = ["name", "first_name", "last_name", "email", "phone", "band_name",
+          "notes", "address_line1", "address_line2", "postal_code", "city", "country", "is_blocked"] as const;
+        const body = Object.fromEntries(
+          Object.entries(rawBody).filter(([k]) => (ALLOWED_USER_FIELDS as readonly string[]).includes(k))
+        ) as {
           name?: string;
+          first_name?: string;
+          last_name?: string;
           email?: string;
           phone?: string;
           band_name?: string;
@@ -2056,6 +2076,7 @@ const app = defineApp([
           postal_code?: string;
           city?: string;
           country?: string;
+          is_blocked?: number;
         };
 
         if (body.email) {
