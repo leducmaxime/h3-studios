@@ -7,7 +7,6 @@ import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter"
 import { WeekCalendar } from "@/components/booking/WeekCalendar";
 import { TimeSlotPicker } from "@/components/booking/TimeSlotPicker";
 import { GroupTypeToggle } from "@/components/booking/GroupTypeToggle";
-import { StudioCard } from "@/components/booking/StudioCard";
 import { BookingForm } from "@/components/booking/BookingForm";
 import { FinalCheckout } from "@/components/booking/FinalCheckout";
 
@@ -47,7 +46,7 @@ interface ReservationProps {
 export function Reservation({ step }: ReservationProps) {
   const {
     state,
-    mergedAvailability,
+    slotsByStudio,
     pricing,
     cartTotal,
     canProceedToStudio,
@@ -59,7 +58,6 @@ export function Reservation({ step }: ReservationProps) {
     clearTimeRange,
     confirmTimeSelection,
     setGroupType,
-    selectStudio,
     updateUserInfo,
     updateEquipment,
     applyPromo,
@@ -110,11 +108,10 @@ export function Reservation({ step }: ReservationProps) {
 
   // Refs for auto-scroll within unified booking step
   const timeSlotRef = useRef<HTMLDivElement>(null);
-  const studioRef = useRef<HTMLDivElement>(null);
   const recapRef = useRef<HTMLDivElement>(null);
 
-  const scrollToRef = (_ref: React.RefObject<HTMLDivElement | null>) => {
-    return;
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   // Auto-scroll when date is selected (time slots appear)
@@ -123,13 +120,6 @@ export function Reservation({ step }: ReservationProps) {
       scrollToRef(timeSlotRef);
     }
   }, [state.step, state.selectedDate, state.startTime]);
-
-  // Auto-scroll when time is confirmed (studio picker appears for group)
-  useEffect(() => {
-    if (state.step === 1 && state.startTime && state.endTime && !state.studioId && state.groupType === "group") {
-      scrollToRef(studioRef);
-    }
-  }, [state.step, state.startTime, state.endTime, state.studioId, state.groupType]);
 
   // Auto-scroll when studio is selected (recap appears)
   useEffect(() => {
@@ -446,9 +436,10 @@ export function Reservation({ step }: ReservationProps) {
                   <div ref={timeSlotRef}>
                     <TimeSlotPicker
                       date={state.selectedDate}
-                      availability={mergedAvailability}
+                      slotsByStudio={slotsByStudio}
                       startTime={state.startTime}
                       endTime={state.endTime}
+                      studioId={state.studioId}
                       onSelectRange={selectTimeRange}
                       onClear={clearTimeRange}
                       onConfirm={confirmTimeSelection}
@@ -462,45 +453,7 @@ export function Reservation({ step }: ReservationProps) {
                   </div>
                 )}
 
-                {/* Studio picker — appears after time selection (group only) */}
-                {state.startTime && state.endTime && state.groupType === "group" && (
-                  <div ref={studioRef}>
-                    <span className="mb-3 block text-sm font-medium text-white/70">
-                      Choisissez votre studio
-                    </span>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {(["la-scene", "le-podium"] as StudioId[]).map((sid) => (
-                        <StudioCard
-                          key={sid}
-                          studioId={sid}
-                          date={state.selectedDate!}
-                          startTime={state.startTime!}
-                          endTime={state.endTime!}
-                          groupType={state.groupType || "group"}
-                          availability={mergedAvailability}
-                          onSelect={() => selectStudio(sid)}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-white/50">
-                      <span className="flex items-center gap-1.5">
-                        <Wifi className="h-3.5 w-3.5 text-primary/70" />
-                        Wifi gratuit
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <TrainFront className="h-3.5 w-3.5 text-primary/70" />
-                        A deux pas du RER A
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5 text-primary/70" />
-                        20 min de Paris
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Recap — appears after studio selection (or auto-assign for solo/duo) */}
+                {/* Recap — appears after time selection (studio is implicit from slot) */}
                 {state.studioId && state.startTime && state.endTime && (
                   <div ref={recapRef}>
                     {renderRecapSection()}

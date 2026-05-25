@@ -183,6 +183,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const appliedPromoRef = useRef<PromoCode | null>(null);
   appliedPromoRef.current = state.appliedPromo;
   const [availability, setAvailability] = useState<Set<OccupancyInfo>>(new Set());
+  const [slotsByStudio, setSlotsByStudio] = useState<Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>>({});
   const [minAdvanceHours, setMinAdvanceHours] = useState<number>(0);
   const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -247,6 +248,7 @@ export function useBookingWithRouter(urlStep?: string) {
               }
             }
           }
+          setSlotsByStudio(json.data.slots);
           setAvailability(occupancy);
           setMinAdvanceHours(json.data.minAdvanceHours ?? 0);
           setMinAdvanceCutoffTime(json.data.minAdvanceCutoffTime ?? null);
@@ -443,38 +445,23 @@ export function useBookingWithRouter(urlStep?: string) {
     }));
   }, []);
 
-  const selectTimeRange = useCallback((startTime: string, endTime: string) => {
-    setState((s) => ({ ...s, startTime, endTime }));
+  const selectTimeRange = useCallback((startTime: string, endTime: string, studioId: StudioId) => {
+    setState((s) => ({ ...s, startTime, endTime, studioId }));
   }, []);
 
   const clearTimeRange = useCallback(() => {
-    setState((s) => ({ ...s, startTime: null, endTime: null }));
+    setState((s) => ({ ...s, startTime: null, endTime: null, studioId: null }));
   }, []);
 
   const confirmTimeSelection = useCallback(() => {
     setState((s) => {
       if (s.startTime && s.endTime && s.selectedDate && s.groupType) {
-        // Unified range validation: ensure the selected range is actually bookable
-        const rangeCheck = isRangeBookable(
-          s.startTime,
-          s.endTime,
-          s.groupType,
-          mergedAvailability,
-          s.selectedDate
-        );
-        if (!rangeCheck.bookable) {
-          // Range is not bookable — reset selection (shouldn't happen if UI is correct)
-          return { ...s, startTime: null, endTime: null };
-        }
-        // If studio not yet selected (solo/duo implicit), use the bookable studio
-        if (!s.studioId && rangeCheck.studioId) {
-          return { ...s, studioId: rangeCheck.studioId };
-        }
+        // Studio is already determined by the selected slot block — nothing to auto-assign
         return s;
       }
       return s;
     });
-  }, [mergedAvailability]);
+  }, []);
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
     setState((s) => {
@@ -887,6 +874,7 @@ export function useBookingWithRouter(urlStep?: string) {
   return {
     state,
     mergedAvailability,
+    slotsByStudio,
     minAdvanceHours,
     minAdvanceCutoffTime,
     pricing,
