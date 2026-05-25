@@ -416,9 +416,7 @@ export function Reservation({ step }: ReservationProps) {
                       ? "Choisissez une date"
                       : !state.startTime
                         ? "Choisissez votre créneau horaire"
-                        : state.groupType === "group" && !state.studioId
-                          ? "Choisissez votre studio"
-                          : "Récapitulatif de votre réservation"}
+                        : "Récapitulatif de votre réservation"}
                   </p>
                 </div>
 
