@@ -56,7 +56,7 @@ export function Equipe() {
       <div className="relative w-full px-2 sm:px-4">
         <div className="mx-auto max-w-6xl">
           <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-            <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">L'ÉQUIPE</h1>
+            <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">L'EQUIPE</h1>
             <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
             <p className="mt-6 text-lg text-white/60">
               Les passionnés qui font vivre H3 Studios

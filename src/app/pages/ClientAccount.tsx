@@ -131,7 +131,7 @@ export function ClientAccount() {
     <div className="min-h-[80vh] bg-black px-2 sm:px-4 pt-32 pb-16">
       <div className="container max-w-4xl mx-auto">
         <div className="mb-12 text-center">
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes réservations</h1>
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes reservations</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           <div className="flex items-center justify-center gap-3 mt-6">
             <Button

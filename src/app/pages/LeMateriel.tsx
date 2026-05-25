@@ -104,7 +104,7 @@ export function LeMateriel() {
 
       <div className="w-full max-w-6xl px-2 sm:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LE MATÉRIEL</h1>
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LE MATERIEL</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           <p className="mt-6 text-lg text-white/60 max-w-2xl mx-auto">
             Du matériel de qualité professionnelle pour des répétitions et enregistrements dans les meilleures conditions
@@ -143,7 +143,7 @@ export function LeMateriel() {
 
         <div className="mt-20">
           <div className="mb-8 text-center">
-            <h2 className="font-blanka text-2xl md:text-3xl">ÉQUIPEMENT D'ENREGISTREMENT</h2>
+            <h2 className="font-blanka text-2xl md:text-3xl">EQUIPEMENT D'ENREGISTREMENT</h2>
             <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-primary/50" />
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

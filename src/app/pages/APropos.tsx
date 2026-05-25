@@ -245,7 +245,7 @@ export function APropos() {
 
       <div className="w-full max-w-5xl px-2 sm:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">À PROPOS</h1>
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">A PROPOS</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           <p className="mt-6 text-lg text-white/60">
             Un son authentique pour des artistes authentiques

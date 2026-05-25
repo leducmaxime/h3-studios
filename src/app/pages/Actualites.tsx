@@ -91,7 +91,7 @@ export function Actualites() {
 
       <div className="w-full max-w-6xl px-2 sm:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">ACTUALITÉS</h1>
+          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">ACTUALITES</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
         </div>
 
@@ -114,7 +114,7 @@ export function Actualites() {
         </div>
 
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
-          <h2 className="font-blanka text-2xl md:text-3xl">DERNIÈRES PUBLICATIONS</h2>
+          <h2 className="font-blanka text-2xl md:text-3xl">DERNIERES PUBLICATIONS</h2>
           <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-primary/50" />
         </div>
 

@@ -25,7 +25,7 @@ export function PaymentCancel() {
             </div>
 
             <h1 className="mb-2 font-blanka text-2xl sm:text-3xl text-yellow-400">
-              PAIEMENT ANNULÉ
+              PAIEMENT ANNULE
             </h1>
             
             <p className="mb-6 text-white/70">
