@@ -141,18 +141,32 @@ export async function createBooking(
   const id = generateId();
   const timestamp = now();
 
-  await db.prepare(`
+  // INSERT atomique avec garde anti-conflit (TOCTOU fix)
+  // Si un conflit existe déjà pour ce studio/date/start_time, l'INSERT échoue silencieusement
+  const result = await db.prepare(`
     INSERT INTO bookings (id, booking_ref, user_id, band_name, studio_id, date, start_time, end_time,
       group_type, status, base_price, equipment_price, total_price, equipment,
       payment_method, payment_status, notes, round_mode, promo_code, promo_discount, promo_type, created_at, updated_at, cancelled_at, cancel_reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    WHERE NOT EXISTS (
+      SELECT 1 FROM bookings
+      WHERE studio_id = ? AND date = ? AND status != 'cancelled'
+        AND start_time < ? AND end_time > ?
+    )
   `).bind(
     id, data.booking_ref, data.user_id, data.band_name, data.studio_id, data.date,
     data.start_time, data.end_time, data.group_type, data.status,
     data.base_price, data.equipment_price, data.total_price,
     data.equipment, data.payment_method, data.payment_status,
     data.notes, data.round_mode, data.promo_code || null, data.promo_discount, data.promo_type || null, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
+    // Paramètres pour le WHERE NOT EXISTS
+    data.studio_id, data.date, data.end_time, data.start_time,
   ).run();
+
+  if (result.meta.changes === 0) {
+    throw new Error("Conflit de créneau détecté — réservation non créée");
+  }
+
   return (await getBookingById(db, id))!;
 }
 

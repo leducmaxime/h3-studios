@@ -1682,6 +1682,13 @@ const app = defineApp([
 
       if (!result.success) return jsonError(result.error || "Cancel failed", 400);
 
+      // Décrémenter usage_count du promo code si applicable
+      if (booking.promo_code) {
+        await env.DB.prepare(
+          "UPDATE promo_codes SET usage_count = MAX(0, usage_count - 1) WHERE code = ?"
+        ).bind(booking.promo_code).run();
+      }
+
       await addAuditLog(env.DB, "booking", params.id, "cancel", {
         reason: body.reason || "Annulée par l'admin",
       }, request.headers.get("X-Admin-User-Id") || "admin");
