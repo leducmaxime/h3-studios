@@ -929,6 +929,58 @@ export async function getPaymentByBookingId(
   ).bind(bookingId).first<DbPayment>();
 }
 
+/**
+ * Recalcule et met à jour booking.payment_status en fonction des paiements réels.
+ * À appeler après tout add/update/delete/refund de paiement.
+ * Idempotent : ne fait pas d'UPDATE si la valeur ne change pas.
+ */
+export async function recomputeBookingPaymentStatus(db: D1Database, bookingId: string): Promise<void> {
+  const booking = await db.prepare(
+    "SELECT id, base_price, equipment_price, total_price, promo_discount, payment_method, payment_status FROM bookings WHERE id = ?"
+  ).bind(bookingId).first<{
+    id: string; base_price: number; equipment_price: number; total_price: number;
+    promo_discount: number; payment_method: string; payment_status: string;
+  }>();
+  if (!booking) return;
+
+  const payments = await db.prepare(
+    "SELECT amount, status, refunded_amount FROM payments WHERE booking_id = ?"
+  ).bind(bookingId).all<{ amount: number; status: string; refunded_amount: number }>();
+
+  const rows = payments.results || [];
+  const totalPaid = rows.filter(p => p.status === "paid").reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+  const totalRefunded = rows
+    .filter(p => p.status === "refunded" || p.status === "partial-refund")
+    .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
+  const netPaid = totalPaid - totalRefunded;
+
+  // Détection convention total_price (même logique que getBookingAmountDue)
+  const base = Number(booking.base_price) || 0;
+  const equip = Number(booking.equipment_price) || 0;
+  const total = Number(booking.total_price) || 0;
+  const discount = Number(booking.promo_discount) || 0;
+  const subtotal = base + equip;
+  const isPostRemise = discount > 0 && Math.abs(total + discount - subtotal) < 1;
+  const finalTotal = isPostRemise ? Math.max(0, total) : Math.max(0, total - discount);
+
+  let newStatus: string;
+  if (finalTotal <= 0 || netPaid >= finalTotal) {
+    newStatus = "paid";
+  } else if (netPaid > 0) {
+    newStatus = "pay-on-site";
+  } else if (booking.payment_method === "card" && booking.payment_status === "pending") {
+    newStatus = "pending"; // Stripe en cours, ne pas toucher
+  } else {
+    newStatus = "pay-on-site";
+  }
+
+  if (newStatus !== booking.payment_status) {
+    await db.prepare("UPDATE bookings SET payment_status = ?, updated_at = ? WHERE id = ?")
+      .bind(newStatus, new Date().toISOString().replace("T", " ").slice(0, 19), bookingId)
+      .run();
+  }
+}
+
 export async function addPayment(
   db: D1Database,
   data: {
@@ -955,24 +1007,7 @@ export async function addPayment(
     timestamp
   ).run();
 
-  if (data.status === "paid") {
-    const payments = await getPaymentsByBookingId(db, data.booking_id);
-    const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
-    
-    const booking = await db.prepare("SELECT total_price, promo_discount, payment_status FROM bookings WHERE id = ?")
-      .bind(data.booking_id)
-      .first<{ total_price: number; promo_discount: number; payment_status: string | null }>();
-
-    if (booking) {
-      const finalTotal = Math.max(0, booking.total_price - (booking.promo_discount || 0));
-      if (totalPaid >= finalTotal) {
-        await db.prepare("UPDATE bookings SET payment_status = 'paid', updated_at = ? WHERE id = ?")
-          .bind(timestamp, data.booking_id)
-          .run();
-      }
-    }
-  }
-
+  await recomputeBookingPaymentStatus(db, data.booking_id);
   await addAuditLog(db, "payment", id, "create", { bookingId: data.booking_id, amount: data.amount, method: data.method });
 
   return { success: true, id };
@@ -1040,6 +1075,7 @@ export async function refundPayment(
     "UPDATE payments SET refunded_amount = ?, status = ? WHERE id = ?",
   ).bind(newRefunded, newStatus, paymentId).run();
 
+  await recomputeBookingPaymentStatus(db, payment.booking_id);
   await addAuditLog(db, "payment", paymentId, "refund", { amount, total: newRefunded });
 
   return { success: true };
@@ -1091,6 +1127,7 @@ export async function updatePayment(
     "UPDATE payments SET amount = ?, method = ? WHERE id = ?",
   ).bind(newAmount, newMethod, paymentId).run();
 
+  await recomputeBookingPaymentStatus(db, payment.booking_id);
   await addAuditLog(db, "payment", paymentId, "update", { amount: newAmount, method: newMethod, previousAmount: payment.amount, previousMethod: payment.method });
 
   return { success: true };
@@ -1114,18 +1151,7 @@ export async function deletePayment(
 
   await db.prepare("DELETE FROM payments WHERE id = ?").bind(paymentId).run();
 
-  // Recalcule le payment_status du booking
-  const remaining = await db.prepare(
-    "SELECT COALESCE(SUM(amount), 0) as total_paid FROM payments WHERE booking_id = ? AND status = 'paid'"
-  ).bind(payment.booking_id).first<{ total_paid: number }>();
-
-  const finalTotal = Math.max(0, payment.total_price - (payment.promo_discount || 0));
-  const totalPaid = remaining?.total_paid ?? 0;
-  if (totalPaid < finalTotal && payment.booking_payment_status === "paid") {
-    await db.prepare("UPDATE bookings SET payment_status = 'pay-on-site', updated_at = ? WHERE id = ?")
-      .bind(now(), payment.booking_id).run();
-  }
-
+  await recomputeBookingPaymentStatus(db, payment.booking_id);
   await addAuditLog(db, "payment", paymentId, "delete", { bookingId: payment.booking_id, amount: payment.amount });
 
   return { success: true };

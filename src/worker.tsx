@@ -1732,9 +1732,7 @@ const app = defineApp([
       });
       if (!paymentResult.success) return jsonError("Échec de l'enregistrement du paiement", 500);
 
-      // Persist payment_status on booking
-      await updateBooking(env.DB, params.id, { payment_status: "paid" });
-
+      // payment_status recalculé automatiquement par recomputeBookingPaymentStatus dans addPayment
       await addAuditLog(env.DB, "booking", params.id, "mark-paid", { amount: remaining, method }, request.headers.get("X-Admin-User-Id") || "admin");
       return jsonSuccess({ id: params.id, paymentId: paymentResult.id, amount: remaining });
     } catch (error) {
