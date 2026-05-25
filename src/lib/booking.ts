@@ -2,7 +2,6 @@ import { formatDateISO, getParisDateISO } from "./utils";
 
 export type StudioId = "la-scene" | "le-podium";
 export type GroupType = "solo" | "duo" | "group";
-export type BookingFlow = "time-first" | "studio-first";
 export type EquipmentId = string;
 export type PaymentMethod = "card" | "cash";
 export type PaymentStatus = "pending" | "paid" | "pay-on-site";

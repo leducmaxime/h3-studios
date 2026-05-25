@@ -79,4 +79,4 @@
 - [x] 12.2 Vérifier les types : `pnpm check` (échecs pré-existants Env.DB uniquement)
 - [x] 12.3 Exécuter les tests : `npx vitest` (tests des fonctions supprimées retirés)
 - [x] 12.4 Mettre à jour `src/components/booking/AGENTS.md` avec la nouvelle architecture
-- [ ] 12.5 Déployer sur staging et valider les scénarios de test
+- [x] 12.5 Déployer sur staging et valider les scénarios de test ✅

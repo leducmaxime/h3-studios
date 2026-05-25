@@ -228,7 +228,7 @@ export function useBookingWithRouter(urlStep?: string) {
   useEffect(() => {
     if (!state.selectedDate) return;
     const dateStr = formatDateISO(state.selectedDate);
-    fetch(`/api/availability?date=${dateStr}`)
+    fetch(`/api/availability?date=${dateStr}&groupType=${state.groupType || "solo"}`)
       .then((res) => res.json())
       .then((data) => {
         const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };

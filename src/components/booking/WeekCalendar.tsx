@@ -18,6 +18,7 @@ interface WeekCalendarProps {
   onSelectDate: (date: Date) => void;
   selectedDate: Date | null;
   studioFilter?: StudioId | null;
+  groupType?: GroupType | null;
   cart?: CompletedBooking[];
 }
 
@@ -118,7 +119,7 @@ function hasBookableAvailability(
   return false;
 }
 
-export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = [] }: WeekCalendarProps) {
+export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupType, cart = [] }: WeekCalendarProps) {
   const today = useMemo(() => new Date(), []);
   const [dayOffset, setDayOffset] = useState(0);
   const [weekOccupancy, setWeekOccupancy] = useState<Map<string, Set<OccupancyInfo>>>(new Map());
@@ -132,7 +133,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
     weekDates.forEach((date) => {
       if (isPast(date) || isTooFarInFuture(date)) return;
       const dateStr = formatDateISO(date);
-      fetch(`/api/availability?date=${dateStr}`)
+      fetch(`/api/availability?date=${dateStr}&groupType=${groupType || "solo"}`)
         .then((res) => res.json())
         .then((data: unknown) => {
           const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };

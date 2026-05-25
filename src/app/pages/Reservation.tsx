@@ -437,6 +437,7 @@ export function Reservation({ step }: ReservationProps) {
                   selectedDate={state.selectedDate}
                   onSelectDate={selectDate}
                   studioFilter={null}
+                  groupType={state.groupType}
                   cart={state.cart}
                 />
 
@@ -596,11 +597,6 @@ export function Reservation({ step }: ReservationProps) {
                                 );
                               })}
                             </div>
-                          )}
-                          {(booking.groupType === "solo" || booking.groupType === "duo") && (
-                            <p className="mt-2 text-xs text-primary/70">
-                              Le choix du studio se fera sur place selon la disponibilité, priorité aux groupes.
-                            </p>
                           )}
                         </div>
                       ))}
