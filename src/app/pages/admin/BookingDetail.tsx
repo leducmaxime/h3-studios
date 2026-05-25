@@ -586,7 +586,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               </div>
 
               {/* Équipements */}
-              {equipmentCatalogue.length > 0 && (
+              {(editingEquipment ? equipmentCatalogue.length > 0 : equipment.length > 0) && (
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Équipements</p>
@@ -597,7 +597,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     )}
                   </div>
                   <div className="space-y-2">
-                    {equipmentCatalogue.map((eq) => {
+                    {(editingEquipment ? equipmentCatalogue : equipmentCatalogue.filter((eq) => equipment.some((e) => e.id === eq.id))).map((eq) => {
                       const draftQty = editingEquipment
                         ? (equipmentDraft.find((d) => d.id === eq.id)?.quantity ?? 0)
                         : (equipment.find((e) => e.id === eq.id)?.quantity ?? 0);
