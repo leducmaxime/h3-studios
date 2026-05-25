@@ -848,18 +848,71 @@ const app = defineApp([
         return jsonError(`Les réservations ne peuvent pas dépasser ${maxAdvanceDays} jours à l'avance`, 400);
       }
 
-      const isZeroTotal = body.price === 0;
-      const bookingPaymentStatus = isZeroTotal ? "paid" : body.paymentStatus;
+      // Idempotence : si bookingRef existe déjà pour ce user, retourner le booking existant
+      const existingByRef = await getBookingByRef(env.DB, body.bookingRef);
+      if (existingByRef) {
+        if (existingByRef.user_id === clientUser.id) {
+          return jsonSuccess(existingByRef);
+        }
+        return jsonError("Référence de réservation déjà utilisée", 409);
+      }
 
-      // Fetch promo type if a promo code is provided
+      // Validation enum
+      const validStudios = ["la-scene", "le-podium"];
+      const validGroupTypes = ["solo", "duo", "group"];
+      if (!validStudios.includes(body.studioId)) return jsonError("Studio invalide", 400);
+      if (!validGroupTypes.includes(body.groupType)) return jsonError("Type de groupe invalide", 400);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) return jsonError("Format de date invalide", 400);
+      if (!/^\d{2}:\d{2}$/.test(body.startTime) || !/^\d{2}:\d{2}$/.test(body.endTime)) return jsonError("Format d'heure invalide", 400);
+      if (body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
+
+      // Recalcul serveur du prix (ne jamais faire confiance au prix client)
+      const isPeak = body.startTime >= "18:00" || new Date(body.date).getDay() === 0 || new Date(body.date).getDay() === 6;
+      const pricePerHalfHour = await getPricingForBooking(env.DB, body.studioId, body.groupType, isPeak);
+      const startParts = body.startTime.split(":").map(Number);
+      const endParts = body.endTime.split(":").map(Number);
+      const halfHours = ((endParts[0] * 60 + endParts[1]) - (startParts[0] * 60 + startParts[1])) / 30;
+      const durationHours = halfHours * 0.5;
+      const serverBasePrice = pricePerHalfHour * halfHours;
+
+      // Recalcul équipement serveur
+      let serverEquipmentPrice = 0;
+      if (body.equipment && body.equipment.length > 0) {
+        const allEquipment = await getEquipment(env.DB);
+        for (const eq of body.equipment) {
+          const eqData = allEquipment.find((e) => e.equipment_id === eq.id);
+          if (eqData && eq.quantity > 0) {
+            if (eqData.pricing_type === "session" && eqData.session_pricing) {
+              const prices = JSON.parse(eqData.session_pricing) as number[];
+              serverEquipmentPrice += prices[eq.quantity - 1] || 0;
+            } else {
+              serverEquipmentPrice += eqData.price_per_hour * eq.quantity * durationHours;
+            }
+          }
+        }
+      }
+
+      // Validation et recalcul promo code
+      let serverPromoDiscount = 0;
       let promoType: string | null = null;
       if (body.promoCode) {
-        const promoRow = await env.DB.prepare(
-          "SELECT type FROM promo_codes WHERE code = ?"
-        ).bind(body.promoCode.trim().toUpperCase()).first<{ type: string }>();
-        if (promoRow) {
-          promoType = promoRow.type;
+        const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), serverBasePrice + serverEquipmentPrice);
+        if (!promoValidation.valid) {
+          return jsonError(promoValidation.error || "Code promo invalide", 400);
         }
+        serverPromoDiscount = promoValidation.roundedDiscount || 0;
+        promoType = promoValidation.promo?.type || null;
+      }
+
+      const serverTotalPrice = serverBasePrice + serverEquipmentPrice;
+      const serverNetTotal = serverTotalPrice - serverPromoDiscount;
+      const isZeroTotal = serverNetTotal <= 0;
+      const bookingPaymentStatus = isZeroTotal ? "paid" : body.paymentStatus;
+
+      // Log si écart de prix > 1€ (télémétrie)
+      const clientTotal = body.price || 0;
+      if (Math.abs(clientTotal - serverNetTotal) > 1) {
+        console.warn(`[booking] Price mismatch for ${body.bookingRef}: client=${clientTotal}, server=${serverNetTotal}, diff=${(clientTotal - serverNetTotal).toFixed(2)}`);
       }
 
       const booking = await createBooking(env.DB, {
@@ -872,9 +925,9 @@ const app = defineApp([
         end_time: body.endTime,
         group_type: body.groupType,
         status: "confirmed",
-        base_price: body.price - body.equipmentPrice + (body.promoDiscount || 0),
-        equipment_price: body.equipmentPrice,
-        total_price: body.price,
+        base_price: serverBasePrice,
+        equipment_price: serverEquipmentPrice,
+        total_price: serverTotalPrice,
         equipment: JSON.stringify(body.equipment),
         payment_method: body.paymentMethod,
         payment_status: bookingPaymentStatus,
@@ -882,7 +935,7 @@ const app = defineApp([
         round_mode: body.round_mode || "none",
         round_value: null,
         promo_code: body.promoCode || null,
-        promo_discount: body.promoDiscount || 0,
+        promo_discount: serverPromoDiscount,
         promo_type: promoType,
         cancelled_at: null,
         cancel_reason: null,
