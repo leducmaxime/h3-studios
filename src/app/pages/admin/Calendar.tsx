@@ -43,6 +43,7 @@ import {
 import { toast } from "sonner";
 import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, EQUIPMENT, type StudioId } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
+import { getBookingAmountDue } from "@/lib/booking-totals";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1284,7 +1285,7 @@ export function AdminCalendar() {
     const studioName = b.studio_id === "la-scene" ? "La Scène" : b.studio_id === "le-podium" ? "Le Podium" : b.studio_id;
 
     const totalPaid = bookingPayments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
-    const finalTotal = (b.total_price || 0) - (b.promo_discount || 0);
+    const finalTotal = getBookingAmountDue({ ...b, promo_discount: b.promo_discount ?? 0 });
     const balance = finalTotal - totalPaid;
 
     const methodLabels: Record<string, string> = {

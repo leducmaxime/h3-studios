@@ -246,6 +246,7 @@ export interface PaginatedResult<T> {
   total: number;
   page: number;
   limit: number;
+  stats?: Record<string, number>;
 }
 
 // --- Filter types ---

@@ -1,4 +1,5 @@
 import { render, route, layout } from "rwsdk/router";
+import { getBookingAmountDue } from "@/lib/booking-totals";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
 import { env, waitUntil } from "cloudflare:workers";
@@ -1300,7 +1301,7 @@ const app = defineApp([
             const totalPaid = payments
               .filter((p) => p.status === "paid")
               .reduce((acc, p) => acc + p.amount, 0);
-            const finalTotal = Math.max(0, booking.total_price - (booking.promo_discount || 0));
+            const finalTotal = getBookingAmountDue(booking);
             const isFullyPaid = totalPaid >= finalTotal;
 
             return {
@@ -1311,20 +1312,6 @@ const app = defineApp([
             };
           })
         );
-
-        const parisNow = getParisNow();
-        const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
-        bookingsWithPaymentStatus = bookingsWithPaymentStatus.map((booking) => {
-          if (booking.status === "confirmed") {
-            const isPast =
-              booking.date < parisNow.dateISO ||
-              (booking.date === parisNow.dateISO && booking.end_time <= nowTimeStr);
-            if (isPast) {
-              return { ...booking, status: "completed" as const };
-            }
-          }
-          return booking;
-        });
 
         if (statusFilter) {
           bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
@@ -1719,7 +1706,7 @@ const app = defineApp([
       // Recompute remaining server-side
       const payments = await getPaymentsByBookingId(env.DB, params.id);
       const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
-      const finalTotal = Math.max(0, booking.total_price - (booking.promo_discount || 0));
+      const finalTotal = getBookingAmountDue(booking);
       const remaining = finalTotal - totalPaid;
 
       if (remaining <= 0) return jsonError("Cette réservation est déjà soldée", 400);

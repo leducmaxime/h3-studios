@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatPrice } from "@/lib/booking";
+import { getBookingAmountDue } from "@/lib/booking-totals";
 import { exportPaymentsCSV } from "@/lib/export";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -647,6 +648,8 @@ export function AdminPayments() {
 
       const booking = bJson.data as {
         booking_ref: string;
+        base_price: number;
+        equipment_price: number;
         total_price: number;
         promo_discount: number;
         promo_code?: string | null;
@@ -659,7 +662,7 @@ export function AdminPayments() {
       };
       const paymentsRows = pJson.data as Array<{ amount: number; status: string }>;
       const totalPaid = paymentsRows.reduce((acc, p) => (p.status === "paid" ? acc + p.amount : acc), 0);
-      const finalTotal = Math.max(booking.total_price - (booking.promo_discount || 0), 0);
+      const finalTotal = getBookingAmountDue(booking);
       const remaining = Math.max(finalTotal - totalPaid, 0);
 
       if (remaining <= 0) {

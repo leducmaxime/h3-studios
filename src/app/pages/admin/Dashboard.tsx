@@ -41,6 +41,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { STUDIOS, SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
+import { getBookingAmountDue } from "@/lib/booking-totals";
 import { generateMonthlyReportPDF } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -119,6 +120,8 @@ interface CalendarBooking {
   start_time: string;
   end_time: string;
   status: string;
+  base_price: number;
+  equipment_price: number;
   total_price: number;
   promo_discount?: number;
 }
@@ -329,7 +332,7 @@ function ActivityCalendarDay({
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold text-primary">
-                    {formatPrice((b.total_price || 0) - (b.promo_discount || 0))}
+                    {formatPrice(getBookingAmountDue({ ...b, promo_discount: b.promo_discount ?? 0 }))}
                   </p>
                   {(b.promo_discount || 0) > 0 && (
                     <p className="text-[10px] text-emerald-500">-{formatPrice(b.promo_discount || 0)}</p>

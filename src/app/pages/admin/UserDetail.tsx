@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
+import { getBookingAmountDue } from "@/lib/booking-totals";
 import { type DbUser, type DbBooking, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 
@@ -330,8 +331,8 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
       case "start_time":
         return (a.start_time > b.start_time ? 1 : -1) * dir;
       case "total_price": {
-        const pa = (a.total_price || 0) - (a.promo_discount || 0);
-        const pb = (b.total_price || 0) - (b.promo_discount || 0);
+        const pa = getBookingAmountDue(a);
+        const pb = getBookingAmountDue(b);
         return (pa > pb ? 1 : -1) * dir;
       }
       case "status":
@@ -360,7 +361,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
   const podiumCount = nonCancelledBookings.filter((b) => b.studio_id === "le-podium").length;
   // Panier moyen
   const totalSpentCalc = nonCancelledBookings.reduce(
-    (acc, b) => acc + Math.max(0, (b.total_price || 0) - (b.promo_discount || 0)), 0,
+    (acc, b) => acc + getBookingAmountDue(b), 0,
   );
   const panierMoyen = nonCancelledBookings.length > 0 ? totalSpentCalc / nonCancelledBookings.length : 0;
 
@@ -811,7 +812,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <span className="font-medium">{formatPrice((b.total_price || 0) - (b.promo_discount || 0))}</span>
+                            <span className="font-medium">{formatPrice(getBookingAmountDue(b))}</span>
                             {b.promo_discount > 0 && (
                               <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
                             )}

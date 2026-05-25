@@ -47,6 +47,7 @@ import {
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPrice, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
+import { getBookingAmountDue, getBookingBalance, parseAmountInput } from "@/lib/booking-totals";
 
 interface BookingWithPromo extends DbBooking {
   promo_code_type?: string | null;
@@ -360,7 +361,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const handleSaveDiscount = async () => {
     if (!booking) return;
-    const discount = parseFloat(discountValue.replace(",", "."));
+    const discount = parseAmountInput(discountValue);
     if (isNaN(discount) || discount < 0) { toast.error("Montant invalide"); return; }
     if (discount > booking.total_price) { toast.error("La remise ne peut pas dépasser le prix total"); return; }
     setSavingDiscount(true);
@@ -412,8 +413,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const handleAddPayment = async () => {
     if (!booking || !newPayment.amount) return;
-    const n = parseFloat(newPayment.amount.replace(/\s/g, "").replace(",", "."));
-    const amount = Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+    const amount = parseAmountInput(newPayment.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error("Montant invalide");
       return;
@@ -450,7 +450,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const handleEditPayment = async () => {
     if (!editPayment) return;
-    const amount = parseFloat(editPaymentAmount.replace(",", "."));
+    const amount = parseAmountInput(editPaymentAmount);
     if (isNaN(amount) || amount <= 0) return;
     // max = reste à payer + montant actuel de ce paiement (puisqu'on le remplace)
     const maxAmount = booking ? balance + (editPayment?.amount ?? 0) : undefined;
@@ -516,9 +516,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
   const totalPrice = Number(booking.total_price) || 0;
-  const promoDiscount = Number(booking.promo_discount) || 0;
-  const finalTotal = Math.max(0, totalPrice - promoDiscount);
-  const balance = finalTotal - totalPaid;
+  const finalTotal = getBookingAmountDue(booking);
+  const balance = getBookingBalance(booking, payments);
 
   const methodLabels: Record<string, string> = {
     card: "Carte bancaire",
@@ -916,7 +915,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                         onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
                         className="bg-zinc-800 border-zinc-700 h-11"
                       />
-                      {newPayment.amount && parseFloat(newPayment.amount.replace(",", ".")) > balance && (
+                      {newPayment.amount && parseAmountInput(newPayment.amount) > balance && (
                         <p className="text-xs text-destructive mt-1">Maximum : {formatPrice(balance)} (reste à payer)</p>
                       )}
                     </div>
@@ -1206,7 +1205,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 className="border-zinc-700 bg-zinc-800"
                 autoFocus
               />
-              {booking && parseFloat(editPaymentAmount.replace(",", ".")) > balance + (editPayment?.amount ?? 0) && (
+              {booking && parseAmountInput(editPaymentAmount) > balance + (editPayment?.amount ?? 0) && (
                 <p className="text-xs text-destructive">
                   Maximum : {formatPrice(balance + (editPayment?.amount ?? 0))} (reste à payer)
                 </p>
@@ -1231,7 +1230,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
             <Button variant="outline" onClick={() => setEditPaymentOpen(false)} className="border-zinc-700">
               Annuler
             </Button>
-            <Button onClick={handleEditPayment} disabled={editingPayment || (booking !== null && parseFloat(editPaymentAmount.replace(",", ".")) > balance + (editPayment?.amount ?? 0))}>
+            <Button onClick={handleEditPayment} disabled={editingPayment || (booking !== null && parseAmountInput(editPaymentAmount) > balance + (editPayment?.amount ?? 0))}>
               {editingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Enregistrer
             </Button>

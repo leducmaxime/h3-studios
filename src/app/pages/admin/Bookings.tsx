@@ -36,6 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
+import { getBookingAmountDue, getDisplayStatus } from "@/lib/booking-totals";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus, type BookingWithUser, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
@@ -470,7 +471,8 @@ export function AdminBookings() {
                 </tr>
                 ) : (
                 bookings.map((booking) => {
-                  const statusConfig = STATUS_CONFIG[booking.status];
+                  const displayStatus = getDisplayStatus(booking) as BookingStatus;
+                  const statusConfig = STATUS_CONFIG[displayStatus] ?? STATUS_CONFIG[booking.status];
                   const studioName = STUDIOS[booking.studio_id as StudioId]?.name || booking.studio_id;
 
                   const paymentStatus = booking.payment_status;
@@ -528,7 +530,7 @@ export function AdminBookings() {
                       </td>
                       <td className="px-4 py-3 text-sm">{studioName}</td>
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className={STATUS_CLASSES[booking.status]}>
+                        <Badge variant="outline" className={STATUS_CLASSES[displayStatus] ?? STATUS_CLASSES[booking.status]}>
                           {statusConfig.label}
                         </Badge>
                       </td>
@@ -536,7 +538,7 @@ export function AdminBookings() {
                         {paymentBadge}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
-                        {formatPrice(Math.max(0, booking.total_price - (booking.promo_discount || 0)))}
+                        {formatPrice(getBookingAmountDue(booking))}
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
