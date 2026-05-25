@@ -1761,10 +1761,6 @@ const app = defineApp([
           return jsonError("Méthode de paiement invalide", 400);
         }
 
-        if (booking.payment_method === "card" && body.method !== "card") {
-          return jsonError("En ligne, les paiements sont uniquement par CB", 400);
-        }
-
         const validStatus = ["pending", "paid", "refunded", "partial-refund"] as const;
         if (!validStatus.includes(body.status as (typeof validStatus)[number])) {
           return jsonError("Statut de paiement invalide", 400);
