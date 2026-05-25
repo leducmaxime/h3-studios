@@ -425,12 +425,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
     setAddingPayment(true);
     try {
-      if (booking.payment_method === "card" && newPayment.method !== "card") {
-        toast.error("En ligne, les paiements sont uniquement par CB");
-        return;
-      }
-
-        const res = await fetch(`/api/admin/bookings/${booking.id}/payments`, {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/payments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
