@@ -17,8 +17,8 @@ import {
   formatPrice,
   calculatePrice,
   PRICING,
+  STUDIOS,
   ALL_TIME_SLOTS,
-  canBeStartTime,
   canBeEndTime,
   isPeakTime,
   type GroupType,
@@ -88,7 +88,6 @@ export function TimeSlotPicker({
       const dateSlots = getStudioTimeSlots(studioId, date);
       const apiSlots = slotsByStudio[studioId];
       if (apiSlots && apiSlots.length > 0) {
-        // Use API slots filtered to studio hours
         result[studioId] = dateSlots;
       } else {
         result[studioId] = dateSlots;
@@ -118,7 +117,6 @@ export function TimeSlotPicker({
   // Start a selection on a studio (clears previous studio selection)
   const startStudioSelection = useCallback((studioId: StudioId, slot: string) => {
     if (activeStudio && activeStudio !== studioId) {
-      // Switching studios — clear previous selection
       setSelectedStart(null);
       setSelectedEnd(null);
       onClear();
@@ -138,17 +136,16 @@ export function TimeSlotPicker({
       onClear();
       return false;
     }
-    
+
     const visibleSlots = studioSlots[studioId];
     const startIdx = ALL_TIME_SLOTS.indexOf(start);
     let endIdx = ALL_TIME_SLOTS.indexOf(end);
     if (end === "00:00") endIdx = ALL_TIME_SLOTS.length;
-    
+
     if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
       return false;
     }
 
-    // Check all slots in range are available in this studio
     for (let i = startIdx; i < endIdx; i++) {
       const time = ALL_TIME_SLOTS[i];
       if (!visibleSlots.includes(time) || checkSlotBooked(time, studioId)) {
@@ -210,7 +207,7 @@ export function TimeSlotPicker({
       }
 
       if (isSelectedStart || isSelectedEnd) {
-        return isPeak ? "bg-primary/50 border-primary/70 ring-2 ring-primary ring-offset-1 ring-offset-black" 
+        return isPeak ? "bg-primary/50 border-primary/70 ring-2 ring-primary ring-offset-1 ring-offset-black"
                       : "bg-primary/40 border-primary/60 ring-2 ring-primary ring-offset-1 ring-offset-black";
       }
 
@@ -223,7 +220,7 @@ export function TimeSlotPicker({
         const visibleSlots = studioSlots[studioId];
         const startIdx = visibleSlots.indexOf(selectedStart);
         const slotIdx = visibleSlots.indexOf(slot);
-        
+
         if (hoveredEndSlot && slotIdx > startIdx && slotIdx < visibleSlots.indexOf(hoveredEndSlot)) {
           return isPeak ? "bg-primary/30 border-primary/50 cursor-pointer" : "bg-primary/20 border-primary/40 cursor-pointer";
         }
@@ -275,20 +272,73 @@ export function TimeSlotPicker({
     };
   }, [selectedStart, selectedEnd, activeStudio, groupType, date]);
 
+  // Compute price range label for a studio's mini-card
+  const getPriceRangeLabel = (studioId: StudioId): string => {
+    const pricing = PRICING[studioId][groupType];
+    // Rates are per 30-min slot — multiply by 2 to get hourly
+    const offPeakHourly = pricing.offPeak * 2;
+    const peakHourly = pricing.peak * 2;
+    if (offPeakHourly === peakHourly) {
+      return `${offPeakHourly}€/h`;
+    }
+    return `${offPeakHourly}€ – ${peakHourly}€/h`;
+  };
+
   const renderStudioBlock = (studioId: StudioId) => {
     const slots = studioSlots[studioId];
     const isActive = activeStudio === studioId;
-    const slotsPerRow = 8;
+    const studio = STUDIOS[studioId];
+
+    // Max 3 rows — compute columns needed
+    const cols = Math.ceil(slots.length / 3);
     const rows: string[][] = [];
-    for (let i = 0; i < slots.length; i += slotsPerRow) {
-      rows.push(slots.slice(i, Math.min(i + slotsPerRow, slots.length)));
+    for (let i = 0; i < slots.length; i += cols) {
+      rows.push(slots.slice(i, Math.min(i + cols, slots.length)));
     }
 
     return (
-      <div key={studioId} className="flex flex-col gap-3">
-        <h4 className={`text-sm font-bold tracking-wide uppercase ${isActive ? "text-primary" : "text-white/50"}`}>
-          {STUDIO_LABELS[studioId]}
-        </h4>
+      <div
+        key={studioId}
+        className={`flex flex-col gap-3 transition-opacity duration-200 ${
+          activeStudio && !isActive ? "opacity-60" : "opacity-100"
+        }`}
+      >
+        {/* Mini-card */}
+        <div
+          className={`relative overflow-hidden rounded-xl border-2 transition-all duration-200 ${
+            isActive
+              ? "border-primary shadow-[0_0_16px_-4px_var(--color-primary,theme(colors.primary))]"
+              : "border-white/15"
+          }`}
+        >
+          {/* Photo */}
+          <div className="relative h-[100px] w-full overflow-hidden">
+            <img
+              src={studio.image}
+              alt={studio.name}
+              className="h-full w-full object-cover"
+            />
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+            {/* Studio name + price badge */}
+            <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-3 pb-2.5">
+              <span className="text-sm font-bold tracking-widest text-white drop-shadow-lg uppercase">
+                {studio.name}
+              </span>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  isActive
+                    ? "bg-primary text-black"
+                    : "bg-white/20 text-white backdrop-blur-sm"
+                }`}
+              >
+                {getPriceRangeLabel(studioId)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Slot grid — max 3 rows */}
         <div className="flex flex-col gap-1.5">
           {rows.map((row, rowIdx) => (
             <div key={rowIdx} className="flex gap-1.5">
@@ -303,27 +353,27 @@ export function TimeSlotPicker({
                 return (
                   <button
                     key={slot}
-                    className={`relative flex-1 h-11 sm:h-12 rounded-lg border transition-all duration-150 ${style}`}
+                    className={`relative flex-1 h-10 rounded-lg border transition-all duration-150 ${style}`}
                     onClick={() => handleSlotClick(slot, studioId)}
                     onMouseEnter={() => handleSlotMouseEnter(slot)}
                     onMouseLeave={handleSlotMouseLeave}
                     disabled={false}
                   >
                     <div className="flex flex-col items-center justify-center h-full">
-                      <span className="text-xs sm:text-sm font-semibold">
+                      <span className="text-[11px] sm:text-xs font-semibold leading-none">
                         {formatHourLabel(slot)}
                       </span>
                       {isPeak && !isBooked && (
-                        <Zap className="w-3 h-3 text-primary/60 mt-0.5" />
+                        <Zap className="w-2.5 h-2.5 text-primary/60 mt-0.5" />
                       )}
                     </div>
                     {isStart && (
-                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap">
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10">
                         DÉBUT
                       </div>
                     )}
                     {isEnd && (
-                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap">
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10">
                         FIN
                       </div>
                     )}
@@ -369,11 +419,11 @@ export function TimeSlotPicker({
           )}
         </div>
 
-        {/* La Scène block */}
-        {renderStudioBlock("la-scene")}
-
-        {/* Le Podium block */}
-        {renderStudioBlock("le-podium")}
+        {/* Two studios side by side on desktop, stacked on mobile */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {renderStudioBlock("la-scene")}
+          {renderStudioBlock("le-podium")}
+        </div>
 
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-4 text-xs text-white/50">
