@@ -586,13 +586,13 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               </div>
 
               {/* Équipements */}
-              {(editingEquipment ? equipmentCatalogue.length > 0 : equipment.length > 0) && (
+              {equipmentCatalogue.length > 0 && (
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Équipements</p>
                     {!editingEquipment && (
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-400" onClick={() => { setEquipmentDraft(equipment.map(e => ({ id: e.id, quantity: e.quantity }))); setEditingEquipment(true); }}>
-                        <Pencil className="h-3 w-3 mr-1" />Modifier
+                        <Pencil className="h-3 w-3 mr-1" />{equipment.length === 0 ? "Ajouter" : "Modifier"}
                       </Button>
                     )}
                   </div>
