@@ -558,13 +558,7 @@ export function AdminBookings() {
                                 <span>Marquer terminé</span>
                               </DropdownMenuItem>
                             )}
-                            {booking.payment_status !== "paid" && booking.status !== "cancelled" && (
-                              <DropdownMenuItem onClick={() => handleMarkPaid(booking.id)}>
-                                <Banknote className="h-4 w-4 text-emerald-400" />
-                                <span>Encaisser le solde</span>
-                              </DropdownMenuItem>
-                            )}
-                            {(booking.status === "confirmed" || booking.payment_status !== "paid") && booking.status !== "cancelled" && <DropdownMenuSeparator />}
+                            {booking.status === "confirmed" && <DropdownMenuSeparator />}
                             {booking.status === "confirmed" && (
                               <>
                                 <DropdownMenuItem
