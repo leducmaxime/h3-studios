@@ -900,14 +900,15 @@ export async function addPayment(
     method: string;
     status: DbPaymentStatus;
     paid_at?: string | null;
+    stripe_event_id?: string | null;
   }
 ): Promise<{ success: boolean; id: string }> {
   const id = generateId();
   const timestamp = now();
   
   await db.prepare(
-    `INSERT INTO payments (id, booking_id, amount, method, status, refunded_amount, paid_at, created_at)
-     VALUES (?, ?, ?, ?, ?, 0, ?, ?)`
+    `INSERT INTO payments (id, booking_id, amount, method, status, refunded_amount, paid_at, created_at, stripe_event_id)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)`
   ).bind(
     id, 
     data.booking_id, 
@@ -915,7 +916,8 @@ export async function addPayment(
     data.method, 
     data.status, 
     data.paid_at || (data.status === "paid" ? timestamp : null),
-    timestamp
+    timestamp,
+    data.stripe_event_id || null
   ).run();
 
   await recomputeBookingPaymentStatus(db, data.booking_id);

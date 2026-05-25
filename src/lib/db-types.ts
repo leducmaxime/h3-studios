@@ -128,6 +128,7 @@ export interface DbPayment {
   refunded_amount: number;
   paid_at: string | null;
   created_at: string;
+  stripe_event_id: string | null;
 }
 
 export interface AdminPaymentRow extends DbPayment {

@@ -56,29 +56,9 @@ export async function createCheckoutSession(
       "Authorization": `Bearer ${secretKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
       "Stripe-Version": STRIPE_API_VERSION,
-      "Idempotency-Key": [...params.bookingRefs].sort().join(","),
+      "Idempotency-Key": `${[...params.bookingRefs].sort().join(",")}-${params.amountCents}`,
     },
     body: body.toString(),
-  });
-
-  if (!response.ok) {
-    const error = await response.json() as { error?: { message?: string } };
-    throw new Error(`Stripe API error: ${error.error?.message || response.statusText}`);
-  }
-
-  return response.json();
-}
-
-export async function getCheckoutSession(
-  secretKey: string,
-  sessionId: string
-): Promise<StripeCheckoutSession> {
-  const response = await fetch(`${STRIPE_API_URL}/checkout/sessions/${sessionId}`, {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${secretKey}`,
-      "Stripe-Version": STRIPE_API_VERSION,
-    },
   });
 
   if (!response.ok) {
@@ -103,23 +83,13 @@ export async function verifyWebhookSignature(
   }
 
   // Parse the signature header (format: t=timestamp,v1=signature,v1=signature2,...)
-  const elements = signatureHeader.split(",");
-  const signatureMap: Record<string, string[]> = {};
-  let timestamp: number | undefined;
+  const parts = new Map(signatureHeader.split(",").map(p => {
+    const [k, v] = p.split("=");
+    return [k, v] as const;
+  }));
+  const timestamp = parseInt(parts.get("t") ?? "", 10);
 
-  for (const element of elements) {
-    const [key, value] = element.split("=");
-    if (key === "t") {
-      timestamp = parseInt(value, 10);
-    } else if (key && value) {
-      if (!signatureMap[key]) {
-        signatureMap[key] = [];
-      }
-      signatureMap[key].push(value);
-    }
-  }
-
-  if (!timestamp || !signatureMap["v1"] || signatureMap["v1"].length === 0) {
+  if (!timestamp || !parts.has("v1")) {
     return false;
   }
 
@@ -153,7 +123,10 @@ export async function verifyWebhookSignature(
     .join("");
 
   // Compare signatures (timing-safe comparison)
-  const valid = signatureMap["v1"].some(sig => timingSafeEqual(sig, expectedSignature));
+  const valid = signatureHeader.split(",")
+    .filter(p => p.startsWith("v1="))
+    .map(p => p.slice(3))
+    .some(sig => timingSafeEqual(sig, expectedSignature));
 
   return valid;
 }
@@ -181,19 +154,22 @@ export async function constructWebhookEvent(
   payload: string,
   signatureHeader: string,
   webhookSecret: string
-): Promise<{ event: StripeWebhookEvent | null; error?: string }> {
+): Promise<StripeWebhookEvent | null> {
   if (!webhookSecret) {
-    return { event: null, error: "Webhook secret not configured" };
+    console.error("Webhook secret not configured");
+    return null;
   }
 
   const valid = await verifyWebhookSignature(payload, signatureHeader, webhookSecret);
   if (!valid) {
-    return { event: null, error: "Invalid webhook signature" };
+    console.error("Invalid webhook signature");
+    return null;
   }
 
   try {
-    return { event: JSON.parse(payload) };
+    return JSON.parse(payload);
   } catch {
-    return { event: null, error: "Invalid JSON payload" };
+    console.error("Invalid JSON payload in webhook");
+    return null;
   }
 }

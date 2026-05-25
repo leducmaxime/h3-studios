@@ -4308,11 +4308,10 @@ const app = defineApp([
       const signature = request.headers.get("stripe-signature") || "";
       const webhookSecret = env.STRIPE_WEBHOOK_SECRET || "";
 
-      const { event, error } = await constructWebhookEvent(payload, signature, webhookSecret);
+      const event = await constructWebhookEvent(payload, signature, webhookSecret);
       
-      if (error || !event) {
-        console.error("Webhook verification failed:", error);
-        return new Response(JSON.stringify({ error: error || "Invalid webhook" }), { 
+      if (!event) {
+        return new Response(JSON.stringify({ error: "Invalid webhook" }), { 
           status: 400,
           headers: { "Content-Type": "application/json" },
         });
@@ -4327,30 +4326,25 @@ const app = defineApp([
       
       console.log("Payment confirmed for refs:", bookingRefs);
 
-      let alreadyProcessed = false;
+      // Fetch all bookings once (not twice per ref in the loop)
+      const bookings = (await Promise.all(bookingRefs.map(ref => getBookingByRef(env.DB, ref))))
+        .filter((b): b is NonNullable<typeof b> => b !== null);
 
-      // Validate session total against sum of per-booking prices (once, outside loop)
-      const expectedTotalCents = bookingRefs.length > 0
-        ? (await Promise.all(bookingRefs.map(ref => getBookingByRef(env.DB, ref))))
-            .filter(Boolean)
-            .reduce((sum, b) => sum + Math.round(b!.total_price * 100), 0)
-        : 0;
+      // Validate session total against sum of per-booking prices
+      const expectedTotalCents = bookings.reduce((sum, b) => sum + Math.round(b.total_price * 100), 0);
       if (session.amount_total && session.amount_total !== expectedTotalCents) {
         console.warn(`Webhook: total mismatch — Stripe: ${session.amount_total}, DB sum: ${expectedTotalCents}`);
       }
 
-      for (const ref of bookingRefs) {
-        const booking = await getBookingByRef(env.DB, ref);
-        if (!booking) {
-          console.error(`Webhook error: Booking not found for ref ${ref}`);
-          continue;
-        }
+      let anyNewlyPaid = false;
 
-        // Idempotency: skip if this booking already has a paid payment
-        const existingPayment = await getPaymentByBookingId(env.DB, booking.id);
-        if (existingPayment?.status === "paid") {
-          console.log(`Webhook: booking ${ref} already paid, skipping duplicate`);
-          alreadyProcessed = true;
+      for (const booking of bookings) {
+        // Idempotency via Stripe event ID: check if this event was already processed
+        const existingEvent = await env.DB.prepare(
+          "SELECT 1 FROM payments WHERE booking_id = ? AND stripe_event_id = ? LIMIT 1"
+        ).bind(booking.id, event.id).first();
+        if (existingEvent) {
+          console.log(`Webhook: event ${event.id} already processed for booking ${booking.booking_ref}, skipping`);
           continue;
         }
 
@@ -4363,62 +4357,52 @@ const app = defineApp([
           method: "card",
           status: "paid",
           paid_at: new Date().toISOString().replace("T", " ").slice(0, 19),
+          stripe_event_id: event.id,
         });
 
-        await env.DB.prepare(
-          "UPDATE bookings SET payment_status = 'paid' WHERE id = ?"
-        ).bind(booking.id).run();
+        anyNewlyPaid = true;
       }
 
-      // After the for loop that processes payments, send ONE consolidated email
-      if (!alreadyProcessed && env.RESEND_API_KEY && bookingRefs.length > 0) {
-        // Fetch all bookings (already updated above)
-        const allBookings = [];
-        for (const ref of bookingRefs) {
-          const b = await getBookingByRef(env.DB, ref);
-          if (b) allBookings.push(b);
-        }
+      // Send ONE consolidated confirmation email if any booking was newly paid
+      if (anyNewlyPaid && env.RESEND_API_KEY && bookings.length > 0) {
+        const firstBooking = bookings[0];
+        const user = await getUserById(env.DB, firstBooking.user_id);
+        if (user && user.email) {
+          const allSlots: BookingSlot[] = bookings.map(b => ({
+            bookingRef: b.booking_ref,
+            studioId: b.studio_id,
+            date: b.date,
+            startTime: b.start_time,
+            endTime: b.end_time,
+            groupType: b.group_type,
+            equipment: b.equipment ? JSON.parse(b.equipment) : [],
+            equipmentPrice: b.equipment_price,
+            totalPrice: b.total_price,
+          }));
 
-        if (allBookings.length > 0) {
-          const firstBooking = allBookings[0];
-          const user = await getUserById(env.DB, firstBooking.user_id);
-          if (user && user.email) {
-            const allSlots: BookingSlot[] = allBookings.map(b => ({
-              bookingRef: b.booking_ref,
-              studioId: b.studio_id,
-              date: b.date,
-              startTime: b.start_time,
-              endTime: b.end_time,
-              groupType: b.group_type,
-              equipment: b.equipment ? JSON.parse(b.equipment) : [],
-              equipmentPrice: b.equipment_price,
-              totalPrice: b.total_price,
-            }));
-
-            const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
-              bookingRef: firstBooking.booking_ref,
-              studioId: firstBooking.studio_id,
-              date: firstBooking.date,
-              startTime: firstBooking.start_time,
-              endTime: firstBooking.end_time,
-              groupType: firstBooking.group_type,
-              equipment: firstBooking.equipment ? JSON.parse(firstBooking.equipment) : [],
-              equipmentPrice: firstBooking.equipment_price,
-              totalPrice: allBookings.reduce((sum, b) => sum + b.total_price, 0),
-              paymentMethod: "card",
-              paymentStatus: "paid",
-              userName: user.name,
-              userEmail: user.email,
-              userPhone: user.phone || "",
-              promoCode: firstBooking.promo_code,
-              promoDiscount: firstBooking.promo_discount,
-              promoType: firstBooking.promo_type,
-              allSlots: allSlots.length > 1 ? allSlots : undefined,
-            }).catch((err) => {
-              console.error(`Webhook: Failed to send consolidated confirmation email:`, err);
-            });
-            waitUntil(emailPromise);
-          }
+          const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
+            bookingRef: firstBooking.booking_ref,
+            studioId: firstBooking.studio_id,
+            date: firstBooking.date,
+            startTime: firstBooking.start_time,
+            endTime: firstBooking.end_time,
+            groupType: firstBooking.group_type,
+            equipment: firstBooking.equipment ? JSON.parse(firstBooking.equipment) : [],
+            equipmentPrice: firstBooking.equipment_price,
+            totalPrice: bookings.reduce((sum, b) => sum + b.total_price, 0),
+            paymentMethod: "card",
+            paymentStatus: "paid",
+            userName: user.name,
+            userEmail: user.email,
+            userPhone: user.phone || "",
+            promoCode: firstBooking.promo_code,
+            promoDiscount: firstBooking.promo_discount,
+            promoType: firstBooking.promo_type,
+            allSlots: allSlots.length > 1 ? allSlots : undefined,
+          }).catch((err) => {
+            console.error(`Webhook: Failed to send consolidated confirmation email:`, err);
+          });
+          waitUntil(emailPromise);
         }
       }
 
