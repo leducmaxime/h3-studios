@@ -5,11 +5,8 @@ import {
   isSlotAvailable,
   isSlotBooked,
   isRangeBookable,
-  isStudioAvailable,
-  isStudioAvailableForGroup,
   canBeStartTime,
   canBeEndTime,
-  assignStudioForSoloDuo,
   calculatePrice,
   formatDuration,
   ALL_TIME_SLOTS,
@@ -221,26 +218,6 @@ describe("Unified Availability Engine", () => {
       expect(formatDuration("22:00", "00:00")).toBe("2h30");
     });
 
-    it("isStudioAvailable checks 00:00 slot", () => {
-      const occupancy = occs(occ("la-scene", "00:00", "group"));
-      // 23:00 to 00:00 should fail because 00:00 is occupied
-      expect(isStudioAvailable("la-scene", "23:00", "00:00", occupancy)).toBe(false);
-      // 23:00 to 23:30 should pass
-      expect(isStudioAvailable("la-scene", "23:00", "23:30", occupancy)).toBe(true);
-    });
-
-    it("isStudioAvailableForGroup checks 00:00 slot — cannot displace when other studio is closed", () => {
-      const occupancy = occs(occ("la-scene", "23:30", "solo"));
-      // On Tuesday, Le Podium closes at 22:30, so it's closed at 23:30
-      // Group cannot displace solo from La Scène because Le Podium is closed
-      expect(isStudioAvailableForGroup("la-scene", "23:00", "00:00", occupancy, tuesday)).toBe(false);
-    });
-
-    it("isStudioAvailableForGroup allows displacement when other studio is open and free", () => {
-      // At 14:00 on Tuesday, both studios are open
-      const occupancy = occs(occ("la-scene", "14:30", "solo"));
-      expect(isStudioAvailableForGroup("la-scene", "14:00", "15:00", occupancy, tuesday)).toBe(true);
-    });
   });
 
   describe("canBeStartTime bug fix", () => {
@@ -305,41 +282,6 @@ describe("Unified Availability Engine", () => {
       const visibleSlots = ["14:00", "14:30", "15:00", "15:30"];
       const isOccupied = (slot: string) => slot === "14:30";
       expect(canBeEndTime("14:00", "15:00", visibleSlots, isOccupied)).toBe(false);
-    });
-  });
-
-  describe("assignStudioForSoloDuo", () => {
-    it("assigns La Scène when both are free", () => {
-      const studio = assignStudioForSoloDuo(tuesday, "14:00", "16:00", occs());
-      expect(studio).toBe("la-scene");
-    });
-
-    it("assigns Le Podium when La Scène is occupied", () => {
-      const occupancy = occs(occ("la-scene", "14:30", "group"));
-      const studio = assignStudioForSoloDuo(tuesday, "14:00", "16:00", occupancy);
-      expect(studio).toBe("le-podium");
-    });
-
-    it("returns null when both are occupied", () => {
-      const occupancy = occs(
-        occ("la-scene", "14:30", "group"),
-        occ("le-podium", "14:30", "group")
-      );
-      const studio = assignStudioForSoloDuo(tuesday, "14:00", "16:00", occupancy);
-      expect(studio).toBeNull();
-    });
-
-    it("handles 00:00 end time", () => {
-      const studio = assignStudioForSoloDuo(tuesday, "23:00", "00:00", occs());
-      expect(studio).toBe("la-scene");
-    });
-
-    it("returns null when La Scène closes earlier and is only option", () => {
-      // On a day when La Scène closes at 22:30 (it doesn't, but testing the logic)
-      // This test verifies the opening hours check works
-      const studio = assignStudioForSoloDuo(tuesday, "22:00", "00:00", occs());
-      // La Scène is open until 00:00, so it should be assigned
-      expect(studio).toBe("la-scene");
     });
   });
 

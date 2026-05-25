@@ -20,7 +20,7 @@ import {
   type CreateBooking,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
-import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, type StudioId } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 
 function generateId(): string {
@@ -313,6 +313,199 @@ export async function moveBookingToOtherStudio(
   return { success: true };
 }
 
+// ─── Group Displacement (priority booking) ─────────────────────────────────────
+
+/**
+ * Règle des 24h : une réservation solo/duo n'est déplaçable que si son start_time
+ * est à plus de 24h de maintenant (heure Paris).
+ */
+export function canDisplaceBooking(booking: { date: string; start_time: string }): boolean {
+  const { hours, minutes, dateISO } = getParisNow();
+  const nowMinutes = hours * 60 + minutes;
+
+  const [startH, startM] = booking.start_time.split(":").map(Number);
+  const bookingStartMinutes = startH * 60 + startM;
+
+  if (booking.date === dateISO) {
+    // Même jour : vérifier qu'il reste plus de 24h avant le début
+    return (bookingStartMinutes - nowMinutes) > 24 * 60;
+  }
+
+  // Date future : toujours déplaçable (à condition que la date soit > aujourd'hui)
+  return booking.date > dateISO;
+}
+
+/**
+ * Vérifie qu'un solo/duo peut être déplacé vers un autre studio.
+ * L'autre studio doit être libre (pas de conflit, pas de blocked slot)
+ * et ouvert sur toute la plage horaire de la réservation.
+ */
+export async function canMoveBookingToStudio(
+  db: D1Database,
+  bookingId: string,
+  newStudioId: string,
+): Promise<boolean> {
+  const booking = await db.prepare("SELECT * FROM bookings WHERE id = ?").bind(bookingId).first<DbBooking>();
+  if (!booking) return false;
+
+  // Vérifier les conflits sur l'autre studio
+  const conflict = await checkConflict(db, newStudioId, booking.date, booking.start_time, booking.end_time, bookingId);
+  if (conflict) return false;
+
+  // Vérifier les blocked slots
+  const blockedSlot = await checkBlockedSlotConflict(db, newStudioId, booking.date, booking.start_time, booking.end_time);
+  if (blockedSlot) return false;
+
+  // Vérifier que le studio est ouvert sur toute la plage
+  const bookingDate = new Date(booking.date + "T00:00:00");
+  const studioSlots = getStudioTimeSlots(newStudioId as StudioId, bookingDate);
+  const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
+  const endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
+  if (startIdx === -1 || endIdx === -1) return false;
+  for (let i = startIdx; i < endIdx; i++) {
+    if (!studioSlots.includes(ALL_TIME_SLOTS[i])) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Récupère les réservations solo/duo qui overlappent avec une plage horaire donnée
+ * et qui sont déplaçables (règle des 24h).
+ */
+export async function getDisplaceableBookings(
+  db: D1Database,
+  studioId: string,
+  date: string,
+  startTime: string,
+  endTime: string,
+): Promise<DbBooking[]> {
+  const result = await db.prepare(`
+    SELECT * FROM bookings
+    WHERE studio_id = ? AND date = ? AND status = 'confirmed'
+      AND group_type IN ('solo', 'duo')
+      AND start_time < ? AND end_time > ?
+    ORDER BY start_time ASC
+  `).bind(studioId, date, endTime, startTime).all<DbBooking>();
+
+  return result.results.filter((b) => canDisplaceBooking(b));
+}
+
+/**
+ * Crée une réservation groupe avec déplacement/annulation automatique des solo/duo en conflit.
+ *
+ * Pour chaque réservation solo/duo chevauchante (à +24h) :
+ * - Si l'autre studio est libre sur toute la plage → déplacement (UPDATE studio_id)
+ * - Sinon → annulation (UPDATE status = 'cancelled')
+ *
+ * Toutes les opérations sont exécutées dans un batch D1 (transaction implicite).
+ *
+ * Retourne les réservations déplacées et annulées pour l'envoi d'emails.
+ */
+export async function createBookingWithDisplacement(
+  db: D1Database,
+  data: CreateBooking,
+): Promise<{ booking: DbBooking; displaced: DbBooking[]; cancelled: DbBooking[] }> {
+  const id = generateId();
+  const timestamp = now();
+  const otherStudioId = data.studio_id === "la-scene" ? "le-podium" : "la-scene";
+
+  // 1. Trouver les réservations solo/duo déplaçables sur ce studio
+  const displaceable = await getDisplaceableBookings(
+    db, data.studio_id, data.date, data.start_time, data.end_time,
+  );
+
+  // 2. Vérifier les réservations non-déplaçables (groupes ou solo/duo à -24h)
+  // D'abord vérifier les groupes (jamais déplaçables)
+  const groupConflict = await db.prepare(`
+    SELECT * FROM bookings
+    WHERE studio_id = ? AND date = ? AND status = 'confirmed'
+      AND group_type = 'group'
+      AND start_time < ? AND end_time > ?
+    LIMIT 1
+  `).bind(data.studio_id, data.date, data.end_time, data.start_time).first<DbBooking>();
+
+  if (groupConflict) {
+    throw new Error("Conflit de créneau détecté — réservation non créée");
+  }
+
+  // Ensuite vérifier les solo/duo qui ne sont PAS déplaçables (<24h)
+  const allOverlapping = await db.prepare(`
+    SELECT * FROM bookings
+    WHERE studio_id = ? AND date = ? AND status = 'confirmed'
+      AND group_type IN ('solo', 'duo')
+      AND start_time < ? AND end_time > ?
+  `).bind(data.studio_id, data.date, data.end_time, data.start_time).all<DbBooking>();
+
+  const nonDisplaceable = allOverlapping.results.filter((b) => !canDisplaceBooking(b));
+  if (nonDisplaceable.length > 0) {
+    throw new Error("Conflit de créneau détecté — réservation non créée");
+  }
+
+  // Vérifier aussi les blocked slots
+  const blockedSlot = await checkBlockedSlotConflict(db, data.studio_id, data.date, data.start_time, data.end_time);
+  if (blockedSlot) {
+    throw new Error("Ce créneau est bloqué");
+  }
+
+  // 3. Pour chaque réservation déplaçable : déplacer ou annuler
+  const displaced: DbBooking[] = [];
+  const cancelled: DbBooking[] = [];
+  const statements: D1PreparedStatement[] = [];
+
+  for (const booking of displaceable) {
+    const canMove = await canMoveBookingToStudio(db, booking.id, otherStudioId);
+    if (canMove) {
+      // Déplacer vers l'autre studio
+      statements.push(
+        db.prepare("UPDATE bookings SET studio_id = ?, updated_at = ? WHERE id = ?")
+          .bind(otherStudioId, timestamp, booking.id),
+      );
+      displaced.push({ ...booking, studio_id: otherStudioId, updated_at: timestamp } as DbBooking);
+    } else {
+      // Annuler
+      statements.push(
+        db.prepare(`UPDATE bookings SET status = 'cancelled', cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ?`)
+          .bind(timestamp, "Déplacé par une réservation groupe", timestamp, booking.id),
+      );
+      cancelled.push({ ...booking, status: "cancelled" as BookingStatus, cancelled_at: timestamp, cancel_reason: "Déplacé par une réservation groupe", updated_at: timestamp } as DbBooking);
+    }
+  }
+
+  // 4. Insérer la nouvelle réservation groupe
+  statements.push(
+    db.prepare(`
+      INSERT INTO bookings (id, booking_ref, user_id, band_name, studio_id, date, start_time, end_time,
+        group_type, status, base_price, equipment_price, total_price, equipment,
+        payment_method, payment_status, notes, round_mode, promo_code, promo_discount, promo_type, created_at, updated_at, cancelled_at, cancel_reason)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM bookings
+        WHERE studio_id = ? AND date = ? AND status != 'cancelled'
+          AND start_time < ? AND end_time > ?
+      )
+    `).bind(
+      id, data.booking_ref, data.user_id, data.band_name, data.studio_id, data.date,
+      data.start_time, data.end_time, data.group_type, data.status,
+      data.base_price, data.equipment_price, data.total_price,
+      data.equipment, data.payment_method, data.payment_status,
+      data.notes, data.round_mode, data.promo_code || null, data.promo_discount, data.promo_type || null, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
+      // WHERE NOT EXISTS params
+      data.studio_id, data.date, data.end_time, data.start_time,
+    ),
+  );
+
+  // 5. Exécuter le batch
+  await db.batch(statements);
+
+  // 6. Récupérer le booking créé
+  const createdBooking = await getBookingById(db, id);
+  if (!createdBooking) {
+    throw new Error("Échec de création de la réservation");
+  }
+
+  return { booking: createdBooking, displaced, cancelled };
+}
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 export async function getUsers(
