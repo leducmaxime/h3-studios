@@ -351,7 +351,14 @@ export function AdminCalendar() {
       .then(r => r.json())
       .then((data: any) => {
         if (!data.success) return;
-        const slots: Array<{ studioId: string; time: string; groupType?: string; bookingId?: string }> = data.data?.slots ?? [];
+        // New format: per-studio slots object. Flatten to array for conflict check.
+        const rawSlots = data.data?.slots ?? {};
+        const slots: Array<{ studioId: string; time: string; groupType?: string; bookingId?: string }> = [];
+        for (const [studioId, studioSlots] of Object.entries(rawSlots)) {
+          for (const slot of (studioSlots as Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>)) {
+            slots.push({ studioId, time: slot.time, groupType: slot.groupType, bookingId: slot.bookingId });
+          }
+        }
         const studioId = selectedBooking.studio_id;
         const bookingId = selectedBooking.id;
         // Génère les créneaux de 30min entre start et end

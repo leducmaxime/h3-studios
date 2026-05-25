@@ -4,10 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter";
-import { FlowChoice } from "@/components/booking/FlowChoice";
 import { WeekCalendar } from "@/components/booking/WeekCalendar";
 import { TimeSlotPicker } from "@/components/booking/TimeSlotPicker";
-import { StudioPicker } from "@/components/booking/StudioPicker";
 import { GroupTypeToggle } from "@/components/booking/GroupTypeToggle";
 import { StudioCard } from "@/components/booking/StudioCard";
 import { BookingForm } from "@/components/booking/BookingForm";
@@ -56,15 +54,12 @@ export function Reservation({ step }: ReservationProps) {
     canConfirmBooking,
     clientUser,
     clientUserLoading,
-    selectFlow,
     selectDate,
-    selectStudioFirst,
     selectTimeRange,
     clearTimeRange,
     confirmTimeSelection,
     setGroupType,
     selectStudio,
-    clearStudioSelection,
     updateUserInfo,
     updateEquipment,
     applyPromo,
@@ -72,7 +67,6 @@ export function Reservation({ step }: ReservationProps) {
     confirmBooking,
     clearDuplicateError,
     addAnotherBooking,
-    goToPaymentChoice,
     goToPaymentFromCoordonnees,
     goToCart,
     removeFromCart,
@@ -118,7 +112,6 @@ export function Reservation({ step }: ReservationProps) {
   const timeSlotRef = useRef<HTMLDivElement>(null);
   const studioRef = useRef<HTMLDivElement>(null);
   const recapRef = useRef<HTMLDivElement>(null);
-  const dateRef = useRef<HTMLDivElement>(null);
 
   const scrollToRef = (_ref: React.RefObject<HTMLDivElement | null>) => {
     return;
@@ -131,26 +124,19 @@ export function Reservation({ step }: ReservationProps) {
     }
   }, [state.step, state.selectedDate, state.startTime]);
 
-  // Auto-scroll when time is confirmed (studio picker appears for group time-first)
+  // Auto-scroll when time is confirmed (studio picker appears for group)
   useEffect(() => {
-    if (state.step === 1 && state.startTime && state.endTime && !state.studioId && state.flow === "time-first" && state.groupType === "group") {
+    if (state.step === 1 && state.startTime && state.endTime && !state.studioId && state.groupType === "group") {
       scrollToRef(studioRef);
     }
-  }, [state.step, state.startTime, state.endTime, state.studioId, state.flow, state.groupType]);
+  }, [state.step, state.startTime, state.endTime, state.studioId, state.groupType]);
 
-  // Auto-scroll when studio is selected (recap appears) — time-first group
+  // Auto-scroll when studio is selected (recap appears)
   useEffect(() => {
     if (state.step === 1 && state.studioId && state.startTime && state.endTime) {
       scrollToRef(recapRef);
     }
   }, [state.step, state.studioId, state.startTime, state.endTime]);
-
-  // Auto-scroll for studio-first: when studio selected, scroll to date picker
-  useEffect(() => {
-    if (state.step === 1 && state.flow === "studio-first" && state.studioId && !state.selectedDate) {
-      scrollToRef(dateRef);
-    }
-  }, [state.step, state.flow, state.studioId, state.selectedDate]);
 
   useEffect(() => {
     if (state.duplicateError) {
@@ -380,13 +366,10 @@ export function Reservation({ step }: ReservationProps) {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
           <div className="relative p-4 sm:p-6 md:p-8">
-            {state.step <= 8 && (
+            {state.step <= 5 && (
               <div className="mb-4">
                 <ProgressIndicator
                   currentStep={state.step}
-                  totalSteps={5}
-                  flow={state.flow || "time-first"}
-                  skipStudio={state.flow === "time-first" && (state.groupType === "solo" || state.groupType === "duo")}
                   onStepClick={navigateToStep}
                   cartLocked={state.cart.length > 0 && !state.isAddingNew}
                 />
@@ -417,21 +400,18 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
-            {/* Step 0: Group type + Flow choice */}
+            {/* Step 0: Group type */}
             {state.step === 0 && (
               <div className="flex flex-col gap-6">
                 <GroupTypeToggle
                   value={state.groupType}
                   onChange={setGroupType}
                 />
-                {state.groupType !== null && (
-                  <FlowChoice onSelect={selectFlow} />
-                )}
               </div>
             )}
 
-            {/* Step 1: Unified booking step — Time-first flow */}
-            {state.step === 1 && state.flow === "time-first" && (
+            {/* Step 1: Unified booking step — Date + Créneaux + Studio */}
+            {state.step === 1 && (
               <div className="flex flex-col gap-6">
                 <div className="flex items-center gap-4">
                   <button
@@ -443,20 +423,14 @@ export function Reservation({ step }: ReservationProps) {
                   </button>
                   <p className="text-white/70">
                     {!state.selectedDate
-                      ? "Étape 1 : Choisissez une date"
+                      ? "Choisissez une date"
                       : !state.startTime
-                        ? "Étape 2 : Choisissez votre créneau horaire"
+                        ? "Choisissez votre créneau horaire"
                         : state.groupType === "group" && !state.studioId
-                          ? "Étape 3 : Choisissez votre studio"
+                          ? "Choisissez votre studio"
                           : "Récapitulatif de votre réservation"}
                   </p>
                 </div>
-
-                {(state.groupType === "solo" || state.groupType === "duo") && (
-                  <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center text-sm font-medium text-primary/90">
-                    Le choix du studio se fera sur place selon la disponibilité, priorité aux groupes.
-                  </p>
-                )}
 
                 {/* Date picker */}
                 <WeekCalendar
@@ -534,106 +508,8 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
-            {/* Step 1: Unified booking step — Studio-first flow */}
-            {state.step === 1 && state.flow === "studio-first" && (
-              <div className="flex flex-col gap-6">
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={goBack}
-                    className="rounded-full p-2 transition-colors hover:bg-white/15"
-                    aria-label="Retour"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <p className="text-white/70">
-                    {!state.studioId
-                      ? "Étape 1 : Choisissez votre studio"
-                      : !state.selectedDate
-                        ? "Étape 2 : Choisissez une date"
-                        : !state.startTime
-                          ? "Étape 3 : Choisissez votre créneau horaire"
-                          : "Récapitulatif de votre réservation"}
-                  </p>
-                </div>
-
-                {/* Studio section — picker OR selected studio card */}
-                {state.studioId ? (
-                  <div className="rounded-xl border-2 border-primary bg-primary/10 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary">
-                          <Check className="h-5 w-5 text-black" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-white/60">Studio sélectionné</p>
-                          <p className="text-lg font-semibold">{STUDIOS[state.studioId as StudioId].name}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={clearStudioSelection}
-                        className="rounded-lg px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
-                      >
-                        Changer
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <StudioPicker
-                    onSelect={selectStudioFirst}
-                    onBack={goBack}
-                    groupType={state.groupType || "group"}
-                    hideHeader
-                  />
-                )}
-
-                {/* Date picker — appears after studio selection */}
-                {state.studioId && (
-                  <div ref={dateRef}>
-                    <span className="mb-3 block text-sm font-medium text-white/70">
-                      Choisissez une date
-                    </span>
-                    <WeekCalendar
-                      selectedDate={state.selectedDate}
-                      onSelectDate={selectDate}
-                      studioFilter={state.studioId}
-                      cart={state.cart}
-                    />
-                  </div>
-                )}
-
-                {/* Time slot picker — appears after date selection */}
-                {state.studioId && state.selectedDate && (
-                  <div ref={timeSlotRef}>
-                    <TimeSlotPicker
-                      date={state.selectedDate}
-                      availability={mergedAvailability}
-                      startTime={state.startTime}
-                      endTime={state.endTime}
-                      onSelectRange={selectTimeRange}
-                      onClear={clearTimeRange}
-                      onConfirm={confirmTimeSelection}
-                      onBack={goBack}
-                      canConfirm={canProceedToStudio}
-                      studioFilter={state.studioId}
-                      hideHeader
-                      groupType={state.groupType || "group"}
-                      minAdvanceHours={minAdvanceHours}
-                      minAdvanceCutoffTime={minAdvanceCutoffTime}
-                    />
-                  </div>
-                )}
-
-                {/* Recap — appears after time selection */}
-                {state.studioId && state.selectedDate && state.startTime && state.endTime && (
-                  <div ref={recapRef}>
-                    {renderRecapSection()}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Step 3: Coordonnées (after cart, before payment) */}
-            {state.step === 3 && (
+            {/* Step 2: Coordonnées (after cart, before payment) */}
+            {state.step === 2 && (
                 <BookingForm
                   date={state.cart[0]?.date || new Date()}
                   startTime={state.cart[0]?.startTime || ""}
@@ -655,8 +531,8 @@ export function Reservation({ step }: ReservationProps) {
                 />
               )}
 
-            {/* Step 5: Cart page */}
-            {state.step === 5 && (
+            {/* Step 3: Cart page */}
+            {state.step === 3 && (
               <div className="flex flex-col gap-6">
                 <div className="flex items-center gap-2">
                   <ShoppingCart className="h-5 w-5 text-primary" />
@@ -768,7 +644,7 @@ export function Reservation({ step }: ReservationProps) {
                             window.location.href = "/mon-compte/connexion?redirect=/reservation/coordonnees";
                             return;
                           }
-                          goToPaymentChoice();
+                          goBack();
                         }}
                         disabled={clientUserLoading}
                         className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -788,8 +664,8 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
-            {/* Step 6: Payment choice */}
-            {state.step === 6 && (
+            {/* Step 4: Paiement (PaymentChoice + StripeRedirect) */}
+            {state.step === 4 && !state.paymentMethod && (
               <PaymentChoice
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -797,9 +673,7 @@ export function Reservation({ step }: ReservationProps) {
                 onBack={goBack}
               />
             )}
-
-            {/* Step 7: Stripe payment */}
-            {state.step === 7 && (
+            {state.step === 4 && state.paymentMethod === "card" && (
               <StripeRedirect
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -809,8 +683,8 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {/* Step 8: Done */}
-            {state.step === 8 && (
+            {/* Step 5: Done */}
+            {state.step === 5 && (
               <FinalCheckout
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -831,7 +705,7 @@ export function Reservation({ step }: ReservationProps) {
         </p>
       )}
 
-      {state.step > 0 && state.step < 8 && (
+      {state.step > 0 && state.step < 5 && (
         <button
           onClick={resetBooking}
           className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/15 hover:text-white"

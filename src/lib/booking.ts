@@ -98,8 +98,7 @@ export function calculatePromoDiscount(promo: PromoCode, total: number): number 
 }
 
 export interface BookingState {
-  flow: BookingFlow | null;
-  step: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  step: 0 | 1 | 2 | 3 | 4 | 5;
   selectedDate: Date | null;
   startTime: string | null;
   endTime: string | null;
@@ -401,90 +400,6 @@ export function isRangeBookable(
 // =============================================================================
 
 /**
- * Check if a studio is strictly available for the given time range.
- * Any occupation (group, solo, duo, or blocked) makes it unavailable.
- */
-export function isStudioAvailable(
-  studioId: StudioId,
-  startTime: string,
-  endTime: string,
-  occupancy: Set<OccupancyInfo>
-): boolean {
-  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
-  const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
-
-  for (const slot of range) {
-    const occupant = Array.from(occupancy).find(
-      (o) => o.studioId === studioId && o.time === slot
-    );
-    if (occupant) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
- * Check if a studio is available for a group booking.
- * A studio is available if it's strictly free, or if it's occupied by a solo/duo
- * that can be moved to the other studio (which must be strictly free).
- */
-export function isStudioAvailableForGroup(
-  studioId: StudioId,
-  startTime: string,
-  endTime: string,
-  occupancy: Set<OccupancyInfo>,
-  date: Date
-): boolean {
-  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
-  const range = ALL_TIME_SLOTS.slice(startIdx, endIdx);
-
-  const otherStudioId = studioId === "la-scene" ? "le-podium" : "la-scene";
-  const otherStudioSlots = getStudioTimeSlots(otherStudioId, date);
-
-  for (const slot of range) {
-    const occupant = Array.from(occupancy).find(
-      (o) => o.studioId === studioId && o.time === slot
-    );
-    if (!occupant) continue; // Free slot, OK
-
-    if (occupant.groupType === "group" || occupant.groupType === "blocked") {
-      return false; // Group or blocked = not available
-    }
-
-    // Solo/duo - check if other studio is free AND open at this slot
-    const otherOccupant = Array.from(occupancy).find(
-      (o) => o.studioId === otherStudioId && o.time === slot
-    );
-    if (otherOccupant || !otherStudioSlots.includes(slot)) {
-      return false; // Other studio occupied or closed = can't displace
-    }
-  }
-
-  return true;
-}
-
-/**
- * Check if any studio is available for a group booking (without studio filter).
- */
-export function isAnyStudioAvailableForGroup(
-  startTime: string,
-  endTime: string,
-  occupancy: Set<OccupancyInfo>,
-  date: Date
-): boolean {
-  return (
-    isStudioAvailableForGroup("la-scene", startTime, endTime, occupancy, date) ||
-    isStudioAvailableForGroup("le-podium", startTime, endTime, occupancy, date)
-  );
-}
-
-/**
  * Check if a slot can be a valid start time.
  * A slot can start if it's not occupied and there are at least
  * MIN_BOOKING_SLOTS (2) available slots from it onward (including itself).
@@ -540,25 +455,6 @@ export function canBeEndTime(
   }
 
   return true;
-}
-
-/**
- * Auto-assign studio for solo/duo bookings.
- * No double-booking: solo/duo cannot overlap with anyone.
- * If one studio is occupied, the other is assigned automatically.
- * If both are available, La Scène is preferred (larger room, open later).
- * Returns null if neither studio is available.
- */
-export function assignStudioForSoloDuo(
-  date: Date,
-  startTime: string,
-  endTime: string,
-  occupancy: Set<string | OccupancyInfo>
-): StudioId | null {
-  const detailedOccupancy = parseOccupancy(occupancy);
-  // Use unified range engine — prefers La Scène, checks opening hours + strict availability
-  const result = isRangeBookable(startTime, endTime, "solo", detailedOccupancy, date);
-  return result.bookable ? result.studioId ?? null : null;
 }
 
 let _publicHolidays: Set<string> = new Set();

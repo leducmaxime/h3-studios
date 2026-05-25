@@ -7,6 +7,7 @@ import {
   getStudioTimeSlots,
   MIN_BOOKING_SLOTS,
   type StudioId,
+  type GroupType,
   type CompletedBooking,
   type OccupancyInfo,
   isSlotAvailable,
@@ -134,10 +135,23 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, cart = 
       fetch(`/api/availability?date=${dateStr}`)
         .then((res) => res.json())
         .then((data: unknown) => {
-          const json = data as { success: boolean; data: { slots: OccupancyInfo[]; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
-          if (json.success && json.data && Array.isArray(json.data.slots)) {
-            const set = new Set<OccupancyInfo>(json.data.slots);
-            setWeekOccupancy((prev) => new Map(prev).set(dateStr, set));
+          const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
+          if (json.success && json.data) {
+            // Convert new per-studio format to OccupancyInfo set (only occupied slots)
+            const occupancy = new Set<OccupancyInfo>();
+            for (const [studioId, slots] of Object.entries(json.data.slots)) {
+              for (const slot of slots) {
+                if (!slot.available) {
+                  occupancy.add({
+                    studioId: studioId as StudioId,
+                    time: slot.time,
+                    groupType: slot.groupType as GroupType | "blocked" | undefined,
+                    bookingId: slot.bookingId,
+                  });
+                }
+              }
+            }
+            setWeekOccupancy((prev) => new Map(prev).set(dateStr, occupancy));
           }
         })
         .catch(console.error);

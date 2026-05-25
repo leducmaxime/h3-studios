@@ -4,7 +4,6 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { formatDateISO } from "@/lib/utils";
 import {
   type BookingState,
-  type BookingFlow,
   type StudioId,
   type GroupType,
   type CompletedBooking,
@@ -15,7 +14,6 @@ import {
   calculatePrice,
   calculateEquipmentPrice,
   generateBookingRef,
-  assignStudioForSoloDuo,
   isRangeBookable,
   loadUserPreferences,
   saveUserPreferences,
@@ -32,36 +30,33 @@ interface ExtendedBookingState extends BookingState {
 
 /**
  * Step flow:
- * 0: GroupType + FlowChoice
- * 1: Booking (Date+Time+Studio unified — all on one page)
- * 5: Panier (CartPage) — "Valider et payer" goes to coordonnées
- * 3: Coordonnées (BookingForm) — after cart validation
- * 6: Choix de paiement (PaymentChoice)
- * 7: Paiement (Stripe/Mock)
- * 8: Terminé (FinalCheckout)
+ * 0: GroupType
+ * 1: Date & Créneaux booking (Date+Time+Studio unified)
+ * 2: Coordonnées (BookingForm)
+ * 3: Panier (CartPage)
+ * 4: Paiement (PaymentChoice + StripeRedirect)
+ * 5: Terminé (FinalCheckout)
  *
  * Cart lock: steps 0-1 are blocked when cart has items (unless isAddingNew).
  */
 const STEP_URL_MAP: Record<number, string> = {
   0: "",
   1: "",
-  3: "coordonnees",
-  5: "panier",
-  6: "paiement-choix",
-  7: "paiement",
-  8: "termine",
+  2: "coordonnees",
+  3: "panier",
+  4: "paiement",
+  5: "termine",
 };
 
 const URL_STEP_MAP: Record<string, number> = {
   "": 0,
   "reservation": 1,
   "creneau": 1,   // legacy URL compat
-  "studio": 1,    // legacy URL compat
-  "coordonnees": 3,
-  "panier": 5,
-  "paiement-choix": 6,
-  "paiement": 7,
-  "termine": 8,
+  "coordonnees": 2,
+  "panier": 3,
+  "paiement": 4,
+  "paiement-choix": 4,  // legacy URL compat
+  "termine": 5,
 };
 
 const BOOKING_STORAGE_KEY = "h3-studios-booking-state";
@@ -130,7 +125,7 @@ function getStepFromUrl(urlStep: string | undefined): number {
   return URL_STEP_MAP[urlStep] ?? 0;
 }
 
-function navigateToUrl(step: number, _flow: BookingFlow | null) {
+function navigateToUrl(step: number) {
   const stepSlug = STEP_URL_MAP[step];
   let url = "/reservation";
   if (stepSlug) {
@@ -153,7 +148,6 @@ function isUserInfoComplete(s: ExtendedBookingState): boolean {
 }
 
 const initialState: ExtendedBookingState = {
-  flow: null,
   step: 0,
   selectedDate: null,
   startTime: null,
@@ -237,9 +231,23 @@ export function useBookingWithRouter(urlStep?: string) {
     fetch(`/api/availability?date=${dateStr}`)
       .then((res) => res.json())
       .then((data) => {
-        const json = data as { success: boolean; data: { slots: OccupancyInfo[]; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
+        const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
         if (json.success && json.data) {
-          setAvailability(new Set(json.data.slots));
+          // Convert new per-studio format to OccupancyInfo set (only occupied slots)
+          const occupancy = new Set<OccupancyInfo>();
+          for (const [studioId, slots] of Object.entries(json.data.slots)) {
+            for (const slot of slots) {
+              if (!slot.available) {
+                occupancy.add({
+                  studioId: studioId as StudioId,
+                  time: slot.time,
+                  groupType: slot.groupType as GroupType | "blocked" | undefined,
+                  bookingId: slot.bookingId,
+                });
+              }
+            }
+          }
+          setAvailability(occupancy);
           setMinAdvanceHours(json.data.minAdvanceHours ?? 0);
           setMinAdvanceCutoffTime(json.data.minAdvanceCutoffTime ?? null);
         }
@@ -253,7 +261,7 @@ export function useBookingWithRouter(urlStep?: string) {
     const savedState = loadBookingState();
     const prefs = loadUserPreferences();
 
-    if (savedState && savedState.step === 8) {
+    if (savedState && savedState.step === 5) {
       clearBookingState();
       if (prefs) {
         setState((s) => ({
@@ -284,7 +292,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
       // Cart lock: if cart has items and not adding new, block booking steps (0-1)
       if (restoredState.cart.length > 0 && !restoredState.isAddingNew && restoredState.step <= 1) {
-        restoredState.step = 5 as BookingState["step"];
+        restoredState.step = 3 as BookingState["step"];
       }
 
       setState(restoredState);
@@ -339,7 +347,7 @@ export function useBookingWithRouter(urlStep?: string) {
       isInitialMount.current = false;
       return;
     }
-    if (state.step === 8) {
+    if (state.step === 5) {
       clearBookingState();
       return;
     }
@@ -350,11 +358,11 @@ export function useBookingWithRouter(urlStep?: string) {
     if (!isHydrated) return;
     // Cart lock: enforce cart URL if cart has items and not adding new (block booking steps 0-1)
     if (state.cart.length > 0 && !state.isAddingNew && state.step <= 1) {
-      setState((s) => ({ ...s, step: 5 as BookingState["step"] }));
+      setState((s) => ({ ...s, step: 3 as BookingState["step"] }));
       return;
     }
-    navigateToUrl(state.step, state.flow);
-  }, [state.step, state.flow, isHydrated, state.cart.length, state.isAddingNew]);
+    navigateToUrl(state.step);
+  }, [state.step, isHydrated, state.cart.length, state.isAddingNew]);
 
   // Always fetch user data on mount (in case auth state changed since last render)
   useEffect(() => {
@@ -399,7 +407,7 @@ export function useBookingWithRouter(urlStep?: string) {
         if (s.cart.length > 0 && !s.isAddingNew && newStep <= 1) {
           // Replace URL to cart without adding history entry
           window.history.replaceState({}, "", "/reservation/panier");
-          return { ...s, step: 5 as BookingState["step"] };
+          return { ...s, step: 3 as BookingState["step"] };
         }
         return { ...s, step: newStep as BookingState["step"] };
       });
@@ -417,21 +425,13 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => {
       // Cart lock: if cart has items and not adding new, block booking steps (0-1)
       if (s.cart.length > 0 && !s.isAddingNew && step <= 1) {
-        return { ...s, step: 5 as BookingState["step"] };
+        return { ...s, step: 3 as BookingState["step"] };
       }
       if (step === 0 && (s.groupType === "solo" || s.groupType === "duo")) {
-        return { ...s, step: 0 as BookingState["step"], groupType: null, flow: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
+        return { ...s, step: 0 as BookingState["step"], groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
       }
       return { ...s, step: step as BookingState["step"] };
     });
-  }, []);
-
-  const selectFlow = useCallback((flow: BookingFlow) => {
-    setState((s) => ({
-      ...s,
-      flow,
-      step: 1,
-    }));
   }, []);
 
   const selectDate = useCallback((date: Date) => {
@@ -440,13 +440,6 @@ export function useBookingWithRouter(urlStep?: string) {
       selectedDate: date,
       startTime: null,
       endTime: null,
-    }));
-  }, []);
-
-  const selectStudioFirst = useCallback((studioId: StudioId) => {
-    setState((s) => ({
-      ...s,
-      studioId,
     }));
   }, []);
 
@@ -473,17 +466,9 @@ export function useBookingWithRouter(urlStep?: string) {
           // Range is not bookable — reset selection (shouldn't happen if UI is correct)
           return { ...s, startTime: null, endTime: null };
         }
-
-        if (s.flow === "time-first") {
-          if (s.groupType === "solo" || s.groupType === "duo") {
-            const studio = assignStudioForSoloDuo(s.selectedDate, s.startTime, s.endTime, mergedAvailability);
-            if (studio) {
-              return { ...s, studioId: studio };
-            }
-            return { ...s, startTime: null, endTime: null };
-          }
-          // Group in time-first: studio chosen later, but range is validated above
-          return s;
+        // If studio not yet selected (solo/duo implicit), use the bookable studio
+        if (!s.studioId && rangeCheck.studioId) {
+          return { ...s, studioId: rangeCheck.studioId };
         }
         return s;
       }
@@ -493,8 +478,8 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
     setState((s) => {
-      if (groupType === "solo" || groupType === "duo") {
-        return { ...s, groupType, flow: "time-first", step: 1 };
+      if (groupType === "solo" || groupType === "duo" || groupType === "group") {
+        return { ...s, groupType, step: 1, selectedDate: null, startTime: null, endTime: null, studioId: null };
       }
       return { ...s, groupType };
     });
@@ -502,11 +487,6 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const selectStudio = useCallback((studioId: StudioId) => {
     setState((s) => ({ ...s, studioId }));
-  }, []);
-
-  /** Clear studio selection and dependent fields (for studio-first flow) */
-  const clearStudioSelection = useCallback(() => {
-    setState((s) => ({ ...s, studioId: null, selectedDate: null, startTime: null, endTime: null }));
   }, []);
 
   const updateUserInfo = useCallback(
@@ -531,9 +511,9 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, appliedPromo: null, promoDiscount: 0 }));
   }, []);
 
-  /** From cart page: go to coordonnées (step 3) before payment */
+  /** From cart page: go to coordonnées (step 2) before payment */
   const goToCoordonnees = useCallback(() => {
-    setState((s) => ({ ...s, step: 3 }));
+    setState((s) => ({ ...s, step: 2 }));
   }, []);
 
   const isDuplicateBooking = useCallback((
@@ -616,7 +596,7 @@ export function useBookingWithRouter(urlStep?: string) {
         ...s,
         bookingRef,
         cart: [...s.cart, newBooking],
-        step: 5,
+        step: 3,
         appliedPromo: null,
         promoDiscount: 0,
         isAddingNew: false,
@@ -639,7 +619,6 @@ export function useBookingWithRouter(urlStep?: string) {
       endTime: null,
       studioId: null,
       groupType: null,
-      flow: null,
       bookingRef: null,
       equipment: [],
       step: 0,
@@ -647,9 +626,9 @@ export function useBookingWithRouter(urlStep?: string) {
     }));
   }, []);
 
-  /** From cart page: proceed to coordonnées (step 3) before payment */
+  /** From cart page: proceed to coordonnées (step 2) before payment */
   const goToPaymentChoice = useCallback(() => {
-    setState((s) => ({ ...s, step: 3 }));
+    setState((s) => ({ ...s, step: 2 }));
   }, []);
 
   /** From coordonnées: proceed to payment choice (step 6) or skip if free */
@@ -713,7 +692,7 @@ export function useBookingWithRouter(urlStep?: string) {
             paymentMethod: "cash" as PaymentMethod,
             paymentStatus: "pay-on-site" as const,
           }));
-          return { ...s, paymentMethod: "cash", cart: updatedCart, step: 8 };
+          return { ...s, paymentMethod: "cash", cart: updatedCart, step: 5 };
         });
       } catch (err) {
         alert("Erreur lors de la réservation: " + err);
@@ -721,7 +700,7 @@ export function useBookingWithRouter(urlStep?: string) {
         setIsSubmitting(false);
       }
     } else {
-      setState((s) => ({ ...s, step: 6 }));
+      setState((s) => ({ ...s, step: 4 }));
     }
   }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
 
@@ -734,10 +713,9 @@ export function useBookingWithRouter(urlStep?: string) {
       endTime: null,
       studioId: null,
       groupType: null,
-      flow: null,
       bookingRef: null,
       equipment: [],
-      step: 5,
+      step: 3,
       isAddingNew: false,
     }));
   }, []);
@@ -794,14 +772,14 @@ export function useBookingWithRouter(urlStep?: string) {
 
       setState((s) => {
         if (method === "card") {
-          return { ...s, paymentMethod: method, step: 7 };
+          return { ...s, paymentMethod: method, step: 4 };
         }
         const updatedCart = s.cart.map((booking) => ({
           ...booking,
           paymentMethod: "cash" as PaymentMethod,
           paymentStatus: "pay-on-site" as const,
         }));
-        return { ...s, paymentMethod: method, cart: updatedCart, step: 8 };
+        return { ...s, paymentMethod: method, cart: updatedCart, step: 5 };
       });
     } catch (err) {
       alert("Erreur lors de la réservation: " + err);
@@ -817,7 +795,7 @@ export function useBookingWithRouter(urlStep?: string) {
         paymentMethod: "card" as PaymentMethod,
         paymentStatus: "paid" as const,
       }));
-      return { ...s, cart: updatedCart, step: 8 };
+      return { ...s, cart: updatedCart, step: 5 };
     });
   }, []);
 
@@ -845,37 +823,25 @@ export function useBookingWithRouter(urlStep?: string) {
             endTime: null,
             studioId: null,
             groupType: null,
-            flow: null,
             bookingRef: null,
             equipment: [],
-            step: 5,
+            step: 3,
             isAddingNew: false,
           };
         }
         return s;
       }
       if (s.step === 1) {
-        if (s.flow === "studio-first" && s.selectedDate) {
-          return { ...s, selectedDate: null, startTime: null, endTime: null };
-        }
-        if (s.flow === "studio-first" && s.studioId) {
-          return { ...s, studioId: null, selectedDate: null, startTime: null, endTime: null };
-        }
-        if (s.flow === "time-first" && s.selectedDate) {
+        if (s.selectedDate) {
           return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null };
         }
-        const isSoloDuo = s.groupType === "solo" || s.groupType === "duo";
-        if (isSoloDuo) {
-          return { ...s, step: 0, flow: null, groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
-        }
-        return { ...s, step: 0, flow: null };
+        return { ...s, step: 0, groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
       }
 
-      if (s.step === 3) return { ...s, step: 5 };
-      if (s.step === 5) return s;
-      if (s.step === 6) return { ...s, step: 3, paymentMethod: null };
-      if (s.step === 7) return { ...s, step: 6, paymentMethod: null };
-      if (s.step === 8) return { ...s, step: 6 };
+      if (s.step === 2) return { ...s, step: 3 };
+      if (s.step === 3) return s;
+      if (s.step === 4) return { ...s, step: 2, paymentMethod: null };
+      if (s.step === 5) return { ...s, step: 4 };
       return s;
     });
   }, []);
@@ -931,15 +897,12 @@ export function useBookingWithRouter(urlStep?: string) {
     clientUserLoading,
     setStep,
     navigateToStep,
-    selectFlow,
     selectDate,
-    selectStudioFirst,
     selectTimeRange,
     clearTimeRange,
     confirmTimeSelection,
     setGroupType,
     selectStudio,
-    clearStudioSelection,
     updateUserInfo,
     updateEquipment,
     applyPromo,
