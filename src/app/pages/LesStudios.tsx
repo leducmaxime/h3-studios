@@ -46,13 +46,15 @@ export function LesStudios() {
     <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
       <ScrollUp />
 
-      <div className="w-full max-w-5xl px-2 sm:px-4">
-        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LES STUDIOS</h1>
-          <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-          <p className="mt-6 text-xl font-medium text-white/90">
-            Deux espaces professionnels pour vos répétitions
-          </p>
+      <div className="relative w-full px-2 sm:px-4">
+        <div className="mx-auto max-w-6xl">
+          <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+            <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LES STUDIOS</h1>
+            <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+            <p className="mt-6 text-lg text-white/60">
+              Deux espaces professionnels pour vos répétitions
+            </p>
+          </div>
         </div>
 
         <div className={`flex flex-wrap items-center justify-center gap-3 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
