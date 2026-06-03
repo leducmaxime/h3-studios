@@ -63,7 +63,15 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
         <link rel="stylesheet" href={styles} />
         <link rel="preload" href="/images/background.webp" as="image" />
         {path === "/" && (
-          <link rel="preload" href="/images/home/hero.webp" as="image" type="image/webp" fetchPriority="high" />
+          <link
+            rel="preload"
+            as="image"
+            type="image/webp"
+            href="/images/home/hero.webp"
+            imageSrcSet="/images/home/hero-768.webp 768w, /images/home/hero.webp 1306w"
+            imageSizes="(max-width: 768px) 100vw, 672px"
+            fetchPriority="high"
+          />
         )}
         
         <link rel="icon" href="/favicon.ico" sizes="32x32" />

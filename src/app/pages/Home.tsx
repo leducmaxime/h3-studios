@@ -38,6 +38,8 @@ export function Home() {
           <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
             <img
               src="/images/home/hero.webp"
+              srcSet="/images/home/hero-768.webp 768w, /images/home/hero.webp 1306w"
+              sizes="(max-width: 768px) 100vw, 672px"
               alt="H3 Studios"
               width={1344}
               height={880}
