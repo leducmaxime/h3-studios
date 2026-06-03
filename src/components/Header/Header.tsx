@@ -52,15 +52,12 @@ export function Header() {
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const root = document.getElementById("root");
     const handleStickyNavbar = () => {
-      const scrollY = root ? root.scrollTop : window.scrollY;
-      setSticky(scrollY >= 10);
+      setSticky(window.scrollY >= 10);
     };
     handleStickyNavbar();
-    const target = root || window;
-    target.addEventListener("scroll", handleStickyNavbar);
-    return () => target.removeEventListener("scroll", handleStickyNavbar);
+    window.addEventListener("scroll", handleStickyNavbar, { passive: true });
+    return () => window.removeEventListener("scroll", handleStickyNavbar);
   }, []);
 
   useEffect(() => {
