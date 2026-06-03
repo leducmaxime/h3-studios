@@ -79,7 +79,11 @@ export function Equipe() {
                   <img
                     src={member.image}
                     alt={member.name}
+                    width={800}
+                    height={1000}
                     className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-6">

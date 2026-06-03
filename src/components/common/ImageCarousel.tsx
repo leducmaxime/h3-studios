@@ -14,12 +14,14 @@ interface ImageCarouselProps {
   images: { src: string; alt: string }[];
   autoPlay?: boolean;
   interval?: number;
+  priorityFirst?: boolean;
 }
 
 export function ImageCarousel({
   images,
   autoPlay = true,
   interval = 3000,
+  priorityFirst = false,
 }: ImageCarouselProps) {
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
@@ -62,7 +64,13 @@ export function ImageCarousel({
               <img
                 src={image.src}
                 alt={image.alt}
+                width={1200}
+                height={675}
                 className="aspect-video w-full object-cover"
+                {...(index === 0 && priorityFirst
+                  ? { loading: "eager" as const, fetchPriority: "high" as const }
+                  : { loading: "lazy" as const, decoding: "async" as const }
+                )}
               />
             </CarouselItem>
           ))}

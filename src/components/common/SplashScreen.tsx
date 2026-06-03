@@ -37,8 +37,10 @@ export function SplashScreen() {
       }`}
     >
       <img
-        src="/images/logo.png"
+        src="/images/logo.webp"
         alt="H3 Studios"
+        width={96}
+        height={96}
         className="h-24 w-24"
         style={{
           animation: "spin 1s ease-out forwards",

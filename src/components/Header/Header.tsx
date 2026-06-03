@@ -119,7 +119,7 @@ export function Header() {
             className="flex items-center gap-2.5 group"
           >
             <img
-              src="/images/logo.png"
+              src="/images/logo.webp"
               alt="logo"
               width={48}
               height={48}

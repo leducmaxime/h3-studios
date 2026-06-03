@@ -123,7 +123,7 @@ export const STUDIOS: Record<StudioId, Studio> = {
     size: "42m²",
     description: "Avec une hauteur de 3,50m et une superficie de 42m², notre studio propose une scène intimiste avec sa rampe d'éclairage. Convenant à tous styles musicaux, ce lieu chaleureux et fonctionnel saura répondre à vos besoins.",
     features: ["Scène", "Éclairage", "Écran géant", "Vidéoprojecteur"],
-    image: "/images/studios/scene-1.jpg",
+    image: "/images/studios/scene-1.webp",
   },
   "le-podium": {
     id: "le-podium",
@@ -131,7 +131,7 @@ export const STUDIOS: Record<StudioId, Studio> = {
     size: "35m²",
     description: "Conçu pour la répétition, cet espace de 35m² offre un cadre simple et fonctionnel, idéal pour vos sessions musicales, en groupe ou en solo. Cette salle est également adapté aux enseignants souhaitant donner des cours à un ou plusieurs élèves.",
     features: ["Compact", "Fonctionnel", "Cours"],
-    image: "/images/studios/podium-1.jpg",
+    image: "/images/studios/podium-1.webp",
   },
 };
 
