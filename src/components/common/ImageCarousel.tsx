@@ -67,10 +67,9 @@ export function ImageCarousel({
                 width={1200}
                 height={675}
                 className="aspect-video w-full object-cover"
-                {...(index === 0 && priorityFirst
-                  ? { loading: "eager" as const, fetchPriority: "high" as const }
-                  : { loading: "lazy" as const, decoding: "async" as const }
-                )}
+                loading={index === 0 && priorityFirst ? "eager" : "lazy"}
+                fetchPriority={index === 0 && priorityFirst ? "high" : "auto"}
+                decoding="async"
               />
             </CarouselItem>
           ))}
