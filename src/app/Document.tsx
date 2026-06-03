@@ -74,13 +74,6 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
         <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="theme-color" content="#ffde59" />
 
-        <script
-          nonce={nonce}
-          dangerouslySetInnerHTML={{
-            __html: `window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-B3TYEET971');`,
-          }}
-        />
-
         <link rel="modulepreload" href="/src/client.tsx" />
       </head>
       <body className="flex min-h-screen flex-col bg-[url('/images/background.webp')] bg-[length:500px] bg-repeat font-secondary">
@@ -103,7 +96,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
         <script
           nonce={nonce}
           dangerouslySetInnerHTML={{
-            __html: `(function(){var w=window,d=document,s='script',l='dataLayer',i='G-B3TYEET971';w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s);j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+'&l='+l;function init(){f.parentNode.insertBefore(j,f);}if('requestIdleCallback'in w){w.requestIdleCallback(init,{timeout:2000})}else{setTimeout(init,2000)}})();`,
+            __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','G-B3TYEET971');`,
           }}
         />
       </body>
