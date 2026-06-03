@@ -219,7 +219,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Que se passe t-il si j'arrive en retard ?",
-    a: "Votre créneau est réservé pour la durée que vous avez choisie. En cas de retard, la session se terminera à l'heure prévue sans prolongation possible, afin de respecter les réservations suivantes."
+    a: "Votre créneau est réservé pour la durée que vous avez choisie. En cas de retard, nous accordons une tolérance de 15 minutes. Passé ce délai, la durée de votre session pourra être réduite afin de ne pas impacter les réservations suivantes."
   },
   {
     q: "Comment venir en transports en commun ?",
