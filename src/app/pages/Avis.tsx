@@ -81,12 +81,8 @@ function StarRating({ rating }: { rating: number }) {
 export function Avis() {
   const [isVisible, setIsVisible] = useState(false);
   const [reviews, setReviews] = useState<Review[]>(FALLBACK_REVIEWS);
-
-  // Calculé dynamiquement depuis les avis chargés
-  const totalReviews = reviews.length;
-  const averageRating = reviews.length > 0
-    ? Math.round((reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length) * 10) / 10
-    : 0;
+  const [totalReviews, setTotalReviews] = useState(FALLBACK_REVIEWS.length);
+  const [averageRating, setAverageRating] = useState(5);
 
   useEffect(() => {
     setIsVisible(true);
@@ -96,7 +92,8 @@ export function Avis() {
       .then((data: unknown) => {
         const typedData = data as { success: boolean; data?: ReviewsData };
         if (typedData.success && typedData.data) {
-          const apiReviews = typedData.data.reviews.map((r) => ({
+          const { reviews: apiReviewsRaw, totalReviews: apiTotal, averageRating: apiAvg } = typedData.data;
+          const apiReviews = apiReviewsRaw.map((r) => ({
             id: r.id,
             author_name: r.author_name,
             rating: r.rating,
@@ -107,6 +104,8 @@ export function Avis() {
           if (apiReviews.length > 0) {
             setReviews(apiReviews);
           }
+          setTotalReviews(apiTotal ?? apiReviews.length);
+          setAverageRating(apiAvg ?? 5);
         }
       })
       .catch(() => {
