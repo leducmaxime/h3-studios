@@ -123,6 +123,8 @@ export function Header() {
               alt="logo"
               width={48}
               height={48}
+              fetchPriority="high"
+              decoding="async"
               className={spin ? "animate-[spin_1s_linear_1]" : "animate-pulse"}
             />
           </a>

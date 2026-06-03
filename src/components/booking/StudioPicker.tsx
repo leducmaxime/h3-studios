@@ -78,6 +78,10 @@ export function StudioPicker({ onSelect, onBack, groupType, hideHeader = false }
                 <img
                   src={studio.image}
                   alt={studio.name}
+                  width={1200}
+                  height={675}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />

@@ -2,7 +2,10 @@ import { RouteMiddleware } from "rwsdk/router";
 
 export const setCommonHeaders =
   (): RouteMiddleware =>
-  ({ response, rw: { nonce } }) => {
+  ({ response, request, rw: { nonce } }) => {
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+
     if (!import.meta.env.VITE_IS_DEV_SERVER) {
       response.headers.set(
         "Strict-Transport-Security",
@@ -24,9 +27,18 @@ export const setCommonHeaders =
 
     // Only set default Cache-Control if not already set by an endpoint
     if (!response.headers.has("Cache-Control")) {
-      response.headers.set(
-        "Cache-Control",
-        "no-cache, no-store, must-revalidate",
-      );
+      const isPublicPage = !pathname.startsWith("/admin") && !pathname.startsWith("/api");
+      if (isPublicPage) {
+        // Edge cache: 5 minutes, browser: validate every time, serve stale while revalidating
+        response.headers.set(
+          "Cache-Control",
+          "public, max-age=0, s-maxage=300, stale-while-revalidate=86400",
+        );
+      } else {
+        response.headers.set(
+          "Cache-Control",
+          "no-cache, no-store, must-revalidate",
+        );
+      }
     }
   };

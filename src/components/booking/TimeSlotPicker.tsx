@@ -316,6 +316,10 @@ export function TimeSlotPicker({
             <img
               src={studio.image}
               alt={studio.name}
+              width={1200}
+              height={675}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
             />
             {/* Gradient overlay */}

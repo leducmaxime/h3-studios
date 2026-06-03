@@ -66,6 +66,10 @@ export function StudioCard({
         <img
           src={studio.image}
           alt={studio.name}
+          width={1200}
+          height={675}
+          loading="lazy"
+          decoding="async"
           className="h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />

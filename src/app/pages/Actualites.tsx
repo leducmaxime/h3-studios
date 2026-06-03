@@ -150,6 +150,9 @@ export function Actualites() {
                           : (currentImage.media_url || currentImage.thumbnail_url || '')
                       )}`}
                       alt={post.caption}
+                      width={640}
+                      height={640}
+                      decoding="async"
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                       loading="lazy"
                       onError={(e) => {
