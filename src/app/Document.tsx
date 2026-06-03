@@ -59,10 +59,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
 
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap&family=Inter:wght@300;400;500;600;700&display=optional" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap&family=Inter:wght@300;400;500;600;700&display=optional" />
+        <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-variable-latin.woff2" crossOrigin="anonymous" />
         <link rel="stylesheet" href={styles} />
         <link rel="preload" href="/images/background.webp" as="image" />
         {path === "/" && (
