@@ -199,7 +199,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Le matériel est-il vraiment inclus dans le prix ?",
-    a: "Oui, le matériel de base est inclus : batterie, amplis guitare et basse, sono, micros, pupitres et pied synthé. Des options supplémentaires (crash, micros additionnels, etc.) sont disponibles à la réservation."
+    a: "Oui, le matériel de base est inclus : batterie, amplis guitare et basse, sono, 4 micros, pupitres et pied synthé. Des options supplémentaires (crash, micros additionnels, etc.) sont disponibles à la réservation."
   },
   {
     q: "Comment réserver en ligne ?",
