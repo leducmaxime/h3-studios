@@ -190,6 +190,14 @@ Stored in `.dev.vars` (local) and Cloudflare dashboard (production):
 
 > **Note:** These deployment rules are non-negotiable. Always follow them in every session.
 
+## Performance Notes
+
+- **Fonts are self-hosted** — Inter Variable (`/public/fonts/inter-variable-latin.woff2`) + Now/Blanka. No external Google Fonts requests. CSP `font-src 'self'` / `style-src 'self'` reflect this. Don't re-add `<link href="fonts.googleapis.com">`.
+- **Hero image is responsive** — `hero.webp` (1306px) + `hero-768.webp` (mobile) via `srcset`. The hero compresses poorly (soft glow/smoke gradients cause halos), so use **resize** for variants, not aggressive quality compression.
+- **Main client bundle (~235KB) is React 19 + ReactDOM + rwsdk runtime** — this is the framework core. It cannot be meaningfully reduced without ejecting from RedwoodSDK (Preact compat breaks rwsdk SSR). PageSpeed's "unused JS ~116KiB" on Home is this framework code. **Do not attempt to code-split it further** — rwsdk already splits per-route (each page is its own chunk).
+- **html2canvas** is a transitive optional dep of jspdf, only loaded if `jsPDF.html()` is called (never is). Already code-split, never downloaded. Leave it alone.
+- Current PageSpeed: **Mobile 85 / Desktop 100**.
+
 ## Related Docs
 
 - `src/components/booking/AGENTS.md` — Detailed booking component knowledge base
