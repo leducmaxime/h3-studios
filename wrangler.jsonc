@@ -38,7 +38,7 @@
       "name": "h3-studios",
       "routes": [
         {
-          "pattern": "prod.h3-studios.fr",
+          "pattern": "h3-studios.fr",
           "custom_domain": true
         }
       ],
