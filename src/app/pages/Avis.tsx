@@ -130,7 +130,7 @@ export function Avis() {
           </div>
           <p className="max-w-md text-sm text-white/70">
             Vous avez répété chez nous ?<br />
-            Partagez votre expérience en 2 minutes. 
+            Partagez votre expérience en 2 minutes.<br />
             Votre retour aide d'autres musiciens à découvrir H3 Studios.
           </p>
           <a
