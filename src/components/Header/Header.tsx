@@ -117,7 +117,7 @@ export function Header() {
           >
             <img
               src="/images/logo.webp"
-              alt="logo"
+              alt="H3 Studios - Accueil"
               width={48}
               height={48}
               fetchPriority="high"
@@ -154,6 +154,7 @@ export function Header() {
                 rel="noopener noreferrer"
                 className="rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
                 aria-label="Facebook"
+                title="Facebook H3 Studios"
               >
                 <Facebook className="h-5 w-5" />
               </a>
@@ -163,6 +164,7 @@ export function Header() {
                 rel="noopener noreferrer"
                 className="rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
                 aria-label="Instagram"
+                title="Instagram H3 Studios"
               >
                 <Instagram className="h-5 w-5" />
               </a>
@@ -301,6 +303,7 @@ export function Header() {
               rel="noopener noreferrer"
               className="rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
               aria-label="Facebook"
+              title="Facebook H3 Studios"
             >
               <Facebook className="h-5 w-5" />
             </a>
@@ -310,6 +313,7 @@ export function Header() {
               rel="noopener noreferrer"
               className="rounded-lg p-2 text-white/70 transition-all duration-200 hover:text-white hover:bg-white/10"
               aria-label="Instagram"
+              title="Instagram H3 Studios"
             >
               <Instagram className="h-5 w-5" />
             </a>
