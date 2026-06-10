@@ -3780,11 +3780,15 @@ const app = defineApp([
   route("/api/instagram/feed", async ({ request }) => {
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
 
-    try {
-      // 1. Always serve from cache instantly for speed
-      const cachedPosts = await getCachedInstagramFeed(env.DB);
+    const cacheHeaders = {
+      "Content-Type": "application/json",
+      "Cache-Control": "public, max-age=1800, s-maxage=1800",
+    };
+    const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-      // 2. If cache is fresh (< 1h), return it immediately
+    try {
+      // 1. Read cached data
+      const cachedPosts = await getCachedInstagramFeed(env.DB);
       const cacheMeta = await env.DB
         .prepare("SELECT updated_at FROM settings WHERE key = ?")
         .bind("instagram_feed_cache")
@@ -3793,75 +3797,48 @@ const app = defineApp([
       const cacheAge = cacheMeta?.updated_at 
         ? Date.now() - new Date(cacheMeta.updated_at).getTime() 
         : Infinity;
-      const ONE_HOUR = 60 * 60 * 1000;
 
-      if (cachedPosts.length > 0 && cacheAge < ONE_HOUR) {
-        return new Response(JSON.stringify({ success: true, data: cachedPosts }), {
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "public, max-age=3600, s-maxage=3600",
-          },
-        });
-      }
-
-      // 3. If cache is stale or missing, refresh in background and return stale data if available
-      const token = env.INSTAGRAM_ACCESS_TOKEN;
-      const refreshPromise = token
-        ? fetchInstagramFeedFromAPI(token).then(async (posts) => {
-            await env.DB.prepare(
-              "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
-            ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
-              data: posts,
-              last_updated: new Date().toISOString()
-            })).run();
-          }).catch(err => console.error("Background Instagram refresh failed:", err))
-        : fetchInstagramFeedFromRSS().then(async (posts) => {
-            await env.DB.prepare(
-              "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
-            ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
-              data: posts,
-              last_updated: new Date().toISOString()
-            })).run();
-          }).catch(err => console.error("Background RSS refresh failed:", err));
-
-      waitUntil(refreshPromise);
-
-      const cacheHeaders = {
-        "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=3600, s-maxage=3600",
-      };
-
-      // 4. Return cached data if available, otherwise wait for fresh data
-      if (cachedPosts.length > 0) {
+      // 2. If cache is fresh, return it immediately
+      if (cachedPosts.length > 0 && cacheAge < CACHE_TTL) {
         return new Response(JSON.stringify({ success: true, data: cachedPosts }), {
           headers: cacheHeaders,
         });
       }
 
-      // No cache at all — must wait for fresh data
-      if (token) {
-        const posts = await fetchInstagramFeedFromAPI(token);
+      // 3. Cache is stale or missing — fetch fresh data and update cache
+      const token = env.INSTAGRAM_ACCESS_TOKEN;
+      let freshPosts: Awaited<ReturnType<typeof fetchInstagramFeedFromAPI>> | null = null;
+
+      try {
+        freshPosts = token
+          ? await fetchInstagramFeedFromAPI(token)
+          : await fetchInstagramFeedFromRSS();
+
+        // Save to cache
         await env.DB.prepare(
           "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
         ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
-          data: posts,
+          data: freshPosts,
           last_updated: new Date().toISOString()
         })).run();
-        return new Response(JSON.stringify({ success: true, data: posts }), {
+      } catch (fetchError) {
+        console.error("Instagram fetch failed, falling back to cache:", fetchError);
+      }
+
+      // 4. Return fresh data if available, otherwise fall back to stale cache
+      if (freshPosts && freshPosts.length > 0) {
+        return new Response(JSON.stringify({ success: true, data: freshPosts }), {
           headers: cacheHeaders,
         });
       }
-      
-      const posts = await fetchInstagramFeedFromRSS();
-      await env.DB.prepare(
-        "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
-      ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
-        data: posts,
-        last_updated: new Date().toISOString()
-      })).run();
-      return new Response(JSON.stringify({ success: true, data: posts }), {
-        headers: cacheHeaders,
-      });
+
+      if (cachedPosts.length > 0) {
+        return new Response(JSON.stringify({ success: true, data: cachedPosts, stale: true }), {
+          headers: cacheHeaders,
+        });
+      }
+
+      return jsonError("Aucune publication disponible. Vérifiez le token Instagram dans l'administration.", 503);
     } catch (error) {
       console.error("GET /api/instagram/feed error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch feed", 500);
