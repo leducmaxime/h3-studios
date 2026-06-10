@@ -372,27 +372,6 @@ export function useBookingWithRouter(urlStep?: string) {
   }, [state.step, isHydrated, state.cart.length, state.isAddingNew]);
 
   // Always fetch user data on mount (in case auth state changed since last render)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    fetch("/api/client/me", { credentials: "include" })
-      .then((res) => res.ok ? res.json() as Promise<{ data?: unknown }> : null)
-      .then((data) => {
-        if (data?.data) {
-          const u = data.data as { name?: string; email?: string; phone?: string; band_name?: string; address_line1?: string; postal_code?: string; city?: string };
-          setState((s) => ({
-            ...s,
-            userName: u.name || s.userName,
-            userEmail: u.email || s.userEmail,
-            userPhone: u.phone || s.userPhone,
-            bandName: u.band_name || s.bandName,
-            billingAddress: u.address_line1 || s.billingAddress,
-            billingPostalCode: u.postal_code || s.billingPostalCode,
-            billingCity: u.city || s.billingCity,
-          }));
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -626,11 +605,6 @@ export function useBookingWithRouter(urlStep?: string) {
       step: 0,
       isAddingNew: true,
     }));
-  }, []);
-
-  /** From cart page: proceed to coordonnées (step 2) before payment */
-  const goToPaymentChoice = useCallback(() => {
-    setState((s) => ({ ...s, step: 2 }));
   }, []);
 
   /** From coordonnées: proceed to payment choice (step 6) or skip if free */
@@ -914,7 +888,6 @@ export function useBookingWithRouter(urlStep?: string) {
     confirmBooking,
     clearDuplicateError,
     addAnotherBooking,
-    goToPaymentChoice,
     goToPaymentFromCoordonnees,
     goToCart,
     removeFromCart,
