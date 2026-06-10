@@ -12,7 +12,7 @@ import {
   type OccupancyInfo,
   isSlotAvailable,
 } from "@/lib/booking";
-import { formatDateISO } from "@/lib/utils";
+import { formatDateISO, getParisDateISO } from "@/lib/utils";
 
 interface WeekCalendarProps {
   onSelectDate: (date: Date) => void;
@@ -48,15 +48,15 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 function isToday(date: Date): boolean {
-  return isSameDay(date, new Date());
+  const todayISO = getParisDateISO();
+  const dateISO = getParisDateISO(date);
+  return dateISO === todayISO;
 }
 
 function isPast(date: Date): boolean {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const compareDate = new Date(date);
-  compareDate.setHours(0, 0, 0, 0);
-  return compareDate < today;
+  const todayISO = getParisDateISO();
+  const dateISO = getParisDateISO(date);
+  return dateISO < todayISO;
 }
 
 function isTooFarInFuture(date: Date): boolean {
@@ -120,7 +120,10 @@ function hasBookableAvailability(
 }
 
 export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupType, cart = [] }: WeekCalendarProps) {
-  const today = useMemo(() => new Date(), []);
+  const today = useMemo(() => {
+    const iso = getParisDateISO();
+    return new Date(iso + "T00:00:00");
+  }, []);
   const [dayOffset, setDayOffset] = useState(0);
   const [weekOccupancy, setWeekOccupancy] = useState<Map<string, Set<OccupancyInfo>>>(new Map());
 

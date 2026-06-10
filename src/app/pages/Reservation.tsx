@@ -78,7 +78,7 @@ export function Reservation({ step }: ReservationProps) {
     minAdvanceCutoffTime,
   } = useBookingWithRouter(step);
 
-  const { getEquipmentName } = useEquipment();
+  const { equipment: availableEquipment, getEquipmentName } = useEquipment();
 
   const [isVisible, setIsVisible] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -159,7 +159,7 @@ export function Reservation({ step }: ReservationProps) {
     let endIdx = TIME_SLOTS.indexOf(state.endTime);
     if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
     const durationH = (endIdx - startIdx) * 0.5;
-    const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH);
+    const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH, availableEquipment);
     const grandTotal = total + equipmentPrice;
 
     // Price breakdown: off-peak vs peak hours
@@ -204,6 +204,7 @@ export function Reservation({ step }: ReservationProps) {
             equipment={state.equipment}
             onChange={updateEquipment}
             durationHours={durationH}
+            availableEquipment={availableEquipment}
           />
         </div>
 
@@ -259,7 +260,7 @@ export function Reservation({ step }: ReservationProps) {
                 <span className="text-white/60">
                   {getEquipmentName(e.id)} x{e.quantity}
                 </span>
-                <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH))}</span>
+                <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH, availableEquipment))}</span>
               </div>
             ))}
 
@@ -540,7 +541,7 @@ export function Reservation({ step }: ReservationProps) {
                            {booking.equipmentPrice > 0 && booking.equipment.length > 0 && (
                              <div className="mt-2 space-y-1">
                                {booking.equipment.filter(e => e.quantity > 0).map(e => {
-                                 const eqPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], slotDurationHours(booking.startTime, booking.endTime));
+                                  const eqPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], slotDurationHours(booking.startTime, booking.endTime), availableEquipment);
                                  return (
                                   <p key={e.id} className="text-xs text-white/40">
                                     + {getEquipmentName(e.id)} ×{e.quantity} : {formatPrice(eqPrice)}

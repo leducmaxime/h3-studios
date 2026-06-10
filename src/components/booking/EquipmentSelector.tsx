@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Minus, Gift, Loader2 } from "lucide-react";
+import { Plus, Minus, Gift } from "lucide-react";
 import {
   type EquipmentSelection,
   type EquipmentId,
@@ -21,6 +20,7 @@ interface EquipmentSelectorProps {
   equipment: EquipmentSelection[];
   onChange: (equipment: EquipmentSelection[]) => void;
   durationHours: number;
+  availableEquipment: ApiEquipment[];
 }
 
 function getQuantity(equipment: EquipmentSelection[], id: EquipmentId): number {
@@ -44,31 +44,8 @@ export function EquipmentSelector({
   equipment,
   onChange,
   durationHours,
+  availableEquipment,
 }: EquipmentSelectorProps) {
-  const [availableEquipment, setAvailableEquipment] = useState<ApiEquipment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchEquipment = async () => {
-      try {
-        const res = await fetch("/api/equipment");
-        if (!res.ok) throw new Error("Failed to fetch equipment");
-        const data = await res.json() as { success: boolean; equipment?: ApiEquipment[]; error?: string };
-        if (data.success && data.equipment) {
-          setAvailableEquipment(data.equipment);
-        } else {
-          throw new Error(data.error || "Failed to fetch equipment");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Erreur de chargement");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEquipment();
-  }, []);
 
   const handleIncrement = (id: EquipmentId, max: number) => {
     const current = getQuantity(equipment, id);
@@ -98,24 +75,6 @@ export function EquipmentSelector({
     if (!eq) return sum;
     return sum + calculateSubtotal(eq, item.quantity);
   }, 0);
-
-  if (loading) {
-    return (
-      <div className="rounded-xl border border-white/20 bg-white/15 p-4">
-        <div className="flex h-20 items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-xl border border-white/20 bg-white/15 p-4">
-        <p className="text-sm text-red-400">Erreur: {error}</p>
-      </div>
-    );
-  }
 
   return (
     <div className="rounded-xl border border-white/20 bg-white/15 p-4">

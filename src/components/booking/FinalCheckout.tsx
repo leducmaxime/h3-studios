@@ -8,6 +8,7 @@ import {
   formatPrice,
   generateICS,
   downloadICS,
+  generateGoogleCalendarUrl,
   type CompletedBooking,
 } from "@/lib/booking";
 import { useEquipment } from "./useEquipment";
@@ -39,25 +40,14 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
   };
 
   const handleAddToGoogleCalendar = (booking: CompletedBooking) => {
-    const startDate = new Date(booking.date);
-    const [startHours, startMinutes] = booking.startTime.split(":").map(Number);
-    startDate.setHours(startHours, startMinutes, 0, 0);
-
-    const endDate = new Date(booking.date);
-    const [endHours, endMinutes] = booking.endTime.split(":").map(Number);
-    endDate.setHours(endHours, endMinutes, 0, 0);
-
-    const formatGoogleDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-
-    const params = new URLSearchParams({
-      action: "TEMPLATE",
-      text: `H3 Studios - répétition - ${booking.bookingRef}`,
-      dates: `${formatGoogleDate(startDate)}/${formatGoogleDate(endDate)}`,
-      details: `Réservation ${booking.bookingRef} chez H3 Studios`,
-      location: "3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie",
-    });
-
-    window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, "_blank");
+    const url = generateGoogleCalendarUrl(
+      booking.date,
+      booking.startTime,
+      booking.endTime,
+      STUDIOS[booking.studioId].name,
+      booking.bookingRef
+    );
+    window.open(url, "_blank");
   };
 
   return (

@@ -644,10 +644,9 @@ export function generateICS(
   bookingRef: string
 ): string {
   const formatICSDate = (d: Date, time: string): string => {
-    const [hours, minutes] = time.split(":").map(Number);
-    const dt = new Date(d);
-    dt.setHours(hours, minutes, 0, 0);
-    return dt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const dateStr = getParisDateISO(d).replace(/-/g, "");
+    const timeStr = time.replace(":", "") + "00";
+    return `${dateStr}T${timeStr}`;
   };
 
   const dtStart = formatICSDate(date, startTime);
@@ -660,8 +659,8 @@ PRODID:-//H3 Studios//Reservation//FR
 BEGIN:VEVENT
 UID:${bookingRef}@h3-studios.fr
 DTSTAMP:${now}
-DTSTART:${dtStart}
-DTEND:${dtEnd}
+DTSTART;TZID=Europe/Paris:${dtStart}
+DTEND;TZID=Europe/Paris:${dtEnd}
 SUMMARY:Répétition - ${studioName}
 DESCRIPTION:Réservation ${bookingRef} chez H3 Studios
 LOCATION:3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie
@@ -690,10 +689,9 @@ export function generateGoogleCalendarUrl(
   bookingRef: string
 ): string {
   const formatGoogleDate = (d: Date, time: string): string => {
-    const [hours, minutes] = time.split(":").map(Number);
-    const dt = new Date(d);
-    dt.setHours(hours, minutes, 0, 0);
-    return dt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const dateStr = getParisDateISO(d).replace(/-/g, "");
+    const timeStr = time.replace(":", "") + "00";
+    return `${dateStr}T${timeStr}`;
   };
 
   const start = formatGoogleDate(date, startTime);
