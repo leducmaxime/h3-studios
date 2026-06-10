@@ -629,6 +629,14 @@ export function Reservation({ step }: ReservationProps) {
                 onBack={goBack}
               />
             )}
+            {state.step === 4 && state.paymentMethod === "cash" && (
+              <PaymentChoice
+                cart={state.cart}
+                total={Math.max(0, cartTotal - state.promoDiscount)}
+                onSelectMethod={selectPaymentMethod}
+                onBack={goBack}
+              />
+            )}
 
             {/* Step 5: Done */}
             {state.step === 5 && (

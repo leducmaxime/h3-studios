@@ -297,6 +297,11 @@ export function useBookingWithRouter(urlStep?: string) {
         restoredState.step = 3 as BookingState["step"];
       }
 
+      // Empty cart on steps 2-4 (coordonnées, panier, paiement): redirect to step 0
+      if (restoredState.cart.length === 0 && restoredState.step >= 2 && restoredState.step <= 4) {
+        restoredState.step = 0 as BookingState["step"];
+      }
+
       setState(restoredState);
     } else if (prefs) {
       setState((s) => ({
@@ -405,6 +410,16 @@ export function useBookingWithRouter(urlStep?: string) {
       const newStep = getStepFromUrl(urlStepStr || undefined);
       
       setState((s) => {
+        // Step 5 is terminal: back button should reset
+        if (s.step === 5) {
+          window.history.replaceState({}, "", "/reservation");
+          return { ...initialState };
+        }
+        // Empty cart on steps 2-4: redirect to step 0
+        if (s.cart.length === 0 && newStep >= 2 && newStep <= 4) {
+          window.history.replaceState({}, "", "/reservation");
+          return { ...s, step: 0 as BookingState["step"] };
+        }
         // Cart lock: if cart has items and not adding new, block booking steps (0-1)
         if (s.cart.length > 0 && !s.isAddingNew && newStep <= 1) {
           // Replace URL to cart without adding history entry
