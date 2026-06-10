@@ -4505,7 +4505,8 @@ async function handleScheduled(controller: ScheduledController) {
     }
   }
 
-  const igResult = await syncInstagram(env.DB as D1Database);
+  const igToken = (env as any).INSTAGRAM_ACCESS_TOKEN;
+  const igResult = await syncInstagram(env.DB as D1Database, igToken);
   if (igResult.success) {
     console.log(`[Cron] Instagram synced: ${igResult.count} posts`);
   } else {

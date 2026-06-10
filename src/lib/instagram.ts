@@ -203,7 +203,8 @@ export async function fetchInstagramFeedFromRSS(): Promise<InstagramPost[]> {
   });
 
   if (!response.ok) {
-    throw new Error(`RSS feed error: ${response.statusText}`);
+    const body = await response.text().catch(() => "");
+    throw new Error(`RSS feed error (${response.status}): ${body || response.statusText}. Configurez un token Instagram dans l'admin pour éviter ce fallback.`);
   }
 
   const xmlText = await response.text();
