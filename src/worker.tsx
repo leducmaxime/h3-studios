@@ -864,12 +864,34 @@ const app = defineApp([
       // "00:00" = minuit/fin de journée, toujours après n'importe quelle heure
       if (body.endTime !== "00:00" && body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
 
-      // Recalcul serveur du prix (ne jamais faire confiance au prix client)
-      const isPeak = body.startTime >= "18:00" || new Date(body.date).getDay() === 0 || new Date(body.date).getDay() === 6;
-      const pricePerHalfHour = await getPricingForBooking(env.DB, body.studioId, body.groupType, isPeak);
+      // Recalcul serveur du prix par slot (pas juste un flag global)
       const halfHours = slotDurationSlots(body.startTime, body.endTime);
       const durationHours = halfHours * 0.5;
-      const serverBasePrice = pricePerHalfHour * halfHours;
+      const bDate = new Date(body.date + "T00:00:00");
+      const dayOfWeek = bDate.getDay();
+
+      // Charger la config peak depuis la DB
+      const peakStartHour = parseInt(await getSetting(env.DB, "booking.min_peak_hour") || "18", 10);
+      const publicHolidaysRaw = await getSetting(env.DB, "booking.public_holidays") || "[]";
+      const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
+
+      // Cacher les prix peak/off-peak (1 appel DB chacun au lieu d'un par slot)
+      const peakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, true);
+      const offPeakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, false);
+
+      const startIdx = ALL_TIME_SLOTS.indexOf(body.startTime);
+      let endIdx = ALL_TIME_SLOTS.indexOf(body.endTime);
+      if (body.endTime === "00:00") endIdx = ALL_TIME_SLOTS.indexOf("00:00");
+
+      let serverBasePrice = 0;
+      for (let i = startIdx; i < endIdx; i++) {
+        const slot = ALL_TIME_SLOTS[i];
+        const hour = parseInt(slot.split(":")[0], 10);
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isHoliday = publicHolidays.includes(body.date);
+        const isPeak = hour >= peakStartHour || isWeekend || isHoliday;
+        serverBasePrice += isPeak ? peakRate : offPeakRate;
+      }
 
       // Recalcul équipement serveur
       let serverEquipmentPrice = 0;
@@ -4371,96 +4393,123 @@ const app = defineApp([
         });
       }
       
-      if (event.type !== "checkout.session.completed") {
-        return new Response("OK", { status: 200 });
-      }
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object;
+          const bookingRefs = (session.metadata.booking_refs || "").split(",").filter(Boolean);
+          
+          console.log("Payment confirmed for refs:", bookingRefs);
 
-      const session = event.data.object;
-      const bookingRefs = (session.metadata.booking_refs || "").split(",").filter(Boolean);
-      
-      console.log("Payment confirmed for refs:", bookingRefs);
+          // Fetch all bookings once (not twice per ref in the loop)
+          const bookings = (await Promise.all(bookingRefs.map(ref => getBookingByRef(env.DB, ref))))
+            .filter((b): b is NonNullable<typeof b> => b !== null);
 
-      // Fetch all bookings once (not twice per ref in the loop)
-      const bookings = (await Promise.all(bookingRefs.map(ref => getBookingByRef(env.DB, ref))))
-        .filter((b): b is NonNullable<typeof b> => b !== null);
+          // Validate session total against sum of per-booking prices
+          const expectedTotalCents = bookings.reduce((sum, b) => sum + Math.round(b.total_price * 100), 0);
+          if (session.amount_total && session.amount_total !== expectedTotalCents) {
+            console.warn(`Webhook: total mismatch — Stripe: ${session.amount_total}, DB sum: ${expectedTotalCents}`);
+          }
 
-      // Validate session total against sum of per-booking prices
-      const expectedTotalCents = bookings.reduce((sum, b) => sum + Math.round(b.total_price * 100), 0);
-      if (session.amount_total && session.amount_total !== expectedTotalCents) {
-        console.warn(`Webhook: total mismatch — Stripe: ${session.amount_total}, DB sum: ${expectedTotalCents}`);
-      }
+          let anyNewlyPaid = false;
 
-      let anyNewlyPaid = false;
+          for (const booking of bookings) {
+            // Idempotency via Stripe event ID: check if this event was already processed
+            const existingEvent = await env.DB.prepare(
+              "SELECT 1 FROM payments WHERE booking_id = ? AND stripe_event_id = ? LIMIT 1"
+            ).bind(booking.id, event.id).first();
+            if (existingEvent) {
+              console.log(`Webhook: event ${event.id} already processed for booking ${booking.booking_ref}, skipping`);
+              continue;
+            }
 
-      for (const booking of bookings) {
-        // Idempotency via Stripe event ID: check if this event was already processed
-        const existingEvent = await env.DB.prepare(
-          "SELECT 1 FROM payments WHERE booking_id = ? AND stripe_event_id = ? LIMIT 1"
-        ).bind(booking.id, event.id).first();
-        if (existingEvent) {
-          console.log(`Webhook: event ${event.id} already processed for booking ${booking.booking_ref}, skipping`);
-          continue;
+            // Record per-booking amount (not session grand total)
+            const bookingCents = Math.round(booking.total_price * 100);
+
+            await addPayment(env.DB, {
+              booking_id: booking.id,
+              amount: bookingCents,
+              method: "card",
+              status: "paid",
+              paid_at: new Date().toISOString().replace("T", " ").slice(0, 19),
+              stripe_event_id: event.id,
+            });
+
+            anyNewlyPaid = true;
+          }
+
+          // Send ONE consolidated confirmation email if any booking was newly paid
+          if (anyNewlyPaid && env.RESEND_API_KEY && bookings.length > 0) {
+            const firstBooking = bookings[0];
+            const user = await getUserById(env.DB, firstBooking.user_id);
+            if (user && user.email) {
+              const allSlots: BookingSlot[] = bookings.map(b => ({
+                bookingRef: b.booking_ref,
+                studioId: b.studio_id,
+                date: b.date,
+                startTime: b.start_time,
+                endTime: b.end_time,
+                groupType: b.group_type,
+                equipment: b.equipment ? JSON.parse(b.equipment) : [],
+                equipmentPrice: b.equipment_price,
+                totalPrice: b.total_price,
+              }));
+
+              const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
+                bookingRef: firstBooking.booking_ref,
+                studioId: firstBooking.studio_id,
+                date: firstBooking.date,
+                startTime: firstBooking.start_time,
+                endTime: firstBooking.end_time,
+                groupType: firstBooking.group_type,
+                equipment: firstBooking.equipment ? JSON.parse(firstBooking.equipment) : [],
+                equipmentPrice: firstBooking.equipment_price,
+                totalPrice: bookings.reduce((sum, b) => sum + b.total_price, 0),
+                paymentMethod: "card",
+                paymentStatus: "paid",
+                userName: user.name,
+                userEmail: user.email,
+                userPhone: user.phone || "",
+                promoCode: firstBooking.promo_code,
+                promoDiscount: firstBooking.promo_discount,
+                promoType: firstBooking.promo_type,
+                allSlots: allSlots.length > 1 ? allSlots : undefined,
+              }).catch((err) => {
+                console.error(`Webhook: Failed to send consolidated confirmation email:`, err);
+              });
+              waitUntil(emailPromise);
+            }
+          }
+
+          return new Response("OK", { status: 200 });
         }
 
-        // Record per-booking amount (not session grand total)
-        const bookingCents = Math.round(booking.total_price * 100);
-
-        await addPayment(env.DB, {
-          booking_id: booking.id,
-          amount: bookingCents,
-          method: "card",
-          status: "paid",
-          paid_at: new Date().toISOString().replace("T", " ").slice(0, 19),
-          stripe_event_id: event.id,
-        });
-
-        anyNewlyPaid = true;
-      }
-
-      // Send ONE consolidated confirmation email if any booking was newly paid
-      if (anyNewlyPaid && env.RESEND_API_KEY && bookings.length > 0) {
-        const firstBooking = bookings[0];
-        const user = await getUserById(env.DB, firstBooking.user_id);
-        if (user && user.email) {
-          const allSlots: BookingSlot[] = bookings.map(b => ({
-            bookingRef: b.booking_ref,
-            studioId: b.studio_id,
-            date: b.date,
-            startTime: b.start_time,
-            endTime: b.end_time,
-            groupType: b.group_type,
-            equipment: b.equipment ? JSON.parse(b.equipment) : [],
-            equipmentPrice: b.equipment_price,
-            totalPrice: b.total_price,
-          }));
-
-          const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
-            bookingRef: firstBooking.booking_ref,
-            studioId: firstBooking.studio_id,
-            date: firstBooking.date,
-            startTime: firstBooking.start_time,
-            endTime: firstBooking.end_time,
-            groupType: firstBooking.group_type,
-            equipment: firstBooking.equipment ? JSON.parse(firstBooking.equipment) : [],
-            equipmentPrice: firstBooking.equipment_price,
-            totalPrice: bookings.reduce((sum, b) => sum + b.total_price, 0),
-            paymentMethod: "card",
-            paymentStatus: "paid",
-            userName: user.name,
-            userEmail: user.email,
-            userPhone: user.phone || "",
-            promoCode: firstBooking.promo_code,
-            promoDiscount: firstBooking.promo_discount,
-            promoType: firstBooking.promo_type,
-            allSlots: allSlots.length > 1 ? allSlots : undefined,
-          }).catch((err) => {
-            console.error(`Webhook: Failed to send consolidated confirmation email:`, err);
-          });
-          waitUntil(emailPromise);
+        case "checkout.session.expired": {
+          const session = event.data.object;
+          const bookingRefsStr = session.metadata?.booking_refs;
+          if (bookingRefsStr) {
+            const refs = bookingRefsStr.split(",").filter(Boolean);
+            console.log("Payment expired for refs:", refs);
+            for (const ref of refs) {
+              try {
+                const booking = await getBookingByRef(env.DB, ref);
+                if (booking && booking.status === "confirmed") {
+                  await updateBooking(env.DB, booking.id, {
+                    status: "cancelled",
+                    cancelled_at: new Date().toISOString(),
+                    cancel_reason: "Paiement expiré",
+                  });
+                }
+              } catch (e) {
+                console.error(`Failed to cancel expired booking ${ref}:`, e);
+              }
+            }
+          }
+          return jsonSuccess({ received: true });
         }
-      }
 
-      return new Response("OK", { status: 200 });
+        default:
+          return new Response("OK", { status: 200 });
+      }
     } catch (error) {
       console.error("Webhook error:", error);
       return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
