@@ -34,6 +34,7 @@ export function Home() {
       <ScrollUp />
 
       <div className="w-full max-w-6xl px-4">
+        <h1 className="sr-only">H3 Studios - Studios de Répétition à Sucy-en-Brie</h1>
         <div className="flex min-h-[calc(100dvh-6rem)] flex-col items-center justify-center md:min-h-[calc(100dvh-8rem)]">
           <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
             <img

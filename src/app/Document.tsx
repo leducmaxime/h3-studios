@@ -1,17 +1,138 @@
 import styles from "@/styles/globals.css?url";
 import { SITE_URL, SITE_NAME, pageSEO, generateJsonLd, type PageSEO } from "./seo";
 
+const BREADCRUMB_NAMES: Record<string, string> = {
+  "les-studios": "Les Studios",
+  "le-materiel": "Le Matériel",
+  "tarifs": "Tarifs",
+  "reservation": "Réservation",
+  "a-propos": "À Propos",
+  "avis": "Avis",
+  "equipe": "L'Équipe",
+  "actualites": "Actualités",
+  "mentions-legales": "Mentions Légales",
+  "politique-confidentialite": "Politique de Confidentialité",
+  "conditions-de-vente": "CGV",
+  "mon-compte": "Mon Compte",
+  "connexion": "Connexion",
+  "profil": "Profil",
+};
+
+const LEGAL_PATHS = ["/mentions-legales", "/politique-confidentialite", "/conditions-de-vente"];
+
 interface DocumentProps {
   children: React.ReactNode;
   path?: string;
   nonce?: string;
 }
 
+function buildBreadcrumb(currentPath: string) {
+  const segments = currentPath.split("/").filter(Boolean);
+  const itemListElement: Array<{ "@type": string; position: number; name: string; item: string }> = [
+    { "@type": "ListItem", position: 1, name: "Accueil", item: `${SITE_URL}/` },
+  ];
+
+  let accumulated = "";
+  for (let i = 0; i < segments.length; i++) {
+    accumulated += `/${segments[i]}`;
+    const name = BREADCRUMB_NAMES[segments[i]] || segments[i];
+    itemListElement.push({
+      "@type": "ListItem",
+      position: i + 2,
+      name,
+      item: `${SITE_URL}${accumulated}`,
+    });
+  }
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement,
+  };
+}
+
 export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce }) => {
   const seo: PageSEO = pageSEO[path] || pageSEO["/"];
   const canonicalUrl = `${SITE_URL}${seo.path}`;
   const ogImageUrl = `${SITE_URL}/images/opengraph.png`;
-  const jsonLd = generateJsonLd();
+
+  const isAdmin = path.startsWith("/admin");
+  const isLegal = LEGAL_PATHS.includes(path);
+  const isAbout = path === "/a-propos";
+  const isHome = path === "/";
+
+  // Build JSON-LD scripts array
+  const jsonLdScripts: object[] = [];
+
+  if (!isAdmin) {
+    if (isLegal) {
+      // Simple WebPage for legal pages
+      jsonLdScripts.push({
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: seo.title,
+        description: seo.description,
+      });
+    } else {
+      // Main MusicVenue JSON-LD (existing)
+      jsonLdScripts.push(generateJsonLd());
+
+      // Add FAQPage on /a-propos
+      if (isAbout) {
+        jsonLdScripts.push({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: [
+            {
+              "@type": "Question",
+              name: "Comment réserver un studio ?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "La réservation se fait en ligne via notre site. Choisissez votre date, créneau horaire et studio, puis finalisez votre réservation en quelques clics.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Quels sont les moyens de paiement acceptés ?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Nous acceptons le paiement par carte bancaire (via Stripe) et le paiement en espèces sur place.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Puis-je annuler ou modifier ma réservation ?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Les annulations sont possibles jusqu'à 48h avant le créneau pour un remboursement intégral. Pour toute modification, contactez-nous.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Le matériel est-il fourni ?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Oui, chaque studio est équipé d'une sono, d'une batterie et d'amplis. Du matériel supplémentaire est disponible en location.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Y a-t-il un parking à proximité ?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Oui, un parking gratuit est disponible devant les studios. L'accès est également possible en transports en commun (RER A, bus).",
+              },
+            },
+          ],
+        });
+      }
+    }
+
+    // BreadcrumbList on all pages except home
+    if (!isHome) {
+      jsonLdScripts.push(buildBreadcrumb(path));
+    }
+  }
 
   return (
     <html lang="fr" className="dark">
@@ -24,8 +145,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
         <meta name="description" content={seo.description} />
         <meta name="keywords" content={seo.keywords.join(", ")} />
         <meta name="author" content={SITE_NAME} />
-        <meta name="robots" content="index, follow" />
-        <meta name="language" content="French" />
+        <meta name="robots" content={isAdmin ? "noindex, nofollow" : "index, follow"} />
         <meta name="revisit-after" content="7 days" />
         
         <link rel="canonical" href={canonicalUrl} />
@@ -53,11 +173,14 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
         <meta name="geo.position" content="48.7697;2.5178" />
         <meta name="ICBM" content="48.7697, 2.5178" />
         
-        <script
-          type="application/ld+json"
-          nonce={nonce}
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        {jsonLdScripts.map((json, i) => (
+          <script
+            key={i}
+            type="application/ld+json"
+            nonce={nonce}
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }}
+          />
+        ))}
 
         <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-variable-latin.woff2" crossOrigin="anonymous" />
         <link rel="stylesheet" href={styles} />

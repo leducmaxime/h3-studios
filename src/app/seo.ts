@@ -172,6 +172,46 @@ export const pageSEO: Record<string, PageSEO> = {
     ],
     path: "/mon-compte/profil",
   },
+  "/mentions-legales": {
+    title: "Mentions Légales - H3 Studios",
+    description:
+      "Consultez les mentions légales de H3 Studios : informations légales, éditeur du site, hébergement et conditions d'utilisation du site de réservation de studios de répétition.",
+    keywords: [
+      "mentions légales",
+      "H3 Studios",
+      "éditeur",
+      "hébergement",
+      "conditions d'utilisation",
+    ],
+    path: "/mentions-legales",
+  },
+  "/politique-confidentialite": {
+    title: "Politique de Confidentialité - H3 Studios",
+    description:
+      "Politique de confidentialité de H3 Studios : découvrez comment nous collectons, utilisons et protégeons vos données personnelles conformément au RGPD.",
+    keywords: [
+      "politique confidentialité",
+      "RGPD",
+      "données personnelles",
+      "H3 Studios",
+      "vie privée",
+    ],
+    path: "/politique-confidentialite",
+  },
+  "/conditions-de-vente": {
+    title: "Conditions Générales de Vente - H3 Studios",
+    description:
+      "Conditions générales de vente de H3 Studios : tarifs, modalités de réservation, annulation et remboursement pour la location de studios de répétition à Sucy-en-Brie.",
+    keywords: [
+      "conditions générales de vente",
+      "CGV",
+      "réservation",
+      "annulation",
+      "remboursement",
+      "H3 Studios",
+    ],
+    path: "/conditions-de-vente",
+  },
 };
 
 export const routes = Object.keys(pageSEO);
@@ -302,12 +342,29 @@ export function generateJsonLd() {
 }
 
 export function generateSitemap(): string {
-  const lastmod = new Date().toISOString().split("T")[0];
+  const todayStr = new Date().toISOString().split("T")[0];
 
+  const legalPages = ["/mentions-legales", "/politique-confidentialite", "/conditions-de-vente"];
   const publicRoutes = routes.filter(path => !path.startsWith("/mon-compte"));
   const urls = publicRoutes.map((path) => {
-    const priority = path === "/" ? "1.0" : "0.8";
-    const changefreq = path === "/" ? "weekly" : "monthly";
+    let priority: string;
+    let changefreq: string;
+    let lastmod: string;
+
+    if (path === "/") {
+      priority = "1.0";
+      changefreq = "weekly";
+      lastmod = todayStr;
+    } else if (legalPages.includes(path)) {
+      priority = "0.5";
+      changefreq = "yearly";
+      lastmod = "2025-06-01";
+    } else {
+      priority = "0.8";
+      changefreq = "monthly";
+      lastmod = "2025-06-01";
+    }
+
     return `  <url>
     <loc>${SITE_URL}${path}</loc>
     <lastmod>${lastmod}</lastmod>

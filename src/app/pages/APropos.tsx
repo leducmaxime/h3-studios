@@ -262,8 +262,12 @@ export function APropos() {
               loop
               muted
               playsInline
+              title="H3 Studios - Découvrez nos studios de répétition"
+              aria-label="Vidéo de présentation des studios H3 Studios"
               className="h-full w-full object-cover grayscale contrast-[1.4] brightness-[0.9]"
-            />
+            >
+              Votre navigateur ne supporte pas la lecture de vidéos. Découvrez H3 Studios, vos studios de répétition à Sucy-en-Brie.
+            </video>
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           </div>
           
