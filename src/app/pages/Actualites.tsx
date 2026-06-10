@@ -113,11 +113,6 @@ export function Actualites() {
           </a>
         </div>
 
-        <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
-          <h2 className="font-blanka text-2xl md:text-3xl">DERNIERES PUBLICATIONS</h2>
-          <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-primary/50" />
-        </div>
-
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
