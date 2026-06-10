@@ -23,6 +23,16 @@ import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, type StudioId } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 
+/** Normalise "00:00" en "24:00" pour les comparaisons de strings SQL.
+ *  "00:00" est plus petit que toutes les heures en string compare,
+ *  ce qui casse les gardes start_time < ? AND end_time > ?. */
+function normEnd(time: string): string {
+  return time === "00:00" ? "24:00" : time;
+}
+
+/** Clause SQL pour comparer end_time en traitant "00:00" comme "24:00" */
+const END_CMP = "CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END";
+
 function generateId(): string {
   return crypto.randomUUID();
 }
@@ -161,7 +171,7 @@ export async function createBooking(
     data.equipment, data.payment_method, data.payment_status,
     data.notes, data.round_mode, data.promo_code || null, data.promo_discount, data.promo_type || null, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
     // Paramètres pour le WHERE NOT EXISTS
-    data.studio_id, data.date, data.end_time, data.start_time,
+    data.studio_id, data.date, normEnd(data.end_time), data.start_time,
   ).run();
 
   if (result.meta.changes === 0) {
@@ -244,7 +254,7 @@ export async function checkConflict(
   endTime: string,
   excludeBookingId?: string,
 ): Promise<DbBooking | null> {
-  const params: unknown[] = [studioId, date, endTime, startTime];
+  const params: unknown[] = [studioId, date, normEnd(endTime), startTime];
   let excludeClause = "";
 
   if (excludeBookingId) {
@@ -290,7 +300,7 @@ export async function checkBlockedSlotConflict(
         (start_time < ? AND end_time > ?)
       )
     LIMIT 1
-  `).bind(date, studioId, endTime, startTime).first<DbBlockedSlot>();
+  `).bind(date, studioId, normEnd(endTime), startTime).first<DbBlockedSlot>();
 }
 
 
@@ -387,9 +397,9 @@ export async function getDisplaceableBookings(
     SELECT * FROM bookings
     WHERE studio_id = ? AND date = ? AND status = 'confirmed'
       AND group_type IN ('solo', 'duo')
-      AND start_time < ? AND end_time > ?
+      AND start_time < ? AND ${END_CMP} > ?
     ORDER BY start_time ASC
-  `).bind(studioId, date, endTime, startTime).all<DbBooking>();
+  `).bind(studioId, date, normEnd(endTime), startTime).all<DbBooking>();
 
   return result.results.filter((b) => canDisplaceBooking(b));
 }
@@ -424,9 +434,9 @@ export async function createBookingWithDisplacement(
     SELECT * FROM bookings
     WHERE studio_id = ? AND date = ? AND status = 'confirmed'
       AND group_type = 'group'
-      AND start_time < ? AND end_time > ?
+      AND start_time < ? AND ${END_CMP} > ?
     LIMIT 1
-  `).bind(data.studio_id, data.date, data.end_time, data.start_time).first<DbBooking>();
+  `).bind(data.studio_id, data.date, normEnd(data.end_time), data.start_time).first<DbBooking>();
 
   if (groupConflict) {
     throw new Error("Conflit de créneau détecté — réservation non créée");
@@ -437,8 +447,8 @@ export async function createBookingWithDisplacement(
     SELECT * FROM bookings
     WHERE studio_id = ? AND date = ? AND status = 'confirmed'
       AND group_type IN ('solo', 'duo')
-      AND start_time < ? AND end_time > ?
-  `).bind(data.studio_id, data.date, data.end_time, data.start_time).all<DbBooking>();
+      AND start_time < ? AND ${END_CMP} > ?
+  `).bind(data.studio_id, data.date, normEnd(data.end_time), data.start_time).all<DbBooking>();
 
   const nonDisplaceable = allOverlapping.results.filter((b) => !canDisplaceBooking(b));
   if (nonDisplaceable.length > 0) {
@@ -485,7 +495,7 @@ export async function createBookingWithDisplacement(
       WHERE NOT EXISTS (
         SELECT 1 FROM bookings
         WHERE studio_id = ? AND date = ? AND status != 'cancelled'
-          AND start_time < ? AND end_time > ?
+          AND start_time < ? AND ${END_CMP} > ?
       )
     `).bind(
       id, data.booking_ref, data.user_id, data.band_name, data.studio_id, data.date,
@@ -494,7 +504,7 @@ export async function createBookingWithDisplacement(
       data.equipment, data.payment_method, data.payment_status,
       data.notes, data.round_mode, data.promo_code || null, data.promo_discount, data.promo_type || null, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
       // WHERE NOT EXISTS params
-      data.studio_id, data.date, data.end_time, data.start_time,
+      data.studio_id, data.date, normEnd(data.end_time), data.start_time,
     ),
   );
 

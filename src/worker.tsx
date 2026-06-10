@@ -126,7 +126,7 @@ import {
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters, type DbBooking } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, type StudioId } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, slotDurationSlots, type StudioId } from "@/lib/booking";
 import {
   getParisDateISO,
   getParisNow,
@@ -867,9 +867,7 @@ const app = defineApp([
       // Recalcul serveur du prix (ne jamais faire confiance au prix client)
       const isPeak = body.startTime >= "18:00" || new Date(body.date).getDay() === 0 || new Date(body.date).getDay() === 6;
       const pricePerHalfHour = await getPricingForBooking(env.DB, body.studioId, body.groupType, isPeak);
-      const startParts = body.startTime.split(":").map(Number);
-      const endParts = body.endTime.split(":").map(Number);
-      const halfHours = ((endParts[0] * 60 + endParts[1]) - (startParts[0] * 60 + startParts[1])) / 30;
+      const halfHours = slotDurationSlots(body.startTime, body.endTime);
       const durationHours = halfHours * 0.5;
       const serverBasePrice = pricePerHalfHour * halfHours;
 

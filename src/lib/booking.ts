@@ -375,7 +375,7 @@ export function isRangeBookable(
 ): { bookable: boolean; studioId?: StudioId } {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.indexOf("00:00");
 
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
     return { bookable: false };
@@ -522,7 +522,7 @@ export function calculatePrice(
 ): { total: number; breakdown: PriceSlot[] } {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
   let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.length;
+  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.indexOf("00:00");
 
   if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
     return { total: 0, breakdown: [] };
@@ -548,7 +548,7 @@ export function calculatePrice(
 export function formatDuration(startTime: string, endTime: string): string {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
   let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.length;
+  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.indexOf("00:00");
 
   if (startIndex === -1 || endIndex === -1) return "";
 
