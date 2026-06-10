@@ -218,6 +218,20 @@ export const CLOSING_TIME = "00:00";
 export const SLOT_DURATION_MINUTES = 30;
 export const MIN_BOOKING_SLOTS = 2;
 
+/** Nombre de créneaux entre deux heures (demi-heures), avec gestion de "00:00" = fin de journée */
+export function slotDurationSlots(startTime: string, endTime: string): number {
+  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
+  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
+  if (endTime === "00:00" && endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+  if (startIdx === -1 || endIdx === -1) return 0;
+  return endIdx - startIdx;
+}
+
+/** Durée en heures entre deux créneaux horaires */
+export function slotDurationHours(startTime: string, endTime: string): number {
+  return slotDurationSlots(startTime, endTime) * 0.5;
+}
+
 // Detailed occupancy information
 export interface OccupancyInfo {
   studioId: StudioId;

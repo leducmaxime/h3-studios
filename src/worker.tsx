@@ -861,7 +861,8 @@ const app = defineApp([
       if (!validGroupTypes.includes(body.groupType)) return jsonError("Type de groupe invalide", 400);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) return jsonError("Format de date invalide", 400);
       if (!/^\d{2}:\d{2}$/.test(body.startTime) || !/^\d{2}:\d{2}$/.test(body.endTime)) return jsonError("Format d'heure invalide", 400);
-      if (body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
+      // "00:00" = minuit/fin de journée, toujours après n'importe quelle heure
+      if (body.endTime !== "00:00" && body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
 
       // Recalcul serveur du prix (ne jamais faire confiance au prix client)
       const isPeak = body.startTime >= "18:00" || new Date(body.date).getDay() === 0 || new Date(body.date).getDay() === 6;

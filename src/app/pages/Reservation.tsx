@@ -17,7 +17,7 @@ import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, type StudioId, type GroupType } from "@/lib/booking";
 import { useEquipment } from "@/components/booking/useEquipment";
 
 const GROUP_LABELS: Record<GroupType, string> = {
@@ -65,6 +65,7 @@ export function Reservation({ step }: ReservationProps) {
     confirmBooking,
     clearDuplicateError,
     addAnotherBooking,
+    goToCoordonnees,
     goToPaymentFromCoordonnees,
     goToCart,
     removeFromCart,
@@ -536,12 +537,11 @@ export function Reservation({ step }: ReservationProps) {
                             {formatDate(booking.date, "long")} • {booking.startTime} -{" "}
                             {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
                           </p>
-                          {booking.equipmentPrice > 0 && booking.equipment.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              {booking.equipment.filter(e => e.quantity > 0).map(e => {
-                                const durationH = (parseInt(booking.endTime) - parseInt(booking.startTime)) / 100;
-                                const eqPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH);
-                                return (
+                           {booking.equipmentPrice > 0 && booking.equipment.length > 0 && (
+                             <div className="mt-2 space-y-1">
+                               {booking.equipment.filter(e => e.quantity > 0).map(e => {
+                                 const eqPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], slotDurationHours(booking.startTime, booking.endTime));
+                                 return (
                                   <p key={e.id} className="text-xs text-white/40">
                                     + {getEquipmentName(e.id)} ×{e.quantity} : {formatPrice(eqPrice)}
                                   </p>
@@ -584,19 +584,19 @@ export function Reservation({ step }: ReservationProps) {
                     </div>
 
                     <div className="flex flex-col gap-3">
-                      <button
-                        onClick={() => {
-                          if (clientUserLoading) return;
-                          if (!clientUser) {
-                            window.location.href = "/mon-compte/connexion?redirect=/reservation/coordonnees";
-                            return;
-                          }
-                          goBack();
-                        }}
-                        disabled={clientUserLoading}
-                        className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {clientUserLoading ? "Vérification..." : `Valider et payer - ${formatPrice(Math.max(0, cartTotal - state.promoDiscount))}`}
+                        <button
+                          onClick={() => {
+                            if (clientUserLoading) return;
+                            if (!clientUser) {
+                              window.location.href = "/mon-compte/connexion?redirect=/reservation/coordonnees";
+                              return;
+                            }
+                            goToCoordonnees();
+                          }}
+                          disabled={clientUserLoading}
+                          className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {clientUserLoading ? "Vérification..." : "Continuer vers mes coordonnées"}
                       </button>
                       <button
                         onClick={addAnotherBooking}

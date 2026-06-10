@@ -151,7 +151,8 @@ export async function createBooking(
     WHERE NOT EXISTS (
       SELECT 1 FROM bookings
       WHERE studio_id = ? AND date = ? AND status != 'cancelled'
-        AND start_time < ? AND end_time > ?
+        AND start_time < ?
+        AND CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END > ?
     )
   `).bind(
     id, data.booking_ref, data.user_id, data.band_name, data.studio_id, data.date,
@@ -251,10 +252,12 @@ export async function checkConflict(
     params.push(excludeBookingId);
   }
 
+  // Treat "00:00" as "24:00" for string comparison — "00:00" means midnight/end of day
   return db.prepare(`
     SELECT * FROM bookings
     WHERE studio_id = ? AND date = ? AND status != 'cancelled'
-      AND start_time < ? AND end_time > ?
+      AND start_time < ?
+      AND CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END > ?
       ${excludeClause}
     LIMIT 1
   `).bind(...params).first<DbBooking>();
