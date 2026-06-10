@@ -204,18 +204,17 @@ describe("Unified Availability Engine", () => {
   describe("Off-by-one bug fixes", () => {
     it("calculatePrice includes 00:00 slot", () => {
       const price = calculatePrice("la-scene", "group", tuesday, "23:00", "00:00");
-      // 23:00, 23:30, 00:00 = 3 slots = 1.5 hours
-      // At peak rate (22€/h for group at La Scène) = 22 * 1.5 = 33€
-      expect(price.total).toBe(33);
-      expect(price.breakdown).toHaveLength(3);
+      // 23:00, 23:30 = 2 slots = 1h (00:00 is boundary, not a slot)
+      // At peak rate (22€/h for group at La Scène) = 22 * 1 = 22€
+      expect(price.total).toBe(22);
+      expect(price.breakdown).toHaveLength(2);
     });
 
     it("formatDuration handles 00:00 correctly", () => {
-      // 23:00 -> 00:00 = 2 slots (23:00, 23:30) = 1h00
-      // Wait: with the fix, 00:00 is INCLUDED, so it's 23:00, 23:30, 00:00 = 3 slots = 1.5h
-      expect(formatDuration("23:00", "00:00")).toBe("1h30");
-      // 22:00 -> 00:00 = 22:00, 22:30, 23:00, 23:30, 00:00 = 5 slots = 2.5h
-      expect(formatDuration("22:00", "00:00")).toBe("2h30");
+      // 23:00 -> 00:00 = 2 slots (23:00, 23:30) = 1h
+      expect(formatDuration("23:00", "00:00")).toBe("1h");
+      // 22:00 -> 00:00 = 4 slots (22:00, 22:30, 23:00, 23:30) = 2h
+      expect(formatDuration("22:00", "00:00")).toBe("2h");
     });
 
   });
