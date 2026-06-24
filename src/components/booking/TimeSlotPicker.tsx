@@ -111,15 +111,18 @@ export function TimeSlotPicker({
 
   const isStartOfOccupiedBlock = useCallback(
     (time: string, studioId: StudioId): boolean => {
-      if (!checkSlotBooked(time, studioId)) return false;
+      const availabilitySlots = slotsByStudio[studioId];
+      const currentSlot = availabilitySlots?.find((slot) => slot.time === time);
+      if (currentSlot?.available !== false) return false;
 
       const visibleSlots = studioSlots[studioId];
       const idx = visibleSlots.indexOf(time);
       if (idx <= 0) return false;
 
-      return !checkSlotBooked(visibleSlots[idx - 1], studioId);
+      const previousSlot = availabilitySlots?.find((slot) => slot.time === visibleSlots[idx - 1]);
+      return previousSlot?.available !== false;
     },
-    [checkSlotBooked, studioSlots]
+    [slotsByStudio, studioSlots]
   );
 
   // Start a selection on a studio (clears previous studio selection)
