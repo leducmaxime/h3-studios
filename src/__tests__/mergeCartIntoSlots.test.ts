@@ -267,4 +267,40 @@ describe("cart-derived runway (canBeStartTime on merged slots)", () => {
     // "16:00" is occupied by the cart
     expect(canBeStartTime("16:00", visibleSlots, isOccupied)).toBe(false);
   });
+
+  // ---------------------------------------------------------------------------
+  // Group displacement over solo/duo cart items
+  // ---------------------------------------------------------------------------
+
+  it("group selection ignores solo/duo cart items (group can overwrite)", () => {
+    const apiSlots: SlotsByStudio = {
+      "la-scene": sceneSlots("14:00", "14:30", "15:00"),
+      "le-podium": sceneSlots("14:00", "14:30", "15:00"),
+    };
+    const cart = [
+      makeBooking({ studioId: "la-scene", startTime: "14:00", endTime: "15:00", groupType: "solo" }),
+    ];
+
+    // When selecting as group, solo cart item does not block the slot
+    const resultAsGroup = mergeCartIntoSlots(apiSlots, cart, tuesday, "group");
+    expect(resultAsGroup["la-scene"]![0].available).toBe(true);
+    expect(resultAsGroup["la-scene"]![1].available).toBe(true);
+
+    // When selecting as solo/duo, the cart item still blocks
+    const resultAsSolo = mergeCartIntoSlots(apiSlots, cart, tuesday, "solo");
+    expect(resultAsSolo["la-scene"]![0].available).toBe(false);
+    expect(resultAsSolo["la-scene"]![1].available).toBe(false);
+  });
+
+  it("group selection still blocks group cart items", () => {
+    const apiSlots: SlotsByStudio = {
+      "la-scene": sceneSlots("14:00", "14:30"),
+    };
+    const cart = [
+      makeBooking({ studioId: "la-scene", startTime: "14:00", endTime: "14:30", groupType: "group" }),
+    ];
+
+    const result = mergeCartIntoSlots(apiSlots, cart, tuesday, "group");
+    expect(result["la-scene"]![0].available).toBe(false);
+  });
 });

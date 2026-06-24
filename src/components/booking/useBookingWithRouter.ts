@@ -31,6 +31,7 @@ export function mergeCartIntoSlots(
   apiSlots: SlotsByStudio,
   cart: CompletedBooking[],
   selectedDate: Date | null,
+  currentGroupType: GroupType | null = null,
 ): SlotsByStudio {
   if (!selectedDate || cart.length === 0) return apiSlots;
 
@@ -44,6 +45,12 @@ export function mergeCartIntoSlots(
 
   for (const booking of cart) {
     if (booking.date.toDateString() !== selectedDateStr) continue;
+
+    // When selecting as group, solo/duo cart items do not block the slot
+    // (group can displace/overwrite them). Group cart items always block.
+    if (currentGroupType === "group" && (booking.groupType === "solo" || booking.groupType === "duo")) {
+      continue;
+    }
 
     const studioSlots = merged[booking.studioId];
     if (!studioSlots) continue;
@@ -252,8 +259,8 @@ export function useBookingWithRouter(urlStep?: string) {
   const [clientUserLoading, setClientUserLoading] = useState(true);
 
   const mergedSlotsByStudio = useMemo(
-    () => mergeCartIntoSlots(slotsByStudio, state.cart, state.selectedDate),
-    [slotsByStudio, state.cart, state.selectedDate],
+    () => mergeCartIntoSlots(slotsByStudio, state.cart, state.selectedDate, state.groupType),
+    [slotsByStudio, state.cart, state.selectedDate, state.groupType],
   );
 
   useEffect(() => {
