@@ -10,15 +10,65 @@ import {
   type EquipmentSelection,
   type PaymentMethod,
   type PromoCode,
-  type OccupancyInfo,
   calculatePrice,
   calculateEquipmentPrice,
   generateBookingRef,
-  isRangeBookable,
   loadUserPreferences,
   saveUserPreferences,
   TIME_SLOTS,
 } from "@/lib/booking";
+
+// ---------------------------------------------------------------------------
+// Pure helper: merge same-date cart bookings into API slot arrays.
+// Returns a deep-cloned copy — does not mutate inputs.
+// End-exclusive: a cart booking ending at "00:00" flips slots up to "23:30"
+// but leaves the "00:00" boundary slot available.
+// ---------------------------------------------------------------------------
+export type SlotEntry = { time: string; available: boolean; groupType?: string; bookingId?: string };
+export type SlotsByStudio = Record<string, SlotEntry[]>;
+
+export function mergeCartIntoSlots(
+  apiSlots: SlotsByStudio,
+  cart: CompletedBooking[],
+  selectedDate: Date | null,
+): SlotsByStudio {
+  if (!selectedDate || cart.length === 0) return apiSlots;
+
+  const selectedDateStr = selectedDate.toDateString();
+  const merged: SlotsByStudio = {};
+
+  // Deep clone each studio's slot array
+  for (const [studioId, slots] of Object.entries(apiSlots)) {
+    merged[studioId] = slots.map((s) => ({ ...s }));
+  }
+
+  for (const booking of cart) {
+    if (booking.date.toDateString() !== selectedDateStr) continue;
+
+    const studioSlots = merged[booking.studioId];
+    if (!studioSlots) continue;
+
+    const startIdx = TIME_SLOTS.indexOf(booking.startTime);
+    let endIdx = TIME_SLOTS.indexOf(booking.endTime);
+    // End-exclusive: "00:00" maps to TIME_SLOTS.length (past index 30),
+    // so the loop never reaches the "00:00" boundary slot.
+    if (endIdx === -1 && booking.endTime === "00:00") endIdx = TIME_SLOTS.length;
+
+    for (let i = startIdx; i < endIdx; i++) {
+      const time = TIME_SLOTS[i];
+      const slotIdx = studioSlots.findIndex((s) => s.time === time);
+      if (slotIdx !== -1) {
+        studioSlots[slotIdx] = {
+          ...studioSlots[slotIdx],
+          available: false,
+          groupType: booking.groupType,
+        };
+      }
+    }
+  }
+
+  return merged;
+}
 
 interface ExtendedBookingState extends BookingState {
   equipment: EquipmentSelection[];
@@ -182,7 +232,6 @@ export function useBookingWithRouter(urlStep?: string) {
   const isInitialMount = useRef(true);
   const appliedPromoRef = useRef<PromoCode | null>(null);
   appliedPromoRef.current = state.appliedPromo;
-  const [availability, setAvailability] = useState<Set<OccupancyInfo>>(new Set());
   const [slotsByStudio, setSlotsByStudio] = useState<Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>>({});
   const [minAdvanceHours, setMinAdvanceHours] = useState<number>(0);
   const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
@@ -202,29 +251,10 @@ export function useBookingWithRouter(urlStep?: string) {
   } | null>(null);
   const [clientUserLoading, setClientUserLoading] = useState(true);
 
-  const mergedAvailability = useMemo(() => {
-    if (!state.selectedDate) return availability;
-
-    const merged = new Set(availability);
-    const selectedDateStr = state.selectedDate.toDateString();
-
-    for (const booking of state.cart) {
-      if (booking.date.toDateString() === selectedDateStr) {
-        const startIdx = TIME_SLOTS.indexOf(booking.startTime);
-        let endIdx = TIME_SLOTS.indexOf(booking.endTime);
-        if (endIdx === -1 && booking.endTime === "00:00") endIdx = TIME_SLOTS.length;
-        for (let i = startIdx; i < endIdx; i++) {
-          merged.add({
-            studioId: booking.studioId,
-            time: TIME_SLOTS[i],
-            groupType: booking.groupType,
-          });
-        }
-      }
-    }
-
-    return merged;
-  }, [availability, state.cart, state.selectedDate]);
+  const mergedSlotsByStudio = useMemo(
+    () => mergeCartIntoSlots(slotsByStudio, state.cart, state.selectedDate),
+    [slotsByStudio, state.cart, state.selectedDate],
+  );
 
   useEffect(() => {
     if (!state.selectedDate) return;
@@ -234,22 +264,7 @@ export function useBookingWithRouter(urlStep?: string) {
       .then((data) => {
         const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
         if (json.success && json.data) {
-          // Convert new per-studio format to OccupancyInfo set (only occupied slots)
-          const occupancy = new Set<OccupancyInfo>();
-          for (const [studioId, slots] of Object.entries(json.data.slots)) {
-            for (const slot of slots) {
-              if (!slot.available) {
-                occupancy.add({
-                  studioId: studioId as StudioId,
-                  time: slot.time,
-                  groupType: slot.groupType as GroupType | "blocked" | undefined,
-                  bookingId: slot.bookingId,
-                });
-              }
-            }
-          }
           setSlotsByStudio(json.data.slots);
-          setAvailability(occupancy);
           setMinAdvanceHours(json.data.minAdvanceHours ?? 0);
           setMinAdvanceCutoffTime(json.data.minAdvanceCutoffTime ?? null);
         }
@@ -862,8 +877,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
   return {
     state,
-    mergedAvailability,
-    slotsByStudio,
+    slotsByStudio: mergedSlotsByStudio,
     minAdvanceHours,
     minAdvanceCutoffTime,
     pricing,

@@ -19,6 +19,7 @@ import {
   PRICING,
   STUDIOS,
   ALL_TIME_SLOTS,
+  canBeStartTime,
   canBeEndTime,
   isPeakTime,
   type GroupType,
@@ -81,20 +82,14 @@ export function TimeSlotPicker({
 
   const hasPeakPricing = groupType === "group";
 
-  // Per-studio visible slots
+  // Per-studio visible slots (based on opening hours)
   const studioSlots = useMemo(() => {
     const result: Record<StudioId, string[]> = { "la-scene": [], "le-podium": [] };
     for (const studioId of ["la-scene", "le-podium"] as StudioId[]) {
-      const dateSlots = getStudioTimeSlots(studioId, date);
-      const apiSlots = slotsByStudio[studioId];
-      if (apiSlots && apiSlots.length > 0) {
-        result[studioId] = dateSlots;
-      } else {
-        result[studioId] = dateSlots;
-      }
+      result[studioId] = getStudioTimeSlots(studioId, date);
     }
     return result;
-  }, [slotsByStudio, date]);
+  }, [date]);
 
   const isSlotTooSoon = useCallback((slot: string): boolean => {
     if (!minAdvanceCutoffTime) return false;
@@ -146,7 +141,17 @@ export function TimeSlotPicker({
       return false;
     }
 
-    for (let i = startIdx; i < endIdx; i++) {
+    // Re-validate the start slot itself (intermediate loop below starts at startIdx+1).
+    if (checkSlotBooked(start, studioId)) {
+      return false;
+    }
+
+    // Check intermediate slots — exclusive of start and end boundaries.
+    // The end boundary is allowed to be occupied. For "00:00" the boundary slot
+    // sits at ALL_TIME_SLOTS index 30 (past most visible ranges), so we exclude
+    // it from the check by capping exclusiveEnd at ALL_TIME_SLOTS.length - 1.
+    const exclusiveEnd = end === "00:00" ? ALL_TIME_SLOTS.length - 1 : endIdx;
+    for (let i = startIdx + 1; i < exclusiveEnd; i++) {
       const time = ALL_TIME_SLOTS[i];
       if (!visibleSlots.includes(time) || checkSlotBooked(time, studioId)) {
         return false;
@@ -162,18 +167,25 @@ export function TimeSlotPicker({
 
   const handleSlotClick = useCallback(
     (slot: string, studioId: StudioId) => {
+      // 1. Too-soon check first
       if (isSlotTooSoon(slot)) {
         setMinAdvanceDialogOpen(true);
         return;
       }
-      if (checkSlotBooked(slot, studioId)) return;
 
+      // 2. Mark this studio as active (clears previous studio if different)
       startStudioSelection(studioId, slot);
 
+      // 3. Mode-specific handling
       if (selectionMode === "done" || selectionMode === "start") {
+        // Start mode: require slot to have ≥ 1h runway before occupied
+        if (!canBeStartTime(slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
+          return;
+        }
         setSelectedStart(slot);
         setSelectedEnd(null);
       } else if (selectionMode === "end") {
+        // End mode: allow occupied end boundary (checked by canBeEndTime)
         if (!canBeEndTime(selectedStart!, slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
           return;
         }
@@ -213,6 +225,13 @@ export function TimeSlotPicker({
 
       if (isBooked) {
         return "bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60";
+      }
+
+      // Free slot that can't start a 1h booking (no runway) — start/done mode, active studio
+      if ((selectionMode === "start" || selectionMode === "done") && isActiveStudio) {
+        if (!canBeStartTime(slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
+          return "bg-white/5 border-white/10 opacity-30 cursor-not-allowed";
+        }
       }
 
       // Hover range in end mode
