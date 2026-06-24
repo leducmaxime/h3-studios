@@ -109,6 +109,19 @@ export function TimeSlotPicker({
     [slotsByStudio]
   );
 
+  const isStartOfOccupiedBlock = useCallback(
+    (time: string, studioId: StudioId): boolean => {
+      if (!checkSlotBooked(time, studioId)) return false;
+
+      const visibleSlots = studioSlots[studioId];
+      const idx = visibleSlots.indexOf(time);
+      if (idx <= 0) return false;
+
+      return !checkSlotBooked(visibleSlots[idx - 1], studioId);
+    },
+    [checkSlotBooked, studioSlots]
+  );
+
   // Start a selection on a studio (clears previous studio selection)
   const startStudioSelection = useCallback((studioId: StudioId, slot: string) => {
     if (activeStudio && activeStudio !== studioId) {
@@ -214,24 +227,29 @@ export function TimeSlotPicker({
       const isSelectedEnd = selectedEnd === slot && activeStudio === studioId;
       const isActiveStudio = activeStudio === studioId;
 
-      if (!isActiveStudio && isBooked) {
-        return "bg-red-500/20 border-red-500/30 opacity-40";
-      }
+      // Red = hard-blocked. Muted = visible but not a valid start.
+      // End-time usability is shown only after a start is selected.
+      const isOccupiedBoundary = isStartOfOccupiedBlock(slot, studioId);
 
+      // Selection highlight always wins
       if (isSelectedStart || isSelectedEnd) {
         return isPeak ? "bg-primary/50 border-primary/70 ring-2 ring-primary ring-offset-1 ring-offset-black"
                       : "bg-primary/40 border-primary/60 ring-2 ring-primary ring-offset-1 ring-offset-black";
       }
 
-      if (isBooked) {
-        return "bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60";
+      // Interior occupied — fully blocked, show red
+      if (isBooked && !isOccupiedBoundary) {
+        return isActiveStudio
+          ? "bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60"
+          : "bg-red-500/20 border-red-500/30 opacity-40";
       }
 
-      // Free slot that can't start a 1h booking (no runway) — start/done mode, active studio
-      if ((selectionMode === "start" || selectionMode === "done") && isActiveStudio) {
-        if (!canBeStartTime(slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
-          return "bg-white/5 border-white/10 opacity-30 cursor-not-allowed";
-        }
+      // Occupied-boundary slots (not red) AND free slots without 1h runway:
+      // usable as an end but not as a start. Apply muted style in start/done
+      // mode regardless of which studio is active, so the user sees the constraint.
+      if ((selectionMode === "start" || selectionMode === "done") &&
+          !canBeStartTime(slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
+        return "bg-white/5 border-white/10 opacity-30 cursor-not-allowed";
       }
 
       // Hover range in end mode
@@ -256,7 +274,7 @@ export function TimeSlotPicker({
         ? "bg-primary/5 hover:bg-primary/10 border-white/10 cursor-pointer"
         : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer";
     },
-    [checkSlotBooked, hasPeakPricing, date, selectedStart, selectedEnd, activeStudio, selectionMode, hoveredEndSlot, studioSlots]
+    [checkSlotBooked, isStartOfOccupiedBlock, hasPeakPricing, date, selectedStart, selectedEnd, activeStudio, selectionMode, hoveredEndSlot, studioSlots]
   );
 
   const formatHourLabel = (slot: string) => {
