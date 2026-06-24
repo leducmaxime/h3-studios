@@ -284,6 +284,69 @@ describe("Unified Availability Engine", () => {
     });
   });
 
+  describe("Phase 1: Group-type-aware availability semantics", () => {
+    it("solo sees both studios when both are free", () => {
+      const studios = getAvailableStudiosForSlot("14:00", "solo", occs(), tuesday);
+      expect(studios).toContain("la-scene");
+      expect(studios).toContain("le-podium");
+    });
+
+    it("duo sees both studios when both are free", () => {
+      const studios = getAvailableStudiosForSlot("14:00", "duo", occs(), tuesday);
+      expect(studios).toContain("la-scene");
+      expect(studios).toContain("le-podium");
+    });
+
+    it("solo/duo occupancy blocks only its own studio for solo", () => {
+      // La Scène has solo at 14:00, Le Podium is free
+      const occupancy = occs(occ("la-scene", "14:00", "solo"));
+      const studios = getAvailableStudiosForSlot("14:00", "solo", occupancy, tuesday);
+      expect(studios).not.toContain("la-scene");
+      expect(studios).toContain("le-podium");
+    });
+
+    it("solo/duo occupancy blocks only its own studio for duo", () => {
+      const occupancy = occs(occ("la-scene", "14:00", "duo"));
+      const studios = getAvailableStudiosForSlot("14:00", "duo", occupancy, tuesday);
+      expect(studios).not.toContain("la-scene");
+      expect(studios).toContain("le-podium");
+    });
+
+    it("group sees solo/duo occupied slot as available on both studios when the other is free", () => {
+      // La Scène has solo at 14:00, but Le Podium is free
+      const occupancy = occs(occ("la-scene", "14:00", "solo"));
+      const studios = getAvailableStudiosForSlot("14:00", "group", occupancy, tuesday);
+      // Group can displace solo from La Scène to Le Podium, so both are available
+      expect(studios).toContain("la-scene");
+      expect(studios).toContain("le-podium");
+    });
+
+    it("group range can target a solo/duo-occupied studio when displacement is possible", () => {
+      // La Scène has solo across the entire range, Le Podium is free throughout
+      const occupancy = occs(
+        occ("la-scene", "14:00", "solo"),
+        occ("la-scene", "14:30", "solo"),
+        occ("la-scene", "15:00", "solo"),
+      );
+      // Group booking range can target La Scène because solo can be displaced to Le Podium
+      const result = isRangeBookable("14:00", "15:30", "group", occupancy, tuesday);
+      expect(result.bookable).toBe(true);
+      expect(result.studioId).toBe("la-scene");
+    });
+
+    // NOTE: The 24-hour displacement rule (canDisplaceBooking) is enforced at the API/DB layer,
+    // not in the pure availability engine. The engine assumes displacement is always permissible
+    // from the availability perspective; the actual 24h cutoff is checked server-side when the
+    // booking is created. This keeps the frontend availability check fast and stateless.
+    it("group range is available on occupied studio regardless of displacement timing rules (engine-only)", () => {
+      // Even a same-day solo booking is displaceable from the engine's perspective —
+      // the 24h rule is an API/DB concern, not a pure availability engine concern.
+      const occupancy = occs(occ("la-scene", "14:00", "solo"));
+      const studios = getAvailableStudiosForSlot("14:00", "group", occupancy, tuesday);
+      expect(studios).toContain("la-scene");
+    });
+  });
+
   describe("Range consistency: per-slot vs range-level", () => {
     it("detects range that looks available per-slot but not range-level", () => {
       // La Scène free at 14:00, occupied at 14:30

@@ -160,7 +160,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
         })
         .catch(console.error);
     });
-  }, [weekDates]);
+  }, [weekDates, groupType]);
 
   const goToPreviousWeek = () => {
     setDayOffset((d) => Math.max(0, d - 7));

@@ -270,7 +270,7 @@ export function useBookingWithRouter(urlStep?: string) {
         }
       })
       .catch(console.error);
-  }, [state.selectedDate]);
+  }, [state.selectedDate, state.groupType]);
 
   useEffect(() => {
     if (isHydrated) return;
