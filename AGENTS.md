@@ -173,7 +173,7 @@ Stored in `.dev.vars` (local) and Cloudflare dashboard (production):
 3. **D1 migrations** — Apply with `wrangler d1 migrations apply h3-studios-db` (not automated on deploy)
 4. **Worker types** — Run `pnpm generate` after schema changes to update `worker-configuration.d.ts`
 5. **Booking state persists in localStorage** — Key: `h3-studios-booking-state`. Cleared on non-reservation page navigation.
-6. **Group bookings displace solo/duo** — If a group books a slot occupied by solo/duo, the smaller booking is auto-moved to the other studio (see `checkConflictWithGroupType` in `src/lib/db.ts`)
+6. **Booking slot availability is uniform** — occupied slots are unavailable for all group types. No priority or displacement between types.
 7. **Admin nav items marked `superAdminOnly`** — Some routes restricted to `super-admin` role (equipment, pricing, settings, audit log)
 
 ## Deployment Rules

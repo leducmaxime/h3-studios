@@ -78,7 +78,6 @@ import {
   getBookingsByDate,
   getBookingsByDateRange,
   checkConflict,
-  moveBookingToOtherStudio,
   getUsers,
   getUserById,
   createUser,
@@ -119,14 +118,11 @@ import {
   getDashboardStats,
   resolveStatsRange,
   getMonthlyReportData,
-  createBookingWithDisplacement,
-  getDisplaceableBookings,
-  canDisplaceBooking,
   getSetting,
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters, type DbBooking } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, slotDurationSlots, type StudioId } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, slotDurationSlots, type StudioId, type EquipmentSelection } from "@/lib/booking";
 import {
   getParisDateISO,
   getParisNow,
@@ -668,9 +664,7 @@ const app = defineApp([
     try {
       const url = new URL(request.url);
       const date = url.searchParams.get("date");
-      const groupType = url.searchParams.get("groupType") || "solo";
       if (!date) return jsonError("Date requise", 400);
-      if (!["solo", "duo", "group"].includes(groupType)) return jsonError("Type de groupe invalide", 400);
 
       const bookings = await getBookingsByDate(env.DB, date);
       const blockedSlots = await getBlockedSlots(env.DB, undefined, date);
@@ -706,27 +700,8 @@ const app = defineApp([
         const studioSlots = getStudioTimeSlots(studioId, bookingDate);
         result[studioId] = studioSlots.map((time) => {
           const occupant = occupantMap[studioId][time];
-
-          if (!occupant) {
-            return { time, available: true };
-          }
-
-          if (occupant.groupType === "blocked") {
-            return { time, available: false, groupType: "blocked" };
-          }
-
-          if (groupType === "group") {
-            // Groups see solo/duo slots as available if >24h, group slots as unavailable
-            if (occupant.groupType === "group") {
-              return { time, available: false, groupType: "group" };
-            }
-            // solo/duo occupant — check 24h rule
-            const isDisplaceable = canDisplaceBooking({ date, start_time: time });
-            return { time, available: isDisplaceable, groupType: isDisplaceable ? undefined : occupant.groupType };
-          }
-
-          // solo/duo: all occupied slots are unavailable
-          return { time, available: false, groupType: occupant.groupType };
+          if (!occupant) return { time, available: true };
+          return { time, available: false, groupType: occupant.groupType, bookingId: occupant.bookingId };
         });
       }
 
@@ -812,19 +787,16 @@ const app = defineApp([
       
       const user = { id: clientUser.id };
 
-      // Check for conflicts — for solo/duo: reject immediately (they can't displace anyone)
-      // For groups: displacement is handled internally by createBookingWithDisplacement
-      if (body.groupType !== "group") {
-        const conflict = await checkConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
-        if (conflict) {
-          return jsonError("Ce créneau n'est plus disponible", 409);
-        }
+      // Check for conflicts
+      const conflict = await checkConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
+      if (conflict) {
+        return jsonError("Ce créneau n'est plus disponible", 409);
+      }
 
-        // Check for blocked slots
-        const blockedSlot = await checkBlockedSlotConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
-        if (blockedSlot) {
-          return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
-        }
+      // Check for blocked slots
+      const blockedSlot = await checkBlockedSlotConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
+      if (blockedSlot) {
+        return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
       }
 
       const paris = getParisNow();
@@ -959,18 +931,7 @@ const app = defineApp([
         cancel_reason: null,
       };
 
-      let booking: DbBooking;
-      let displacedBookings: Awaited<ReturnType<typeof createBookingWithDisplacement>>["displaced"] = [];
-      let cancelledBookings: Awaited<ReturnType<typeof createBookingWithDisplacement>>["cancelled"] = [];
-
-      if (body.groupType === "group") {
-        const result = await createBookingWithDisplacement(env.DB, createBookingData);
-        booking = result.booking as unknown as DbBooking;
-        displacedBookings = result.displaced;
-        cancelledBookings = result.cancelled;
-      } else {
-        booking = await createBooking(env.DB, createBookingData) as unknown as DbBooking;
-      }
+      const booking = await createBooking(env.DB, createBookingData) as unknown as DbBooking;
 
       // Auto-create a 0€ payment record for fully discounted bookings
       if (isZeroTotal) {
@@ -987,64 +948,6 @@ const app = defineApp([
         await env.DB.prepare(
           "UPDATE promo_codes SET usage_count = usage_count + 1 WHERE code = ?",
         ).bind(body.promoCode.trim().toUpperCase()).run();
-      }
-
-      // Send displacement/cancellation emails to affected solo/duo users (non-blocking)
-      if (env.RESEND_API_KEY && (displacedBookings.length > 0 || cancelledBookings.length > 0)) {
-        const sendDisplacementEmails = async () => {
-          for (const b of cancelledBookings) {
-            try {
-              const user = await getUserById(env.DB, b.user_id);
-              if (user?.email) {
-                await fetch("https://api.resend.com/emails", {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${env.RESEND_API_KEY}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    from: "H3 Studios <noreply@h3-studios.fr>",
-                    to: user.email,
-                    subject: "Votre réservation H3 Studios a été annulée",
-                    html: `<p>Bonjour ${user.name || ""},</p>
-<p>Votre réservation du <strong>${b.date}</strong> de <strong>${b.start_time}</strong> à <strong>${b.end_time}</strong> a été annulée car un groupe a réservé sur ce créneau.</p>
-<p>Nous vous invitons à réserver un autre créneau : <a href="https://h3-studios.fr/reservation">Réserver un créneau</a></p>
-<p>Merci de votre compréhension,<br>L'équipe H3 Studios</p>`,
-                  }),
-                });
-              }
-            } catch (err) {
-              console.error("Failed to send cancellation email:", err);
-            }
-          }
-          for (const b of displacedBookings) {
-            try {
-              const user = await getUserById(env.DB, b.user_id);
-              if (user?.email) {
-                const newStudioName = b.studio_id === "la-scene" ? "La Scène" : "Le Podium";
-                await fetch("https://api.resend.com/emails", {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${env.RESEND_API_KEY}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    from: "H3 Studios <noreply@h3-studios.fr>",
-                    to: user.email,
-                    subject: "Votre réservation H3 Studios a été modifiée",
-                    html: `<p>Bonjour ${user.name || ""},</p>
-<p>Votre réservation du <strong>${b.date}</strong> de <strong>${b.start_time}</strong> à <strong>${b.end_time}</strong> a été déplacée vers le studio <strong>${newStudioName}</strong>.</p>
-<p>La date et l'heure restent inchangées.</p>
-<p>Merci de votre compréhension,<br>L'équipe H3 Studios</p>`,
-                  }),
-                });
-              }
-            } catch (err) {
-              console.error("Failed to send displacement email:", err);
-            }
-          }
-        };
-        waitUntil(sendDisplacementEmails());
       }
 
       // Send booking confirmation email immediately for non-card payments
@@ -1523,28 +1426,7 @@ const app = defineApp([
 
         const conflict = await checkConflict(env.DB, body.studio_id, body.date, body.start_time, body.end_time);
         if (conflict) {
-          // For group bookings: try to displace a solo/duo booking to the other studio
-          if (body.group_type === "group" && (conflict.group_type === "solo" || conflict.group_type === "duo")) {
-            const otherStudioId = body.studio_id === "la-scene" ? "le-podium" : "la-scene";
-
-            const otherStudioConflict = await checkConflict(env.DB, otherStudioId, body.date, body.start_time, body.end_time);
-            if (otherStudioConflict) {
-              return jsonError("Conflit avec une autre réservation", 409);
-            }
-
-            const moveResult = await moveBookingToOtherStudio(env.DB, conflict.id, otherStudioId);
-            if (!moveResult.success) {
-              return jsonError(`Impossible de déplacer la réservation existante: ${moveResult.error}`, 409);
-            }
-
-            await addAuditLog(env.DB, "booking", conflict.id, "move-for-group", {
-              fromStudio: body.studio_id,
-              toStudio: otherStudioId,
-              reason: "Group booking displaced solo/duo",
-            }, request.headers.get("X-Admin-User-Id") || "admin");
-          } else {
-            return jsonError("Conflit avec une autre réservation", 409);
-          }
+          return jsonError("Conflit avec une autre réservation", 409);
         }
 
         // Check for blocked slots

@@ -55,7 +55,7 @@ describe("Unified Availability Engine", () => {
 
   describe("getAvailableStudiosForSlot", () => {
     it("returns both studios for free slot", () => {
-      const studios = getAvailableStudiosForSlot("14:00", "group", occs(), tuesday);
+      const studios = getAvailableStudiosForSlot("14:00", occs(), tuesday);
       expect(studios).toContain("la-scene");
       expect(studios).toContain("le-podium");
     });
@@ -63,42 +63,36 @@ describe("Unified Availability Engine", () => {
     it("returns empty for fully occupied slot", () => {
       const studios = getAvailableStudiosForSlot(
         "14:00",
-        "group",
         occs(occ("la-scene", "14:00", "group"), occ("le-podium", "14:00", "group")),
         tuesday
       );
       expect(studios).toHaveLength(0);
     });
 
-    it("allows group to displace solo/duo", () => {
+    it("returns only free studio when one is occupied (no displacement)", () => {
       const studios = getAvailableStudiosForSlot(
         "14:00",
-        "group",
         occs(occ("la-scene", "14:00", "solo")),
         tuesday
       );
-      // La Scène occupied by solo, but group can displace if Le Podium is free
-      expect(studios).toContain("la-scene");
+      // La Scène is occupied (regardless of group type), Le Podium is free
+      expect(studios).not.toContain("la-scene");
       expect(studios).toContain("le-podium");
     });
 
-    it("prevents group displacement when other studio is occupied", () => {
+    it("returns neither when both studios are occupied", () => {
       const studios = getAvailableStudiosForSlot(
         "14:00",
-        "group",
         occs(occ("la-scene", "14:00", "solo"), occ("le-podium", "14:00", "group")),
         tuesday
       );
-      // La Scène has solo, but Le Podium has group — can't displace to Le Podium
       expect(studios).not.toContain("la-scene");
-      // Le Podium has group, so it's not available either
       expect(studios).not.toContain("le-podium");
     });
 
-    it("prevents solo from using occupied studio", () => {
+    it("prevents any group type from using occupied studio", () => {
       const studios = getAvailableStudiosForSlot(
         "14:00",
-        "solo",
         occs(occ("la-scene", "14:00", "solo")),
         tuesday
       );
@@ -109,30 +103,30 @@ describe("Unified Availability Engine", () => {
 
   describe("isSlotAvailable / isSlotBooked", () => {
     it("free slot is available", () => {
-      expect(isSlotAvailable("14:00", "group", occs(), tuesday)).toBe(true);
-      expect(isSlotBooked("14:00", "group", occs(), tuesday)).toBe(false);
+      expect(isSlotAvailable("14:00", occs(), tuesday)).toBe(true);
+      expect(isSlotBooked("14:00", occs(), tuesday)).toBe(false);
     });
 
     it("occupied slot is booked", () => {
       const occupancy = occs(occ("la-scene", "14:00", "group"), occ("le-podium", "14:00", "group"));
-      expect(isSlotAvailable("14:00", "group", occupancy, tuesday)).toBe(false);
-      expect(isSlotBooked("14:00", "group", occupancy, tuesday)).toBe(true);
+      expect(isSlotAvailable("14:00", occupancy, tuesday)).toBe(false);
+      expect(isSlotBooked("14:00", occupancy, tuesday)).toBe(true);
     });
 
     it("with studioFilter checks specific studio", () => {
       const occupancy = occs(occ("la-scene", "14:00", "group"));
       // Without filter: Le Podium is free, so slot is available
-      expect(isSlotAvailable("14:00", "group", occupancy, tuesday)).toBe(true);
+      expect(isSlotAvailable("14:00", occupancy, tuesday)).toBe(true);
       // With La Scène filter: occupied
-      expect(isSlotAvailable("14:00", "group", occupancy, tuesday, "la-scene")).toBe(false);
+      expect(isSlotAvailable("14:00", occupancy, tuesday, "la-scene")).toBe(false);
       // With Le Podium filter: free
-      expect(isSlotAvailable("14:00", "group", occupancy, tuesday, "le-podium")).toBe(true);
+      expect(isSlotAvailable("14:00", occupancy, tuesday, "le-podium")).toBe(true);
     });
   });
 
   describe("isRangeBookable", () => {
     it("returns true for fully free range", () => {
-      const result = isRangeBookable("14:00", "16:00", "group", occs(), tuesday);
+      const result = isRangeBookable("14:00", "16:00", occs(), tuesday);
       expect(result.bookable).toBe(true);
       expect(result.studioId).toBeDefined();
     });
@@ -142,43 +136,45 @@ describe("Unified Availability Engine", () => {
         occ("la-scene", "14:30", "group"),
         occ("le-podium", "14:30", "group")
       );
-      const result = isRangeBookable("14:00", "16:00", "group", occupancy, tuesday);
+      const result = isRangeBookable("14:00", "16:00", occupancy, tuesday);
       expect(result.bookable).toBe(false);
     });
 
-    it("returns true for group with displaceable solo/duo", () => {
+    it("returns true when one studio is free for entire range despite other being occupied", () => {
       const occupancy = occs(occ("la-scene", "14:30", "solo"));
-      const result = isRangeBookable("14:00", "16:00", "group", occupancy, tuesday);
-      expect(result.bookable).toBe(true);
-    });
-
-    it("returns true for solo when one studio is free for entire range", () => {
-      const occupancy = occs(occ("la-scene", "14:30", "solo"));
-      // La Scène occupied, but Le Podium is free — solo can book Le Podium
-      const result = isRangeBookable("14:00", "16:00", "solo", occupancy, tuesday);
+      // La Scène occupied at 14:30, but Le Podium is free throughout
+      const result = isRangeBookable("14:00", "16:00", occupancy, tuesday);
       expect(result.bookable).toBe(true);
       expect(result.studioId).toBe("le-podium");
     });
 
-    it("returns false for solo when both studios have occupation in range", () => {
+    it("returns true when one studio is free for entire range", () => {
+      const occupancy = occs(occ("la-scene", "14:30", "solo"));
+      // La Scène occupied, but Le Podium is free
+      const result = isRangeBookable("14:00", "16:00", occupancy, tuesday);
+      expect(result.bookable).toBe(true);
+      expect(result.studioId).toBe("le-podium");
+    });
+
+    it("returns false when both studios have occupation in range", () => {
       const occupancy = occs(
         occ("la-scene", "14:30", "solo"),
         occ("le-podium", "15:00", "group")
       );
       // No single studio is free for the entire range
-      const result = isRangeBookable("14:00", "16:00", "solo", occupancy, tuesday);
+      const result = isRangeBookable("14:00", "16:00", occupancy, tuesday);
       expect(result.bookable).toBe(false);
     });
 
     it("returns specific studioId with studioFilter", () => {
-      const result = isRangeBookable("14:00", "16:00", "group", occs(), tuesday, "le-podium");
+      const result = isRangeBookable("14:00", "16:00", occs(), tuesday, "le-podium");
       expect(result.bookable).toBe(true);
       expect(result.studioId).toBe("le-podium");
     });
 
     it("returns false when filtered studio is occupied", () => {
       const occupancy = occs(occ("le-podium", "14:30", "group"));
-      const result = isRangeBookable("14:00", "16:00", "group", occupancy, tuesday, "le-podium");
+      const result = isRangeBookable("14:00", "16:00", occupancy, tuesday, "le-podium");
       expect(result.bookable).toBe(false);
     });
 
@@ -190,13 +186,13 @@ describe("Unified Availability Engine", () => {
         occ("le-podium", "14:00", "group")
       );
       // No single studio is free for the entire range
-      const result = isRangeBookable("14:00", "15:00", "group", occupancy, tuesday);
+      const result = isRangeBookable("14:00", "15:00", occupancy, tuesday);
       expect(result.bookable).toBe(false);
     });
 
     it("handles 00:00 end time correctly", () => {
       // Midnight booking: should include the 00:00 slot
-      const result = isRangeBookable("23:00", "00:00", "group", occs(), tuesday);
+      const result = isRangeBookable("23:00", "00:00", occs(), tuesday);
       expect(result.bookable).toBe(true);
     });
   });
@@ -284,66 +280,34 @@ describe("Unified Availability Engine", () => {
     });
   });
 
-  describe("Phase 1: Group-type-aware availability semantics", () => {
-    it("solo sees both studios when both are free", () => {
-      const studios = getAvailableStudiosForSlot("14:00", "solo", occs(), tuesday);
+  describe("All group types behave identically for availability", () => {
+    it("sees both studios when both are free", () => {
+      const studios = getAvailableStudiosForSlot("14:00", occs(), tuesday);
       expect(studios).toContain("la-scene");
       expect(studios).toContain("le-podium");
     });
 
-    it("duo sees both studios when both are free", () => {
-      const studios = getAvailableStudiosForSlot("14:00", "duo", occs(), tuesday);
-      expect(studios).toContain("la-scene");
-      expect(studios).toContain("le-podium");
-    });
-
-    it("solo/duo occupancy blocks only its own studio for solo", () => {
+    it("occupied studio is unavailable for all group types", () => {
       // La Scène has solo at 14:00, Le Podium is free
       const occupancy = occs(occ("la-scene", "14:00", "solo"));
-      const studios = getAvailableStudiosForSlot("14:00", "solo", occupancy, tuesday);
+      const studios = getAvailableStudiosForSlot("14:00", occupancy, tuesday);
       expect(studios).not.toContain("la-scene");
       expect(studios).toContain("le-podium");
     });
 
-    it("solo/duo occupancy blocks only its own studio for duo", () => {
+    it("occupied studio is unavailable regardless of occupant group type", () => {
       const occupancy = occs(occ("la-scene", "14:00", "duo"));
-      const studios = getAvailableStudiosForSlot("14:00", "duo", occupancy, tuesday);
+      const studios = getAvailableStudiosForSlot("14:00", occupancy, tuesday);
       expect(studios).not.toContain("la-scene");
       expect(studios).toContain("le-podium");
     });
 
-    it("group sees solo/duo occupied slot as available on both studios when the other is free", () => {
-      // La Scène has solo at 14:00, but Le Podium is free
+    it("any occupied slot blocks all group types equally (no displacement)", () => {
       const occupancy = occs(occ("la-scene", "14:00", "solo"));
-      const studios = getAvailableStudiosForSlot("14:00", "group", occupancy, tuesday);
-      // Group can displace solo from La Scène to Le Podium, so both are available
-      expect(studios).toContain("la-scene");
+      const studios = getAvailableStudiosForSlot("14:00", occupancy, tuesday);
+      // La Scène occupied by solo — no displacement, so it's unavailable
+      expect(studios).not.toContain("la-scene");
       expect(studios).toContain("le-podium");
-    });
-
-    it("group range can target a solo/duo-occupied studio when displacement is possible", () => {
-      // La Scène has solo across the entire range, Le Podium is free throughout
-      const occupancy = occs(
-        occ("la-scene", "14:00", "solo"),
-        occ("la-scene", "14:30", "solo"),
-        occ("la-scene", "15:00", "solo"),
-      );
-      // Group booking range can target La Scène because solo can be displaced to Le Podium
-      const result = isRangeBookable("14:00", "15:30", "group", occupancy, tuesday);
-      expect(result.bookable).toBe(true);
-      expect(result.studioId).toBe("la-scene");
-    });
-
-    // NOTE: The 24-hour displacement rule (canDisplaceBooking) is enforced at the API/DB layer,
-    // not in the pure availability engine. The engine assumes displacement is always permissible
-    // from the availability perspective; the actual 24h cutoff is checked server-side when the
-    // booking is created. This keeps the frontend availability check fast and stateless.
-    it("group range is available on occupied studio regardless of displacement timing rules (engine-only)", () => {
-      // Even a same-day solo booking is displaceable from the engine's perspective —
-      // the 24h rule is an API/DB concern, not a pure availability engine concern.
-      const occupancy = occs(occ("la-scene", "14:00", "solo"));
-      const studios = getAvailableStudiosForSlot("14:00", "group", occupancy, tuesday);
-      expect(studios).toContain("la-scene");
     });
   });
 
@@ -357,15 +321,15 @@ describe("Unified Availability Engine", () => {
       );
 
       // Per-slot: 14:00 has La Scène free, 14:30 has Le Podium free
-      expect(isSlotAvailable("14:00", "solo", occupancy, tuesday)).toBe(true);
-      expect(isSlotAvailable("14:30", "solo", occupancy, tuesday)).toBe(true);
+      expect(isSlotAvailable("14:00", occupancy, tuesday)).toBe(true);
+      expect(isSlotAvailable("14:30", occupancy, tuesday)).toBe(true);
 
       // But range-level: no single studio covers both
-      const rangeResult = isRangeBookable("14:00", "15:00", "solo", occupancy, tuesday);
+      const rangeResult = isRangeBookable("14:00", "15:00", occupancy, tuesday);
       expect(rangeResult.bookable).toBe(false);
     });
 
-    it("group can displace across range when other studio is consistently free", () => {
+    it("finds the free studio across range when other is occupied", () => {
       // La Scène has solo at 14:00 and 14:30
       // Le Podium is free for both
       const occupancy = occs(
@@ -373,10 +337,10 @@ describe("Unified Availability Engine", () => {
         occ("la-scene", "14:30", "solo")
       );
 
-      // Group can displace solo to Le Podium for entire range
-      const rangeResult = isRangeBookable("14:00", "15:00", "group", occupancy, tuesday);
+      // Only Le Podium is free for the entire range
+      const rangeResult = isRangeBookable("14:00", "15:00", occupancy, tuesday);
       expect(rangeResult.bookable).toBe(true);
-      expect(rangeResult.studioId).toBe("la-scene");
+      expect(rangeResult.studioId).toBe("le-podium");
     });
   });
 });

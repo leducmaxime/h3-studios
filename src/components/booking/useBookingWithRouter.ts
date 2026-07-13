@@ -31,7 +31,6 @@ export function mergeCartIntoSlots(
   apiSlots: SlotsByStudio,
   cart: CompletedBooking[],
   selectedDate: Date | null,
-  currentGroupType: GroupType | null = null,
 ): SlotsByStudio {
   if (!selectedDate || cart.length === 0) return apiSlots;
 
@@ -45,12 +44,6 @@ export function mergeCartIntoSlots(
 
   for (const booking of cart) {
     if (booking.date.toDateString() !== selectedDateStr) continue;
-
-    // When selecting as group, solo/duo cart items do not block the slot
-    // (group can displace/overwrite them). Group cart items always block.
-    if (currentGroupType === "group" && (booking.groupType === "solo" || booking.groupType === "duo")) {
-      continue;
-    }
 
     const studioSlots = merged[booking.studioId];
     if (!studioSlots) continue;
@@ -259,14 +252,14 @@ export function useBookingWithRouter(urlStep?: string) {
   const [clientUserLoading, setClientUserLoading] = useState(true);
 
   const mergedSlotsByStudio = useMemo(
-    () => mergeCartIntoSlots(slotsByStudio, state.cart, state.selectedDate, state.groupType),
+    () => mergeCartIntoSlots(slotsByStudio, state.cart, state.selectedDate),
     [slotsByStudio, state.cart, state.selectedDate, state.groupType],
   );
 
   useEffect(() => {
     if (!state.selectedDate) return;
     const dateStr = formatDateISO(state.selectedDate);
-    fetch(`/api/availability?date=${dateStr}&groupType=${state.groupType || "solo"}`)
+    fetch(`/api/availability?date=${dateStr}`)
       .then((res) => res.json())
       .then((data) => {
         const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
@@ -277,7 +270,7 @@ export function useBookingWithRouter(urlStep?: string) {
         }
       })
       .catch(console.error);
-  }, [state.selectedDate, state.groupType]);
+  }, [state.selectedDate]);
 
   useEffect(() => {
     if (isHydrated) return;

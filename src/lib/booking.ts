@@ -288,14 +288,11 @@ export function getSlotDetails(
 }
 
 /**
- * Get the list of studios that can accommodate a specific slot for the given group type.
- * For solo/duo: studio must be open and strictly free.
- * For group: studio must be open and either free OR occupied by solo/duo that can be
- * displaced to the other studio (other studio must be strictly free and open).
+ * Get the list of studios that can accommodate a specific slot.
+ * A studio is available if it is open and not occupied.
  */
 export function getAvailableStudiosForSlot(
   time: string,
-  groupType: GroupType,
   occupancy: Set<OccupancyInfo>,
   date: Date
 ): StudioId[] {
@@ -306,17 +303,6 @@ export function getAvailableStudiosForSlot(
     if (!studio.isOpen) continue;
     if (!studio.occupant) {
       available.push(studio.studioId);
-    } else if (
-      groupType === "group" &&
-      studio.occupant.groupType !== "group" &&
-      studio.occupant.groupType !== "blocked"
-    ) {
-      const otherStudio = details.find(
-        (d) => d.studioId !== studio.studioId
-      )!;
-      if (otherStudio.isOpen && !otherStudio.occupant) {
-        available.push(studio.studioId);
-      }
     }
   }
 
@@ -325,19 +311,15 @@ export function getAvailableStudiosForSlot(
 
 /**
  * Unified per-slot availability check.
- * With studioFilter: checks that specific studio.
- * Without studioFilter: checks if ANY studio has the slot available.
  */
 export function isSlotAvailable(
   time: string,
-  groupType: GroupType,
   occupancy: Set<OccupancyInfo>,
   date: Date,
   studioFilter?: StudioId
 ): boolean {
   const availableStudios = getAvailableStudiosForSlot(
     time,
-    groupType,
     occupancy,
     date
   );
@@ -352,23 +334,21 @@ export function isSlotAvailable(
  */
 export function isSlotBooked(
   time: string,
-  groupType: GroupType,
   occupancy: Set<OccupancyInfo>,
   date: Date,
   studioFilter?: StudioId
 ): boolean {
-  return !isSlotAvailable(time, groupType, occupancy, date, studioFilter);
+  return !isSlotAvailable(time, occupancy, date, studioFilter);
 }
 
 /**
- * Check if a time range can be booked in a single studio for the given group type.
+ * Check if a time range can be booked in a single studio.
  * Returns the studioId if bookable, or {bookable:false} if not.
  * This is the SINGLE SOURCE OF TRUTH for range validity.
  */
 export function isRangeBookable(
   startTime: string,
   endTime: string,
-  groupType: GroupType,
   occupancy: Set<OccupancyInfo>,
   date: Date,
   studioFilter?: StudioId
@@ -391,7 +371,6 @@ export function isRangeBookable(
       const time = ALL_TIME_SLOTS[i];
       const availableStudios = getAvailableStudiosForSlot(
         time,
-        groupType,
         occupancy,
         date
       );

@@ -269,10 +269,10 @@ describe("cart-derived runway (canBeStartTime on merged slots)", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Group displacement over solo/duo cart items
+  // All cart bookings always block their slots regardless of group type
   // ---------------------------------------------------------------------------
 
-  it("group selection ignores solo/duo cart items (group can overwrite)", () => {
+  it("solo cart booking blocks slots regardless of current selection", () => {
     const apiSlots: SlotsByStudio = {
       "la-scene": sceneSlots("14:00", "14:30", "15:00"),
       "le-podium": sceneSlots("14:00", "14:30", "15:00"),
@@ -281,18 +281,17 @@ describe("cart-derived runway (canBeStartTime on merged slots)", () => {
       makeBooking({ studioId: "la-scene", startTime: "14:00", endTime: "15:00", groupType: "solo" }),
     ];
 
-    // When selecting as group, solo cart item does not block the slot
-    const resultAsGroup = mergeCartIntoSlots(apiSlots, cart, tuesday, "group");
-    expect(resultAsGroup["la-scene"]![0].available).toBe(true);
-    expect(resultAsGroup["la-scene"]![1].available).toBe(true);
+    // All cart bookings always block their slots
+    const result = mergeCartIntoSlots(apiSlots, cart, tuesday);
+    expect(result["la-scene"]![0].available).toBe(false);
+    expect(result["la-scene"]![1].available).toBe(false);
 
-    // When selecting as solo/duo, the cart item still blocks
-    const resultAsSolo = mergeCartIntoSlots(apiSlots, cart, tuesday, "solo");
-    expect(resultAsSolo["la-scene"]![0].available).toBe(false);
-    expect(resultAsSolo["la-scene"]![1].available).toBe(false);
+    // Different date cart doesn't block
+    const resultOtherDate = mergeCartIntoSlots(apiSlots, cart, wednesday);
+    expect(resultOtherDate["la-scene"]![0].available).toBe(true);
   });
 
-  it("group selection still blocks group cart items", () => {
+  it("group cart booking blocks slots", () => {
     const apiSlots: SlotsByStudio = {
       "la-scene": sceneSlots("14:00", "14:30"),
     };
@@ -300,7 +299,7 @@ describe("cart-derived runway (canBeStartTime on merged slots)", () => {
       makeBooking({ studioId: "la-scene", startTime: "14:00", endTime: "14:30", groupType: "group" }),
     ];
 
-    const result = mergeCartIntoSlots(apiSlots, cart, tuesday, "group");
+    const result = mergeCartIntoSlots(apiSlots, cart, tuesday);
     expect(result["la-scene"]![0].available).toBe(false);
   });
 });

@@ -55,9 +55,6 @@ interface ExtendedBookingState {
 ## KEY CHANGES (2026 refactor)
 
 - **Removed**: `flow` field, `FlowChoice.tsx`, `assignStudioForSoloDuo()`, `isStudioAvailable()`, `isStudioAvailableForGroup()`
-- **Added**: `createBookingWithDisplacement()` (DB) — atomic group booking with solo/duo displacement
-- **Added**: `canDisplaceBooking()` — 24h rule (Paris time)
-- **Added**: Displacement/cancellation emails via Resend
+- **Removed** (Jul 2026): All group displacement/priority logic — `createBookingWithDisplacement()`, `canDisplaceBooking()`, `moveBookingToOtherStudio()`. Bookings no longer displace or cancel each other. Occupied = unavailable for all group types.
 - **Changed**: API `/api/availability` → `{ slots: { "la-scene": [...], "le-podium": [...] } }`
 - **Changed**: TimeSlotPicker — 2 blocks stacked, no side-by-side grid
-- **Changed**: Groups see displaceable slots as plain "available" (silent displacement)

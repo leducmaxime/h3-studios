@@ -94,8 +94,7 @@ function getCartOccupancy(cart: CompletedBooking[], dateStr: string): Set<Occupa
 
 /**
  * Check if a date has at least MIN_BOOKING_SLOTS consecutive available slots.
- * Uses the unified availability engine with "solo" groupType (most restrictive)
- * to ensure we never show a day as available when it can't actually be booked.
+ * Uses the unified availability engine — a slot is available if it's open and not occupied.
  */
 function hasBookableAvailability(
   occupancy: Set<OccupancyInfo>,
@@ -109,8 +108,7 @@ function hasBookableAvailability(
     let consecutive = 0;
 
     for (const time of slots) {
-      // Use "solo" as the most restrictive check — no displacement allowed
-      const available = isSlotAvailable(time, "solo", occupancy, date, studioId);
+      const available = isSlotAvailable(time, occupancy, date, studioId);
       consecutive = available ? consecutive + 1 : 0;
       if (consecutive >= MIN_BOOKING_SLOTS) return true;
     }
@@ -136,7 +134,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
     weekDates.forEach((date) => {
       if (isPast(date) || isTooFarInFuture(date)) return;
       const dateStr = formatDateISO(date);
-      fetch(`/api/availability?date=${dateStr}&groupType=${groupType || "solo"}`)
+      fetch(`/api/availability?date=${dateStr}`)
         .then((res) => res.json())
         .then((data: unknown) => {
           const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
@@ -160,7 +158,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
         })
         .catch(console.error);
     });
-  }, [weekDates, groupType]);
+  }, [weekDates]);
 
   const goToPreviousWeek = () => {
     setDayOffset((d) => Math.max(0, d - 7));

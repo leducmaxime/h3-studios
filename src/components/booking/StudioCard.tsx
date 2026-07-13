@@ -36,7 +36,7 @@ export function StudioCard({
   const duration = formatDuration(startTime, endTime);
 
   // Unified range-level availability check — single source of truth
-  const rangeCheck = isRangeBookable(startTime, endTime, groupType, availability, date, studioId);
+  const rangeCheck = isRangeBookable(startTime, endTime, availability, date, studioId);
   const isAvailable = rangeCheck.bookable;
 
   const hasPeakSlots = breakdown.some((slot) => slot.isPeak);
