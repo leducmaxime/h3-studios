@@ -54,13 +54,13 @@ export function ClientProfile() {
 
   useEffect(() => {
     fetch("/api/client/me")
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<{ success: boolean; data: ClientUser }>)
       .then((data) => {
         if (!data?.data) {
           window.location.href = "/mon-compte/connexion";
           return;
         }
-        const u = data.data as ClientUser;
+        const u = data.data;
         setUser(u);
         setFirstName(u.first_name || "");
         setLastName(u.last_name || "");

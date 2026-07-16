@@ -116,9 +116,10 @@ import {
   addAuditLog,
   getAuditLogs,
   getDashboardStats,
-  resolveStatsRange,
   getMonthlyReportData,
   getSetting,
+  getUserByEmail,
+  resolveStatsRange,
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters, type DbBooking } from "@/lib/db-types";
 
@@ -550,7 +551,7 @@ const app = defineApp([
         }
         bookings.push(booking);
       }
-      const totalCents = bookings.reduce((sum, b) => sum + Math.round(b.total_price * 100), 0);
+      const totalCents = bookings.reduce((sum, b) => sum + Math.round(getBookingAmountDue(b) * 100), 0);
 
       const secretKey = env.STRIPE_SECRET_KEY || "";
       if (!secretKey) {
@@ -4286,8 +4287,8 @@ const app = defineApp([
           const bookings = (await Promise.all(bookingRefs.map(ref => getBookingByRef(env.DB, ref))))
             .filter((b): b is NonNullable<typeof b> => b !== null);
 
-          // Validate session total against sum of per-booking prices
-          const expectedTotalCents = bookings.reduce((sum, b) => sum + Math.round(b.total_price * 100), 0);
+          // Validate session total against sum of per-booking prices (net of promo)
+          const expectedTotalCents = bookings.reduce((sum, b) => sum + Math.round(getBookingAmountDue(b) * 100), 0);
           if (session.amount_total && session.amount_total !== expectedTotalCents) {
             console.warn(`Webhook: total mismatch — Stripe: ${session.amount_total}, DB sum: ${expectedTotalCents}`);
           }
@@ -4304,12 +4305,12 @@ const app = defineApp([
               continue;
             }
 
-            // Record per-booking amount (not session grand total)
-            const bookingCents = Math.round(booking.total_price * 100);
+            // Record per-booking amount in euros net of promo discount
+            const bookingDue = getBookingAmountDue(booking);
 
             await addPayment(env.DB, {
               booking_id: booking.id,
-              amount: bookingCents,
+              amount: bookingDue,
               method: "card",
               status: "paid",
               paid_at: new Date().toISOString().replace("T", " ").slice(0, 19),

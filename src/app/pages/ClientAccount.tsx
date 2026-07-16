@@ -85,12 +85,14 @@ export function ClientAccount() {
       fetch("/api/client/me").then((r) => r.ok ? r.json() : null),
       fetch("/api/client/bookings").then((r) => r.ok ? r.json() : []),
     ]).then(([userData, bookingsData]) => {
-      if (!userData?.data) {
+      const me = userData as { data: ClientUser } | null;
+      const bk = bookingsData as { data: BookingRow[] } | BookingRow[];
+      if (!me?.data) {
         window.location.href = "/mon-compte/connexion";
         return;
       }
-      setUser(userData.data);
-      setBookings(Array.isArray(bookingsData?.data) ? bookingsData.data : Array.isArray(bookingsData) ? bookingsData : []);
+      setUser(me.data);
+      setBookings(Array.isArray((bk as { data: BookingRow[] }).data) ? (bk as { data: BookingRow[] }).data : Array.isArray(bk) ? bk : []);
       setLoading(false);
     }).catch(() => {
       window.location.href = "/mon-compte/connexion";

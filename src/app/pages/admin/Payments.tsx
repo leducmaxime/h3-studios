@@ -67,6 +67,7 @@ interface ApiPayment {
   user_band_name: string | null;
   user_id: string | null;
   booking_date: string | null;
+  stripe_event_id: string | null;
 }
 
 interface PaymentsResponse {

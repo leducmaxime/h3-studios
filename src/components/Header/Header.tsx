@@ -75,7 +75,7 @@ export function Header() {
 
   useEffect(() => {
     fetch("/api/client/me")
-      .then((res) => res.json())
+      .then((res) => res.json() as Promise<{ data?: unknown }>)
       .then((data) => {
         setIsLoggedIn(!!data?.data);
       })
