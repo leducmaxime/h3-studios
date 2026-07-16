@@ -47,6 +47,7 @@ function useClearBookingOnNavigate() {
     const isAccountPage = pathname.startsWith("/mon-compte");
     if (!isReservationPage && !isAccountPage) {
       localStorage.removeItem("h3-studios-booking-state");
+      localStorage.removeItem("h3-studios-booking-state-v2");
     }
   }, [pathname]);
 }

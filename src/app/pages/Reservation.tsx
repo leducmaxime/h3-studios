@@ -17,7 +17,7 @@ import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, stepIndex, type BookingStep, type StudioId, type GroupType } from "@/lib/booking";
 import { useEquipment } from "@/components/booking/useEquipment";
 
 const GROUP_LABELS: Record<GroupType, string> = {
@@ -72,6 +72,7 @@ export function Reservation({ step }: ReservationProps) {
     resetBooking,
     goBack,
     navigateToStep,
+    canNavigateToStep,
     selectPaymentMethod,
     processPayment,
     minAdvanceHours,
@@ -117,14 +118,14 @@ export function Reservation({ step }: ReservationProps) {
 
   // Auto-scroll when date is selected (time slots appear)
   useEffect(() => {
-    if (state.step === 1 && state.selectedDate && !state.startTime) {
+    if (state.step === "creneau" && state.selectedDate && !state.startTime) {
       scrollToRef(timeSlotRef);
     }
   }, [state.step, state.selectedDate, state.startTime]);
 
   // Auto-scroll when studio is selected (recap appears)
   useEffect(() => {
-    if (state.step === 1 && state.studioId && state.startTime && state.endTime) {
+    if (state.step === "creneau" && state.studioId && state.startTime && state.endTime) {
       scrollToRef(recapRef);
     }
   }, [state.step, state.studioId, state.startTime, state.endTime]);
@@ -143,8 +144,8 @@ export function Reservation({ step }: ReservationProps) {
       })())
     : 0;
 
-  // Show cart banner when adding a new booking and cart has items (only on booking steps 0-1)
-  const showCartBanner = state.isAddingNew && state.cart.length > 0 && state.step <= 1;
+  // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau)
+  const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "groupe" || state.step === "creneau");
 
   // Inline recap + options block, shown after studio is selected (within the same step)
   const renderRecapSection = () => {
@@ -358,42 +359,40 @@ export function Reservation({ step }: ReservationProps) {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
           <div className="relative p-4 sm:p-6 md:p-8">
-            {state.step <= 5 && (
-              <div className="mb-4">
+            <div className="mb-4">
                 <ProgressIndicator
                   currentStep={state.step}
                   onStepClick={navigateToStep}
-                  cartLocked={state.cart.length > 0 && !state.isAddingNew}
+                  canNavigateToStep={canNavigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {state.step === 1 && state.groupType && (
+                  {state.step === "creneau" && state.groupType && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
                   {/* Studio pill: show on booking step only */}
-                  {state.studioId && state.step === 1 && state.groupType === "group" && (
+                  {state.studioId && state.step === "creneau" && state.groupType === "group" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
                   {/* Date + time pills */}
-                  {state.selectedDate && state.step === 1 && (
+                  {state.selectedDate && state.step === "creneau" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && state.step === 1 && (
+                  {state.startTime && state.endTime && state.step === "creneau" && (
                     <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
                       {state.startTime} - {state.endTime}
                     </span>
                   )}
                 </div>
               </div>
-            )}
 
-            {/* Step 0: Group type */}
-            {state.step === 0 && (
+            {/* Step groupe: Group type */}
+            {state.step === "groupe" && (
               <div className="flex flex-col gap-6">
                 <GroupTypeToggle
                   value={state.groupType}
@@ -402,8 +401,8 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
-            {/* Step 1: Unified booking step — Date + Créneaux + Studio */}
-            {state.step === 1 && (
+            {/* Step creneau: Unified booking step — Date + Créneaux + Studio */}
+            {state.step === "creneau" && (
               <div className="flex flex-col gap-6">
                 <div className="flex items-center gap-4">
                   <button
@@ -462,8 +461,8 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
-            {/* Step 2: Coordonnées (after cart, before payment) */}
-            {state.step === 2 && (
+            {/* Step coordonnees: Coordonnées (after cart, before payment) */}
+            {state.step === "coordonnees" && (
                 <BookingForm
                   date={state.cart[0]?.date || new Date()}
                   startTime={state.cart[0]?.startTime || ""}
@@ -485,8 +484,8 @@ export function Reservation({ step }: ReservationProps) {
                 />
               )}
 
-            {/* Step 3: Cart page */}
-            {state.step === 3 && (
+            {/* Step panier: Cart page */}
+            {state.step === "panier" && (
               <div className="flex flex-col gap-6">
                 <div className="flex items-center gap-2">
                   <ShoppingCart className="h-5 w-5 text-primary" />
@@ -612,8 +611,8 @@ export function Reservation({ step }: ReservationProps) {
               </div>
             )}
 
-            {/* Step 4: Paiement (PaymentChoice + StripeRedirect) */}
-            {state.step === 4 && !state.paymentMethod && (
+            {/* Step paiement: PaymentChoice + StripeRedirect */}
+            {state.step === "paiement" && !state.paymentMethod && (
               <PaymentChoice
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -621,7 +620,7 @@ export function Reservation({ step }: ReservationProps) {
                 onBack={goBack}
               />
             )}
-            {state.step === 4 && state.paymentMethod === "card" && (
+            {state.step === "paiement" && state.paymentMethod === "card" && (
               <StripeRedirect
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -630,7 +629,7 @@ export function Reservation({ step }: ReservationProps) {
                 onBack={goBack}
               />
             )}
-            {state.step === 4 && state.paymentMethod === "cash" && (
+            {state.step === "paiement" && state.paymentMethod === "cash" && (
               <PaymentChoice
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -639,8 +638,8 @@ export function Reservation({ step }: ReservationProps) {
               />
             )}
 
-            {/* Step 5: Done */}
-            {state.step === 5 && (
+            {/* Step termine: Done */}
+            {state.step === "termine" && (
               <FinalCheckout
                 cart={state.cart}
                 total={Math.max(0, cartTotal - state.promoDiscount)}
@@ -653,7 +652,7 @@ export function Reservation({ step }: ReservationProps) {
         </div>
       </div>
 
-      {state.step === 1 && state.groupType === "group" && !state.studioId && (
+      {state.step === "creneau" && state.groupType === "group" && !state.studioId && (
         <p className="mt-4 text-center text-sm font-medium text-primary/80">
           Les tarifs varient selon l'heure (après 18h) et le jour (weekend &
           jour férié). Économisez jusqu'à 20% en réservant avant 18h en semaine
@@ -661,7 +660,7 @@ export function Reservation({ step }: ReservationProps) {
         </p>
       )}
 
-      {state.step > 0 && state.step < 5 && (
+      {state.step !== "groupe" && state.step !== "termine" && (
         <button
           onClick={resetBooking}
           className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/15 hover:text-white"

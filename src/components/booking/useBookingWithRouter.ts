@@ -3,6 +3,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { formatDateISO } from "@/lib/utils";
 import {
+  BOOKING_STEPS,
+  type BookingStep,
   type BookingState,
   type StudioId,
   type GroupType,
@@ -79,38 +81,99 @@ interface ExtendedBookingState extends BookingState {
 }
 
 /**
- * Step flow:
- * 0: GroupType
- * 1: Date & Créneaux booking (Date+Time+Studio unified)
- * 2: Coordonnées (BookingForm)
- * 3: Panier (CartPage)
- * 4: Paiement (PaymentChoice + StripeRedirect)
- * 5: Terminé (FinalCheckout)
+ * Slug-based step flow:
+ *   groupe → creneau → panier → coordonnees → paiement → termine
  *
- * Cart lock: steps 0-1 are blocked when cart has items (unless isAddingNew).
+ * Guards:
+ *   - Cart lock:   cart.length > 0 && !isAddingNew → groupe/creneau → panier
+ *   - creneau:     requires groupType, else → groupe
+ *   - panier/coordonnees/paiement: require cart.length > 0, else → groupe
+ *   - termine:     terminal (direct nav → groupe)
  */
-const STEP_URL_MAP: Record<number, string> = {
-  0: "",
-  1: "",
-  2: "coordonnees",
-  3: "panier",
-  4: "paiement",
-  5: "termine",
+
+// ---------------------------------------------------------------------------
+// Storage – versioned key v2 (slugs), discard old numeric state
+// ---------------------------------------------------------------------------
+const BOOKING_STORAGE_KEY = "h3-studios-booking-state-v2";
+const OLD_BOOKING_STORAGE_KEY = "h3-studios-booking-state";
+
+function discardOldStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(OLD_BOOKING_STORAGE_KEY);
+  } catch { /* ignore */ }
+}
+
+// ---------------------------------------------------------------------------
+// URL ↔ slug helpers (identity mapping — each slug is its own URL)
+// ---------------------------------------------------------------------------
+const LEGACY_ALIASES: Record<string, BookingStep> = {
+  "paiement-choix": "paiement",
 };
 
-const URL_STEP_MAP: Record<string, number> = {
-  "": 0,
-  "reservation": 1,
-  "creneau": 1,   // legacy URL compat
-  "coordonnees": 2,
-  "panier": 3,
-  "paiement": 4,
-  "paiement-choix": 4,  // legacy URL compat
-  "termine": 5,
-};
+function resolveStepFromUrl(urlStep: string | undefined): BookingStep {
+  if (!urlStep || urlStep === "reservation") return "groupe";
+  if (LEGACY_ALIASES[urlStep]) return LEGACY_ALIASES[urlStep];
+  if ((BOOKING_STEPS as readonly string[]).includes(urlStep)) return urlStep as BookingStep;
+  return "groupe"; // unknown → groupe
+}
 
-const BOOKING_STORAGE_KEY = "h3-studios-booking-state";
+function navigateToUrl(step: BookingStep, replace = false) {
+  const url = `/reservation/${step}`;
+  if (typeof window !== "undefined" && window.location.pathname !== url) {
+    if (replace) {
+      window.history.replaceState({}, "", url);
+    } else {
+      window.history.pushState({}, "", url);
+    }
+  }
+}
 
+// ---------------------------------------------------------------------------
+// Guard logic — pure function, no side-effects
+// ---------------------------------------------------------------------------
+function applyStepGuards(
+  cart: CompletedBooking[],
+  isAddingNew: boolean,
+  groupType: GroupType | null,
+  targetStep: BookingStep,
+): { step: BookingStep; isRedirect: boolean } {
+  // Cart lock: groupe or creneau → panier
+  if (cart.length > 0 && !isAddingNew && (targetStep === "groupe" || targetStep === "creneau")) {
+    return { step: "panier", isRedirect: true };
+  }
+  // Creneau: needs groupType
+  if (targetStep === "creneau" && !groupType) {
+    return { step: "groupe", isRedirect: true };
+  }
+  // Panier, coordonnees, paiement: need cart items
+  if ((targetStep === "panier" || targetStep === "coordonnees" || targetStep === "paiement") && cart.length === 0) {
+    return { step: "groupe", isRedirect: true };
+  }
+  // Termine: terminal — redirect to groupe
+  if (targetStep === "termine") {
+    return { step: "groupe", isRedirect: true };
+  }
+  return { step: targetStep, isRedirect: false };
+}
+
+// ---------------------------------------------------------------------------
+// User-info completeness check
+// ---------------------------------------------------------------------------
+function isUserInfoComplete(s: ExtendedBookingState): boolean {
+  return (
+    s.userName.trim() !== "" &&
+    s.userEmail.trim() !== "" &&
+    s.userPhone.trim() !== "" &&
+    s.billingAddress.trim() !== "" &&
+    s.billingPostalCode.trim() !== "" &&
+    s.billingCity.trim() !== ""
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Serialization
+// ---------------------------------------------------------------------------
 interface SerializedBookingState extends Omit<ExtendedBookingState, "selectedDate" | "cart"> {
   selectedDate: string | null;
   cart: Array<Omit<CompletedBooking, "date"> & { date: string }>;
@@ -131,6 +194,7 @@ function deserializeState(serialized: SerializedBookingState): ExtendedBookingSt
   return {
     ...initialState,
     ...serialized,
+    step: (BOOKING_STEPS as readonly string[]).includes(serialized.step) ? serialized.step : ("groupe" as BookingStep),
     selectedDate: serialized.selectedDate ? new Date(serialized.selectedDate) : null,
     cart: serialized.cart.map((booking) => ({
       ...booking,
@@ -170,35 +234,11 @@ function clearBookingState(): void {
   }
 }
 
-function getStepFromUrl(urlStep: string | undefined): number {
-  if (!urlStep) return 0;
-  return URL_STEP_MAP[urlStep] ?? 0;
-}
-
-function navigateToUrl(step: number) {
-  const stepSlug = STEP_URL_MAP[step];
-  let url = "/reservation";
-  if (stepSlug) {
-    url = `/reservation/${stepSlug}`;
-  }
-  if (typeof window !== "undefined" && window.location.pathname !== url) {
-    window.history.pushState({}, "", url);
-  }
-}
-
-function isUserInfoComplete(s: ExtendedBookingState): boolean {
-  return (
-    s.userName.trim() !== "" &&
-    s.userEmail.trim() !== "" &&
-    s.userPhone.trim() !== "" &&
-    s.billingAddress.trim() !== "" &&
-    s.billingPostalCode.trim() !== "" &&
-    s.billingCity.trim() !== ""
-  );
-}
-
+// ---------------------------------------------------------------------------
+// initialState
+// ---------------------------------------------------------------------------
 const initialState: ExtendedBookingState = {
-  step: 0,
+  step: "groupe",
   selectedDate: null,
   startTime: null,
   endTime: null,
@@ -222,11 +262,14 @@ const initialState: ExtendedBookingState = {
   duplicateError: null,
 };
 
+// ===========================================================================
+// HOOK
+// ===========================================================================
 export function useBookingWithRouter(urlStep?: string) {
-  const initialStep = getStepFromUrl(urlStep);
+  const initialStep = resolveStepFromUrl(urlStep);
   const [state, setState] = useState<ExtendedBookingState>({
     ...initialState,
-    step: initialStep as BookingState["step"],
+    step: initialStep,
   });
   const [isHydrated, setIsHydrated] = useState(false);
   const isInitialMount = useRef(true);
@@ -272,13 +315,19 @@ export function useBookingWithRouter(urlStep?: string) {
       .catch(console.error);
   }, [state.selectedDate]);
 
+  // -------------------------------------------------------------------------
+  // Hydration effect
+  // -------------------------------------------------------------------------
   useEffect(() => {
     if (isHydrated) return;
+
+    // Discard old numeric-format storage — do NOT migrate
+    discardOldStorage();
 
     const savedState = loadBookingState();
     const prefs = loadUserPreferences();
 
-    if (savedState && savedState.step === 5) {
+    if (savedState && savedState.step === "termine") {
       clearBookingState();
       if (prefs) {
         setState((s) => ({
@@ -294,10 +343,13 @@ export function useBookingWithRouter(urlStep?: string) {
     }
 
     if (savedState) {
-      const urlStepNum = getStepFromUrl(urlStep);
+      const urlStepSlug = resolveStepFromUrl(urlStep);
+      // Prefer URL step if it's non-default; otherwise keep saved step
+      const restoredStep = (urlStepSlug !== "groupe" || !!urlStep) ? urlStepSlug : savedState.step;
+
       const restoredState = {
         ...savedState,
-        step: (urlStepNum > 0 ? urlStepNum : savedState.step) as BookingState["step"],
+        step: restoredStep,
       };
 
       if (prefs) {
@@ -307,17 +359,20 @@ export function useBookingWithRouter(urlStep?: string) {
         restoredState.bandName = prefs.bandName || restoredState.bandName;
       }
 
-      // Cart lock: if cart has items and not adding new, block booking steps (0-1)
-      if (restoredState.cart.length > 0 && !restoredState.isAddingNew && restoredState.step <= 1) {
-        restoredState.step = 3 as BookingState["step"];
-      }
-
-      // Empty cart on steps 2-4 (coordonnées, panier, paiement): redirect to step 0
-      if (restoredState.cart.length === 0 && restoredState.step >= 2 && restoredState.step <= 4) {
-        restoredState.step = 0 as BookingState["step"];
-      }
+      // Apply guards
+      const { step: guardedStep, isRedirect } = applyStepGuards(
+        restoredState.cart,
+        restoredState.isAddingNew,
+        restoredState.groupType,
+        restoredState.step,
+      );
+      restoredState.step = guardedStep;
 
       setState(restoredState);
+
+      if (isRedirect && typeof window !== "undefined") {
+        window.history.replaceState({}, "", `/reservation/${guardedStep}`);
+      }
     } else if (prefs) {
       setState((s) => ({
         ...s,
@@ -326,6 +381,14 @@ export function useBookingWithRouter(urlStep?: string) {
         userPhone: prefs.userPhone || "",
         bandName: prefs.bandName || "",
       }));
+    }
+
+    // Base /reservation → redirect to /reservation/groupe
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (path === "/reservation" || path === "/reservation/") {
+        window.history.replaceState({}, "", "/reservation/groupe");
+      }
     }
 
     fetch("/api/client/me", { credentials: "include" })
@@ -363,85 +426,120 @@ export function useBookingWithRouter(urlStep?: string) {
       });
   }, [isHydrated, urlStep]);
 
+  // -------------------------------------------------------------------------
+  // Persist state to localStorage (skip for termine / initial mount)
+  // -------------------------------------------------------------------------
   useEffect(() => {
     if (!isHydrated) return;
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
-    if (state.step === 5) {
+    if (state.step === "termine") {
       clearBookingState();
       return;
     }
     saveBookingState(state);
   }, [state, isHydrated]);
 
+  // -------------------------------------------------------------------------
+  // URL sync effect + reactive guard enforcement
+  // -------------------------------------------------------------------------
   useEffect(() => {
     if (!isHydrated) return;
-    // Cart lock: enforce cart URL if cart has items and not adding new (block booking steps 0-1)
-    if (state.cart.length > 0 && !state.isAddingNew && state.step <= 1) {
-      setState((s) => ({ ...s, step: 3 as BookingState["step"] }));
+
+    // "termine" is a legitimately reached terminal state (payment/cash
+    // completion): never guard-redirect away from it here. External entry
+    // attempts (direct load, popstate, step clicks) are guarded elsewhere.
+    if (state.step === "termine") {
+      navigateToUrl("termine");
       return;
     }
+
+    const { step: guardedStep, isRedirect } = applyStepGuards(
+      state.cart,
+      state.isAddingNew,
+      state.groupType,
+      state.step,
+    );
+
+    if (guardedStep !== state.step) {
+      setState((s) => ({ ...s, step: guardedStep }));
+      navigateToUrl(guardedStep, true); // replaceState for guard redirects
+      return;
+    }
+
     navigateToUrl(state.step);
-  }, [state.step, isHydrated, state.cart.length, state.isAddingNew]);
+  }, [state.step, isHydrated, state.cart.length, state.isAddingNew, state.groupType]);
 
-  // Always fetch user data on mount (in case auth state changed since last render)
-
+  // Scroll to top on step change
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [state.step]);
 
+  // -------------------------------------------------------------------------
+  // Popstate handler — apply guards with replaceState
+  // -------------------------------------------------------------------------
   useEffect(() => {
     if (typeof window === "undefined") return;
-    
+
     const handlePopState = () => {
       const path = window.location.pathname;
       const stepMatch = path.match(/\/reservation\/?(.*)$/);
       const urlStepStr = stepMatch ? stepMatch[1] : "";
-      const newStep = getStepFromUrl(urlStepStr || undefined);
-      
+      const urlStep = resolveStepFromUrl(urlStepStr || undefined);
+
       setState((s) => {
-        // Step 5 is terminal: back button should reset
-        if (s.step === 5) {
-          window.history.replaceState({}, "", "/reservation");
+        // Step "termine" is terminal: back button should reset
+        if (s.step === "termine") {
+          window.history.replaceState({}, "", "/reservation/groupe");
           return { ...initialState };
         }
-        // Empty cart on steps 2-4: redirect to step 0
-        if (s.cart.length === 0 && newStep >= 2 && newStep <= 4) {
-          window.history.replaceState({}, "", "/reservation");
-          return { ...s, step: 0 as BookingState["step"] };
+
+        const { step: guardedStep, isRedirect } = applyStepGuards(
+          s.cart,
+          s.isAddingNew,
+          s.groupType,
+          urlStep,
+        );
+
+        if (isRedirect && guardedStep !== urlStep) {
+          window.history.replaceState({}, "", `/reservation/${guardedStep}`);
         }
-        // Cart lock: if cart has items and not adding new, block booking steps (0-1)
-        if (s.cart.length > 0 && !s.isAddingNew && newStep <= 1) {
-          // Replace URL to cart without adding history entry
-          window.history.replaceState({}, "", "/reservation/panier");
-          return { ...s, step: 3 as BookingState["step"] };
-        }
-        return { ...s, step: newStep as BookingState["step"] };
+
+        return { ...s, step: guardedStep };
       });
     };
-    
+
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const setStep = useCallback((step: BookingState["step"]) => {
+  // -------------------------------------------------------------------------
+  // Transition helpers
+  // -------------------------------------------------------------------------
+  const setStep = useCallback((step: BookingStep) => {
     setState((s) => ({ ...s, step }));
   }, []);
 
-  const navigateToStep = useCallback((step: number) => {
+  const navigateToStep = useCallback((targetStep: BookingStep) => {
     setState((s) => {
-      // Cart lock: if cart has items and not adding new, block booking steps (0-1)
-      if (s.cart.length > 0 && !s.isAddingNew && step <= 1) {
-        return { ...s, step: 3 as BookingState["step"] };
+      // Apply guards
+      const { step: guardedStep } = applyStepGuards(
+        s.cart, s.isAddingNew, s.groupType, targetStep,
+      );
+
+      // Preserve reset behavior for groupe when switching group type
+      if (targetStep === "groupe" && (s.groupType === "solo" || s.groupType === "duo")) {
+        return {
+          ...s, step: "groupe", groupType: null,
+          selectedDate: null, startTime: null, endTime: null, studioId: null,
+        };
       }
-      if (step === 0 && (s.groupType === "solo" || s.groupType === "duo")) {
-        return { ...s, step: 0 as BookingState["step"], groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
-      }
-      return { ...s, step: step as BookingState["step"] };
+
+      return { ...s, step: guardedStep };
     });
   }, []);
 
@@ -465,7 +563,6 @@ export function useBookingWithRouter(urlStep?: string) {
   const confirmTimeSelection = useCallback(() => {
     setState((s) => {
       if (s.startTime && s.endTime && s.selectedDate && s.groupType) {
-        // Studio is already determined by the selected slot block — nothing to auto-assign
         return s;
       }
       return s;
@@ -475,7 +572,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const setGroupType = useCallback((groupType: GroupType | null) => {
     setState((s) => {
       if (groupType === "solo" || groupType === "duo" || groupType === "group") {
-        return { ...s, groupType, step: 1, selectedDate: null, startTime: null, endTime: null, studioId: null };
+        return { ...s, groupType, step: "creneau", selectedDate: null, startTime: null, endTime: null, studioId: null };
       }
       return { ...s, groupType };
     });
@@ -507,9 +604,9 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, appliedPromo: null, promoDiscount: 0 }));
   }, []);
 
-  /** From cart page: go to coordonnées (step 2) before payment */
+  /** From cart page: go to coordonnées */
   const goToCoordonnees = useCallback(() => {
-    setState((s) => ({ ...s, step: 2 }));
+    setState((s) => ({ ...s, step: "coordonnees" }));
   }, []);
 
   const isDuplicateBooking = useCallback((
@@ -527,11 +624,11 @@ export function useBookingWithRouter(urlStep?: string) {
 
     const overlappingBookings = cart.filter((booking) => {
       if (booking.date.toDateString() !== dateStr) return false;
-      
+
       const existingStart = TIME_SLOTS.indexOf(booking.startTime);
       let existingEnd = TIME_SLOTS.indexOf(booking.endTime);
       if (existingEnd === -1 && booking.endTime === "00:00") existingEnd = TIME_SLOTS.length;
-      
+
       return newStart < existingEnd && newEnd > existingStart;
     });
 
@@ -556,7 +653,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
       const pricing = calculatePrice(s.studioId, s.groupType, s.selectedDate, s.startTime, s.endTime);
       const bookingRef = generateBookingRef();
-      
+
       const startIdx = TIME_SLOTS.indexOf(s.startTime);
       let endIdx = TIME_SLOTS.indexOf(s.endTime);
       if (endIdx === -1 && s.endTime === "00:00") endIdx = TIME_SLOTS.length;
@@ -592,7 +689,7 @@ export function useBookingWithRouter(urlStep?: string) {
         ...s,
         bookingRef,
         cart: [...s.cart, newBooking],
-        step: 3,
+        step: "panier",
         appliedPromo: null,
         promoDiscount: 0,
         isAddingNew: false,
@@ -617,101 +714,20 @@ export function useBookingWithRouter(urlStep?: string) {
       groupType: null,
       bookingRef: null,
       equipment: [],
-      step: 0,
+      step: "groupe",
       isAddingNew: true,
     }));
   }, []);
 
-  /** From coordonnées: proceed to payment choice (step 6) or skip if free */
-  const goToPaymentFromCoordonnees = useCallback(async () => {
-    const currentCart = state.cart;
-    const cartTotal = currentCart.reduce((sum, b) => sum + b.price, 0);
-    const totalPromoDiscount = state.promoDiscount || 0;
-    const finalTotal = Math.max(0, cartTotal - totalPromoDiscount);
-    
-    // If total is 0€ (100% discount), skip payment and create booking directly
-    if (finalTotal === 0) {
-      if (isSubmitting) return;
-      setIsSubmitting(true);
-      try {
-        const promoCodeToApply = appliedPromoRef.current?.code ?? null;
-        let remainingPromo = totalPromoDiscount;
-        const allCartRefs = state.cart.map(b => b.bookingRef);
-        for (let i = 0; i < state.cart.length; i++) {
-          const booking = state.cart[i];
-          const bookingPromoDiscount = Math.min(booking.price, remainingPromo);
-          remainingPromo -= bookingPromoDiscount;
-          const finalPrice = Math.max(0, booking.price - bookingPromoDiscount);
-          const res = await fetch("/api/bookings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              bookingRef: booking.bookingRef,
-              user: {
-                name: state.userName,
-                email: state.userEmail,
-                phone: state.userPhone,
-                bandName: state.bandName,
-                addressLine1: state.billingAddress,
-                postalCode: state.billingPostalCode,
-                city: state.billingCity,
-              },
-              studioId: booking.studioId,
-              date: formatDateISO(booking.date),
-              startTime: booking.startTime,
-              endTime: booking.endTime,
-              groupType: booking.groupType,
-              equipment: booking.equipment,
-              equipmentPrice: booking.equipmentPrice,
-              price: finalPrice,
-              paymentMethod: "cash",
-              paymentStatus: "pay-on-site",
-              promoCode: i === 0 ? promoCodeToApply : null,
-              round_mode: i === 0 ? appliedPromoRef.current?.round_mode ?? null : null,
-              promoDiscount: bookingPromoDiscount,
-              notes: state.additionalInfo,
-              cartBookingRefs: allCartRefs,
-              isLastInCart: i === state.cart.length - 1,
-            }),
-          });
-          const json = await res.json() as { success: boolean; error?: string };
-          if (!json.success) throw new Error(json.error);
-        }
-        setState((s) => {
-          const updatedCart = s.cart.map((booking) => ({
-            ...booking,
-            paymentMethod: "cash" as PaymentMethod,
-            paymentStatus: "pay-on-site" as const,
-          }));
-          return { ...s, paymentMethod: "cash", cart: updatedCart, step: 5 };
-        });
-      } catch (err) {
-        alert("Erreur lors de la réservation: " + err);
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else {
-      setState((s) => ({ ...s, step: 4 }));
-    }
-  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
-
-  /** Cancel current new booking and go back to cart */
-  const goToCart = useCallback(() => {
-    setState((s) => ({
-      ...s,
-      selectedDate: null,
-      startTime: null,
-      endTime: null,
-      studioId: null,
-      groupType: null,
-      bookingRef: null,
-      equipment: [],
-      step: 3,
-      isAddingNew: false,
-    }));
-  }, []);
-
-  const selectPaymentMethod = useCallback(async (method: PaymentMethod) => {
+  // -------------------------------------------------------------------------
+  // Shared submitCart helper — deduplicates the booking POST loop
+  // Used by goToPaymentFromCoordonnees (0€ path) and selectPaymentMethod
+  //
+  // paymentMethod=null  → "cash" treatment + go to termine (for 0€ total)
+  // paymentMethod=cash  → POST + go to termine
+  // paymentMethod=card  → POST + stay on paiement
+  // -------------------------------------------------------------------------
+  const submitCart = useCallback(async (paymentMethod: PaymentMethod | null) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
@@ -720,6 +736,8 @@ export function useBookingWithRouter(urlStep?: string) {
       const totalPromoDiscount = state.promoDiscount || 0;
       let remainingPromo = totalPromoDiscount;
       const allCartRefs = state.cart.map(b => b.bookingRef);
+      const method = paymentMethod || "cash";
+
       for (let i = 0; i < state.cart.length; i++) {
         const booking = state.cart[i];
         const bookingPromoDiscount = Math.min(booking.price, remainingPromo);
@@ -763,22 +781,59 @@ export function useBookingWithRouter(urlStep?: string) {
 
       setState((s) => {
         if (method === "card") {
-          return { ...s, paymentMethod: method, step: 4 };
+          return { ...s, paymentMethod: method, step: "paiement" };
         }
         const updatedCart = s.cart.map((booking) => ({
           ...booking,
-          paymentMethod: "cash" as PaymentMethod,
+          paymentMethod: method as PaymentMethod,
           paymentStatus: "pay-on-site" as const,
         }));
-        return { ...s, paymentMethod: method, cart: updatedCart, step: 5 };
+        return { ...s, paymentMethod: method, cart: updatedCart, step: "termine" };
       });
     } catch (err) {
       alert("Erreur lors de la réservation: " + err);
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.additionalInfo, isSubmitting]);
+  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, isSubmitting]);
 
+  /** From coordonnées: proceed to payment choice or skip if free */
+  const goToPaymentFromCoordonnees = useCallback(async () => {
+    const currentCart = state.cart;
+    const cartTotal = currentCart.reduce((sum, b) => sum + b.price, 0);
+    const totalPromoDiscount = state.promoDiscount || 0;
+    const finalTotal = Math.max(0, cartTotal - totalPromoDiscount);
+
+    if (finalTotal === 0) {
+      // 100% discount → skip payment, submit with cash treatment
+      await submitCart(null);
+    } else {
+      setState((s) => ({ ...s, step: "paiement" }));
+    }
+  }, [state.cart, state.promoDiscount, submitCart]);
+
+  /** Cancel current new booking and go back to cart */
+  const goToCart = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      selectedDate: null,
+      startTime: null,
+      endTime: null,
+      studioId: null,
+      groupType: null,
+      bookingRef: null,
+      equipment: [],
+      step: "panier",
+      isAddingNew: false,
+    }));
+  }, []);
+
+  /** Select payment method → POST bookings, then termine (cash) or stay paiement (card) */
+  const selectPaymentMethod = useCallback(async (method: PaymentMethod) => {
+    await submitCart(method);
+  }, [submitCart]);
+
+  /** Stripe callback: mark cart as paid, go to termine */
   const processPayment = useCallback(() => {
     setState((s) => {
       const updatedCart = s.cart.map((booking) => ({
@@ -786,14 +841,13 @@ export function useBookingWithRouter(urlStep?: string) {
         paymentMethod: "card" as PaymentMethod,
         paymentStatus: "paid" as const,
       }));
-      return { ...s, cart: updatedCart, step: 5 };
+      return { ...s, cart: updatedCart, step: "termine" };
     });
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
     setState((s) => {
       const newCart = s.cart.filter((b) => b.id !== bookingId);
-
       return { ...s, cart: newCart, appliedPromo: null, promoDiscount: 0 };
     });
   }, []);
@@ -805,7 +859,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const goBack = useCallback(() => {
     setState((s) => {
-      if (s.step === 0) {
+      if (s.step === "groupe") {
         if (s.isAddingNew && s.cart.length > 0) {
           return {
             ...s,
@@ -816,27 +870,29 @@ export function useBookingWithRouter(urlStep?: string) {
             groupType: null,
             bookingRef: null,
             equipment: [],
-            step: 3,
+            step: "panier",
             isAddingNew: false,
           };
         }
         return s;
       }
-      if (s.step === 1) {
+      if (s.step === "creneau") {
         if (s.selectedDate) {
           return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null };
         }
-        return { ...s, step: 0, groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
+        return { ...s, step: "groupe", groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
       }
-
-      if (s.step === 2) return { ...s, step: 3 };
-      if (s.step === 3) return s;
-      if (s.step === 4) return { ...s, step: 2, paymentMethod: null };
-      if (s.step === 5) return { ...s, step: 4 };
+      if (s.step === "coordonnees") return { ...s, step: "panier" };
+      if (s.step === "panier") return s;
+      if (s.step === "paiement") return { ...s, step: "coordonnees", paymentMethod: null };
+      if (s.step === "termine") return { ...s, step: "paiement" };
       return s;
     });
   }, []);
 
+  // -------------------------------------------------------------------------
+  // Derived values
+  // -------------------------------------------------------------------------
   const pricing = useMemo(() => {
     if (!state.studioId || !state.selectedDate || !state.startTime || !state.endTime || !state.groupType) {
       return null;
@@ -848,13 +904,13 @@ export function useBookingWithRouter(urlStep?: string) {
       state.startTime,
       state.endTime
     );
-    
+
     const startIdx = TIME_SLOTS.indexOf(state.startTime);
     let endIdx = TIME_SLOTS.indexOf(state.endTime);
     if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
     const durationHours = (endIdx - startIdx) * 0.5;
     const equipmentPrice = calculateEquipmentPrice(state.equipment, durationHours);
-    
+
     return {
       ...basePrice,
       equipmentPrice,
@@ -875,6 +931,17 @@ export function useBookingWithRouter(urlStep?: string) {
     state.billingPostalCode.trim() !== "" &&
     state.billingCity.trim() !== "";
 
+  /** Exposed for ProgressIndicator — checks if a slug step is reachable via user click */
+  const canNavigateToStep = useCallback((targetStep: BookingStep): boolean => {
+    if (targetStep === "paiement" || targetStep === "termine") return false;
+    const isCartLocked = state.cart.length > 0 && !state.isAddingNew;
+    if (targetStep === "groupe") return !isCartLocked;
+    if (targetStep === "creneau") return !!(state.groupType) && !isCartLocked;
+    if (targetStep === "panier") return true;
+    if (targetStep === "coordonnees") return state.cart.length > 0;
+    return false;
+  }, [state.cart.length, state.isAddingNew, state.groupType]);
+
   return {
     state,
     slotsByStudio: mergedSlotsByStudio,
@@ -888,6 +955,7 @@ export function useBookingWithRouter(urlStep?: string) {
     clientUserLoading,
     setStep,
     navigateToStep,
+    canNavigateToStep,
     selectDate,
     selectTimeRange,
     clearTimeRange,

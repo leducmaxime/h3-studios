@@ -96,8 +96,17 @@ export function calculatePromoDiscount(promo: PromoCode, total: number): number 
   return Math.min(promo.value, total);
 }
 
+// Slug-based step model for the booking wizard
+export const BOOKING_STEPS = ["groupe","creneau","panier","coordonnees","paiement","termine"] as const;
+export type BookingStep = (typeof BOOKING_STEPS)[number];
+
+/** Compare steps by order in the canonical flow */
+export function stepIndex(step: BookingStep): number {
+  return BOOKING_STEPS.indexOf(step);
+}
+
 export interface BookingState {
-  step: 0 | 1 | 2 | 3 | 4 | 5;
+  step: BookingStep;
   selectedDate: Date | null;
   startTime: string | null;
   endTime: string | null;

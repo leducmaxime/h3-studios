@@ -41,7 +41,7 @@ export function PaymentCancel() {
 
             <div className="flex flex-col gap-3">
               <a
-                href="/reservation/payment"
+                href="/reservation/paiement"
                 className="flex items-center justify-center gap-2 rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
               >
                 <RefreshCw className="h-5 w-5" />

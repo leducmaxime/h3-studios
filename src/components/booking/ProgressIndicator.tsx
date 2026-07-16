@@ -1,72 +1,66 @@
 "use client";
 
 import { Calendar, CircleCheckBig, CreditCard, IdCard, ShoppingCart, Users } from "lucide-react";
+import { BOOKING_STEPS, type BookingStep, stepIndex } from "@/lib/booking";
 
 interface ProgressIndicatorProps {
-  currentStep: number;
-  onStepClick?: (step: number) => void;
-  /** When true, booking steps (0-1) are not clickable even if completed */
-  cartLocked?: boolean;
+  currentStep: BookingStep;
+  onStepClick?: (step: BookingStep) => void;
+  /** Guard-based clickability check from the hook */
+  canNavigateToStep?: (step: BookingStep) => boolean;
 }
 
-// Each entry: [Icon, actualStep]
-type StepDef = [typeof Users, number];
+type StepDef = {
+  icon: typeof Users;
+  step: BookingStep;
+  label: string;
+};
 
 /**
- * Step flow:
- * 0: Type (GroupType)
- * 1: Date & Créneaux (Date+Time+Studio)
- * 2: Coordonnées (BookingForm)
- * 3: Panier (CartPage)
- * 4: Paiement (PaymentChoice + StripeRedirect)
- * 5: Terminé (FinalCheckout)
+ * Step flow (traversal order):
+ *   Type → Créneaux → Panier → Coordonnées → Paiement → Terminé
  */
 function getStepDefs(): StepDef[] {
   return [
-    [Users, 0],              // Type
-    [Calendar, 1],           // Date & Créneaux
-    [IdCard, 2],             // Coordonnées
-    [ShoppingCart, 3],       // Panier
-    [CreditCard, 4],         // Paiement
-    [CircleCheckBig, 5],     // Terminé
+    { icon: Users, step: "groupe", label: "Type" },
+    { icon: Calendar, step: "creneau", label: "Créneaux" },
+    { icon: ShoppingCart, step: "panier", label: "Panier" },
+    { icon: IdCard, step: "coordonnees", label: "Coordonnées" },
+    { icon: CreditCard, step: "paiement", label: "Paiement" },
+    { icon: CircleCheckBig, step: "termine", label: "Terminé" },
   ];
 }
 
 export function ProgressIndicator({
   currentStep,
   onStepClick,
-  cartLocked,
+  canNavigateToStep,
 }: ProgressIndicatorProps) {
   const stepDefs = getStepDefs();
 
-  // Map each step to its visual position index for progress comparison
-  const stepOrder = stepDefs.map(([, s]) => s);
-
-  const resolvedStep = currentStep;
-  const currentIdx = stepOrder.indexOf(resolvedStep);
+  const currentIdx = stepIndex(currentStep);
 
   return (
     <div className="mb-6">
       <div className="flex items-center justify-center gap-0">
-        {stepDefs.map(([Icon, actualStep], index) => {
+        {stepDefs.map(({ icon: Icon, step, label }, index) => {
           const thisIdx = index;
           const isCompleted = currentIdx > thisIdx;
           const isCurrent = currentIdx === thisIdx;
-          // Cart locked: booking steps (0-1) are not clickable
-          // Payment/confirmation steps (4-5) are never clickable
-          const isBookingStep = actualStep <= 1;
-          const isPaymentStep = actualStep >= 4;
-          const isClickable = isCompleted && !!onStepClick && !(cartLocked && isBookingStep) && !isPaymentStep;
+          const isClickable =
+            isCompleted &&
+            !!onStepClick &&
+            !!canNavigateToStep?.(step);
 
           return (
-            <div key={actualStep} className="flex items-center">
+            <div key={step} className="flex items-center">
               <div className="flex flex-col items-center">
                 <button
                   type="button"
                   disabled={!isClickable}
                   onClick={() => {
                     if (isClickable) {
-                      onStepClick(actualStep);
+                      onStepClick(step);
                     }
                   }}
                   className={`
@@ -116,9 +110,9 @@ export function ProgressIndicator({
       </div>
 
       <div className="mt-4 flex gap-1">
-        {stepDefs.map(([, actualStep], index) => (
+        {stepDefs.map(({ step }, index) => (
           <div
-            key={actualStep}
+            key={step}
             className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
               currentIdx >= index ? "bg-primary" : "bg-white/20"
             }`}
