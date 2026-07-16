@@ -269,7 +269,9 @@ export function useBookingWithRouter(urlStep?: string) {
   const initialStep = resolveStepFromUrl(urlStep);
   const [state, setState] = useState<ExtendedBookingState>({
     ...initialState,
-    step: initialStep,
+    // Guard the URL-derived step even for the very first render (SSR included):
+    // a fresh visitor has no cart/groupType, so deep links land on groupe.
+    step: applyStepGuards([], false, null, initialStep).step,
   });
   const [isHydrated, setIsHydrated] = useState(false);
   const isInitialMount = useRef(true);
@@ -324,22 +326,16 @@ export function useBookingWithRouter(urlStep?: string) {
     // Discard old numeric-format storage — do NOT migrate
     discardOldStorage();
 
-    const savedState = loadBookingState();
+    const rawSavedState = loadBookingState();
     const prefs = loadUserPreferences();
 
+    // A saved terminal state is stale (storage is cleared at termine, but be
+    // defensive): discard it and fall through to the fresh-visit path so
+    // prefs, guards and /api/client/me still run.
+    let savedState = rawSavedState;
     if (savedState && savedState.step === "termine") {
       clearBookingState();
-      if (prefs) {
-        setState((s) => ({
-          ...s,
-          userName: prefs.userName || "",
-          userEmail: prefs.userEmail || "",
-          userPhone: prefs.userPhone || "",
-          bandName: prefs.bandName || "",
-        }));
-      }
-      setIsHydrated(true);
-      return;
+      savedState = null;
     }
 
     if (savedState) {
@@ -373,14 +369,27 @@ export function useBookingWithRouter(urlStep?: string) {
       if (isRedirect && typeof window !== "undefined") {
         window.history.replaceState({}, "", `/reservation/${guardedStep}`);
       }
-    } else if (prefs) {
+    } else {
+      // Fresh visit: apply guards to the URL-derived step (deep links to
+      // panier/coordonnees/paiement/termine redirect to groupe) and replace
+      // the URL so it never points at an unreachable step.
+      const urlStepSlug = resolveStepFromUrl(urlStep);
+      const { step: guardedStep, isRedirect } = applyStepGuards([], false, null, urlStepSlug);
       setState((s) => ({
         ...s,
-        userName: prefs.userName || "",
-        userEmail: prefs.userEmail || "",
-        userPhone: prefs.userPhone || "",
-        bandName: prefs.bandName || "",
+        step: guardedStep,
+        ...(prefs
+          ? {
+              userName: prefs.userName || "",
+              userEmail: prefs.userEmail || "",
+              userPhone: prefs.userPhone || "",
+              bandName: prefs.bandName || "",
+            }
+          : {}),
       }));
+      if (isRedirect && typeof window !== "undefined") {
+        window.history.replaceState({}, "", `/reservation/${guardedStep}`);
+      }
     }
 
     // Base /reservation → redirect to /reservation/groupe
