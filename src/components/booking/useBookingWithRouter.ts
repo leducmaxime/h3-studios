@@ -282,6 +282,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const [slotsByStudio, setSlotsByStudio] = useState<Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>>({});
   const [minAdvanceHours, setMinAdvanceHours] = useState<number>(0);
   const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
+  const [todayFullyBlocked, setTodayFullyBlocked] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing } = usePricing();
   const [clientUser, setClientUser] = useState<{
@@ -300,8 +301,28 @@ export function useBookingWithRouter(urlStep?: string) {
   const [clientUserLoading, setClientUserLoading] = useState(true);
 
   const mergedSlotsByStudio = useMemo(
-    () => mergeCartIntoSlots(slotsByStudio, state.cart, state.selectedDate),
-    [slotsByStudio, state.cart, state.selectedDate, state.groupType],
+    () => {
+      const merged = mergeCartIntoSlots(slotsByStudio, state.cart, state.selectedDate);
+      // Apply min-advance gating for today: slots before cutoff are unavailable,
+      // and a fully-blocked today makes all slots unavailable.
+      if (todayFullyBlocked || minAdvanceCutoffTime) {
+        const result: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>> = {};
+        for (const [studioId, slots] of Object.entries(merged)) {
+          result[studioId] = slots.map((s) => {
+            if (todayFullyBlocked) {
+              return { ...s, available: false, groupType: s.groupType ?? "blocked" };
+            }
+            if (minAdvanceCutoffTime && s.time < minAdvanceCutoffTime) {
+              return { ...s, available: false, groupType: s.groupType ?? "blocked" };
+            }
+            return s;
+          });
+        }
+        return result;
+      }
+      return merged;
+    },
+    [slotsByStudio, state.cart, state.selectedDate, state.groupType, todayFullyBlocked, minAdvanceCutoffTime],
   );
 
   useEffect(() => {
@@ -310,11 +331,12 @@ export function useBookingWithRouter(urlStep?: string) {
     fetch(`/api/availability?date=${dateStr}`)
       .then((res) => res.json())
       .then((data) => {
-        const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
+        const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null; todayFullyBlocked: boolean } };
         if (json.success && json.data) {
           setSlotsByStudio(json.data.slots);
           setMinAdvanceHours(json.data.minAdvanceHours ?? 0);
           setMinAdvanceCutoffTime(json.data.minAdvanceCutoffTime ?? null);
+          setTodayFullyBlocked(json.data.todayFullyBlocked ?? false);
         }
       })
       .catch(console.error);
@@ -983,8 +1005,10 @@ export function useBookingWithRouter(urlStep?: string) {
     slotsByStudio: mergedSlotsByStudio,
     minAdvanceHours,
     minAdvanceCutoffTime,
+    todayFullyBlocked,
     pricing,
     pricingData,
+    maxAdvanceDays: pricingData?.maxAdvanceDays ?? 90,
     pricingLoading,
     pricingError,
     refetchPricing,

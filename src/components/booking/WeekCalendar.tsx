@@ -20,6 +20,7 @@ interface WeekCalendarProps {
   studioFilter?: StudioId | null;
   groupType?: GroupType | null;
   cart?: CompletedBooking[];
+  maxAdvanceDays?: number;
 }
 
 const DAYS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -59,10 +60,14 @@ function isPast(date: Date): boolean {
   return dateISO < todayISO;
 }
 
-function isTooFarInFuture(date: Date): boolean {
-  const maxDate = new Date();
-  maxDate.setMonth(maxDate.getMonth() + 2);
-  return date > maxDate;
+function isTooFarInFuture(date: Date, maxAdvanceDays: number): boolean {
+  const todayISO = getParisDateISO();
+  const dateISO = getParisDateISO(date);
+  const [ty, tm, td] = todayISO.split("-").map(Number);
+  const [dy, dm, dd] = dateISO.split("-").map(Number);
+  const todayMs = Date.UTC(ty, tm - 1, td);
+  const dateMs = Date.UTC(dy, dm - 1, dd);
+  return (dateMs - todayMs) / 86400000 > maxAdvanceDays;
 }
 
 function formatWeekRange(dates: Date[]): string {
@@ -95,12 +100,17 @@ function getCartOccupancy(cart: CompletedBooking[], dateStr: string): Set<Occupa
 /**
  * Check if a date has at least MIN_BOOKING_SLOTS consecutive available slots.
  * Uses the unified availability engine — a slot is available if it's open and not occupied.
+ * For today, applies min-advance rules so only slots at/after the cutoff count as available.
  */
 function hasBookableAvailability(
   occupancy: Set<OccupancyInfo>,
   date: Date,
-  studioFilter?: StudioId | null
+  studioFilter?: StudioId | null,
+  minAdvanceCutoffTime?: string | null,
+  todayFullyBlocked?: boolean,
 ): boolean {
+  if (todayFullyBlocked) return false;
+
   const studios: StudioId[] = studioFilter ? [studioFilter] : ["la-scene", "le-podium"];
 
   for (const studioId of studios) {
@@ -108,6 +118,11 @@ function hasBookableAvailability(
     let consecutive = 0;
 
     for (const time of slots) {
+      // Slots before the cutoff are treated as unavailable (min-advance rule)
+      if (minAdvanceCutoffTime && time < minAdvanceCutoffTime) {
+        consecutive = 0;
+        continue;
+      }
       const available = isSlotAvailable(time, occupancy, date, studioId);
       consecutive = available ? consecutive + 1 : 0;
       if (consecutive >= MIN_BOOKING_SLOTS) return true;
@@ -117,27 +132,29 @@ function hasBookableAvailability(
   return false;
 }
 
-export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupType, cart = [] }: WeekCalendarProps) {
+export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupType, cart = [], maxAdvanceDays = 90 }: WeekCalendarProps) {
   const today = useMemo(() => {
     const iso = getParisDateISO();
     return new Date(iso + "T00:00:00");
   }, []);
   const [dayOffset, setDayOffset] = useState(0);
   const [weekOccupancy, setWeekOccupancy] = useState<Map<string, Set<OccupancyInfo>>>(new Map());
+  const [dayMinAdvance, setDayMinAdvance] = useState<Map<string, { minAdvanceCutoffTime: string | null; todayFullyBlocked: boolean }>>(new Map());
 
   const weekDates = useMemo(() => getSlidingWeekDates(today, dayOffset), [dayOffset, today]);
 
-  const maxDayOffset = 60; // ~2 months
+  const maxDayOffset = Math.max(0, maxAdvanceDays - 6);
 
   useEffect(() => {
     setWeekOccupancy(new Map());
+    setDayMinAdvance(new Map());
     weekDates.forEach((date) => {
-      if (isPast(date) || isTooFarInFuture(date)) return;
+      if (isPast(date) || isTooFarInFuture(date, maxAdvanceDays)) return;
       const dateStr = formatDateISO(date);
       fetch(`/api/availability?date=${dateStr}`)
         .then((res) => res.json())
         .then((data: unknown) => {
-          const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null } };
+          const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null; todayFullyBlocked: boolean } };
           if (json.success && json.data) {
             // Convert new per-studio format to OccupancyInfo set (only occupied slots)
             const occupancy = new Set<OccupancyInfo>();
@@ -154,11 +171,15 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
               }
             }
             setWeekOccupancy((prev) => new Map(prev).set(dateStr, occupancy));
+            setDayMinAdvance((prev) => new Map(prev).set(dateStr, {
+              minAdvanceCutoffTime: json.data.minAdvanceCutoffTime ?? null,
+              todayFullyBlocked: json.data.todayFullyBlocked ?? false,
+            }));
           }
         })
         .catch(console.error);
     });
-  }, [weekDates]);
+  }, [weekDates, maxAdvanceDays]);
 
   const goToPreviousWeek = () => {
     setDayOffset((d) => Math.max(0, d - 7));
@@ -199,13 +220,16 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
           const dateKey = formatDateISO(date);
           const dayIndex = date.getDay();
           const past = isPast(date);
-          const tooFar = isTooFarInFuture(date);
+          const tooFar = isTooFarInFuture(date, maxAdvanceDays);
           const todayDate = isToday(date);
           const selected = selectedDate && isSameDay(date, selectedDate);
           const apiOccupancy = weekOccupancy.get(dateKey) ?? new Set<OccupancyInfo>();
+          const dayMeta = dayMinAdvance.get(dateKey);
+          const cutoff = dayMeta?.minAdvanceCutoffTime ?? null;
+          const fullyBlocked = dayMeta?.todayFullyBlocked ?? false;
           const cartOccupancyForDate = getCartOccupancy(cart, dateKey);
           const merged = new Set<OccupancyInfo>([...apiOccupancy, ...cartOccupancyForDate]);
-          const hasAvailability = hasBookableAvailability(merged, date, studioFilter);
+          const hasAvailability = hasBookableAvailability(merged, date, studioFilter, cutoff, fullyBlocked);
           const isFull = !past && !tooFar && !hasAvailability;
           const disabled = past || tooFar || !hasAvailability;
 

@@ -706,21 +706,25 @@ const app = defineApp([
         });
       }
 
-      // Compute min_advance info
+      // Compute min_advance info (today only)
       const paris = getParisNow();
       let minAdvanceHours = 0;
       let minAdvanceCutoffTime: string | null = null;
+      let todayFullyBlocked = false;
       if (date === paris.dateISO) {
         minAdvanceHours = parseInt(await getSetting(env.DB, "booking.min_advance_hours") || "2", 10);
         const cutoffMinutes = (paris.hours * 60 + paris.minutes) + minAdvanceHours * 60;
-        const cutoffH = Math.floor(cutoffMinutes / 60);
-        const cutoffM = cutoffMinutes % 60;
-        if (cutoffH < 24) {
+        if (cutoffMinutes >= 24 * 60) {
+          // now + délai crosses midnight → no bookable start time left today
+          todayFullyBlocked = true;
+        } else {
+          const cutoffH = Math.floor(cutoffMinutes / 60);
+          const cutoffM = cutoffMinutes % 60;
           minAdvanceCutoffTime = `${String(cutoffH).padStart(2, "0")}:${String(cutoffM).padStart(2, "0")}`;
         }
       }
 
-      return jsonSuccess({ slots: result, minAdvanceHours, minAdvanceCutoffTime });
+      return jsonSuccess({ slots: result, minAdvanceHours, minAdvanceCutoffTime, todayFullyBlocked });
     } catch (error) {
       console.error("GET /api/availability error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch availability", 500);
