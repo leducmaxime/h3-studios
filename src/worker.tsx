@@ -4346,7 +4346,7 @@ const app = defineApp([
                 groupType: firstBooking.group_type,
                 equipment: firstBooking.equipment ? JSON.parse(firstBooking.equipment) : [],
                 equipmentPrice: firstBooking.equipment_price,
-                totalPrice: bookings.reduce((sum, b) => sum + b.total_price, 0),
+                totalPrice: bookings.reduce((sum, b) => sum + getBookingAmountDue(b), 0),
                 paymentMethod: "card",
                 paymentStatus: "paid",
                 userName: user.name,
