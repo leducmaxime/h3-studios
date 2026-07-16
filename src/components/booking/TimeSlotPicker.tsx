@@ -1,16 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
-import { ChevronLeft, Clock, Zap, ArrowRight } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { ChevronLeft, Clock, ArrowRight } from "lucide-react";
 import {
   getStudioTimeSlots,
   formatDate,
@@ -41,9 +32,13 @@ interface TimeSlotPickerProps {
   canConfirm: boolean;
   hideHeader?: boolean;
   groupType?: GroupType;
+  // Accepted for backward compatibility only — the minimum-booking-delay
+  // filter now lives upstream: too-soon slots simply arrive as available: false.
   minAdvanceHours?: number;
   minAdvanceCutoffTime?: string | null;
   pricingGrid?: PricingGrid | null;
+  /** When true, every slot of the day renders as unavailable. */
+  todayFullyBlocked?: boolean;
 }
 
 const STUDIO_LABELS: Record<StudioId, string> = {
@@ -64,25 +59,29 @@ export function TimeSlotPicker({
   canConfirm,
   hideHeader = false,
   groupType = "group",
-  minAdvanceHours = 0,
-  minAdvanceCutoffTime = null,
   pricingGrid,
+  todayFullyBlocked = false,
 }: TimeSlotPickerProps) {
   const [selectedStart, setSelectedStart] = useState<string | null>(startTime);
   const [selectedEnd, setSelectedEnd] = useState<string | null>(endTime);
   const [activeStudio, setActiveStudio] = useState<StudioId | null>(initialStudioId);
-  const [hoveredEndSlot, setHoveredEndSlot] = useState<string | null>(null);
-  const [minAdvanceDialogOpen, setMinAdvanceDialogOpen] = useState(false);
+  const [hoveredSlot, setHoveredSlot] = useState<{ slot: string; studioId: StudioId } | null>(null);
+  // Set when the parent is cleared as part of an internal transition that
+  // immediately rebuilds local selection state — the resulting prop sync
+  // must not wipe it.
+  const skipPropSyncRef = useRef(false);
 
   const selectionMode = selectedStart && selectedEnd ? "done" : selectedStart ? "end" : "start";
 
   useEffect(() => {
+    if (skipPropSyncRef.current) {
+      skipPropSyncRef.current = false;
+      return;
+    }
     setSelectedStart(startTime);
     setSelectedEnd(endTime);
     if (initialStudioId) setActiveStudio(initialStudioId);
   }, [startTime, endTime, initialStudioId]);
-
-  const hasPeakPricing = groupType === "group";
 
   // Per-studio visible slots (based on opening hours)
   const studioSlots = useMemo(() => {
@@ -93,22 +92,33 @@ export function TimeSlotPicker({
     return result;
   }, [date]);
 
-  const isSlotTooSoon = useCallback((slot: string): boolean => {
-    if (!minAdvanceCutoffTime) return false;
-    const [slotH, slotM] = slot.split(":").map(Number);
-    const [cutH, cutM] = minAdvanceCutoffTime.split(":").map(Number);
-    return slotH * 60 + slotM < cutH * 60 + cutM;
-  }, [minAdvanceCutoffTime]);
+  // Exact DB rates for a studio + the current group type, straight from the
+  // grid. null = grid not loaded yet (the legend renders skeletons).
+  const getStudioRates = useCallback(
+    (studioId: StudioId) => pricingGrid?.[studioId]?.[groupType] ?? null,
+    [pricingGrid, groupType]
+  );
+
+  // Peak coloring is grid-driven: only when the studio actually bills
+  // evenings/weekends differently for this group type.
+  const studioHasPeakPricing = useCallback(
+    (studioId: StudioId): boolean => {
+      const rates = getStudioRates(studioId);
+      return rates !== null && rates.peak !== rates.offPeak;
+    },
+    [getStudioRates]
+  );
 
   const checkSlotBooked = useCallback(
     (time: string, studioId: StudioId): boolean => {
+      if (todayFullyBlocked) return true;
       const slots = slotsByStudio[studioId];
       if (!slots) return true;
       const slot = slots.find((s) => s.time === time);
       if (!slot) return true;
       return !slot.available;
     },
-    [slotsByStudio]
+    [slotsByStudio, todayFullyBlocked]
   );
 
   const isStartOfOccupiedBlock = useCallback(
@@ -126,16 +136,6 @@ export function TimeSlotPicker({
     },
     [slotsByStudio, studioSlots]
   );
-
-  // Start a selection on a studio (clears previous studio selection)
-  const startStudioSelection = useCallback((studioId: StudioId, slot: string) => {
-    if (activeStudio && activeStudio !== studioId) {
-      setSelectedStart(null);
-      setSelectedEnd(null);
-      onClear();
-    }
-    setActiveStudio(studioId);
-  }, [activeStudio, onClear]);
 
   const handleClear = useCallback(() => {
     setSelectedStart(null);
@@ -185,101 +185,148 @@ export function TimeSlotPicker({
 
   const handleSlotClick = useCallback(
     (slot: string, studioId: StudioId) => {
-      // 1. Too-soon check first
-      if (isSlotTooSoon(slot)) {
-        setMinAdvanceDialogOpen(true);
+      const switchingStudio = activeStudio !== null && studioId !== activeStudio;
+
+      // End mode on the studio holding the start: the click either completes
+      // the range or deselects — there is no dead click.
+      if (selectionMode === "end" && !switchingStudio) {
+        if (
+          slot !== selectedStart &&
+          canBeEndTime(selectedStart!, slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId)) &&
+          tryConfirmRange(selectedStart!, slot, studioId)
+        ) {
+          return; // Valid later slot → range confirmed.
+        }
+        // Start slot again, an unavailable slot, or anything before the start.
+        handleClear();
         return;
       }
 
-      // 2. Mark this studio as active (clears previous studio if different)
-      startStudioSelection(studioId, slot);
-
-      // 3. Mode-specific handling
-      if (selectionMode === "done" || selectionMode === "start") {
-        // Start mode: require slot to have ≥ 1h runway before occupied
-        if (!canBeStartTime(slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
-          return;
-        }
-        setSelectedStart(slot);
-        setSelectedEnd(null);
-      } else if (selectionMode === "end") {
-        // End mode: allow occupied end boundary (checked by canBeEndTime)
-        if (!canBeEndTime(selectedStart!, slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
-          return;
-        }
-        tryConfirmRange(selectedStart!, slot, studioId);
+      // Everything else is a fresh start attempt — including a click on the
+      // other studio mid-selection, which moves the start there in one click.
+      // A confirmed range still lives in the parent: clear it so the recap
+      // disappears, but keep the local state rebuilt just below (skip the
+      // prop sync this clear triggers).
+      if (selectionMode === "done") {
+        skipPropSyncRef.current = true;
+        onClear();
       }
+
+      if (!canBeStartTime(slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
+        // Unavailable or no 1h runway → full deselect.
+        handleClear();
+        return;
+      }
+
+      setSelectedStart(slot);
+      setSelectedEnd(null);
+      setActiveStudio(studioId);
     },
-    [selectionMode, selectedStart, studioSlots, checkSlotBooked, isSlotTooSoon, tryConfirmRange, startStudioSelection]
+    [selectionMode, selectedStart, activeStudio, studioSlots, checkSlotBooked, tryConfirmRange, handleClear, onClear]
   );
 
   const handleSlotMouseEnter = useCallback(
-    (slot: string) => {
-      if (selectionMode === "end") setHoveredEndSlot(slot);
+    (slot: string, studioId: StudioId) => {
+      if (selectionMode === "end") setHoveredSlot({ slot, studioId });
     },
     [selectionMode]
   );
 
   const handleSlotMouseLeave = useCallback(() => {
-    setHoveredEndSlot(null);
+    setHoveredSlot(null);
   }, []);
 
   const getSlotStyle = useCallback(
-    (slot: string, studioId: StudioId) => {
+    (slot: string, studioId: StudioId): string => {
       const isBooked = checkSlotBooked(slot, studioId);
-      const isPeak = hasPeakPricing && isPeakTime(date, slot);
-      const isSelectedStart = selectedStart === slot && activeStudio === studioId;
-      const isSelectedEnd = selectedEnd === slot && activeStudio === studioId;
-      const isActiveStudio = activeStudio === studioId;
-
-      // Red = hard-blocked. Muted = visible but not a valid start.
-      // End-time usability is shown only after a start is selected.
+      // Peak hue only ever applies to free slots — unavailable trumps peak.
+      const isPeak = !isBooked && studioHasPeakPricing(studioId) && isPeakTime(date, slot);
+      const isSameStudio = activeStudio === studioId;
+      const isSelectedStart = selectedStart === slot && isSameStudio;
+      const isSelectedEnd = selectedEnd === slot && isSameStudio;
       const isOccupiedBoundary = isStartOfOccupiedBlock(slot, studioId);
+      const visibleSlots = studioSlots[studioId];
 
-      // Selection highlight always wins
+      // Selection highlight always wins; the amber border keeps the peak
+      // nature of the slot legible.
       if (isSelectedStart || isSelectedEnd) {
-        return isPeak ? "bg-primary/50 border-primary/70 ring-2 ring-primary ring-offset-1 ring-offset-black"
-                      : "bg-primary/40 border-primary/60 ring-2 ring-primary ring-offset-1 ring-offset-black";
+        return isPeak
+          ? "bg-primary/50 border-amber-500 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer"
+          : "bg-primary/40 border-primary/60 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer";
       }
 
-      // Interior occupied — fully blocked, show red
+      // Confirmed range: fill the interior so the booking reads as one block.
+      if (selectionMode === "done" && isSameStudio && selectedStart && selectedEnd) {
+        const slotIdx = visibleSlots.indexOf(slot);
+        const startIdx = visibleSlots.indexOf(selectedStart);
+        let endIdx = visibleSlots.indexOf(selectedEnd);
+        if (selectedEnd === "00:00" && endIdx === -1) endIdx = visibleSlots.length;
+        if (slotIdx > startIdx && slotIdx < endIdx) {
+          return isPeak
+            ? "bg-primary/25 border-amber-500/50 cursor-pointer"
+            : "bg-primary/20 border-primary/30 cursor-pointer";
+        }
+      }
+
+      // Occupied interior — hard-blocked, red on both studios alike.
       if (isBooked && !isOccupiedBoundary) {
-        return isActiveStudio
-          ? "bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60"
-          : "bg-red-500/20 border-red-500/30 opacity-40";
+        return "bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60";
       }
 
-      // Occupied-boundary slots (not red) AND free slots without 1h runway:
-      // usable as an end but not as a start. Apply muted style in start/done
-      // mode regardless of which studio is active, so the user sees the constraint.
-      if ((selectionMode === "start" || selectionMode === "done") &&
-          !canBeStartTime(slot, studioSlots[studioId], (t) => checkSlotBooked(t, studioId))) {
+      if (selectionMode === "end" && selectedStart) {
+        if (isSameStudio) {
+          const startIdx = visibleSlots.indexOf(selectedStart);
+          const slotIdx = visibleSlots.indexOf(slot);
+
+          if (slotIdx > startIdx) {
+            // Only genuine end candidates get the end-zone treatment — free
+            // slots parked behind an occupied one stay quiet (clicking them
+            // deselects).
+            if (!canBeEndTime(selectedStart, slot, visibleSlots, (t) => checkSlotBooked(t, studioId))) {
+              return "bg-white/5 border-white/10 opacity-40 cursor-pointer";
+            }
+            // Range preview between the start and the hovered end candidate.
+            const hoveredIdx =
+              hoveredSlot && hoveredSlot.studioId === studioId ? visibleSlots.indexOf(hoveredSlot.slot) : -1;
+            if (hoveredIdx > startIdx && slotIdx > startIdx && slotIdx < hoveredIdx) {
+              return "bg-primary/30 border-primary/50 cursor-pointer";
+            }
+            return isPeak
+              ? "bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-200 cursor-pointer"
+              : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer";
+          }
+
+          // At or before the start — clicking deselects.
+          return "bg-white/5 border-white/10 opacity-40 cursor-pointer";
+        }
+
+        // Other studio: every slot is a potential new START here, never an end.
+        if (!canBeStartTime(slot, visibleSlots, (t) => checkSlotBooked(t, studioId))) {
+          return isBooked
+            ? "bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60"
+            : "bg-white/5 border-white/10 opacity-40 cursor-not-allowed";
+        }
+        if (hoveredSlot?.studioId === studioId && hoveredSlot.slot === slot) {
+          // Single-slot start preview.
+          return "bg-primary/30 border-primary/60 ring-1 ring-primary/60 cursor-pointer";
+        }
+        return isPeak
+          ? "bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/40 text-amber-200 cursor-pointer"
+          : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer";
+      }
+
+      // Start/done mode: slots that can't open a range (occupied boundary or
+      // no 1h runway) stay muted on both studios alike.
+      if (!canBeStartTime(slot, visibleSlots, (t) => checkSlotBooked(t, studioId))) {
         return "bg-white/5 border-white/10 opacity-30 cursor-not-allowed";
       }
 
-      // Hover range in end mode
-      if (selectionMode === "end" && selectedStart && activeStudio === studioId) {
-        const visibleSlots = studioSlots[studioId];
-        const startIdx = visibleSlots.indexOf(selectedStart);
-        const slotIdx = visibleSlots.indexOf(slot);
-
-        if (hoveredEndSlot && slotIdx > startIdx && slotIdx < visibleSlots.indexOf(hoveredEndSlot)) {
-          return isPeak ? "bg-primary/30 border-primary/50 cursor-pointer" : "bg-primary/20 border-primary/40 cursor-pointer";
-        }
-        if (slotIdx > startIdx) {
-          return isPeak ? "bg-primary/10 hover:bg-primary/20 border-primary/20 cursor-pointer" : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer";
-        }
-      }
-
-      if (!isActiveStudio) {
-        return "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer opacity-50 hover:opacity-80";
-      }
-
+      // Default free slot — equal prominence on both studios.
       return isPeak
-        ? "bg-primary/5 hover:bg-primary/10 border-white/10 cursor-pointer"
+        ? "bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/40 text-amber-200 cursor-pointer"
         : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer";
     },
-    [checkSlotBooked, isStartOfOccupiedBlock, hasPeakPricing, date, selectedStart, selectedEnd, activeStudio, selectionMode, hoveredEndSlot, studioSlots]
+    [checkSlotBooked, isStartOfOccupiedBlock, studioHasPeakPricing, date, selectedStart, selectedEnd, activeStudio, selectionMode, hoveredSlot, studioSlots]
   );
 
   const formatHourLabel = (slot: string) => {
@@ -314,20 +361,11 @@ export function TimeSlotPicker({
     };
   }, [selectedStart, selectedEnd, activeStudio, groupType, date, pricingGrid]);
 
-  // Compute price range label for a studio's mini-card
-  const getPriceRangeLabel = (studioId: StudioId): string => {
-    if (!pricingGrid || !pricingGrid[studioId] || !pricingGrid[studioId][groupType]) return "…";
-    const { peak, offPeak } = pricingGrid[studioId][groupType];
-    if (offPeak === peak) {
-      return `${offPeak}€/h`;
-    }
-    return `${offPeak}€ – ${peak}€/h`;
-  };
-
   const renderStudioBlock = (studioId: StudioId) => {
     const slots = studioSlots[studioId];
     const isActive = activeStudio === studioId;
     const studio = STUDIOS[studioId];
+    const rates = getStudioRates(studioId);
 
     // Max 3 rows — compute columns needed
     const cols = Math.ceil(slots.length / 3);
@@ -339,16 +377,14 @@ export function TimeSlotPicker({
     return (
       <div
         key={studioId}
-        className={`flex flex-col gap-3 transition-opacity duration-200 ${
-          activeStudio && !isActive ? "opacity-60" : "opacity-100"
-        }`}
+        className="group flex flex-col gap-3 rounded-2xl p-2 -m-2 transition-colors duration-200 hover:bg-white/[0.04]"
       >
         {/* Mini-card */}
         <div
           className={`relative overflow-hidden rounded-xl border-2 transition-all duration-200 ${
             isActive
               ? "border-primary shadow-[0_0_16px_-4px_var(--color-primary,theme(colors.primary))]"
-              : "border-white/15"
+              : "border-white/15 group-hover:border-primary/40 group-hover:shadow-[0_0_20px_-6px_var(--color-primary,theme(colors.primary))]"
           }`}
         >
           {/* Photo */}
@@ -364,19 +400,10 @@ export function TimeSlotPicker({
             />
             {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-            {/* Studio name + price badge */}
-            <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between px-3 pb-2.5">
+            {/* Studio name */}
+            <div className="absolute bottom-0 left-0 right-0 flex items-end px-3 pb-2.5">
               <span className="text-sm font-bold tracking-widest text-white drop-shadow-lg uppercase">
                 {studio.name}
-              </span>
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                  isActive
-                    ? "bg-primary text-black"
-                    : "bg-white/20 text-white backdrop-blur-sm"
-                }`}
-              >
-                {getPriceRangeLabel(studioId)}
               </span>
             </div>
           </div>
@@ -387,29 +414,32 @@ export function TimeSlotPicker({
           {rows.map((row, rowIdx) => (
             <div key={rowIdx} className="flex gap-1.5">
               {row.map((slot) => {
-                const isBooked = checkSlotBooked(slot, studioId);
-                const isTooSoon = isSlotTooSoon(slot);
-                const isPeak = hasPeakPricing && isPeakTime(date, slot);
                 const style = getSlotStyle(slot, studioId);
                 const isStart = selectedStart === slot && activeStudio === studioId;
                 const isEnd = selectedEnd === slot && activeStudio === studioId;
+                // Mid-selection, the other studio previews this slot as a
+                // potential new start — never as an end.
+                const isStartPreview =
+                  selectionMode === "end" &&
+                  activeStudio !== null &&
+                  activeStudio !== studioId &&
+                  hoveredSlot?.studioId === studioId &&
+                  hoveredSlot.slot === slot &&
+                  canBeStartTime(slot, slots, (t) => checkSlotBooked(t, studioId));
 
                 return (
                   <button
                     key={slot}
+                    type="button"
                     className={`relative flex-1 h-10 rounded-lg border transition-all duration-150 ${style}`}
                     onClick={() => handleSlotClick(slot, studioId)}
-                    onMouseEnter={() => handleSlotMouseEnter(slot)}
+                    onMouseEnter={() => handleSlotMouseEnter(slot, studioId)}
                     onMouseLeave={handleSlotMouseLeave}
-                    disabled={false}
                   >
-                    <div className="flex flex-col items-center justify-center h-full">
+                    <div className="flex items-center justify-center h-full">
                       <span className="text-[11px] sm:text-xs font-semibold leading-none">
                         {formatHourLabel(slot)}
                       </span>
-                      {isPeak && !isBooked && (
-                        <Zap className="w-2.5 h-2.5 text-primary/60 mt-0.5" />
-                      )}
                     </div>
                     {isStart && (
                       <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10">
@@ -421,11 +451,42 @@ export function TimeSlotPicker({
                         FIN
                       </div>
                     )}
+                    {isStartPreview && (
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary/70 text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                        DÉBUT
+                      </div>
+                    )}
                   </button>
                 );
               })}
             </div>
           ))}
+        </div>
+
+        {/* Per-studio price legend — exact DB rates via the pricing grid */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/50">
+          {rates === null ? (
+            <>
+              <span className="h-3.5 w-28 animate-pulse rounded bg-white/10" />
+              <span className="h-3.5 w-24 animate-pulse rounded bg-white/10" />
+            </>
+          ) : rates.peak !== rates.offPeak ? (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3.5 w-3.5 rounded border border-white/10 bg-white/5" />
+                Heure creuse — {formatPrice(rates.offPeak)}/h
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3.5 w-3.5 rounded border border-amber-500/40 bg-amber-500/15" />
+                Heure pleine — {formatPrice(rates.peak)}/h
+              </span>
+            </>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3.5 w-3.5 rounded border border-white/10 bg-white/5" />
+              Tarif — {formatPrice(rates.offPeak)}/h
+            </span>
+          )}
         </div>
       </div>
     );
@@ -469,18 +530,8 @@ export function TimeSlotPicker({
           {renderStudioBlock("le-podium")}
         </div>
 
-        {/* Legend */}
+        {/* Legend — slot states. Prices live under each studio block. */}
         <div className="flex flex-wrap items-center gap-4 text-xs text-white/50">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-4 rounded bg-white/5 border border-white/10" />
-            Libre
-          </span>
-          {hasPeakPricing && (
-            <span className="flex items-center gap-1.5 text-primary">
-              <Zap className="w-3 h-3" />
-              Soirs, weekends et jours fériés
-            </span>
-          )}
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-4 h-4 rounded bg-red-500/30 border border-red-500/50" />
             Indisponible
@@ -509,22 +560,6 @@ export function TimeSlotPicker({
             </div>
           </div>
         )}
-
-        <Dialog open={minAdvanceDialogOpen} onOpenChange={setMinAdvanceDialogOpen}>
-          <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Réservation de dernière minute</DialogTitle>
-              <DialogDescription className="text-zinc-300 leading-relaxed">
-                Les réservations en ligne ne sont pas possibles moins de {minAdvanceHours}h avant le début de la session. Nous vous invitons à nous contacter au <span className="font-semibold text-white whitespace-nowrap">06 13 44 08 75</span> afin de vérifier ensemble si une réservation reste possible.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button onClick={() => setMinAdvanceDialogOpen(false)} className="w-full">
-                Fermer
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );
