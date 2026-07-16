@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter";
@@ -48,8 +48,10 @@ export function Reservation({ step }: ReservationProps) {
   const {
     state,
     slotsByStudio,
-    pricing,
     pricingData,
+    pricingLoading,
+    pricingError,
+    refetchPricing,
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,
@@ -164,11 +166,6 @@ export function Reservation({ step }: ReservationProps) {
     return timePrice + (booking.equipmentPrice || 0);
   }, [pricingData]);
 
-  /** Recomputed cart total from grid (or fallback to stored prices) */
-  const recomputedCartTotal = useMemo(() => {
-    return state.cart.reduce((sum, b) => sum + recomputeCartItemPrice(b), 0);
-  }, [state.cart, recomputeCartItemPrice]);
-
   // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau)
   const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "groupe" || state.step === "creneau");
 
@@ -262,41 +259,65 @@ export function Reservation({ step }: ReservationProps) {
           </div>
 
           <div className="mt-3 border-t border-white/10 pt-3 space-y-1.5 text-sm">
-            {hasPeakPricing ? (
-              <>
-                {offPeakHours > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-white/60">{offPeakHours}h x {offPeakRate}€/h</span>
-                    <span>{formatPrice(offPeakSubtotal)}</span>
-                  </div>
-                )}
-                {peakHours > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-primary/70">{peakHours}h x {peakRate}€/h <span className="text-xs">(soir/WE)</span></span>
-                    <span className="text-primary">{formatPrice(peakSubtotal)}</span>
-                  </div>
-                )}
-              </>
+            {pricingError ? (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5">
+                <span className="text-sm text-red-300">Impossible de charger les tarifs.</span>
+                <button
+                  type="button"
+                  onClick={refetchPricing}
+                  className="shrink-0 rounded-md border border-red-400/40 px-2.5 py-1 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
+                >
+                  Réessayer
+                </button>
+              </div>
+            ) : !grid ? (
+              <div className="space-y-2" aria-busy="true" aria-label="Chargement des tarifs">
+                <div className="h-4 w-2/3 animate-pulse rounded bg-white/10" />
+                <div className="h-4 w-1/2 animate-pulse rounded bg-white/10" />
+                <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
+                  <div className="h-5 w-16 animate-pulse rounded bg-white/10" />
+                  <div className="h-6 w-20 animate-pulse rounded bg-white/10" />
+                </div>
+              </div>
             ) : (
-              <div className="flex items-center justify-between">
-                <span className="text-white/60">{durationH}h x {anyRate}€/h</span>
-                <span>{formatPrice(total)}</span>
-              </div>
+              <>
+                {hasPeakPricing ? (
+                  <>
+                    {offPeakHours > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/60">{offPeakHours}h x {offPeakRate}€/h</span>
+                        <span>{formatPrice(offPeakSubtotal)}</span>
+                      </div>
+                    )}
+                    {peakHours > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-primary/70">{peakHours}h x {peakRate}€/h <span className="text-xs">(soir/WE)</span></span>
+                        <span className="text-primary">{formatPrice(peakSubtotal)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">{durationH}h x {anyRate}€/h</span>
+                    <span>{formatPrice(total)}</span>
+                  </div>
+                )}
+
+                {state.equipment.filter(e => e.quantity > 0).map(e => (
+                  <div key={e.id} className="flex items-center justify-between">
+                    <span className="text-white/60">
+                      {getEquipmentName(e.id)} x{e.quantity}
+                    </span>
+                    <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH, availableEquipment))}</span>
+                  </div>
+                ))}
+
+                <div className="flex items-center justify-between border-t border-white/10 pt-2 mt-1">
+                  <span className="font-semibold">Total</span>
+                  <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
+                </div>
+              </>
             )}
-
-            {state.equipment.filter(e => e.quantity > 0).map(e => (
-              <div key={e.id} className="flex items-center justify-between">
-                <span className="text-white/60">
-                  {getEquipmentName(e.id)} x{e.quantity}
-                </span>
-                <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH, availableEquipment))}</span>
-              </div>
-            ))}
-
-            <div className="flex items-center justify-between border-t border-white/10 pt-2 mt-1">
-              <span className="font-semibold">Total</span>
-              <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
-            </div>
           </div>
         </div>
 
@@ -320,17 +341,19 @@ export function Reservation({ step }: ReservationProps) {
 
         <button
           onClick={handleConfirmRecap}
-          className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 md:block"
+          disabled={!grid}
+          className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 md:block"
         >
-          Ajouter au panier - {formatPrice(grandTotal)}
+          {grid ? `Ajouter au panier - ${formatPrice(grandTotal)}` : pricingError ? "Tarifs indisponibles" : "Chargement des tarifs…"}
         </button>
 
         <StickyBookingCTA
           studioPrice={total}
           equipmentPrice={equipmentPrice}
           onConfirm={handleConfirmRecap}
-          disabled={false}
+          disabled={!grid}
           buttonText="Ajouter au panier"
+          priceLoading={!grid && !pricingError}
         />
       </div>
     );

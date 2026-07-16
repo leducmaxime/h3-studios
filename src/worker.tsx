@@ -843,9 +843,11 @@ const app = defineApp([
       const bDate = new Date(body.date + "T00:00:00");
       const dayOfWeek = bDate.getDay();
 
-      // Charger la config peak depuis la DB
-      const peakStartHour = parseInt(await getSetting(env.DB, "booking.min_peak_hour") || "18", 10);
-      const publicHolidaysRaw = await getSetting(env.DB, "booking.public_holidays") || "[]";
+      // Charger la config peak depuis la DB — mêmes clés que l'admin et le
+      // client (/api/peak-hours, /api/public-holidays) pour que le montant
+      // facturé corresponde au prix affiché.
+      const peakStartHour = parseInt(await getSetting(env.DB, "peak_start_hour") || "18", 10);
+      const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
       const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
       // Cacher les prix peak/off-peak (1 appel DB chacun au lieu d'un par slot)
@@ -1069,7 +1071,10 @@ const app = defineApp([
         minMaxByGroupType[gt] = { min, max };
       }
 
-      return jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays });
+      // Admin pricing edits must be visible on next page load — never cache.
+      const res = jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays });
+      res.headers.set("Cache-Control", "no-store");
+      return res;
     } catch (error) {
       console.error("GET /api/pricing error:", error);
       return jsonError("Failed to fetch pricing", 500);

@@ -48,7 +48,9 @@ export function getSlotRate(
   time: string
 ): number {
   const peak = isPeakTime(date, time);
-  return grid[studioId][groupType][peak ? "peak" : "offPeak"];
+  // Optional chaining: a missing pricing row yields 0€ (same semantics as the
+  // server-side getPricingForBooking fallback) instead of a render crash.
+  return grid[studioId]?.[groupType]?.[peak ? "peak" : "offPeak"] ?? 0;
 }
 
 /**
@@ -64,8 +66,7 @@ export function calculatePrice(
   endTime: string
 ): { total: number; breakdown: PriceSlot[] } {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.indexOf("00:00");
+  const endIndex = ALL_TIME_SLOTS.indexOf(endTime);
 
   if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
     return { total: 0, breakdown: [] };
@@ -76,7 +77,7 @@ export function calculatePrice(
   for (let i = startIndex; i < endIndex; i++) {
     const time = ALL_TIME_SLOTS[i];
     const peak = isPeakTime(date, time);
-    const rate = grid[studioId][groupType][peak ? "peak" : "offPeak"];
+    const rate = grid[studioId]?.[groupType]?.[peak ? "peak" : "offPeak"] ?? 0;
     breakdown.push({ time, isPeak: peak, rate });
   }
 

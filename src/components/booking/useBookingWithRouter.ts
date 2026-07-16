@@ -283,7 +283,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const [minAdvanceHours, setMinAdvanceHours] = useState<number>(0);
   const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { pricing: pricingData, loading: pricingLoading } = usePricing();
+  const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing } = usePricing();
   const [clientUser, setClientUser] = useState<{
     id: string;
     email: string | null;
@@ -663,10 +663,13 @@ export function useBookingWithRouter(urlStep?: string) {
         };
       }
 
+      // Never add a booking without a loaded pricing grid — a 0€ fallback
+      // price would desync the displayed total from the server charge.
       const grid = pricingData?.grid;
-      const pricingResult = grid
-        ? calculatePrice(grid, s.studioId, s.groupType, s.selectedDate, s.startTime, s.endTime)
-        : { total: 0, breakdown: [] };
+      if (!grid) {
+        return s;
+      }
+      const pricingResult = calculatePrice(grid, s.studioId, s.groupType, s.selectedDate, s.startTime, s.endTime);
       const bookingRef = generateBookingRef();
 
       const startIdx = TIME_SLOTS.indexOf(s.startTime);
@@ -982,6 +985,9 @@ export function useBookingWithRouter(urlStep?: string) {
     minAdvanceCutoffTime,
     pricing,
     pricingData,
+    pricingLoading,
+    pricingError,
+    refetchPricing,
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,

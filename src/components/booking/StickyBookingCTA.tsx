@@ -8,6 +8,8 @@ interface StickyBookingCTAProps {
   onConfirm: () => void;
   disabled?: boolean;
   buttonText?: string;
+  /** When true, prices are replaced by skeleton bars (tariffs still loading) */
+  priceLoading?: boolean;
 }
 
 export function StickyBookingCTA({
@@ -16,6 +18,7 @@ export function StickyBookingCTA({
   onConfirm,
   disabled = false,
   buttonText = "Confirmer",
+  priceLoading = false,
 }: StickyBookingCTAProps) {
   const total = studioPrice + equipmentPrice;
 
@@ -41,11 +44,16 @@ export function StickyBookingCTA({
           }
         `}
       </style>
-      
+
       <div className="border-t border-white/10 bg-black/90 px-4 py-3 backdrop-blur-lg">
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col">
-            {equipmentPrice > 0 ? (
+            {priceLoading ? (
+              <>
+                <span className="text-xs text-white/60">Total</span>
+                <span className="mt-1 block h-6 w-20 animate-pulse rounded bg-white/10" />
+              </>
+            ) : equipmentPrice > 0 ? (
               <>
                 <span className="text-xs text-white/60">
                   Studio {formatPrice(studioPrice)} + Options {formatPrice(equipmentPrice)}
@@ -75,7 +83,7 @@ export function StickyBookingCTA({
               }
             `}
           >
-            {buttonText} – {formatPrice(total)}
+            {priceLoading ? buttonText : `${buttonText} – ${formatPrice(total)}`}
           </button>
         </div>
       </div>
