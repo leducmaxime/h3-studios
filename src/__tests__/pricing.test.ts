@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   calculatePrice,
+  getSlotRate,
+  type PricingGrid,
+} from "../lib/pricing";
+import {
   isPeakTime,
   formatPrice,
   calculateEquipmentPrice,
@@ -11,6 +15,20 @@ import {
   type GroupType,
   type EquipmentSelection,
 } from "../lib/booking";
+
+// Grid fixture matching the old hardcoded PRICING values (€/hour)
+const TEST_GRID: PricingGrid = {
+  "la-scene": {
+    solo: { offPeak: 6, peak: 6 },
+    duo: { offPeak: 12, peak: 12 },
+    group: { offPeak: 18, peak: 22 },
+  },
+  "le-podium": {
+    solo: { offPeak: 6, peak: 6 },
+    duo: { offPeak: 12, peak: 12 },
+    group: { offPeak: 15, peak: 18 },
+  },
+};
 
 describe("isPeakTime", () => {
   it("should return true for evening hours (18h+)", () => {
@@ -49,7 +67,7 @@ describe("isPeakTime", () => {
 describe("calculatePrice", () => {
   it("should calculate price for 1 hour solo off-peak", () => {
     const weekday = new Date("2026-02-13");
-    const result = calculatePrice("la-scene", "solo", weekday, "10:00", "11:00");
+    const result = calculatePrice(TEST_GRID, "la-scene", "solo", weekday, "10:00", "11:00");
     
     expect(result.total).toBe(6);
     expect(result.breakdown).toHaveLength(2);
@@ -57,7 +75,7 @@ describe("calculatePrice", () => {
 
   it("should calculate price for 2 hours group peak", () => {
     const weekday = new Date("2026-02-13");
-    const result = calculatePrice("la-scene", "group", weekday, "18:00", "20:00");
+    const result = calculatePrice(TEST_GRID, "la-scene", "group", weekday, "18:00", "20:00");
     
     expect(result.total).toBe(44);
     expect(result.breakdown).toHaveLength(4);
@@ -66,7 +84,7 @@ describe("calculatePrice", () => {
 
   it("should calculate price for duo with mixed peak/off-peak", () => {
     const weekday = new Date("2026-02-13");
-    const result = calculatePrice("le-podium", "duo", weekday, "17:00", "19:00");
+    const result = calculatePrice(TEST_GRID, "le-podium", "duo", weekday, "17:00", "19:00");
     
     expect(result.total).toBe(24);
     expect(result.breakdown).toHaveLength(4);
@@ -74,7 +92,7 @@ describe("calculatePrice", () => {
 
   it("should return 0 for invalid time range", () => {
     const weekday = new Date("2026-02-13");
-    const result = calculatePrice("la-scene", "solo", weekday, "14:00", "14:00");
+    const result = calculatePrice(TEST_GRID, "la-scene", "solo", weekday, "14:00", "14:00");
     
     expect(result.total).toBe(0);
     expect(result.breakdown).toHaveLength(0);
@@ -82,11 +100,17 @@ describe("calculatePrice", () => {
 
   it("should handle midnight as end time", () => {
     const weekday = new Date("2026-02-13");
-    const result = calculatePrice("la-scene", "solo", weekday, "22:00", "00:00");
+    const result = calculatePrice(TEST_GRID, "la-scene", "solo", weekday, "22:00", "00:00");
 
     // 22:00, 22:30, 23:00, 23:30 = 4 slots = 2h (00:00 is boundary, not a slot)
     expect(result.breakdown).toHaveLength(4);
     expect(result.total).toBe(12);
+  });
+
+  it("should get slot rate correctly", () => {
+    const weekday = new Date("2026-02-13");
+    const rate = getSlotRate(TEST_GRID, "la-scene", "solo", weekday, "10:00");
+    expect(rate).toBe(6);
   });
 });
 

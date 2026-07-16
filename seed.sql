@@ -5,19 +5,19 @@
 INSERT INTO admin_users (id, email, password_hash, name, role, is_active) VALUES ('adm-001', 'admin@h3studios.fr', '$2a$10$placeholder_admin123_hash_will_be_set_by_auth', 'Admin H3', 'super-admin', 1);
 INSERT INTO admin_users (id, email, password_hash, name, role, is_active) VALUES ('adm-002', 'operateur@h3studios.fr', '$2a$10$placeholder_oper123_hash_will_be_set_by_auth', 'Opérateur H3', 'operator', 1);
 
--- Pricing (from booking.ts PRICING)
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-001', 'la-scene', 'solo', 0, 6);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-002', 'la-scene', 'solo', 1, 6);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-003', 'la-scene', 'duo', 0, 12);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-004', 'la-scene', 'duo', 1, 12);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-005', 'la-scene', 'group', 0, 18);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-006', 'la-scene', 'group', 1, 22);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-007', 'le-podium', 'solo', 0, 6);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-008', 'le-podium', 'solo', 1, 6);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-009', 'le-podium', 'duo', 0, 12);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-010', 'le-podium', 'duo', 1, 12);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-011', 'le-podium', 'group', 0, 15);
-INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-012', 'le-podium', 'group', 1, 18);
+-- Pricing (cents per half-hour — converted from €/h: €/h * 50 = cents per half-hour)
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-001', 'la-scene', 'solo', 0, 300);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-002', 'la-scene', 'solo', 1, 300);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-003', 'la-scene', 'duo', 0, 600);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-004', 'la-scene', 'duo', 1, 600);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-005', 'la-scene', 'group', 0, 900);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-006', 'la-scene', 'group', 1, 1100);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-007', 'le-podium', 'solo', 0, 300);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-008', 'le-podium', 'solo', 1, 300);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-009', 'le-podium', 'duo', 0, 600);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-010', 'le-podium', 'duo', 1, 600);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-011', 'le-podium', 'group', 0, 750);
+INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-012', 'le-podium', 'group', 1, 900);
 
 -- Equipment (from booking.ts EQUIPMENT)
 INSERT INTO equipment (id, equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour) VALUES ('eq-001', 'cymbal', '2 Cymbales Crash', 1, 'session', '[3]', 0);

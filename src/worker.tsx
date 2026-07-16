@@ -1027,6 +1027,55 @@ const app = defineApp([
     }
   }),
 
+  route("/api/pricing", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+    try {
+      const rows = await getPricing(env.DB);
+      const maxAdvanceDays = parseInt(await getSetting(env.DB, "booking.max_advance_days") || "90", 10);
+
+      // Build grid: studio_id × group_type × { peak, offPeak } in €/hour
+      // DB stores price_per_half_hour in cents → €/h = cents * 2 / 100 = cents / 50
+      const grid: Record<string, Record<string, { peak: number; offPeak: number }>> = {};
+      const groupTypes = new Set<string>();
+
+      for (const row of rows) {
+        if (!grid[row.studio_id]) grid[row.studio_id] = {};
+        if (!grid[row.studio_id][row.group_type]) {
+          grid[row.studio_id][row.group_type] = { peak: 0, offPeak: 0 };
+          groupTypes.add(row.group_type);
+        }
+        const hourly = row.price_per_half_hour * 2 / 100;
+        if (row.is_peak) {
+          grid[row.studio_id][row.group_type].peak = hourly;
+        } else {
+          grid[row.studio_id][row.group_type].offPeak = hourly;
+        }
+      }
+
+      // Compute min/max per group type across all studios and peak/offPeak
+      const minMaxByGroupType: Record<string, { min: number; max: number }> = {};
+      for (const gt of groupTypes) {
+        let min = Infinity;
+        let max = -Infinity;
+        for (const studioId of Object.keys(grid)) {
+          const entry = grid[studioId][gt];
+          if (entry) {
+            if (entry.peak < min) min = entry.peak;
+            if (entry.offPeak < min) min = entry.offPeak;
+            if (entry.peak > max) max = entry.peak;
+            if (entry.offPeak > max) max = entry.offPeak;
+          }
+        }
+        minMaxByGroupType[gt] = { min, max };
+      }
+
+      return jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays });
+    } catch (error) {
+      console.error("GET /api/pricing error:", error);
+      return jsonError("Failed to fetch pricing", 500);
+    }
+  }),
+
   route("/api/peak-hours", async ({ request }) => {
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
     try {

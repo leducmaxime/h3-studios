@@ -2,6 +2,9 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { formatDateISO } from "@/lib/utils";
+import type { PricingData } from "@/lib/pricing";
+import { calculatePrice } from "@/lib/pricing";
+import { usePricing } from "./usePricing";
 import {
   BOOKING_STEPS,
   type BookingStep,
@@ -12,7 +15,6 @@ import {
   type EquipmentSelection,
   type PaymentMethod,
   type PromoCode,
-  calculatePrice,
   calculateEquipmentPrice,
   generateBookingRef,
   loadUserPreferences,
@@ -281,6 +283,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const [minAdvanceHours, setMinAdvanceHours] = useState<number>(0);
   const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { pricing: pricingData, loading: pricingLoading } = usePricing();
   const [clientUser, setClientUser] = useState<{
     id: string;
     email: string | null;
@@ -660,7 +663,10 @@ export function useBookingWithRouter(urlStep?: string) {
         };
       }
 
-      const pricing = calculatePrice(s.studioId, s.groupType, s.selectedDate, s.startTime, s.endTime);
+      const grid = pricingData?.grid;
+      const pricingResult = grid
+        ? calculatePrice(grid, s.studioId, s.groupType, s.selectedDate, s.startTime, s.endTime)
+        : { total: 0, breakdown: [] };
       const bookingRef = generateBookingRef();
 
       const startIdx = TIME_SLOTS.indexOf(s.startTime);
@@ -669,7 +675,7 @@ export function useBookingWithRouter(urlStep?: string) {
       const durationHours = (endIdx - startIdx) * 0.5;
       const equipmentPrice = calculateEquipmentPrice(s.equipment, durationHours);
 
-      const finalPrice = pricing.total + equipmentPrice;
+      const finalPrice = pricingResult.total + equipmentPrice;
 
       const newBooking: CompletedBooking = {
         id: crypto.randomUUID(),
@@ -706,7 +712,7 @@ export function useBookingWithRouter(urlStep?: string) {
       };
     });
     return success;
-  }, [isDuplicateBooking]);
+  }, [isDuplicateBooking, pricingData]);
 
   const clearDuplicateError = useCallback(() => {
     setState((s) => ({ ...s, duplicateError: null }));
@@ -906,7 +912,11 @@ export function useBookingWithRouter(urlStep?: string) {
     if (!state.studioId || !state.selectedDate || !state.startTime || !state.endTime || !state.groupType) {
       return null;
     }
+    const grid = pricingData?.grid;
+    if (!grid) return null;
+
     const basePrice = calculatePrice(
+      grid,
       state.studioId,
       state.groupType,
       state.selectedDate,
@@ -925,11 +935,25 @@ export function useBookingWithRouter(urlStep?: string) {
       equipmentPrice,
       grandTotal: basePrice.total + equipmentPrice,
     };
-  }, [state.studioId, state.groupType, state.selectedDate, state.startTime, state.endTime, state.equipment]);
+  }, [pricingData, state.studioId, state.groupType, state.selectedDate, state.startTime, state.endTime, state.equipment]);
 
   const cartTotal = useMemo(() => {
-    return state.cart.reduce((sum, booking) => sum + booking.price, 0);
-  }, [state.cart]);
+    const grid = pricingData?.grid;
+    if (!grid) {
+      return state.cart.reduce((sum, booking) => sum + booking.price, 0);
+    }
+    return state.cart.reduce((sum, booking) => {
+      const timePrice = calculatePrice(
+        grid,
+        booking.studioId,
+        booking.groupType,
+        booking.date,
+        booking.startTime,
+        booking.endTime
+      ).total;
+      return sum + timePrice + (booking.equipmentPrice || 0);
+    }, 0);
+  }, [state.cart, pricingData]);
 
   const canProceedToStudio = state.startTime !== null && state.endTime !== null;
   const canConfirmBooking =
@@ -957,6 +981,7 @@ export function useBookingWithRouter(urlStep?: string) {
     minAdvanceHours,
     minAdvanceCutoffTime,
     pricing,
+    pricingData,
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,

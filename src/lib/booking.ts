@@ -32,12 +32,6 @@ export const EQUIPMENT: Record<EquipmentId, Equipment> = {
   piano: { id: "piano", name: "Piano numérique", pricePerHour: 0, maxPerSession: 2, pricingType: "session", sessionPricing: [3, 6] },
 };
 
-export interface PriceSlot {
-  time: string;
-  isPeak: boolean;
-  rate: number;
-}
-
 export interface EquipmentSelection {
   id: EquipmentId;
   quantity: number;
@@ -141,19 +135,6 @@ export const STUDIOS: Record<StudioId, Studio> = {
     description: "Conçu pour la répétition, cet espace de 35m² offre un cadre simple et fonctionnel, idéal pour vos sessions musicales, en groupe ou en solo. Cette salle est également adapté aux enseignants souhaitant donner des cours à un ou plusieurs élèves.",
     features: ["Compact", "Fonctionnel", "Cours"],
     image: "/images/studios/podium-1.webp",
-  },
-};
-
-export const PRICING: Record<StudioId, Record<GroupType, { offPeak: number; peak: number }>> = {
-  "la-scene": {
-    solo: { offPeak: 6, peak: 6 },
-    duo: { offPeak: 12, peak: 12 },
-    group: { offPeak: 18, peak: 22 },
-  },
-  "le-podium": {
-    solo: { offPeak: 6, peak: 6 },
-    duo: { offPeak: 12, peak: 12 },
-    group: { offPeak: 15, peak: 18 },
   },
 };
 
@@ -489,48 +470,6 @@ export function isPeakTime(date: Date, time: string): boolean {
   const isHoliday = _publicHolidays.has(dateToParisISO(date));
   if (hour === 0) return true;
   return hour >= _peakStartHour || isWeekend || isHoliday;
-}
-
-export function getSlotRate(
-  studioId: StudioId,
-  groupType: GroupType,
-  date: Date,
-  time: string
-): number {
-  const isPeak = isPeakTime(date, time);
-  return PRICING[studioId][groupType][isPeak ? "peak" : "offPeak"];
-}
-
-export function calculatePrice(
-  studioId: StudioId,
-  groupType: GroupType,
-  date: Date,
-  startTime: string,
-  endTime: string
-): { total: number; breakdown: PriceSlot[] } {
-  const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.indexOf("00:00");
-
-  if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
-    return { total: 0, breakdown: [] };
-  }
-
-  const breakdown: PriceSlot[] = [];
-
-  for (let i = startIndex; i < endIndex; i++) {
-    const time = ALL_TIME_SLOTS[i];
-    const isPeak = isPeakTime(date, time);
-    const rate = PRICING[studioId][groupType][isPeak ? "peak" : "offPeak"];
-    breakdown.push({ time, isPeak, rate });
-  }
-
-  const total = breakdown.reduce(
-    (sum, slot) => sum + (slot.rate * SLOT_DURATION_MINUTES) / 60,
-    0
-  );
-
-  return { total, breakdown };
 }
 
 export function formatDuration(startTime: string, endTime: string): string {

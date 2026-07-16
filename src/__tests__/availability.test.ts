@@ -7,12 +7,25 @@ import {
   isRangeBookable,
   canBeStartTime,
   canBeEndTime,
-  calculatePrice,
   formatDuration,
   ALL_TIME_SLOTS,
   type OccupancyInfo,
   type StudioId,
 } from "@/lib/booking";
+import { calculatePrice, type PricingGrid } from "@/lib/pricing";
+
+const TEST_GRID: PricingGrid = {
+  "la-scene": {
+    solo: { offPeak: 6, peak: 6 },
+    duo: { offPeak: 12, peak: 12 },
+    group: { offPeak: 18, peak: 22 },
+  },
+  "le-podium": {
+    solo: { offPeak: 6, peak: 6 },
+    duo: { offPeak: 12, peak: 12 },
+    group: { offPeak: 15, peak: 18 },
+  },
+};
 
 // Helper to create a standard Tuesday (index 2) — both studios open 10:00-22:30/00:00
 const tuesday = new Date(2026, 0, 6); // Jan 6, 2026 = Tuesday
@@ -199,7 +212,7 @@ describe("Unified Availability Engine", () => {
 
   describe("Off-by-one bug fixes", () => {
     it("calculatePrice includes 00:00 slot", () => {
-      const price = calculatePrice("la-scene", "group", tuesday, "23:00", "00:00");
+      const price = calculatePrice(TEST_GRID, "la-scene", "group", tuesday, "23:00", "00:00");
       // 23:00, 23:30 = 2 slots = 1h (00:00 is boundary, not a slot)
       // At peak rate (22€/h for group at La Scène) = 22 * 1 = 22€
       expect(price.total).toBe(22);

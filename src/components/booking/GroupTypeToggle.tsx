@@ -3,7 +3,8 @@
 import type { ComponentType } from "react";
 import { User, Users } from "lucide-react";
 
-import { type GroupType, PRICING } from "@/lib/booking";
+import { type GroupType } from "@/lib/booking";
+import type { MinMaxByGroupType } from "@/lib/pricing";
 
 /** 3-person group icon matching lucide style (24x24, stroke-based) */
 function UsersGroup({ className }: { className?: string }) {
@@ -36,6 +37,7 @@ function UsersGroup({ className }: { className?: string }) {
 interface GroupTypeToggleProps {
   value: GroupType | null;
   onChange: (type: GroupType | null) => void;
+  minMaxByGroupType?: MinMaxByGroupType | null;
 }
 
 const OPTIONS: { type: GroupType; label: string; sublabel: string; icon: ComponentType<{ className?: string }> }[] = [
@@ -44,19 +46,13 @@ const OPTIONS: { type: GroupType; label: string; sublabel: string; icon: Compone
   { type: "group", label: "Groupe", sublabel: "3+ pers.", icon: UsersGroup },
 ];
 
-function getPriceRange(groupType: GroupType): string {
-  const prices = [
-    PRICING["la-scene"][groupType].offPeak,
-    PRICING["la-scene"][groupType].peak,
-    PRICING["le-podium"][groupType].offPeak,
-    PRICING["le-podium"][groupType].peak,
-  ];
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  return min === max ? `${min}€/h` : `${min}€ - ${max}€/h`;
+function getPriceRange(groupType: GroupType, minMaxByGroupType?: MinMaxByGroupType | null): string {
+  if (!minMaxByGroupType || !minMaxByGroupType[groupType]) return "…";
+  const { min, max } = minMaxByGroupType[groupType];
+  return min === max ? `${min}€/h` : `${min}€ – ${max}€/h`;
 }
 
-export function GroupTypeToggle({ value, onChange }: GroupTypeToggleProps) {
+export function GroupTypeToggle({ value, onChange, minMaxByGroupType }: GroupTypeToggleProps) {
   const handleClick = (type: GroupType) => {
     if (value === type) {
       onChange(null);
@@ -71,7 +67,7 @@ export function GroupTypeToggle({ value, onChange }: GroupTypeToggleProps) {
       <div className="grid grid-cols-3 gap-1 lg:gap-2">
         {OPTIONS.map(({ type, label, sublabel, icon: Icon }) => {
           const selected = value === type;
-          const priceRange = getPriceRange(type);
+          const priceRange = getPriceRange(type, minMaxByGroupType);
           return (
             <button
               key={type}

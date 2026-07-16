@@ -15,8 +15,6 @@ import {
   getStudioTimeSlots,
   formatDate,
   formatPrice,
-  calculatePrice,
-  PRICING,
   STUDIOS,
   ALL_TIME_SLOTS,
   canBeStartTime,
@@ -25,6 +23,8 @@ import {
   type GroupType,
   type StudioId,
 } from "@/lib/booking";
+import { calculatePrice } from "@/lib/pricing";
+import type { PricingGrid } from "@/lib/pricing";
 
 type SlotData = { time: string; available: boolean; groupType?: string; bookingId?: string };
 
@@ -43,6 +43,7 @@ interface TimeSlotPickerProps {
   groupType?: GroupType;
   minAdvanceHours?: number;
   minAdvanceCutoffTime?: string | null;
+  pricingGrid?: PricingGrid | null;
 }
 
 const STUDIO_LABELS: Record<StudioId, string> = {
@@ -65,6 +66,7 @@ export function TimeSlotPicker({
   groupType = "group",
   minAdvanceHours = 0,
   minAdvanceCutoffTime = null,
+  pricingGrid,
 }: TimeSlotPickerProps) {
   const [selectedStart, setSelectedStart] = useState<string | null>(startTime);
   const [selectedEnd, setSelectedEnd] = useState<string | null>(endTime);
@@ -294,7 +296,7 @@ export function TimeSlotPicker({
 
   // Price info for active studio
   const priceInfo = useMemo(() => {
-    if (!selectedStart || !selectedEnd || !activeStudio) return null;
+    if (!selectedStart || !selectedEnd || !activeStudio || !pricingGrid) return null;
     const startIdx = ALL_TIME_SLOTS.indexOf(selectedStart);
     let endIdx = ALL_TIME_SLOTS.indexOf(selectedEnd);
     if (selectedEnd === "00:00") endIdx = ALL_TIME_SLOTS.length;
@@ -302,7 +304,7 @@ export function TimeSlotPicker({
     const durationHours = durationSlots * 0.5;
     const durationLabel = durationHours % 1 === 0 ? `${durationHours}h` : `${Math.floor(durationHours)}h30`;
 
-    const price = calculatePrice(activeStudio, groupType, date, selectedStart, selectedEnd).total;
+    const price = calculatePrice(pricingGrid, activeStudio, groupType, date, selectedStart, selectedEnd).total;
 
     return {
       start: selectedStart.replace(":00", "h").replace(":30", "h30"),
@@ -310,18 +312,16 @@ export function TimeSlotPicker({
       duration: durationLabel,
       price: formatPrice(price),
     };
-  }, [selectedStart, selectedEnd, activeStudio, groupType, date]);
+  }, [selectedStart, selectedEnd, activeStudio, groupType, date, pricingGrid]);
 
   // Compute price range label for a studio's mini-card
   const getPriceRangeLabel = (studioId: StudioId): string => {
-    const pricing = PRICING[studioId][groupType];
-    // Rates are per 30-min slot — multiply by 2 to get hourly
-    const offPeakHourly = pricing.offPeak * 2;
-    const peakHourly = pricing.peak * 2;
-    if (offPeakHourly === peakHourly) {
-      return `${offPeakHourly}€/h`;
+    if (!pricingGrid || !pricingGrid[studioId] || !pricingGrid[studioId][groupType]) return "…";
+    const { peak, offPeak } = pricingGrid[studioId][groupType];
+    if (offPeak === peak) {
+      return `${offPeak}€/h`;
     }
-    return `${offPeakHourly}€ – ${peakHourly}€/h`;
+    return `${offPeak}€ – ${peak}€/h`;
   };
 
   const renderStudioBlock = (studioId: StudioId) => {

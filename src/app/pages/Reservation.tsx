@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter";
@@ -17,7 +17,8 @@ import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculatePrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, stepIndex, type BookingStep, type StudioId, type GroupType } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, stepIndex, type BookingStep, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
+import { calculatePrice } from "@/lib/pricing";
 import { useEquipment } from "@/components/booking/useEquipment";
 
 const GROUP_LABELS: Record<GroupType, string> = {
@@ -48,6 +49,7 @@ export function Reservation({ step }: ReservationProps) {
     state,
     slotsByStudio,
     pricing,
+    pricingData,
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,
@@ -144,6 +146,29 @@ export function Reservation({ step }: ReservationProps) {
       })())
     : 0;
 
+  /**
+   * Recompute a cart item's time-based price from the pricing grid.
+   * Falls back to the stored price when grid is not loaded.
+   */
+  const recomputeCartItemPrice = useCallback((booking: CompletedBooking): number => {
+    const grid = pricingData?.grid;
+    if (!grid) return booking.price;
+    const timePrice = calculatePrice(
+      grid,
+      booking.studioId,
+      booking.groupType,
+      booking.date,
+      booking.startTime,
+      booking.endTime
+    ).total;
+    return timePrice + (booking.equipmentPrice || 0);
+  }, [pricingData]);
+
+  /** Recomputed cart total from grid (or fallback to stored prices) */
+  const recomputedCartTotal = useMemo(() => {
+    return state.cart.reduce((sum, b) => sum + recomputeCartItemPrice(b), 0);
+  }, [state.cart, recomputeCartItemPrice]);
+
   // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau)
   const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "groupe" || state.step === "creneau");
 
@@ -151,9 +176,12 @@ export function Reservation({ step }: ReservationProps) {
   const renderRecapSection = () => {
     if (!state.selectedDate || !state.startTime || !state.endTime || !state.studioId) return null;
 
+    const grid = pricingData?.grid;
     const studio = STUDIOS[state.studioId as StudioId];
     const gt = (state.groupType || "group") as GroupType;
-    const priceResult = calculatePrice(state.studioId as StudioId, gt, state.selectedDate, state.startTime, state.endTime);
+    const priceResult = grid
+      ? calculatePrice(grid, state.studioId as StudioId, gt, state.selectedDate, state.startTime, state.endTime)
+      : { total: 0, breakdown: [] };
     const total = priceResult.total;
     const duration = formatDuration(state.startTime, state.endTime);
     const startIdx = TIME_SLOTS.indexOf(state.startTime);
@@ -397,6 +425,7 @@ export function Reservation({ step }: ReservationProps) {
                 <GroupTypeToggle
                   value={state.groupType}
                   onChange={setGroupType}
+                  minMaxByGroupType={pricingData?.minMaxByGroupType}
                 />
               </div>
             )}
@@ -448,6 +477,7 @@ export function Reservation({ step }: ReservationProps) {
                       groupType={state.groupType || "group"}
                       minAdvanceHours={minAdvanceHours}
                       minAdvanceCutoffTime={minAdvanceCutoffTime}
+                      pricingGrid={pricingData?.grid}
                     />
                   </div>
                 )}
@@ -506,7 +536,9 @@ export function Reservation({ step }: ReservationProps) {
                 ) : (
                   <>
                     <div className="space-y-3">
-                      {state.cart.map((booking) => (
+                      {state.cart.map((booking) => {
+                        const displayPrice = recomputeCartItemPrice(booking);
+                        return (
                         <div
                           key={booking.id}
                           className="rounded-xl border border-white/20 bg-black/30 p-4"
@@ -522,7 +554,7 @@ export function Reservation({ step }: ReservationProps) {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-lg font-bold text-primary">
-                                {formatPrice(booking.price)}
+                                {formatPrice(displayPrice)}
                               </span>
                               <button
                                 onClick={() => removeFromCart(booking.id)}
@@ -550,7 +582,7 @@ export function Reservation({ step }: ReservationProps) {
                             </div>
                           )}
                         </div>
-                      ))}
+                      );})}
                     </div>
 
                     <PromoCodeInput
