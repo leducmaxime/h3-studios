@@ -13,6 +13,7 @@ import {
   type StudioId,
 } from "@/lib/booking";
 import { calculatePrice, type PricingGrid } from "@/lib/pricing";
+import { hasBookableRun } from "@/lib/booking";
 
 const TEST_GRID: PricingGrid = {
   "la-scene": {
@@ -355,5 +356,36 @@ describe("Unified Availability Engine", () => {
       expect(rangeResult.bookable).toBe(true);
       expect(rangeResult.studioId).toBe("le-podium");
     });
+  });
+});
+
+describe("hasBookableRun (calendar day bookability)", () => {
+  // La Scène closes at 00:00 → last visible slot "00:00" is an end-only
+  // boundary marker and must never count as a bookable half-hour.
+  const lateSlots = ["22:30", "23:00", "23:30", "00:00"];
+  const allFree = () => true;
+
+  it("counts two consecutive free slots before the boundary as bookable", () => {
+    expect(hasBookableRun(lateSlots, allFree, 2, "23:00")).toBe(true);
+  });
+
+  it("rejects a single free slot before closing (boundary is not bookable)", () => {
+    // Cutoff 23:30 → only 23:30 is at/after cutoff; "00:00" must not count.
+    expect(hasBookableRun(lateSlots, allFree, 2, "23:30")).toBe(false);
+  });
+
+  it("rejects a day where only the closing boundary is free", () => {
+    const onlyBoundaryFree = (time: string) => time === "00:00";
+    expect(hasBookableRun(lateSlots, onlyBoundaryFree, 2, null)).toBe(false);
+  });
+
+  it("treats slots before the cutoff as unavailable", () => {
+    const freeAfterCutoff = (time: string) => time >= "23:00";
+    expect(hasBookableRun(lateSlots, freeAfterCutoff, 2, "23:30")).toBe(false);
+    expect(hasBookableRun(lateSlots, freeAfterCutoff, 2, "23:00")).toBe(true);
+  });
+
+  it("allows a slot exactly at the cutoff time", () => {
+    expect(hasBookableRun(lateSlots, allFree, 2, "23:00")).toBe(true);
   });
 });

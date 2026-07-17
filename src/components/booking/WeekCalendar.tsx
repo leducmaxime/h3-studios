@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   ALL_TIME_SLOTS,
   getStudioTimeSlots,
+  hasBookableRun,
   MIN_BOOKING_SLOTS,
   type StudioId,
   type GroupType,
@@ -115,18 +116,13 @@ function hasBookableAvailability(
 
   for (const studioId of studios) {
     const slots = getStudioTimeSlots(studioId, date);
-    let consecutive = 0;
-
-    for (const time of slots) {
-      // Slots before the cutoff are treated as unavailable (min-advance rule)
-      if (minAdvanceCutoffTime && time < minAdvanceCutoffTime) {
-        consecutive = 0;
-        continue;
-      }
-      const available = isSlotAvailable(time, occupancy, date, studioId);
-      consecutive = available ? consecutive + 1 : 0;
-      if (consecutive >= MIN_BOOKING_SLOTS) return true;
-    }
+    const bookable = hasBookableRun(
+      slots,
+      (time) => isSlotAvailable(time, occupancy, date, studioId),
+      MIN_BOOKING_SLOTS,
+      minAdvanceCutoffTime,
+    );
+    if (bookable) return true;
   }
 
   return false;

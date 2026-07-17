@@ -208,6 +208,32 @@ export const CLOSING_TIME = "00:00";
 export const SLOT_DURATION_MINUTES = 30;
 export const MIN_BOOKING_SLOTS = 2;
 
+/**
+ * Returns true when at least `minSlots` consecutive bookable slots exist.
+ * The closing-boundary slot (last entry of getStudioTimeSlots, e.g. "00:00"
+ * for la-scene / "22:30" for le-podium) is an end-only marker and never
+ * counts as a bookable half-hour — without this exclusion a day with only
+ * 30min left before closing would be wrongly shown as bookable.
+ * Slots before `minAdvanceCutoffTime` (today only) count as unavailable.
+ */
+export function hasBookableRun(
+  slots: string[],
+  isAvailable: (time: string) => boolean,
+  minSlots: number = MIN_BOOKING_SLOTS,
+  minAdvanceCutoffTime?: string | null,
+): boolean {
+  let consecutive = 0;
+  for (const time of slots.slice(0, -1)) {
+    if (minAdvanceCutoffTime && time < minAdvanceCutoffTime) {
+      consecutive = 0;
+      continue;
+    }
+    consecutive = isAvailable(time) ? consecutive + 1 : 0;
+    if (consecutive >= minSlots) return true;
+  }
+  return false;
+}
+
 /** Nombre de créneaux entre deux heures (demi-heures), avec gestion de "00:00" = fin de journée */
 export function slotDurationSlots(startTime: string, endTime: string): number {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
