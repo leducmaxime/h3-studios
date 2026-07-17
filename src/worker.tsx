@@ -123,7 +123,7 @@ import {
   getBookingsByRefs,
   resolveStatsRange,
 } from "@/lib/db";
-import { type BookingFilters, type AuditLogFilters, type DbBooking } from "@/lib/db-types";
+import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, slotDurationSlots, type StudioId, type EquipmentSelection } from "@/lib/booking";
 import {
@@ -163,6 +163,15 @@ function getSlotsForBooking(start: string, end: string): string[] {
   if (endIdx === -1 && end === "00:00") endIdx = ALL_TIME_SLOTS.length;
   if (startIdx === -1 || endIdx === -1) return [];
   return ALL_TIME_SLOTS.slice(startIdx, endIdx);
+}
+
+function buildOpeningHoursMap(dbHours: DbOpeningHours[]): Record<string, Record<number, { open: string; close: string }>> {
+  const map: Record<string, Record<number, { open: string; close: string }>> = {};
+  for (const h of dbHours) {
+    if (!map[h.studio_id]) map[h.studio_id] = {};
+    map[h.studio_id][h.day_of_week] = { open: h.open_time, close: h.close_time };
+  }
+  return map;
 }
 
 function jsonResponse(data: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
@@ -674,13 +683,7 @@ const app = defineApp([
       const bookingDate = new Date(date + "T00:00:00");
 
       // Load DB-driven opening hours so admin edits apply to slot availability
-      const dbHours = await getOpeningHours(env.DB);
-      const hoursMap: Record<string, Record<number, { open: string; close: string }>> = {};
-      for (const h of dbHours) {
-        if (!hoursMap[h.studio_id]) hoursMap[h.studio_id] = {};
-        hoursMap[h.studio_id][h.day_of_week] = { open: h.open_time, close: h.close_time };
-      }
-      setOpeningHours(hoursMap);
+      setOpeningHours(buildOpeningHoursMap(await getOpeningHours(env.DB)));
 
       // Build per-studio, per-slot occupant map
       const occupantMap: Record<string, Record<string, { groupType: string; bookingId?: string } | null>> = {
@@ -932,14 +935,23 @@ const app = defineApp([
       // "00:00" = minuit/fin de journée, toujours après n'importe quelle heure
       if (body.endTime !== "00:00" && body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
 
-      // Load DB-driven opening hours for server-side slot computations
-      const dbHours = await getOpeningHours(env.DB);
-      const hoursMap2: Record<string, Record<number, { open: string; close: string }>> = {};
-      for (const h of dbHours) {
-        if (!hoursMap2[h.studio_id]) hoursMap2[h.studio_id] = {};
-        hoursMap2[h.studio_id][h.day_of_week] = { open: h.open_time, close: h.close_time };
-      }
+      // Load DB-driven opening hours and validate that the booking falls
+      // within studio hours (prevents bookings outside opening hours).
+      const hoursMap2 = buildOpeningHoursMap(await getOpeningHours(env.DB));
       setOpeningHours(hoursMap2);
+
+      const openingDay = bookingDate.getDay();
+      const studioHours = hoursMap2[body.studioId]?.[openingDay];
+      if (studioHours) {
+        if (body.startTime < studioHours.open) {
+          return jsonError(`Le studio ouvre à ${studioHours.open.replace(/^0/, "").replace(":00", "")}h ce jour-là.`, 400);
+        }
+        const effectiveClose = studioHours.close === "00:00" ? "24:00" : studioHours.close;
+        const effectiveEnd = body.endTime === "00:00" ? "24:00" : body.endTime;
+        if (effectiveEnd > effectiveClose) {
+          return jsonError(`Le studio ferme à ${studioHours.close.replace(/^0/, "").replace(":00", "")}h ce jour-là.`, 400);
+        }
+      }
 
       // ── Server-authoritative pricing ──────────────────────────────────────
       const halfHours = slotDurationSlots(body.startTime, body.endTime);
@@ -1275,12 +1287,7 @@ const app = defineApp([
       }
 
       // Include opening hours so the client can update its slot store
-      const dbHours = await getOpeningHours(env.DB);
-      const openingHours: Record<string, Record<number, { open: string; close: string }>> = {};
-      for (const h of dbHours) {
-        if (!openingHours[h.studio_id]) openingHours[h.studio_id] = {};
-        openingHours[h.studio_id][h.day_of_week] = { open: h.open_time, close: h.close_time };
-      }
+      const openingHours = buildOpeningHoursMap(await getOpeningHours(env.DB));
 
       // Admin pricing edits must be visible on next page load — never cache.
       const res = jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays, openingHours });
@@ -4151,8 +4158,8 @@ const app = defineApp([
         return jsonError("Format d'email invalide", 400);
       }
 
-      if (body.password.length < 6) {
-        return jsonError("Le mot de passe doit contenir au moins 6 caractères", 400);
+      if (body.password.length < 8) {
+        return jsonError("Le mot de passe doit contenir au moins 8 caractères", 400);
       }
 
       const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(body.email.trim().toLowerCase()).first();

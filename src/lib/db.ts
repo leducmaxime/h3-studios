@@ -20,7 +20,7 @@ import {
   type CreateBooking,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, type StudioId } from "./booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 
 /** Normalise "00:00" en "24:00" pour les comparaisons de strings SQL.
@@ -1690,7 +1690,7 @@ export async function getDashboardStats(
       )
       SELECT
         COUNT(*) as count,
-        COALESCE(SUM(b.total_price - COALESCE(paid.paid_amount, 0)), 0) as total
+        COALESCE(SUM(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)), 0) as total
       FROM bookings b
       LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
       WHERE b.status != 'cancelled'
@@ -1738,7 +1738,7 @@ export async function getDashboardStats(
       )
       SELECT
         COUNT(*) as count,
-        COALESCE(SUM(b.total_price - COALESCE(paid.paid_amount, 0)), 0) as total
+        COALESCE(SUM(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)), 0) as total
       FROM bookings b
       LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
       WHERE b.status != 'cancelled'

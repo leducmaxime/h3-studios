@@ -648,7 +648,7 @@ export function Reservation({ step }: ReservationProps) {
                         Ajouter une autre réservation
                       </button>
                     </div>
-                  </>                  
+                  </>
               </div>
             )}
 
