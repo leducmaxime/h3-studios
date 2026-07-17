@@ -81,6 +81,8 @@ export function Reservation({ step }: ReservationProps) {
     processPayment,
     minAdvanceHours,
     minAdvanceCutoffTime,
+    todayFullyBlocked,
+    maxAdvanceDays,
   } = useBookingWithRouter(step);
 
   const { equipment: availableEquipment, getEquipmentName } = useEquipment();
@@ -480,6 +482,7 @@ export function Reservation({ step }: ReservationProps) {
                   studioFilter={null}
                   groupType={state.groupType}
                   cart={state.cart}
+                  maxAdvanceDays={maxAdvanceDays}
                 />
 
                 {/* Time slot picker — appears after date selection */}
@@ -500,6 +503,7 @@ export function Reservation({ step }: ReservationProps) {
                       groupType={state.groupType || "group"}
                       minAdvanceHours={minAdvanceHours}
                       minAdvanceCutoffTime={minAdvanceCutoffTime}
+                      todayFullyBlocked={todayFullyBlocked}
                       pricingGrid={pricingData?.grid}
                     />
                   </div>
