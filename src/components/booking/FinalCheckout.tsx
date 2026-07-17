@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Calendar, Download, ExternalLink, ChevronLeft, CreditCard, Banknote } from "lucide-react";
+import { CheckCircle2, Calendar, Download, ExternalLink, ChevronLeft, CreditCard, Banknote, UserCheck, MailCheck } from "lucide-react";
 import {
   STUDIOS,
   formatDate,
@@ -20,9 +20,11 @@ interface FinalCheckoutProps {
   onBack: () => void;
   onProceedToPayment?: () => void;
   showPaymentButton?: boolean;
+  /** Account outcome of the booking submission (guest checkout flow) */
+  accountStatus?: string | null;
 }
 
-export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPayment, showPaymentButton }: FinalCheckoutProps) {
+export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPayment, showPaymentButton, accountStatus }: FinalCheckoutProps) {
   const { getEquipmentName } = useEquipment();
   const isPending = cart[0]?.paymentStatus === "pending";
   const isPaid = cart[0]?.paymentStatus === "paid";
@@ -64,6 +66,27 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
           {!showPaymentButton && (isPaid ? " • Payé en ligne" : " • Paiement sur place")}
         </p>
       </div>
+
+      {accountStatus === "created" && (
+        <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20">
+            <UserCheck className="h-4 w-4 text-primary" />
+          </div>
+          <p className="text-sm text-white/85">
+            Votre compte a été créé — vous êtes connecté. Retrouvez vos réservations dans <a href="/mon-compte" className="font-medium text-primary underline underline-offset-2">votre espace</a>.
+          </p>
+        </div>
+      )}
+      {accountStatus === "activation-email-sent" && (
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10">
+            <MailCheck className="h-4 w-4 text-primary" />
+          </div>
+          <p className="text-sm text-white/85">
+            Vérifiez votre boîte mail : un email vous permet de définir votre mot de passe pour activer votre compte.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {cart.map((booking) => (

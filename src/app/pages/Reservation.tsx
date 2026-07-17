@@ -710,6 +710,7 @@ export function Reservation({ step }: ReservationProps) {
                 total={Math.max(0, cartTotal - state.promoDiscount)}
                 onNewBooking={resetBooking}
                 onBack={goBack}
+                accountStatus={state.accountStatus}
               />
             )}
 

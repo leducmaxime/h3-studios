@@ -786,6 +786,7 @@ const app = defineApp([
       let userId: string;
       let accountStatus: string;
       let newSessionToken: string | null = null;
+      let guestWasCreated = false;
 
       // Optional session check
       const sessionToken = getClientSessionToken(request);
@@ -820,19 +821,35 @@ const app = defineApp([
         });
 
         userId = guestUser.id;
+        guestWasCreated = wasCreated;
+        accountStatus = "guest";
 
         if (guestUser.is_blocked) {
           return jsonError("Votre compte a été bloqué. Veuillez nous contacter pour plus d'informations.", 403);
         }
+      }
 
-        if (wasCreated && body.createAccount && body.accountPassword && body.accountPassword.length >= 8) {
+      // Idempotence FIRST — before any side effect (activation email) or
+      // conflict check: a retry of an already-created bookingRef must return
+      // the existing booking, not self-conflict with its own row.
+      const existingByRef = await getBookingByRef(env.DB, body.bookingRef);
+      if (existingByRef) {
+        if (existingByRef.user_id === userId) {
+          return jsonSuccess({ ...existingByRef, accountStatus });
+        }
+        return jsonError("Référence de réservation déjà utilisée", 409);
+      }
+
+      // Guest account activation — only for genuinely new bookings
+      if (!sessionUser) {
+        if (guestWasCreated && body.createAccount && body.accountPassword && body.accountPassword.length >= 8) {
           // Newly created user + createAccount + valid password → set password + create session
           const passwordHash = await hashPassword(body.accountPassword);
           await updateUserPassword(env.DB, userId, passwordHash);
           const token = await createClientSession(env.DB, userId);
           newSessionToken = token;
           accountStatus = "created";
-        } else if (!wasCreated && body.createAccount) {
+        } else if (!guestWasCreated && body.createAccount) {
           // Pre-existing user (guest or activated) + createAccount → password-reset email
           try {
             const resetToken = generateToken();
@@ -909,15 +926,6 @@ const app = defineApp([
         return jsonError(`Les réservations ne peuvent pas dépasser ${maxAdvanceDays} jours à l'avance`, 400);
       }
 
-      // Idempotence : si bookingRef existe déjà pour ce user, retourner le booking existant
-      const existingByRef = await getBookingByRef(env.DB, body.bookingRef);
-      if (existingByRef) {
-        if (existingByRef.user_id === userId) {
-          return jsonSuccess({ ...existingByRef, accountStatus });
-        }
-        return jsonError("Référence de réservation déjà utilisée", 409);
-      }
-
       // Validation enum
       const validStudios = ["la-scene", "le-podium"];
       const validGroupTypes = ["solo", "duo", "group"];
@@ -975,6 +983,9 @@ const app = defineApp([
 
       // ── Cart-level promo recompute (Phase 5A: server authoritative) ──────
       let serverPromoDiscount = 0;
+      // Cart-level promo total (server-authoritative) — also used by the
+      // consolidated confirmation email so it matches the charged amount.
+      let cartPromoDiscountTotal = 0;
       let promoType: string | null = null;
 
       if (body.isLastInCart && body.promoCode) {
@@ -984,10 +995,13 @@ const app = defineApp([
           : [body.bookingRef];
 
         // Fetch previous bookings (all cart refs except this one — not yet inserted)
-        const prevRefs = cartBookingRefs.filter((r) => r !== body.bookingRef);
-        const previousBookings = prevRefs.length > 0
+        // Dedupe refs and scope to THIS user's bookings only — a client can
+        // send arbitrary refs, and the allocation loop writes to them.
+        const prevRefs = [...new Set(cartBookingRefs.filter((r) => r !== body.bookingRef))].slice(0, 20);
+        const previousBookings = (prevRefs.length > 0
           ? await getBookingsByRefs(env.DB, prevRefs)
-          : [];
+          : []
+        ).filter((b) => b.user_id === userId);
 
         // Compute cart subtotal from stored authoritative DB prices +
         // this booking's recomputed price
@@ -1007,6 +1021,7 @@ const app = defineApp([
         }
 
         const discountTotal = Math.min(promoValidation.roundedDiscount || 0, cartSubtotal);
+        cartPromoDiscountTotal = discountTotal;
         promoType = promoValidation.promo?.type || null;
 
         // Allocate greedily in cart order: previous bookings first (refs order),
@@ -1135,6 +1150,8 @@ const app = defineApp([
             }
           }
 
+          const cartGrossTotal = allSlots.reduce((sum, slot) => sum + slot.totalPrice, 0);
+
           const emailData: BookingConfirmationData = {
             bookingRef: booking.booking_ref,
             studioId: body.studioId,
@@ -1144,14 +1161,16 @@ const app = defineApp([
             groupType: body.groupType,
             equipment: body.equipment,
             equipmentPrice: body.equipmentPrice,
-            totalPrice: body.price,
+            // Server-authoritative totals: multi-slot emails show the cart net
+            // total, single-slot the booking net — never client-supplied amounts.
+            totalPrice: allSlots.length > 1 ? cartGrossTotal - cartPromoDiscountTotal : serverNetTotal,
             paymentMethod: body.paymentMethod,
             paymentStatus: bookingPaymentStatus,
             userName: name,
             userEmail: email,
             userPhone: phone,
             promoCode: body.promoCode,
-            promoDiscount: body.promoDiscount,
+            promoDiscount: cartPromoDiscountTotal,
             promoType: promoType,
             allSlots: allSlots.length > 1 ? allSlots : undefined,
           };

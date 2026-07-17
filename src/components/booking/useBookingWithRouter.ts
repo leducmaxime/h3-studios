@@ -180,14 +180,15 @@ function isUserInfoComplete(s: ExtendedBookingState): boolean {
 // ---------------------------------------------------------------------------
 // Serialization
 // ---------------------------------------------------------------------------
-interface SerializedBookingState extends Omit<ExtendedBookingState, "selectedDate" | "cart" | "accountPassword" | "accountPasswordConfirm" | "accountStatus"> {
+interface SerializedBookingState extends Omit<ExtendedBookingState, "selectedDate" | "cart" | "accountPassword" | "accountPasswordConfirm"> {
   selectedDate: string | null;
   cart: Array<Omit<CompletedBooking, "date"> & { date: string }>;
 }
 
 function serializeState(state: ExtendedBookingState): SerializedBookingState {
-  // Never persist credentials or transient account status to localStorage.
-  const { accountPassword, accountPasswordConfirm, accountStatus, ...persistable } = state;
+  // Never persist credentials to localStorage (accountStatus is harmless and
+  // survives the Stripe redirect so the confirmation banner can render).
+  const { accountPassword, accountPasswordConfirm, ...persistable } = state;
   return {
     ...persistable,
     selectedDate: state.selectedDate ? state.selectedDate.toISOString() : null,
@@ -199,12 +200,11 @@ function serializeState(state: ExtendedBookingState): SerializedBookingState {
 }
 
 function deserializeState(serialized: SerializedBookingState): ExtendedBookingState {
-  // Defensive: drop any sensitive fields that a previous version may have
+  // Defensive: drop any credential fields that a previous version may have
   // persisted — they must never round-trip through localStorage.
-  const { accountPassword, accountPasswordConfirm, accountStatus, ...safe } = serialized as SerializedBookingState & {
+  const { accountPassword, accountPasswordConfirm, ...safe } = serialized as SerializedBookingState & {
     accountPassword?: string;
     accountPasswordConfirm?: string;
-    accountStatus?: string | null;
   };
   return {
     ...initialState,
@@ -955,17 +955,24 @@ export function useBookingWithRouter(urlStep?: string) {
       if (!json.success) {
         return { ok: false, error: json.error || "Erreur de connexion" };
       }
-      if (json.data) {
-        setClientUser(json.data);
+      // The login response only carries a subset of the profile — re-fetch
+      // /api/client/me for the full record so address/band also prefill.
+      const meRes = await fetch("/api/client/me", { credentials: "include" });
+      const meJson = (await meRes.json()) as {
+        data?: { id: string; email: string | null; name: string; phone: string | null; first_name: string | null; last_name: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null };
+      };
+      const user = meJson?.data ?? null;
+      if (user) {
+        setClientUser(user);
         setState((s) => ({
           ...s,
-          userName: json.data!.name || s.userName,
-          userEmail: json.data!.email || s.userEmail,
-          userPhone: json.data!.phone || s.userPhone,
-          bandName: json.data!.band_name || s.bandName,
-          billingAddress: json.data!.address_line1 || s.billingAddress,
-          billingPostalCode: json.data!.postal_code || s.billingPostalCode,
-          billingCity: json.data!.city || s.billingCity,
+          userName: user.name || s.userName,
+          userEmail: user.email || s.userEmail,
+          userPhone: user.phone || s.userPhone,
+          bandName: user.band_name || s.bandName,
+          billingAddress: user.address_line1 || s.billingAddress,
+          billingPostalCode: user.postal_code || s.billingPostalCode,
+          billingCity: user.city || s.billingCity,
         }));
       }
       return { ok: true };
