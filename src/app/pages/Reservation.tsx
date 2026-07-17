@@ -17,7 +17,7 @@ import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, stepIndex, type BookingStep, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
 import { useEquipment } from "@/components/booking/useEquipment";
 
@@ -61,7 +61,6 @@ export function Reservation({ step }: ReservationProps) {
     selectDate,
     selectTimeRange,
     clearTimeRange,
-    confirmTimeSelection,
     setGroupType,
     updateUserInfo,
     updateEquipment,
@@ -80,8 +79,6 @@ export function Reservation({ step }: ReservationProps) {
     canNavigateToStep,
     selectPaymentMethod,
     processPayment,
-    minAdvanceHours,
-    minAdvanceCutoffTime,
     todayFullyBlocked,
     maxAdvanceDays,
   } = useBookingWithRouter(step);
@@ -497,13 +494,9 @@ export function Reservation({ step }: ReservationProps) {
                       studioId={state.studioId}
                       onSelectRange={selectTimeRange}
                       onClear={clearTimeRange}
-                      onConfirm={confirmTimeSelection}
                       onBack={goBack}
-                      canConfirm={canProceedToStudio}
                       hideHeader
                       groupType={state.groupType || "group"}
-                      minAdvanceHours={minAdvanceHours}
-                      minAdvanceCutoffTime={minAdvanceCutoffTime}
                       todayFullyBlocked={todayFullyBlocked}
                       pricingGrid={pricingData?.grid}
                     />
@@ -542,12 +535,8 @@ export function Reservation({ step }: ReservationProps) {
                   clientUserLoading={clientUserLoading}
                   clientLogin={clientLogin}
                   onUpdateField={(fields) => {
-                    // The hook exposes a per-field setter — fan the form's
-                    // partial update out into updateUserInfo(field, value) calls.
-                    for (const [field, value] of Object.entries(fields)) {
-                      if (value === undefined) continue;
-                      updateUserInfo(field as Parameters<typeof updateUserInfo>[0], value);
-                    }
+                    // The hook now accepts Partial<ExtendedBookingState> directly
+                    updateUserInfo(fields);
                   }}
                   onContinue={goToPaymentFromCoordonnees}
                   onBack={goBack}
@@ -563,23 +552,11 @@ export function Reservation({ step }: ReservationProps) {
                   <h3 className="text-lg font-semibold">Votre panier</h3>
                 </div>
 
-                {state.cart.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <ShoppingCart className="mx-auto mb-4 h-12 w-12 text-white/20" />
-                    <p className="text-white/60">Votre panier est vide</p>
-                    <button
-                      onClick={addAnotherBooking}
-                      className="mt-4 rounded-lg bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary/90"
-                    >
-                      Ajouter une réservation
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-3">
-                      {state.cart.map((booking) => {
-                        const displayPrice = recomputeCartItemPrice(booking);
-                        return (
+                <>
+                  <div className="space-y-3">
+                    {state.cart.map((booking) => {
+                      const displayPrice = recomputeCartItemPrice(booking);
+                      return (
                         <div
                           key={booking.id}
                           className="rounded-xl border border-white/20 bg-black/30 p-4"
@@ -671,8 +648,7 @@ export function Reservation({ step }: ReservationProps) {
                         Ajouter une autre réservation
                       </button>
                     </div>
-                  </>
-                )}
+                  </>                  
               </div>
             )}
 
@@ -711,6 +687,7 @@ export function Reservation({ step }: ReservationProps) {
                 onNewBooking={resetBooking}
                 onBack={goBack}
                 accountStatus={state.accountStatus}
+                displayPrices={Object.fromEntries(state.cart.map(b => [b.id, recomputeCartItemPrice(b)]))}
               />
             )}
 

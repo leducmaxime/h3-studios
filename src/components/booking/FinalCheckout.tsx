@@ -22,9 +22,13 @@ interface FinalCheckoutProps {
   showPaymentButton?: boolean;
   /** Account outcome of the booking submission (guest checkout flow) */
   accountStatus?: string | null;
+  /** Per-booking recomputed prices for line-item consistency with total */
+  displayPrices?: Record<string, number>;
 }
 
-export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPayment, showPaymentButton, accountStatus }: FinalCheckoutProps) {
+const LINE_DISPLAY_PRICES_DEFAULT: Record<string, number> = {};
+
+export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPayment, showPaymentButton, accountStatus, displayPrices = LINE_DISPLAY_PRICES_DEFAULT }: FinalCheckoutProps) {
   const { getEquipmentName } = useEquipment();
   const isPending = cart[0]?.paymentStatus === "pending";
   const isPaid = cart[0]?.paymentStatus === "paid";
@@ -102,7 +106,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
                 <p className="text-sm text-primary">Réf: {booking.bookingRef}</p>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <span className="font-semibold text-primary">{formatPrice(booking.price)}</span>
+                <span className="font-semibold text-primary">{formatPrice(displayPrices[booking.id] ?? booking.price)}</span>
                 {!showPaymentButton && (
                   booking.paymentStatus === "paid" ? (
                     <span className="flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">

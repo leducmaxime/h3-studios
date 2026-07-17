@@ -372,7 +372,7 @@ export async function getUsers(
         SELECT
           user_id,
           COUNT(*) as total_bookings,
-          COALESCE(SUM(total_price), 0) as total_spent
+          COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as total_spent
         FROM bookings
         WHERE status != 'cancelled'
         GROUP BY user_id
@@ -411,7 +411,7 @@ export async function getUsers(
         SELECT
           user_id,
           COUNT(*) as total_bookings,
-          COALESCE(SUM(total_price), 0) as total_spent
+          COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as total_spent
         FROM bookings
         WHERE status != 'cancelled'
         GROUP BY user_id
@@ -456,7 +456,7 @@ export async function getUserById(
         SELECT
           user_id,
           COUNT(*) as total_bookings,
-          COALESCE(SUM(total_price), 0) as total_spent
+          COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as total_spent
         FROM bookings
         WHERE status != 'cancelled'
         GROUP BY user_id
@@ -475,7 +475,7 @@ export async function getUserByEmail(
     `SELECT u.*, COALESCE(s.total_bookings, 0) as total_bookings, COALESCE(s.total_spent, 0) as total_spent
      FROM users u
      LEFT JOIN (
-       SELECT user_id, COUNT(*) as total_bookings, COALESCE(SUM(total_price), 0) as total_spent
+       SELECT user_id, COUNT(*) as total_bookings, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as total_spent
        FROM bookings WHERE status != 'cancelled' GROUP BY user_id
      ) s ON u.id = s.user_id
      WHERE LOWER(TRIM(u.email)) = ?`,
@@ -918,14 +918,10 @@ export async function recomputeBookingPaymentStatus(db: D1Database, bookingId: s
     .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
   const netPaid = totalPaid - totalRefunded;
 
-  // Détection convention total_price (même logique que getBookingAmountDue)
-  const base = Number(booking.base_price) || 0;
-  const equip = Number(booking.equipment_price) || 0;
+  // Convention pré-remise simplifiée (audit Phase 7B : zéro ligne post-remise)
   const total = Number(booking.total_price) || 0;
   const discount = Number(booking.promo_discount) || 0;
-  const subtotal = base + equip;
-  const isPostRemise = discount > 0 && Math.abs(total + discount - subtotal) < 1;
-  const finalTotal = isPostRemise ? Math.max(0, total) : Math.max(0, total - discount);
+  const finalTotal = Math.max(0, total - discount);
 
   let newStatus: string;
   if (finalTotal <= 0 || netPaid >= finalTotal) {
@@ -1678,13 +1674,13 @@ export async function getDashboardStats(
 
   const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult, rangeEquipmentResult, rangeMinMaxResult] = await db.batch([
     db.prepare(
-      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date = ? AND status != 'cancelled'",
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
     db.prepare(
-      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(weekFrom, weekTo),
     db.prepare(
-      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(monthFrom, today),
     db.prepare(
       `WITH paid_by_booking AS (
@@ -1705,11 +1701,11 @@ export async function getDashboardStats(
       "SELECT studio_id, start_time, end_time FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
     db.prepare(
-      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(reportMonthFrom || monthFrom, reportMonthTo || today),
 
     db.prepare(
-      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(rangeFrom, rangeTo),
 
     db.prepare(
@@ -1756,7 +1752,7 @@ export async function getDashboardStats(
     ).bind(rangeFrom, rangeTo),
 
     db.prepare(
-      "SELECT COALESCE(MIN(total_price), 0) as min_price, COALESCE(MAX(total_price), 0) as max_price FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+      "SELECT COALESCE(MIN(total_price - COALESCE(promo_discount, 0)), 0) as min_price, COALESCE(MAX(total_price - COALESCE(promo_discount, 0)), 0) as max_price FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(rangeFrom, rangeTo),
   ]);
 
@@ -1862,7 +1858,7 @@ export async function getMonthlyReportData(
   ] = await db.batch([
     // Total revenue + booking count
     db.prepare(
-      "SELECT COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+      "SELECT COUNT(*) as count, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(rangeFrom, rangeTo),
 
     // Equipment revenue
@@ -1877,7 +1873,7 @@ export async function getMonthlyReportData(
 
     // Studio breakdown
     db.prepare(
-      "SELECT studio_id, COUNT(*) as count, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY studio_id",
+      "SELECT studio_id, COUNT(*) as count, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY studio_id",
     ).bind(rangeFrom, rangeTo),
 
     // Payment methods
@@ -1891,7 +1887,7 @@ export async function getMonthlyReportData(
 
     // Top 5 clients
     db.prepare(
-      `SELECT u.name, u.band_name, COUNT(*) as bookings, COALESCE(SUM(b.total_price), 0) as revenue
+      `SELECT u.name, u.band_name, COUNT(*) as bookings, COALESCE(SUM(b.total_price - COALESCE(b.promo_discount, 0)), 0) as revenue
        FROM bookings b
        JOIN users u ON b.user_id = u.id
        WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled'
@@ -1905,7 +1901,7 @@ export async function getMonthlyReportData(
       `SELECT
          CAST(strftime('%W', date) AS INTEGER) as week_num,
          COUNT(*) as count,
-         COALESCE(SUM(total_price), 0) as revenue
+         COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue
        FROM bookings
        WHERE date >= ? AND date <= ? AND status != 'cancelled'
        GROUP BY week_num

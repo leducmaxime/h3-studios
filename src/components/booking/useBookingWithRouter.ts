@@ -20,6 +20,7 @@ import {
   loadUserPreferences,
   saveUserPreferences,
   TIME_SLOTS,
+  applyMinAdvance,
 } from "@/lib/booking";
 
 // ---------------------------------------------------------------------------
@@ -164,20 +165,6 @@ function applyStepGuards(
 }
 
 // ---------------------------------------------------------------------------
-// User-info completeness check
-// ---------------------------------------------------------------------------
-function isUserInfoComplete(s: ExtendedBookingState): boolean {
-  return (
-    s.userName.trim() !== "" &&
-    s.userEmail.trim() !== "" &&
-    s.userPhone.trim() !== "" &&
-    s.billingAddress.trim() !== "" &&
-    s.billingPostalCode.trim() !== "" &&
-    s.billingCity.trim() !== ""
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Serialization
 // ---------------------------------------------------------------------------
 interface SerializedBookingState extends Omit<ExtendedBookingState, "selectedDate" | "cart" | "accountPassword" | "accountPasswordConfirm"> {
@@ -295,7 +282,9 @@ export function useBookingWithRouter(urlStep?: string) {
   const [isHydrated, setIsHydrated] = useState(false);
   const isInitialMount = useRef(true);
   const appliedPromoRef = useRef<PromoCode | null>(null);
-  appliedPromoRef.current = state.appliedPromo;
+  useEffect(() => {
+    appliedPromoRef.current = state.appliedPromo;
+  }, [state.appliedPromo]);
   const [slotsByStudio, setSlotsByStudio] = useState<Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>>({});
   const [minAdvanceHours, setMinAdvanceHours] = useState<number>(0);
   const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
@@ -320,34 +309,27 @@ export function useBookingWithRouter(urlStep?: string) {
   const mergedSlotsByStudio = useMemo(
     () => {
       const merged = mergeCartIntoSlots(slotsByStudio, state.cart, state.selectedDate);
-      // Apply min-advance gating for today: slots before cutoff are unavailable,
-      // and a fully-blocked today makes all slots unavailable.
-      if (todayFullyBlocked || minAdvanceCutoffTime) {
-        const result: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>> = {};
-        for (const [studioId, slots] of Object.entries(merged)) {
-          result[studioId] = slots.map((s) => {
-            if (todayFullyBlocked) {
-              return { ...s, available: false, groupType: s.groupType ?? "blocked" };
-            }
-            if (minAdvanceCutoffTime && s.time < minAdvanceCutoffTime) {
-              return { ...s, available: false, groupType: s.groupType ?? "blocked" };
-            }
-            return s;
-          });
-        }
-        return result;
+      // Apply min-advance gating for today: slots before cutoff are unavailable.
+      // Lexicographic "00:00" < any cutoff — this intentionally marks the
+      // midnight END boundary unavailable when a cutoff is active.
+      const result: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>> = {};
+      for (const [studioId, slots] of Object.entries(merged)) {
+        result[studioId] = applyMinAdvance(slots, minAdvanceCutoffTime, todayFullyBlocked);
       }
-      return merged;
+      return result;
     },
-    [slotsByStudio, state.cart, state.selectedDate, state.groupType, todayFullyBlocked, minAdvanceCutoffTime],
+    [slotsByStudio, state.cart, state.selectedDate, todayFullyBlocked, minAdvanceCutoffTime],
   );
 
+  const availabilityFetchGenRef = useRef(0);
   useEffect(() => {
     if (!state.selectedDate) return;
     const dateStr = formatDateISO(state.selectedDate);
+    const gen = ++availabilityFetchGenRef.current;
     fetch(`/api/availability?date=${dateStr}`)
       .then((res) => res.json())
       .then((data) => {
+        if (gen !== availabilityFetchGenRef.current) return; // stale guard
         const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null; todayFullyBlocked: boolean } };
         if (json.success && json.data) {
           setSlotsByStudio(json.data.slots);
@@ -382,8 +364,8 @@ export function useBookingWithRouter(urlStep?: string) {
 
     if (savedState) {
       const urlStepSlug = resolveStepFromUrl(urlStep);
-      // Prefer URL step if it's non-default; otherwise keep saved step
-      const restoredStep = (urlStepSlug !== "groupe" || !!urlStep) ? urlStepSlug : savedState.step;
+      // Prefer URL step when present; otherwise keep saved step
+      const restoredStep = urlStep ? urlStepSlug : savedState.step;
 
       const restoredState = {
         ...savedState,
@@ -582,8 +564,9 @@ export function useBookingWithRouter(urlStep?: string) {
         s.cart, s.isAddingNew, s.groupType, targetStep,
       );
 
-      // Preserve reset behavior for groupe when switching group type
-      if (targetStep === "groupe" && (s.groupType === "solo" || s.groupType === "duo")) {
+      // Preserve reset behavior for groupe when switching group type —
+      // only apply when the guard allowed the navigation (no redirect).
+      if (targetStep === "groupe" && guardedStep === targetStep && (s.groupType === "solo" || s.groupType === "duo")) {
         return {
           ...s, step: "groupe", groupType: null,
           selectedDate: null, startTime: null, endTime: null, studioId: null,
@@ -611,15 +594,6 @@ export function useBookingWithRouter(urlStep?: string) {
     setState((s) => ({ ...s, startTime: null, endTime: null, studioId: null }));
   }, []);
 
-  const confirmTimeSelection = useCallback(() => {
-    setState((s) => {
-      if (s.startTime && s.endTime && s.selectedDate && s.groupType) {
-        return s;
-      }
-      return s;
-    });
-  }, []);
-
   const setGroupType = useCallback((groupType: GroupType | null) => {
     setState((s) => {
       if (groupType === "solo" || groupType === "duo" || groupType === "group") {
@@ -634,10 +608,18 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const updateUserInfo = useCallback(
-    (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity" | "additionalInfo" | "createAccount" | "accountPassword" | "accountPasswordConfirm", value: string | boolean) => {
-      setState((s) => ({ ...s, [field]: value }));
-      if (field === "userName" || field === "userEmail" || field === "userPhone" || field === "bandName") {
-        saveUserPreferences({ [field]: value as string });
+    (fields: Partial<ExtendedBookingState>) => {
+      setState((s) => ({ ...s, ...fields }));
+      // Save user preferences for relevant fields
+      const prefsFields: (keyof import("@/lib/booking").UserPreferences)[] = ["userName", "userEmail", "userPhone", "bandName"];
+      const prefs: Partial<import("@/lib/booking").UserPreferences> = {};
+      for (const key of prefsFields) {
+        if (key in fields) {
+          (prefs as Record<string, unknown>)[key] = fields[key as keyof typeof fields];
+        }
+      }
+      if (Object.keys(prefs).length > 0) {
+        saveUserPreferences(prefs);
       }
     },
     []
@@ -1076,13 +1058,11 @@ export function useBookingWithRouter(urlStep?: string) {
   /** Exposed for ProgressIndicator — checks if a slug step is reachable via user click */
   const canNavigateToStep = useCallback((targetStep: BookingStep): boolean => {
     if (targetStep === "paiement" || targetStep === "termine") return false;
-    const isCartLocked = state.cart.length > 0 && !state.isAddingNew;
-    if (targetStep === "groupe") return !isCartLocked;
-    if (targetStep === "creneau") return !!(state.groupType) && !isCartLocked;
-    if (targetStep === "panier") return true;
-    if (targetStep === "coordonnees") return state.cart.length > 0;
-    return false;
-  }, [state.cart.length, state.isAddingNew, state.groupType]);
+    const { isRedirect } = applyStepGuards(
+      state.cart, state.isAddingNew, state.groupType, targetStep,
+    );
+    return !isRedirect;
+  }, [state.cart, state.isAddingNew, state.groupType]);
 
   return {
     state,
@@ -1107,7 +1087,6 @@ export function useBookingWithRouter(urlStep?: string) {
     selectDate,
     selectTimeRange,
     clearTimeRange,
-    confirmTimeSelection,
     setGroupType,
     selectStudio,
     updateUserInfo,

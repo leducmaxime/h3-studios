@@ -1,5 +1,6 @@
 import { type DbBooking, type DbUser, type DbPayment } from "./db-types";
 import { STUDIOS, formatPrice, type StudioId } from "./booking";
+import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -334,7 +335,7 @@ export async function generateInvoicePDF(
 
   // Pricing summary
   const basePrice = booking.base_price || 0;
-  const totalPrice = booking.total_price || 0;
+  const netTotal = getBookingAmountDue(booking);
 
   doc.setFont("helvetica", "normal");
   doc.text("Sous-total répétition:", 100, y);
@@ -355,7 +356,7 @@ export async function generateInvoicePDF(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text("Total TTC:", 100, y);
-  doc.text(`${totalPrice.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+  doc.text(`${netTotal.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
   y += 15;
 
   // Payment info

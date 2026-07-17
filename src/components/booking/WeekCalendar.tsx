@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   ALL_TIME_SLOTS,
@@ -141,7 +141,9 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
 
   const maxDayOffset = Math.max(0, maxAdvanceDays - 6);
 
+  const weekFetchGenRef = useRef(0);
   useEffect(() => {
+    const gen = ++weekFetchGenRef.current;
     setWeekOccupancy(new Map());
     setDayMinAdvance(new Map());
     weekDates.forEach((date) => {
@@ -150,6 +152,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
       fetch(`/api/availability?date=${dateStr}`)
         .then((res) => res.json())
         .then((data: unknown) => {
+          if (gen !== weekFetchGenRef.current) return; // stale guard
           const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null; todayFullyBlocked: boolean } };
           if (json.success && json.data) {
             // Convert new per-studio format to OccupancyInfo set (only occupied slots)

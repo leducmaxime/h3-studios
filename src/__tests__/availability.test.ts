@@ -230,10 +230,11 @@ describe("Unified Availability Engine", () => {
   });
 
   describe("canBeStartTime bug fix", () => {
-    it("allows start when exactly MIN_BOOKING_SLOTS are free at end of day", () => {
-      // If a studio closes at 22:30, the last 2 slots are 21:30 and 22:00
-      // This is exactly MIN_BOOKING_SLOTS (2), so 21:30 should be a valid start
-      const visibleSlots = ["21:00", "21:30", "22:00"];
+    it("allows start when exactly MIN_BOOKING_SLOTS are free before boundary", () => {
+      // If a studio closes at 22:30, getStudioTimeSlots includes "22:30"
+      // as the closing-boundary slot. After excluding it, effective slots
+      // = ["21:00","21:30","22:00"] — "21:30" has 2 free ahead (21:30, 22:00).
+      const visibleSlots = ["21:00", "21:30", "22:00", "22:30"];
       const isOccupied = (slot: string) => false;
       expect(canBeStartTime("21:30", visibleSlots, isOccupied)).toBe(true);
     });
@@ -258,6 +259,30 @@ describe("Unified Availability Engine", () => {
       // But if 14:30 is also occupied:
       const isOccupied2 = (slot: string) => slot === "14:30" || slot === "15:00";
       expect(canBeStartTime("14:00", visibleSlots, isOccupied2)).toBe(false);
+    });
+
+    it("rejects last real slot as start (no room before boundary)", () => {
+      // Studio closes at 22:30 — "22:00" is the last real slot.
+      // After excluding the boundary "22:30", only "22:00" remains,
+      // which is 1 slot < MIN_BOOKING_SLOTS (2).
+      const visibleSlots = ["21:00", "21:30", "22:00", "22:30"];
+      const isOccupied = (slot: string) => false;
+      expect(canBeStartTime("22:00", visibleSlots, isOccupied)).toBe(false);
+    });
+
+    it("rejects boundary slot as start (not a real booking slot)", () => {
+      // "22:30" is the closing-boundary marker — never a valid start.
+      const visibleSlots = ["21:00", "21:30", "22:00", "22:30"];
+      const isOccupied = (slot: string) => false;
+      expect(canBeStartTime("22:30", visibleSlots, isOccupied)).toBe(false);
+    });
+
+    it("rejects 00:00 boundary as start for la-scene", () => {
+      // La Scène closes at 00:00 — the boundary slot "00:00" is in visibleSlots
+      // but must never be a valid start.
+      const visibleSlots = ["22:00", "22:30", "23:00", "23:30", "00:00"];
+      const isOccupied = (slot: string) => false;
+      expect(canBeStartTime("00:00", visibleSlots, isOccupied)).toBe(false);
     });
   });
 

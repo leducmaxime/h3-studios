@@ -31,6 +31,7 @@ export interface BookingConfirmationData {
   promoCode?: string | null;
   promoDiscount?: number;
   promoType?: string | null;
+  promoValue?: number; // Valeur brute du code promo (pourcentage ou montant fixe)
   // Multi-booking: all slots in the cart
   allSlots?: BookingSlot[];
 }
@@ -151,7 +152,7 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   const paymentLabel = getPaymentMethodLabel(data.paymentMethod, data.paymentStatus, data.totalPrice);
   const equipmentLabel = buildEquipmentList(data.equipment);
   const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
-  const promoLabel = data.promoType === "percentage" ? `${data.promoDiscount}%` : `${formatPrice(data.promoDiscount || 0)}`;
+  const promoLabel = data.promoType === "percentage" ? `${data.promoValue ?? data.promoDiscount}%` : `${formatPrice(data.promoDiscount || 0)}`;
   const durationHours = calculateDurationHours(data.startTime, data.endTime);
   const isGroup = data.groupType === "group";
   const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, durationHours);
@@ -501,6 +502,62 @@ export async function sendBookingConfirmationEmail(
     return { success: true };
   } catch (error) {
     console.error("Error sending booking confirmation email:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+/**
+ * Envoie un email de création/réinitialisation de mot de passe via Resend.
+ * Utilisé à la fois par le flux de réservation (création de compte) et
+ * par la page mot-de-passe-oublie.
+ *
+ * @param apiKey - Clé API Resend
+ * @param to - Email du destinataire
+ * @param name - Prénom/nom du destinataire (pour la personnalisation)
+ * @param resetUrl - URL complète de réinitialisation
+ * @param subject - Sujet de l'email (défaut : "Créez votre mot de passe H3 Studios")
+ * @returns Success ou erreur
+ */
+export async function sendPasswordResetEmail(
+  apiKey: string,
+  to: string,
+  name: string,
+  resetUrl: string,
+  subject = "Créez votre mot de passe H3 Studios",
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const emailHtml = `
+      <h2>${subject}</h2>
+      <p>Bonjour ${name},</p>
+      <p>Vous avez demandé à créer ou réinitialiser votre mot de passe. Cliquez sur le lien ci-dessous :</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>Ce lien est valable pendant 1 heure.</p>
+      <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+    `;
+
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "H3 Studios <contact@h3-studios.fr>",
+        to,
+        subject,
+        html: emailHtml,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorData = await resendResponse.text();
+      console.error("Resend API error (password reset):", errorData);
+      return { success: false, error: errorData };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending password reset email:", error);
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }

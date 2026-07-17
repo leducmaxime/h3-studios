@@ -1,7 +1,7 @@
 "use client";
 
 import { Calendar, CircleCheckBig, CreditCard, IdCard, ShoppingCart, Users } from "lucide-react";
-import { BOOKING_STEPS, type BookingStep, stepIndex } from "@/lib/booking";
+import { type BookingStep, stepIndex } from "@/lib/booking";
 
 interface ProgressIndicatorProps {
   currentStep: BookingStep;
@@ -20,30 +20,27 @@ type StepDef = {
  * Step flow (traversal order):
  *   Type → Créneaux → Panier → Coordonnées → Paiement → Terminé
  */
-function getStepDefs(): StepDef[] {
-  return [
-    { icon: Users, step: "groupe", label: "Type" },
-    { icon: Calendar, step: "creneau", label: "Créneaux" },
-    { icon: ShoppingCart, step: "panier", label: "Panier" },
-    { icon: IdCard, step: "coordonnees", label: "Coordonnées" },
-    { icon: CreditCard, step: "paiement", label: "Paiement" },
-    { icon: CircleCheckBig, step: "termine", label: "Terminé" },
-  ];
-}
+const STEP_DEFS: StepDef[] = [
+  { icon: Users, step: "groupe", label: "Type" },
+  { icon: Calendar, step: "creneau", label: "Créneaux" },
+  { icon: ShoppingCart, step: "panier", label: "Panier" },
+  { icon: IdCard, step: "coordonnees", label: "Coordonnées" },
+  { icon: CreditCard, step: "paiement", label: "Paiement" },
+  { icon: CircleCheckBig, step: "termine", label: "Terminé" },
+];
 
 export function ProgressIndicator({
   currentStep,
   onStepClick,
   canNavigateToStep,
 }: ProgressIndicatorProps) {
-  const stepDefs = getStepDefs();
 
   const currentIdx = stepIndex(currentStep);
 
   return (
     <div className="mb-6">
       <div className="flex items-center justify-center gap-0">
-        {stepDefs.map(({ icon: Icon, step, label }, index) => {
+        {STEP_DEFS.map(({ icon: Icon, step, label }, index) => {
           const thisIdx = index;
           const isCompleted = currentIdx > thisIdx;
           const isCurrent = currentIdx === thisIdx;
@@ -96,7 +93,7 @@ export function ProgressIndicator({
                 </span>
               </div>
 
-              {index < stepDefs.length - 1 && (
+              {index < STEP_DEFS.length - 1 && (
                 <div
                   className={`
                     mx-1 sm:mx-2 h-0.5 w-3 sm:w-6 md:w-10 transition-colors duration-300
@@ -110,7 +107,7 @@ export function ProgressIndicator({
       </div>
 
       <div className="mt-4 flex gap-1">
-        {stepDefs.map(({ step }, index) => (
+        {STEP_DEFS.map(({ step }, index) => (
           <div
             key={step}
             className={`h-1 flex-1 rounded-full transition-colors duration-300 ${

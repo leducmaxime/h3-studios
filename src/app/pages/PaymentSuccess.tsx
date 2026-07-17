@@ -45,7 +45,6 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
 
     // Always clear localStorage
     localStorage.removeItem("h3-pending-payment");
-    localStorage.removeItem("h3-booking-state");
 
     setLoading(false);
     setTimeout(() => setIsVisible(true), 50);
@@ -95,7 +94,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                   </span>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-white/60">Confirmation envoyée à</span>
+                  <span className="text-white/60">Une confirmation sera envoyée à</span>
                   <span className="break-all text-sm text-white/80">{bookingData.email}</span>
                 </div>
               </div>

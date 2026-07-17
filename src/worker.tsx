@@ -46,7 +46,7 @@ import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
 import { createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
-import { sendBookingConfirmationEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
+import { sendBookingConfirmationEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
 import {
   type AdminRole,
   verifyPassword,
@@ -125,7 +125,7 @@ import {
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters, type DbBooking } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, slotDurationSlots, type StudioId, type EquipmentSelection } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, slotDurationSlots, type StudioId, type EquipmentSelection } from "@/lib/booking";
 import {
   getParisDateISO,
   getParisNow,
@@ -165,10 +165,10 @@ function getSlotsForBooking(start: string, end: string): string[] {
   return ALL_TIME_SLOTS.slice(startIdx, endIdx);
 }
 
-function jsonResponse(data: unknown, status = 200): Response {
+function jsonResponse(data: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...extraHeaders },
   });
 }
 
@@ -673,6 +673,15 @@ const app = defineApp([
       const blockedSlots = await getBlockedSlots(env.DB, undefined, date);
       const bookingDate = new Date(date + "T00:00:00");
 
+      // Load DB-driven opening hours so admin edits apply to slot availability
+      const dbHours = await getOpeningHours(env.DB);
+      const hoursMap: Record<string, Record<number, { open: string; close: string }>> = {};
+      for (const h of dbHours) {
+        if (!hoursMap[h.studio_id]) hoursMap[h.studio_id] = {};
+        hoursMap[h.studio_id][h.day_of_week] = { open: h.open_time, close: h.close_time };
+      }
+      setOpeningHours(hoursMap);
+
       // Build per-studio, per-slot occupant map
       const occupantMap: Record<string, Record<string, { groupType: string; bookingId?: string } | null>> = {
         "la-scene": {},
@@ -785,9 +794,10 @@ const app = defineApp([
         return jsonError("Adresse email invalide.", 400);
       }
 
+      type AccountStatus = "authenticated" | "created" | "activation-email-sent" | "guest";
       // ── Identity resolution (Phase 5A: optional auth) ─────────────────────
       let userId: string;
-      let accountStatus: string;
+      let accountStatus: AccountStatus;
       let newSessionToken: string | null = null;
       let guestWasCreated = false;
 
@@ -862,31 +872,14 @@ const app = defineApp([
               .bind(`prt-booking-${generateId()}`, userId, resetToken, expiresAt)
               .run();
             const resetUrl = new URL(`/mon-compte/reinitialiser?token=${resetToken}`, request.url).toString();
-            const emailHtml = `
-              <h2>Créez votre mot de passe H3 Studios</h2>
-              <p>Bonjour ${name},</p>
-              <p>Vous avez créé un compte lors de votre réservation. Cliquez sur le lien ci-dessous pour définir votre mot de passe :</p>
-              <p><a href="${resetUrl}">${resetUrl}</a></p>
-              <p>Ce lien est valable pendant 1 heure.</p>
-              <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
-            `;
             if (env.RESEND_API_KEY) {
-              const resendResponse = await fetch("https://api.resend.com/emails", {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${env.RESEND_API_KEY}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  from: "H3 Studios <contact@h3-studios.fr>",
-                  to: email,
-                  subject: "Créez votre mot de passe H3 Studios",
-                  html: emailHtml,
-                }),
-              });
-              if (!resendResponse.ok) {
-                console.error("Resend API error (account creation):", await resendResponse.text());
-              }
+              await sendPasswordResetEmail(
+                env.RESEND_API_KEY,
+                email,
+                name,
+                resetUrl,
+                "Créez votre mot de passe H3 Studios",
+              );
             }
           } catch (e) {
             console.error("Failed to send activation email:", e);
@@ -939,6 +932,15 @@ const app = defineApp([
       // "00:00" = minuit/fin de journée, toujours après n'importe quelle heure
       if (body.endTime !== "00:00" && body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
 
+      // Load DB-driven opening hours for server-side slot computations
+      const dbHours = await getOpeningHours(env.DB);
+      const hoursMap2: Record<string, Record<number, { open: string; close: string }>> = {};
+      for (const h of dbHours) {
+        if (!hoursMap2[h.studio_id]) hoursMap2[h.studio_id] = {};
+        hoursMap2[h.studio_id][h.day_of_week] = { open: h.open_time, close: h.close_time };
+      }
+      setOpeningHours(hoursMap2);
+
       // ── Server-authoritative pricing ──────────────────────────────────────
       const halfHours = slotDurationSlots(body.startTime, body.endTime);
       const durationHours = halfHours * 0.5;
@@ -990,6 +992,7 @@ const app = defineApp([
       // consolidated confirmation email so it matches the charged amount.
       let cartPromoDiscountTotal = 0;
       let promoType: string | null = null;
+      let promoValue: number | undefined = undefined;
 
       if (body.isLastInCart && body.promoCode) {
         // Last cart request with a promo code: full cart recompute
@@ -1026,6 +1029,7 @@ const app = defineApp([
         const discountTotal = Math.min(promoValidation.roundedDiscount || 0, cartSubtotal);
         cartPromoDiscountTotal = discountTotal;
         promoType = promoValidation.promo?.type || null;
+        promoValue = promoValidation.promo?.value;
 
         // Allocate greedily in cart order: previous bookings first (refs order),
         // then this booking.
@@ -1056,12 +1060,11 @@ const app = defineApp([
               promo_type: promoType,
             });
             // Fully discounted previous booking (e.g. 100% promo on a
-            // multi-item cart): mark paid + 0€ payment record, mirroring the
-            // single-booking zero-total path.
+            // multi-item cart): 0€ payment record — addPayment triggers
+            // recomputeBookingPaymentStatus which sets "paid" automatically.
             const prevBooking = previousBookings.find((pb) => pb.id === alloc.id);
             const prevSubtotal = prevBooking ? (prevBooking.base_price || 0) + (prevBooking.equipment_price || 0) : 0;
             if (prevBooking && alloc.discount >= prevSubtotal && prevSubtotal > 0 && prevBooking.payment_status !== "paid") {
-              await updateBooking(env.DB, alloc.id, { payment_status: "paid" });
               await addPayment(env.DB, {
                 booking_id: alloc.id,
                 amount: 0,
@@ -1082,6 +1085,7 @@ const app = defineApp([
         const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), serverTotalPrice);
         if (promoValidation.valid) {
           promoType = promoValidation.promo?.type || null;
+          promoValue = promoValidation.promo?.value;
         }
         // serverPromoDiscount stays 0
       }
@@ -1178,7 +1182,7 @@ const app = defineApp([
             endTime: body.endTime,
             groupType: body.groupType,
             equipment: body.equipment,
-            equipmentPrice: body.equipmentPrice,
+            equipmentPrice: serverEquipmentPrice,
             // Server-authoritative totals: multi-slot emails show the cart net
             // total, single-slot the booking net — never client-supplied amounts.
             totalPrice: allSlots.length > 1 ? cartGrossTotal - cartPromoDiscountTotal : serverNetTotal,
@@ -1190,6 +1194,7 @@ const app = defineApp([
             promoCode: body.promoCode,
             promoDiscount: cartPromoDiscountTotal,
             promoType: promoType,
+            promoValue,
             allSlots: allSlots.length > 1 ? allSlots : undefined,
           };
 
@@ -1200,15 +1205,11 @@ const app = defineApp([
       }
 
       // ── Response with accountStatus ───────────────────────────────────────
-      const responseData = { success: true, bookingId: booking.id, ref: booking.booking_ref, accountStatus };
+      const responseData = { bookingId: booking.id, ref: booking.booking_ref, accountStatus };
 
       if (newSessionToken) {
-        return new Response(JSON.stringify({ success: true, data: responseData }), {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Set-Cookie": buildClientSessionCookie(newSessionToken),
-          },
+        return jsonResponse({ success: true, data: responseData }, 200, {
+          "Set-Cookie": buildClientSessionCookie(newSessionToken),
         });
       }
 
@@ -1273,8 +1274,16 @@ const app = defineApp([
         minMaxByGroupType[gt] = { min, max };
       }
 
+      // Include opening hours so the client can update its slot store
+      const dbHours = await getOpeningHours(env.DB);
+      const openingHours: Record<string, Record<number, { open: string; close: string }>> = {};
+      for (const h of dbHours) {
+        if (!openingHours[h.studio_id]) openingHours[h.studio_id] = {};
+        openingHours[h.studio_id][h.day_of_week] = { open: h.open_time, close: h.close_time };
+      }
+
       // Admin pricing edits must be visible on next page load — never cache.
-      const res = jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays });
+      const res = jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays, openingHours });
       res.headers.set("Cache-Control", "no-store");
       return res;
     } catch (error) {
@@ -3550,7 +3559,7 @@ const app = defineApp([
 
       if (groupByMonth) {
         const rows = await env.DB.prepare(
-          `SELECT substr(date, 1, 7) as date, COALESCE(SUM(total_price), 0) as revenue
+          `SELECT substr(date, 1, 7) as date, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue
            FROM bookings
            WHERE date >= ? AND date <= ? AND status != 'cancelled'
            GROUP BY substr(date, 1, 7)
@@ -3561,7 +3570,7 @@ const app = defineApp([
       }
 
       const bookings = await env.DB.prepare(
-        "SELECT date, COALESCE(SUM(total_price), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date ORDER BY date ASC",
+        "SELECT date, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date ORDER BY date ASC",
       ).bind(fromStr, toStr).all<{ date: string; revenue: number }>();
 
       return jsonSuccess(bookings.results.map((row) => ({ date: row.date, revenue: row.revenue })));
@@ -3616,7 +3625,7 @@ const app = defineApp([
          occupancyStmt,
         // Studio distribution
         env.DB.prepare(
-          `SELECT studio_id, COUNT(*) as count, SUM(total_price) as revenue
+          `SELECT studio_id, COUNT(*) as count, SUM(total_price - COALESCE(promo_discount, 0)) as revenue
            FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
            GROUP BY studio_id`,
         ).bind(fromStr, toStr),
@@ -3635,7 +3644,7 @@ const app = defineApp([
         env.DB.prepare(
           `SELECT
             COUNT(*) as count,
-            COALESCE(SUM(total_price), 0) as revenue
+            COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue
           FROM bookings
           WHERE date >= ? AND date <= ?
             AND status != 'cancelled'
@@ -4293,37 +4302,21 @@ const app = defineApp([
         .run();
 
       const resetUrl = new URL(`/mon-compte/reinitialiser?token=${token}`, request.url).toString();
-      const emailHtml = `
-        <h2>Réinitialisation de votre mot de passe</h2>
-        <p>Bonjour ${user.name},</p>
-        <p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le lien ci-dessous :</p>
-        <p><a href="${resetUrl}">${resetUrl}</a></p>
-        <p>Ce lien est valable pendant 1 heure.</p>
-        <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
-      `;
 
       if (!env.RESEND_API_KEY) {
         console.error("RESEND_API_KEY not configured");
         return jsonError("Service d'email non configuré", 500);
       }
 
-      const resendResponse = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "H3 Studios <contact@h3-studios.fr>",
-          to: user.email,
-          subject: "Réinitialisation de votre mot de passe H3 Studios",
-          html: emailHtml,
-        }),
-      });
+      const emailResult = await sendPasswordResetEmail(
+        env.RESEND_API_KEY,
+        user.email,
+        user.name,
+        resetUrl,
+        "Réinitialisation de votre mot de passe H3 Studios",
+      );
 
-      if (!resendResponse.ok) {
-        const errorData = await resendResponse.text();
-        console.error("Resend API error:", errorData);
+      if (!emailResult.success) {
         return jsonError("Échec de l'envoi de l'email", 500);
       }
 
@@ -4342,8 +4335,8 @@ const app = defineApp([
       if (!body.token || !body.password) {
         return jsonError("Token et mot de passe requis", 400);
       }
-      if (body.password.length < 6) {
-        return jsonError("Le mot de passe doit contenir au moins 6 caractères", 400);
+      if (body.password.length < 8) {
+        return jsonError("Le mot de passe doit contenir au moins 8 caractères", 400);
       }
 
       const row = await env.DB
@@ -4442,9 +4435,9 @@ const app = defineApp([
       }
 
       if (body.password !== undefined && body.password.length > 0) {
-        if (body.password.length < 6) {
-          return jsonError("Le mot de passe doit contenir au moins 6 caractères", 400);
-        }
+      if (body.password.length < 8) {
+        return jsonError("Le mot de passe doit contenir au moins 8 caractères", 400);
+      }
         const passwordHash = await hashPassword(body.password);
         (allowedFields as Record<string, unknown>).password_hash = passwordHash;
       }
@@ -4563,6 +4556,12 @@ const app = defineApp([
 
             // Record per-booking amount in euros net of promo discount
             const bookingDue = getBookingAmountDue(booking);
+
+            // Skip 0€ due: already got a zero-payment at creation for fully-discounted cart items
+            if (bookingDue <= 0) {
+              console.log(`Webhook: booking ${booking.booking_ref} has 0€ due, skipping addPayment`);
+              continue;
+            }
 
             await addPayment(env.DB, {
               booking_id: booking.id,

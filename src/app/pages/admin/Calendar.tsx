@@ -389,7 +389,7 @@ export function AdminCalendar() {
         .finally(() => setLoadingPayments(false));
       
       setNewPayment({
-        amount: String(selectedBooking.total_price),
+        amount: String(getBookingAmountDue({ ...selectedBooking, promo_discount: selectedBooking.promo_discount ?? 0 })),
         method: "cash",
       });
     } else {

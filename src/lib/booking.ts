@@ -438,9 +438,14 @@ export function canBeStartTime(
   if (slotIdx === -1) return false;
   if (isSlotOccupied(slot)) return false;
 
+  // Exclude the closing-boundary slot (last entry, e.g. "00:00" / "22:30")
+  // from the runway count — it is an end-only marker and does not represent
+  // a bookable half-hour. Mirror hasBookableRun exclusion.
+  const effectiveSlots = visibleSlots.slice(0, -1);
+
   let freeCount = 0;
-  for (let i = slotIdx; i < visibleSlots.length; i++) {
-    if (isSlotOccupied(visibleSlots[i])) break;
+  for (let i = slotIdx; i < effectiveSlots.length; i++) {
+    if (isSlotOccupied(effectiveSlots[i])) break;
     freeCount++;
   }
 
@@ -548,6 +553,30 @@ export function generateBookingRef(): string {
   const datePart = getParisDateISO().replace(/-/g, "");
   const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `H3-${datePart}-${randomPart}`;
+}
+
+/**
+ * Apply min-advance gating to an array of slot entries.
+ * Slots before the cutoff are marked unavailable.
+ * When fullyBlocked is true, every slot is marked unavailable.
+ * Lexicographic "00:00" < any cutoff — this intentionally marks the
+ * midnight END boundary unavailable when a cutoff is active.
+ */
+export function applyMinAdvance(
+  slots: Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>,
+  cutoff: string | null,
+  fullyBlocked: boolean,
+): Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }> {
+  if (!cutoff && !fullyBlocked) return slots;
+  return slots.map((s) => {
+    if (fullyBlocked) {
+      return { ...s, available: false, groupType: s.groupType ?? "blocked" };
+    }
+    if (cutoff && s.time < cutoff) {
+      return { ...s, available: false, groupType: s.groupType ?? "blocked" };
+    }
+    return s;
+  });
 }
 
 export function getAvailableRanges(

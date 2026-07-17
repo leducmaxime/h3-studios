@@ -28,6 +28,7 @@ export interface PricingData {
   grid: PricingGrid;
   minMaxByGroupType: MinMaxByGroupType;
   maxAdvanceDays: number;
+  openingHours?: Record<string, Record<number, { open: string; close: string }>>;
 }
 
 export interface PriceSlot {

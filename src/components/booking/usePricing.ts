@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { PricingData } from "@/lib/pricing";
+import { setOpeningHours } from "@/lib/booking";
 
 export function usePricing() {
   const [pricing, setPricing] = useState<PricingData | null>(null);
@@ -17,6 +18,10 @@ export function usePricing() {
         if (signal?.cancelled) return;
         if (json.success && json.data) {
           setPricing(json.data);
+          // Wire DB-driven opening hours so the public flow uses admin edits
+          if (json.data.openingHours) {
+            setOpeningHours(json.data.openingHours as Record<string, Record<number, { open: string; close: string }>>);
+          }
         } else {
           setError(json.error || "Failed to load pricing");
         }

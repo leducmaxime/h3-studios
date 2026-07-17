@@ -3,31 +3,18 @@ import type { DbBooking, DbPayment } from "./db-types";
 /**
  * Retourne le montant réellement dû pour une réservation.
  *
- * Gère les deux conventions de stockage de total_price :
- * - Post-remise (réservations publiques) : total_price est déjà net de remise
- * - Pré-remise (réservations admin) : total_price = base + equipment, remise à soustraire
+ * Convention de stockage (pré-remise) :
+ *   total_price = base_price + equipment_price  (montant brut)
+ *   promo_discount = réduction à soustraire
  *
- * Détection automatique par équation mathématique (sans colonne source).
+ * Toutes les réservations suivent cette convention depuis l'audit
+ * de données (Phase 7B) qui a confirmé zéro ligne post-remise.
  */
 export function getBookingAmountDue(
   booking: Pick<DbBooking, "base_price" | "equipment_price" | "total_price" | "promo_discount">,
 ): number {
-  const base = Number(booking.base_price) || 0;
-  const equip = Number(booking.equipment_price) || 0;
   const total = Number(booking.total_price) || 0;
   const discount = Number(booking.promo_discount) || 0;
-
-  if (discount === 0) return Math.max(0, total);
-
-  const subtotal = base + equip;
-  const isPostRemise = Math.abs(total + discount - subtotal) < 1; // tolérance 1 centime
-  const isPreRemise = Math.abs(total - subtotal) < 1;
-
-  if (isPostRemise && !isPreRemise) {
-    // Convention post-remise : total_price est déjà net
-    return Math.max(0, total);
-  }
-  // Convention pré-remise (ou ambiguë) : soustraire la remise
   return Math.max(0, total - discount);
 }
 

@@ -27,15 +27,9 @@ interface TimeSlotPickerProps {
   studioId: StudioId | null;
   onSelectRange: (start: string, end: string, studioId: StudioId) => void;
   onClear: () => void;
-  onConfirm: () => void;
   onBack: () => void;
-  canConfirm: boolean;
   hideHeader?: boolean;
   groupType?: GroupType;
-  // Accepted for backward compatibility only — the minimum-booking-delay
-  // filter now lives upstream: too-soon slots simply arrive as available: false.
-  minAdvanceHours?: number;
-  minAdvanceCutoffTime?: string | null;
   pricingGrid?: PricingGrid | null;
   /** When true, every slot of the day renders as unavailable. */
   todayFullyBlocked?: boolean;
@@ -54,9 +48,7 @@ export function TimeSlotPicker({
   studioId: initialStudioId,
   onSelectRange,
   onClear,
-  onConfirm,
   onBack,
-  canConfirm,
   hideHeader = false,
   groupType = "group",
   pricingGrid,
@@ -179,9 +171,8 @@ export function TimeSlotPicker({
     setSelectedStart(start);
     setSelectedEnd(end);
     onSelectRange(start, end, studioId);
-    onConfirm();
     return true;
-  }, [studioSlots, checkSlotBooked, onSelectRange, onConfirm, onClear]);
+  }, [studioSlots, checkSlotBooked, onSelectRange, onClear]);
 
   const handleSlotClick = useCallback(
     (slot: string, studioId: StudioId) => {
