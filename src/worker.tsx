@@ -119,6 +119,8 @@ import {
   getMonthlyReportData,
   getSetting,
   getUserByEmail,
+  findOrCreateUserByEmail,
+  getBookingsByRefs,
   resolveStatsRange,
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters, type DbBooking } from "@/lib/db-types";
@@ -735,8 +737,6 @@ const app = defineApp([
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
 
     try {
-      const clientUser = await requireClientAuth(request, env.DB);
-
       const body = await request.json() as {
         bookingRef: string;
         userId?: string;
@@ -765,6 +765,8 @@ const app = defineApp([
         notes?: string;
         cartBookingRefs?: string[];
         isLastInCart?: boolean;
+        createAccount?: boolean;
+        accountPassword?: string;
       };
 
       const name = body.user?.name?.trim() || "";
@@ -780,19 +782,104 @@ const app = defineApp([
         return jsonError("Merci de renseigner nom, email et téléphone.", 400);
       }
 
-      await updateUser(env.DB, clientUser.id, {
-        name,
-        email,
-        phone,
-        ...(bandNameRaw ? { band_name: bandNameRaw } : {}),
-        ...(addressLine1 ? { address_line1: addressLine1 } : {}),
-        ...(postalCode ? { postal_code: postalCode } : {}),
-        ...(city ? { city: city } : {}),
-      });
-      
-      const user = { id: clientUser.id };
+      // ── Identity resolution (Phase 5A: optional auth) ─────────────────────
+      let userId: string;
+      let accountStatus: string;
+      let newSessionToken: string | null = null;
 
-      // Check for conflicts
+      // Optional session check
+      const sessionToken = getClientSessionToken(request);
+      let sessionUser: Awaited<ReturnType<typeof validateClientSession>> = null;
+      if (sessionToken) {
+        sessionUser = await validateClientSession(env.DB, sessionToken);
+      }
+
+      if (sessionUser) {
+        // A) Authenticated user — use session identity, ignore body email for identity
+        userId = sessionUser.id;
+        accountStatus = "authenticated";
+
+        // Profile fields may be updated from form, but NOT email (PII protection)
+        await updateUser(env.DB, userId, {
+          name,
+          phone,
+          ...(bandNameRaw ? { band_name: bandNameRaw } : {}),
+          ...(addressLine1 ? { address_line1: addressLine1 } : {}),
+          ...(postalCode ? { postal_code: postalCode } : {}),
+          ...(city ? { city: city } : {}),
+        });
+      } else {
+        // B) Guest: find-or-create user by normalized email
+        const { user: guestUser, wasCreated } = await findOrCreateUserByEmail(env.DB, email, {
+          name,
+          phone,
+          band_name: bandNameRaw || undefined,
+          address_line1: addressLine1 || undefined,
+          postal_code: postalCode || undefined,
+          city: city || undefined,
+        });
+
+        userId = guestUser.id;
+
+        if (guestUser.is_blocked) {
+          return jsonError("Votre compte a été bloqué. Veuillez nous contacter pour plus d'informations.", 403);
+        }
+
+        if (wasCreated && body.createAccount && body.accountPassword && body.accountPassword.length >= 8) {
+          // Newly created user + createAccount + valid password → set password + create session
+          const passwordHash = await hashPassword(body.accountPassword);
+          await updateUserPassword(env.DB, userId, passwordHash);
+          const token = await createClientSession(env.DB, userId);
+          newSessionToken = token;
+          accountStatus = "created";
+        } else if (!wasCreated && body.createAccount) {
+          // Pre-existing user (guest or activated) + createAccount → password-reset email
+          try {
+            const resetToken = generateToken();
+            const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+            await env.DB
+              .prepare("INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)")
+              .bind(`prt-booking-${generateId()}`, userId, resetToken, expiresAt)
+              .run();
+            const resetUrl = new URL(`/mon-compte/reinitialiser?token=${resetToken}`, request.url).toString();
+            const emailHtml = `
+              <h2>Créez votre mot de passe H3 Studios</h2>
+              <p>Bonjour ${name},</p>
+              <p>Vous avez créé un compte lors de votre réservation. Cliquez sur le lien ci-dessous pour définir votre mot de passe :</p>
+              <p><a href="${resetUrl}">${resetUrl}</a></p>
+              <p>Ce lien est valable pendant 1 heure.</p>
+              <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+            `;
+            if (env.RESEND_API_KEY) {
+              const resendResponse = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${env.RESEND_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  from: "H3 Studios <contact@h3-studios.fr>",
+                  to: email,
+                  subject: "Créez votre mot de passe H3 Studios",
+                  html: emailHtml,
+                }),
+              });
+              if (!resendResponse.ok) {
+                console.error("Resend API error (account creation):", await resendResponse.text());
+              }
+            }
+          } catch (e) {
+            console.error("Failed to send activation email:", e);
+            // Non-blocking: continue regardless of email failure
+          }
+          accountStatus = "activation-email-sent";
+        } else {
+          // Just a guest — no account creation requested or password too short
+          accountStatus = "guest";
+        }
+      }
+
+      // ── Check for conflicts ──────────────────────────────────────────────
       const conflict = await checkConflict(env.DB, body.studioId, body.date, body.startTime, body.endTime);
       if (conflict) {
         return jsonError("Ce créneau n'est plus disponible", 409);
@@ -825,8 +912,8 @@ const app = defineApp([
       // Idempotence : si bookingRef existe déjà pour ce user, retourner le booking existant
       const existingByRef = await getBookingByRef(env.DB, body.bookingRef);
       if (existingByRef) {
-        if (existingByRef.user_id === clientUser.id) {
-          return jsonSuccess(existingByRef);
+        if (existingByRef.user_id === userId) {
+          return jsonSuccess({ ...existingByRef, accountStatus });
         }
         return jsonError("Référence de réservation déjà utilisée", 409);
       }
@@ -841,20 +928,16 @@ const app = defineApp([
       // "00:00" = minuit/fin de journée, toujours après n'importe quelle heure
       if (body.endTime !== "00:00" && body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
 
-      // Recalcul serveur du prix par slot (pas juste un flag global)
+      // ── Server-authoritative pricing ──────────────────────────────────────
       const halfHours = slotDurationSlots(body.startTime, body.endTime);
       const durationHours = halfHours * 0.5;
       const bDate = new Date(body.date + "T00:00:00");
       const dayOfWeek = bDate.getDay();
 
-      // Charger la config peak depuis la DB — mêmes clés que l'admin et le
-      // client (/api/peak-hours, /api/public-holidays) pour que le montant
-      // facturé corresponde au prix affiché.
       const peakStartHour = parseInt(await getSetting(env.DB, "peak_start_hour") || "18", 10);
       const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
       const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
-      // Cacher les prix peak/off-peak (1 appel DB chacun au lieu d'un par slot)
       const peakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, true);
       const offPeakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, false);
 
@@ -872,7 +955,6 @@ const app = defineApp([
         serverBasePrice += isPeak ? peakRate : offPeakRate;
       }
 
-      // Recalcul équipement serveur
       let serverEquipmentPrice = 0;
       if (body.equipment && body.equipment.length > 0) {
         const allEquipment = await getEquipment(env.DB);
@@ -889,32 +971,102 @@ const app = defineApp([
         }
       }
 
-      // Validation et recalcul promo code
+      const serverTotalPrice = serverBasePrice + serverEquipmentPrice;
+
+      // ── Cart-level promo recompute (Phase 5A: server authoritative) ──────
       let serverPromoDiscount = 0;
       let promoType: string | null = null;
-      if (body.promoCode) {
-        const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), serverBasePrice + serverEquipmentPrice);
+
+      if (body.isLastInCart && body.promoCode) {
+        // Last cart request with a promo code: full cart recompute
+        const cartBookingRefs: string[] = Array.isArray(body.cartBookingRefs)
+          ? body.cartBookingRefs
+          : [body.bookingRef];
+
+        // Fetch previous bookings (all cart refs except this one — not yet inserted)
+        const prevRefs = cartBookingRefs.filter((r) => r !== body.bookingRef);
+        const previousBookings = prevRefs.length > 0
+          ? await getBookingsByRefs(env.DB, prevRefs)
+          : [];
+
+        // Compute cart subtotal from stored authoritative DB prices +
+        // this booking's recomputed price
+        let cartSubtotal = 0;
+        for (const ref of prevRefs) {
+          const b = previousBookings.find((pb) => pb.booking_ref === ref);
+          if (b) {
+            cartSubtotal += (b.base_price || 0) + (b.equipment_price || 0);
+          }
+        }
+        cartSubtotal += serverTotalPrice;
+
+        // Validate promo on full cart subtotal
+        const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), cartSubtotal);
         if (!promoValidation.valid) {
           return jsonError(promoValidation.error || "Code promo invalide", 400);
         }
-        serverPromoDiscount = promoValidation.roundedDiscount || 0;
+
+        const discountTotal = Math.min(promoValidation.roundedDiscount || 0, cartSubtotal);
         promoType = promoValidation.promo?.type || null;
+
+        // Allocate greedily in cart order: previous bookings first (refs order),
+        // then this booking.
+        let remaining = discountTotal;
+        const allocations: Array<{ ref: string; id: string | null; discount: number }> = [];
+
+        for (const ref of prevRefs) {
+          const b = previousBookings.find((pb) => pb.booking_ref === ref);
+          if (b) {
+            const subtotal = (b.base_price || 0) + (b.equipment_price || 0);
+            const alloc = Math.min(remaining, subtotal);
+            allocations.push({ ref, id: b.id, discount: alloc });
+            remaining -= alloc;
+          }
+        }
+
+        // Current booking allocation
+        const currentAlloc = Math.min(remaining, serverTotalPrice);
+        allocations.push({ ref: body.bookingRef, id: null, discount: currentAlloc });
+        remaining -= currentAlloc;
+
+        // Update previous bookings' promo fields
+        for (const alloc of allocations) {
+          if (alloc.id) {
+            await updateBooking(env.DB, alloc.id, {
+              promo_discount: alloc.discount,
+              promo_code: body.promoCode,
+              promo_type: promoType,
+            });
+          } else {
+            serverPromoDiscount = alloc.discount;
+          }
+        }
+      } else if (body.promoCode) {
+        // Non-last cart request: store promo_code/type for later cart recompute,
+        // but set discount to zero (authoritative allocation happens on last request)
+        promoType = null; // will be set when the last request recomputes
+        // Still validate the promo code for early error detection
+        const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), serverTotalPrice);
+        if (promoValidation.valid) {
+          promoType = promoValidation.promo?.type || null;
+        }
+        // serverPromoDiscount stays 0
       }
 
-      const serverTotalPrice = serverBasePrice + serverEquipmentPrice;
       const serverNetTotal = serverTotalPrice - serverPromoDiscount;
       const isZeroTotal = serverNetTotal <= 0;
       const bookingPaymentStatus = isZeroTotal ? "paid" : body.paymentStatus;
 
-      // Log si écart de prix > 1€ (télémétrie)
+      // Log price mismatch (telemetry)
       const clientTotal = body.price || 0;
       if (Math.abs(clientTotal - serverNetTotal) > 1) {
         console.warn(`[booking] Price mismatch for ${body.bookingRef}: client=${clientTotal}, server=${serverNetTotal}, diff=${(clientTotal - serverNetTotal).toFixed(2)}`);
       }
 
+      // ── Create booking ────────────────────────────────────────────────────
       const createBookingData = {
         booking_ref: body.bookingRef,
-        user_id: clientUser.id,
+        user_id: userId,
         band_name: bookingBandName,
         studio_id: body.studioId,
         date: body.date,
@@ -957,15 +1109,12 @@ const app = defineApp([
         ).bind(body.promoCode.trim().toUpperCase()).run();
       }
 
-      // Send booking confirmation email immediately for non-card payments
-      // (cash/on-site or zero-total). For card payments, email is sent after
-      // Stripe webhook confirms payment.
+      // ── Email (consolidated on last cart request) ─────────────────────────
       if (env.RESEND_API_KEY && bookingPaymentStatus !== "pending") {
         const isLastInCart = body.isLastInCart === true;
         const cartBookingRefs: string[] = Array.isArray(body.cartBookingRefs) ? body.cartBookingRefs : [booking.booking_ref];
 
         if (isLastInCart) {
-          // Fetch all bookings in the cart to build consolidated email
           let allSlots: BookingSlot[] = [];
           if (cartBookingRefs.length > 1) {
             for (const ref of cartBookingRefs) {
@@ -1011,10 +1160,22 @@ const app = defineApp([
             .catch((err) => { console.error("Failed to send booking confirmation email:", err); });
           waitUntil(emailPromise);
         }
-        // else: not last in cart, skip email — consolidated email sent on last call
       }
 
-      return jsonSuccess({ success: true, bookingId: booking.id, ref: booking.booking_ref });
+      // ── Response with accountStatus ───────────────────────────────────────
+      const responseData = { success: true, bookingId: booking.id, ref: booking.booking_ref, accountStatus };
+
+      if (newSessionToken) {
+        return new Response(JSON.stringify({ success: true, data: responseData }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Set-Cookie": buildClientSessionCookie(newSessionToken),
+          },
+        });
+      }
+
+      return jsonSuccess(responseData);
     } catch (error) {
       console.error("POST /api/bookings error:", error);
       return jsonError(error instanceof Error ? error.message : "Booking failed", 500);

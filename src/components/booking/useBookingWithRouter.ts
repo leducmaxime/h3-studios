@@ -80,6 +80,10 @@ interface ExtendedBookingState extends BookingState {
   promoDiscount: number;
   isAddingNew: boolean;
   duplicateError: string | null;
+  createAccount: boolean;
+  accountPassword: string;
+  accountPasswordConfirm: string;
+  accountStatus: string | null;
 }
 
 /**
@@ -176,14 +180,16 @@ function isUserInfoComplete(s: ExtendedBookingState): boolean {
 // ---------------------------------------------------------------------------
 // Serialization
 // ---------------------------------------------------------------------------
-interface SerializedBookingState extends Omit<ExtendedBookingState, "selectedDate" | "cart"> {
+interface SerializedBookingState extends Omit<ExtendedBookingState, "selectedDate" | "cart" | "accountPassword" | "accountPasswordConfirm" | "accountStatus"> {
   selectedDate: string | null;
   cart: Array<Omit<CompletedBooking, "date"> & { date: string }>;
 }
 
 function serializeState(state: ExtendedBookingState): SerializedBookingState {
+  // Never persist credentials or transient account status to localStorage.
+  const { accountPassword, accountPasswordConfirm, accountStatus, ...persistable } = state;
   return {
-    ...state,
+    ...persistable,
     selectedDate: state.selectedDate ? state.selectedDate.toISOString() : null,
     cart: state.cart.map((booking) => ({
       ...booking,
@@ -193,9 +199,16 @@ function serializeState(state: ExtendedBookingState): SerializedBookingState {
 }
 
 function deserializeState(serialized: SerializedBookingState): ExtendedBookingState {
+  // Defensive: drop any sensitive fields that a previous version may have
+  // persisted — they must never round-trip through localStorage.
+  const { accountPassword, accountPasswordConfirm, accountStatus, ...safe } = serialized as SerializedBookingState & {
+    accountPassword?: string;
+    accountPasswordConfirm?: string;
+    accountStatus?: string | null;
+  };
   return {
     ...initialState,
-    ...serialized,
+    ...safe,
     step: (BOOKING_STEPS as readonly string[]).includes(serialized.step) ? serialized.step : ("groupe" as BookingStep),
     selectedDate: serialized.selectedDate ? new Date(serialized.selectedDate) : null,
     cart: serialized.cart.map((booking) => ({
@@ -262,6 +275,10 @@ const initialState: ExtendedBookingState = {
   promoDiscount: 0,
   isAddingNew: false,
   duplicateError: null,
+  createAccount: false,
+  accountPassword: "",
+  accountPasswordConfirm: "",
+  accountStatus: null,
 };
 
 // ===========================================================================
@@ -617,10 +634,10 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const updateUserInfo = useCallback(
-    (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity" | "additionalInfo", value: string) => {
+    (field: "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity" | "additionalInfo" | "createAccount" | "accountPassword" | "accountPasswordConfirm", value: string | boolean) => {
       setState((s) => ({ ...s, [field]: value }));
       if (field === "userName" || field === "userEmail" || field === "userPhone" || field === "bandName") {
-        saveUserPreferences({ [field]: value });
+        saveUserPreferences({ [field]: value as string });
       }
     },
     []
@@ -777,46 +794,70 @@ export function useBookingWithRouter(urlStep?: string) {
       let remainingPromo = totalPromoDiscount;
       const allCartRefs = state.cart.map(b => b.bookingRef);
       const method = paymentMethod || "cash";
+      let accountStatus: string | null = null;
 
       for (let i = 0; i < state.cart.length; i++) {
         const booking = state.cart[i];
         const bookingPromoDiscount = Math.min(booking.price, remainingPromo);
         remainingPromo -= bookingPromoDiscount;
         const finalPrice = Math.max(0, booking.price - bookingPromoDiscount);
+
+        // For logged-in users, force the POST email to the session email
+        const userEmail = clientUser ? clientUser.email || state.userEmail : state.userEmail;
+
+        const body: Record<string, unknown> = {
+          bookingRef: booking.bookingRef,
+          user: {
+            name: state.userName,
+            email: userEmail,
+            phone: state.userPhone,
+            bandName: state.bandName,
+            addressLine1: state.billingAddress,
+            postalCode: state.billingPostalCode,
+            city: state.billingCity,
+          },
+          studioId: booking.studioId,
+          date: formatDateISO(booking.date),
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          groupType: booking.groupType,
+          equipment: booking.equipment,
+          equipmentPrice: booking.equipmentPrice,
+          price: finalPrice,
+          paymentMethod: method,
+          paymentStatus: method === "card" ? "pending" : "pay-on-site",
+          // Send promoCode on the LAST request (server does cart-level recompute)
+          promoCode: i === state.cart.length - 1 ? promoCodeToApply : null,
+          round_mode: i === state.cart.length - 1 ? appliedPromoRef.current?.round_mode ?? null : null,
+          promoDiscount: bookingPromoDiscount,
+          notes: state.additionalInfo,
+          cartBookingRefs: allCartRefs,
+          isLastInCart: i === state.cart.length - 1,
+        };
+
+        // Account creation on first booking request only (i === 0)
+        if (i === 0 && !clientUser && state.createAccount) {
+          body.createAccount = true;
+          body.accountPassword = state.accountPassword;
+        }
+
         const res = await fetch("/api/bookings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bookingRef: booking.bookingRef,
-            user: {
-              name: state.userName,
-              email: state.userEmail,
-              phone: state.userPhone,
-              bandName: state.bandName,
-              addressLine1: state.billingAddress,
-              postalCode: state.billingPostalCode,
-              city: state.billingCity,
-            },
-            studioId: booking.studioId,
-            date: formatDateISO(booking.date),
-            startTime: booking.startTime,
-            endTime: booking.endTime,
-            groupType: booking.groupType,
-            equipment: booking.equipment,
-            equipmentPrice: booking.equipmentPrice,
-            price: finalPrice,
-            paymentMethod: method,
-            paymentStatus: method === "card" ? "pending" : "pay-on-site",
-            promoCode: i === 0 ? promoCodeToApply : null,
-            round_mode: i === 0 ? appliedPromoRef.current?.round_mode ?? null : null,
-            promoDiscount: bookingPromoDiscount,
-            notes: state.additionalInfo,
-            cartBookingRefs: allCartRefs,
-            isLastInCart: i === state.cart.length - 1,
-          }),
+          body: JSON.stringify(body),
         });
-        const json = await res.json() as { success: boolean; error?: string };
+        const json = await res.json() as { success: boolean; data?: { accountStatus?: string }; error?: string };
         if (!json.success) throw new Error(json.error);
+
+        // Capture accountStatus from the first response
+        if (i === 0 && json.data?.accountStatus) {
+          accountStatus = json.data.accountStatus;
+        }
+      }
+
+      // Persist accountStatus in state
+      if (accountStatus) {
+        setState((s) => ({ ...s, accountStatus }));
       }
 
       setState((s) => {
@@ -835,7 +876,7 @@ export function useBookingWithRouter(urlStep?: string) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, isSubmitting]);
+  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, isSubmitting, clientUser, state.createAccount, state.accountPassword]);
 
   /** From coordonnées: proceed to payment choice or skip if free */
   const goToPaymentFromCoordonnees = useCallback(async () => {
@@ -895,6 +936,42 @@ export function useBookingWithRouter(urlStep?: string) {
   const resetBooking = useCallback(() => {
     clearBookingState();
     setState(initialState);
+  }, []);
+
+  /** Login a client user in the booking flow. On success, prefill form fields from the account. */
+  const clientLogin = useCallback(async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch("/api/client/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+        credentials: "include",
+      });
+      const json = await res.json() as {
+        success: boolean;
+        data?: { id: string; email: string | null; name: string; phone: string | null; first_name: string | null; last_name: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null };
+        error?: string;
+      };
+      if (!json.success) {
+        return { ok: false, error: json.error || "Erreur de connexion" };
+      }
+      if (json.data) {
+        setClientUser(json.data);
+        setState((s) => ({
+          ...s,
+          userName: json.data!.name || s.userName,
+          userEmail: json.data!.email || s.userEmail,
+          userPhone: json.data!.phone || s.userPhone,
+          bandName: json.data!.band_name || s.bandName,
+          billingAddress: json.data!.address_line1 || s.billingAddress,
+          billingPostalCode: json.data!.postal_code || s.billingPostalCode,
+          billingCity: json.data!.city || s.billingCity,
+        }));
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: "Erreur réseau" };
+    }
   }, []);
 
   const goBack = useCallback(() => {
@@ -1041,6 +1118,11 @@ export function useBookingWithRouter(urlStep?: string) {
     goBack,
     selectPaymentMethod,
     processPayment,
+    clientLogin,
+    createAccount: state.createAccount,
+    accountPassword: state.accountPassword,
+    accountPasswordConfirm: state.accountPasswordConfirm,
+    accountStatus: state.accountStatus,
   };
 }
 

@@ -144,6 +144,18 @@ export async function getBookingByRef(
   return db.prepare("SELECT * FROM bookings WHERE booking_ref = ?").bind(ref).first<DbBooking>();
 }
 
+export async function getBookingsByRefs(
+  db: D1Database,
+  refs: string[],
+): Promise<DbBooking[]> {
+  if (refs.length === 0) return [];
+  const placeholders = refs.map(() => "?").join(", ");
+  const result = await db.prepare(
+    `SELECT * FROM bookings WHERE booking_ref IN (${placeholders}) ORDER BY created_at ASC`,
+  ).bind(...refs).all<DbBooking>();
+  return result.results;
+}
+
 export async function createBooking(
   db: D1Database,
   data: CreateBooking,
@@ -184,7 +196,7 @@ export async function createBooking(
 export async function updateBooking(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "promo_discount">>,
+  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "promo_discount" | "promo_code" | "promo_type">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -468,6 +480,57 @@ export async function getUserByEmail(
      ) s ON u.id = s.user_id
      WHERE LOWER(TRIM(u.email)) = ?`,
   ).bind(normalizedEmail).first<DbUser>();
+}
+
+/**
+ * Atomically find or create a user by normalized email.
+ * Uses INSERT OR IGNORE to avoid SELECT-then-INSERT races.
+ * For a pre-existing user: does NOT update profile fields (PII-overwrite protection).
+ * For a newly created user: populates name, phone, band_name, address from profile.
+ * Returns { user, wasCreated }.
+ */
+export async function findOrCreateUserByEmail(
+  db: D1Database,
+  email: string,
+  profile: {
+    name: string;
+    phone?: string;
+    band_name?: string;
+    address_line1?: string;
+    postal_code?: string;
+    city?: string;
+  },
+): Promise<{ user: DbUser; wasCreated: boolean }> {
+  const id = generateId();
+  const timestamp = now();
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const result = await db.prepare(`
+    INSERT OR IGNORE INTO users (id, email, name, phone, band_name, address_line1, postal_code, city, is_blocked, total_bookings, total_spent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
+  `).bind(
+    id,
+    normalizedEmail,
+    profile.name,
+    profile.phone ?? null,
+    profile.band_name ?? null,
+    profile.address_line1 ?? null,
+    profile.postal_code ?? null,
+    profile.city ?? null,
+    timestamp,
+    timestamp,
+  ).run();
+
+  const wasCreated = result.meta.changes > 0;
+
+  // If changes === 0, the email already existed — wasCreated = false.
+  // We still SELECT to get the authoritative row (which was NOT overwritten).
+  const user = await getUserByEmail(db, normalizedEmail);
+  if (!user) {
+    throw new Error("Utilisateur introuvable après création");
+  }
+
+  return { user, wasCreated };
 }
 
 export async function updateUserPassword(

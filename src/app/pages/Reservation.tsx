@@ -57,6 +57,7 @@ export function Reservation({ step }: ReservationProps) {
     canConfirmBooking,
     clientUser,
     clientUserLoading,
+    clientLogin,
     selectDate,
     selectTimeRange,
     clearTimeRange,
@@ -534,7 +535,20 @@ export function Reservation({ step }: ReservationProps) {
                   billingPostalCode={state.billingPostalCode}
                   billingCity={state.billingCity}
                   additionalInfo={state.additionalInfo}
-                  onUpdateField={updateUserInfo}
+                  createAccount={state.createAccount}
+                  accountPassword={state.accountPassword}
+                  accountPasswordConfirm={state.accountPasswordConfirm}
+                  clientUser={clientUser}
+                  clientUserLoading={clientUserLoading}
+                  clientLogin={clientLogin}
+                  onUpdateField={(fields) => {
+                    // The hook exposes a per-field setter — fan the form's
+                    // partial update out into updateUserInfo(field, value) calls.
+                    for (const [field, value] of Object.entries(fields)) {
+                      if (value === undefined) continue;
+                      updateUserInfo(field as Parameters<typeof updateUserInfo>[0], value);
+                    }
+                  }}
                   onContinue={goToPaymentFromCoordonnees}
                   onBack={goBack}
                   canContinue={canConfirmBooking}
@@ -644,18 +658,10 @@ export function Reservation({ step }: ReservationProps) {
 
                     <div className="flex flex-col gap-3">
                         <button
-                          onClick={() => {
-                            if (clientUserLoading) return;
-                            if (!clientUser) {
-                              window.location.href = "/mon-compte/connexion?redirect=/reservation/coordonnees";
-                              return;
-                            }
-                            goToCoordonnees();
-                          }}
-                          disabled={clientUserLoading}
-                          className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => goToCoordonnees()}
+                          className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
                         >
-                          {clientUserLoading ? "Vérification..." : "Continuer vers mes coordonnées"}
+                          Valider le panier
                       </button>
                       <button
                         onClick={addAnotherBooking}
