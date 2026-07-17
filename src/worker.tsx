@@ -781,6 +781,9 @@ const app = defineApp([
       if (!name || !email || !phone) {
         return jsonError("Merci de renseigner nom, email et téléphone.", 400);
       }
+      if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+        return jsonError("Adresse email invalide.", 400);
+      }
 
       // ── Identity resolution (Phase 5A: optional auth) ─────────────────────
       let userId: string;
@@ -1052,6 +1055,21 @@ const app = defineApp([
               promo_code: body.promoCode,
               promo_type: promoType,
             });
+            // Fully discounted previous booking (e.g. 100% promo on a
+            // multi-item cart): mark paid + 0€ payment record, mirroring the
+            // single-booking zero-total path.
+            const prevBooking = previousBookings.find((pb) => pb.id === alloc.id);
+            const prevSubtotal = prevBooking ? (prevBooking.base_price || 0) + (prevBooking.equipment_price || 0) : 0;
+            if (prevBooking && alloc.discount >= prevSubtotal && prevSubtotal > 0 && prevBooking.payment_status !== "paid") {
+              await updateBooking(env.DB, alloc.id, { payment_status: "paid" });
+              await addPayment(env.DB, {
+                booking_id: alloc.id,
+                amount: 0,
+                method: body.paymentMethod,
+                status: "paid",
+                paid_at: new Date().toISOString(),
+              });
+            }
           } else {
             serverPromoDiscount = alloc.discount;
           }
