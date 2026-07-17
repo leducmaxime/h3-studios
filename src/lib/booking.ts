@@ -175,16 +175,33 @@ export const STUDIO_HOURS: Record<StudioId, Record<number, StudioHours>> = {
   },
 };
 
+// DB-driven opening hours: the public booking flow reads this store, which
+// mirrors STUDIO_HOURS until setOpeningHours() is called with the DB values
+// (client: after /api/pricing loads; worker: per request). This keeps
+// getStudioTimeSlots synchronous while making admin opening-hours edits
+// effective publicly.
+let _openingHours: Record<StudioId, Record<number, StudioHours>> = STUDIO_HOURS;
+
+export function setOpeningHours(hours: Record<string, Record<number, StudioHours>>): void {
+  if (hours && typeof hours === "object") {
+    _openingHours = { ...STUDIO_HOURS, ...hours } as Record<StudioId, Record<number, StudioHours>>;
+  }
+}
+
+export function getOpeningHoursForStudio(studioId: StudioId): Record<number, StudioHours> {
+  return _openingHours[studioId] || STUDIO_HOURS[studioId];
+}
+
 /** Get the closing time for a studio on a given date */
 export function getStudioClosingTime(studioId: StudioId, date: Date): string {
   const dayOfWeek = date.getDay();
-  return STUDIO_HOURS[studioId][dayOfWeek].close;
+  return getOpeningHoursForStudio(studioId)[dayOfWeek].close;
 }
 
 /** Get bookable time slots for a specific studio on a given date */
 export function getStudioTimeSlots(studioId: StudioId, date: Date): string[] {
   const dayOfWeek = date.getDay();
-  const hours = STUDIO_HOURS[studioId][dayOfWeek];
+  const hours = getOpeningHoursForStudio(studioId)[dayOfWeek];
   const openIdx = ALL_TIME_SLOTS.indexOf(hours.open);
   const closeIdx = ALL_TIME_SLOTS.indexOf(hours.close);
   if (openIdx === -1 || closeIdx === -1) return [];
