@@ -78,7 +78,7 @@ export function EquipmentSelector({
 
   return (
     <div className="rounded-xl border border-white/20 bg-white/15 p-4">
-      <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-x-6">
         {availableEquipment.map((eq) => {
           const quantity = getQuantity(equipment, eq.id);
           const subtotal = calculateSubtotal(eq, quantity);

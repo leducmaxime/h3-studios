@@ -198,7 +198,9 @@ export function Reservation({ step }: ReservationProps) {
     const anyRate = priceResult.breakdown.length > 0 ? priceResult.breakdown[0].rate : 0;
     const offPeakSubtotal = offPeakHours * offPeakRate;
     const peakSubtotal = peakHours * peakRate;
-    const hasPeakPricing = gt === "group";
+    // Two-band view when both off-peak and peak slots exist with differing rates.
+    // When only one band is present (or rates are equal), the flat view is identical.
+    const hasPeakPricing = offPeakSlots.length > 0 && peakSlots.length > 0 && offPeakRate !== peakRate;
 
     const handleConfirmRecap = () => {
       confirmBooking();
@@ -206,7 +208,7 @@ export function Reservation({ step }: ReservationProps) {
 
     return (
       <div className="flex flex-col gap-5 pb-24 md:pb-0">
-        <div className="rounded-xl border border-primary/40 bg-primary/8 p-4">
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
           <div className="mb-3 flex items-center gap-2">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20">
               <PackageCheck className="h-4 w-4 text-primary" />
@@ -214,12 +216,17 @@ export function Reservation({ step }: ReservationProps) {
             <span className="text-sm font-semibold text-primary">Inclus dans votre réservation</span>
             <span className="ml-auto rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-primary uppercase">Sans surcoût</span>
           </div>
-          <div className="flex flex-wrap gap-1.5 md:flex-nowrap md:overflow-x-auto md:scrollbar-none">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 lg:grid-cols-2">
             {["Batterie (sans crash)", "Sono", "Amplis guitare", "Amplis basse", "4 micros", "Pupitres", "Pied synthé"].map((item) => (
-              <span key={item} className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/75">
-                <Check className="h-3 w-3 shrink-0 text-primary" />
-                {item}
-              </span>
+              <div key={item} className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-white/85">{item}</span>
+                <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary/80">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15">
+                    <Check className="h-2.5 w-2.5 text-primary" />
+                  </span>
+                  Inclus
+                </span>
+              </div>
             ))}
           </div>
         </div>
