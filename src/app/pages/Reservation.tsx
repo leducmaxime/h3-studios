@@ -48,6 +48,7 @@ export function Reservation({ step }: ReservationProps) {
   const {
     state,
     slotsByStudio,
+    slotsLoading,
     pricingData,
     pricingLoading,
     pricingError,
@@ -83,7 +84,7 @@ export function Reservation({ step }: ReservationProps) {
     maxAdvanceDays,
   } = useBookingWithRouter(step);
 
-  const { equipment: availableEquipment, getEquipmentName } = useEquipment();
+  const { equipment: availableEquipment, getEquipmentName, loading: equipmentLoading } = useEquipment();
 
   const [isVisible, setIsVisible] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -238,6 +239,7 @@ export function Reservation({ step }: ReservationProps) {
             onChange={updateEquipment}
             durationHours={durationH}
             availableEquipment={availableEquipment}
+            loading={equipmentLoading}
           />
         </div>
 
@@ -496,6 +498,7 @@ export function Reservation({ step }: ReservationProps) {
                     <TimeSlotPicker
                       date={state.selectedDate}
                       slotsByStudio={slotsByStudio}
+                      slotsLoading={slotsLoading}
                       startTime={state.startTime}
                       endTime={state.endTime}
                       studioId={state.studioId}
@@ -506,6 +509,8 @@ export function Reservation({ step }: ReservationProps) {
                       groupType={state.groupType || "group"}
                       todayFullyBlocked={todayFullyBlocked}
                       pricingGrid={pricingData?.grid}
+                      pricingError={pricingError}
+                      refetchPricing={refetchPricing}
                     />
                   </div>
                 )}

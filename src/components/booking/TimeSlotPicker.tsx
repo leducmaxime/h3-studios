@@ -31,6 +31,12 @@ interface TimeSlotPickerProps {
   hideHeader?: boolean;
   groupType?: GroupType;
   pricingGrid?: PricingGrid | null;
+  /** True while the availability fetch for `date` is in flight. */
+  slotsLoading?: boolean;
+  /** Error message from the pricing fetch, or null. */
+  pricingError?: string | null;
+  /** Refetch pricing data. */
+  refetchPricing?: () => void;
   /** When true, every slot of the day renders as unavailable. */
   todayFullyBlocked?: boolean;
 }
@@ -40,7 +46,7 @@ const STUDIO_LABELS: Record<StudioId, string> = {
   "le-podium": "LE PODIUM",
 };
 
-/** Shown on hover/focus for free slots that can't open (or close) a range. */
+/** Shown on hover/focus for slots usable as an end but not a start. */
 const MIN_DURATION_HINT = "Durée minimum de réservation : 1 heure";
 
 type SlotPresentation = { className: string; hint: string | null };
@@ -65,6 +71,9 @@ export function TimeSlotPicker({
   hideHeader = false,
   groupType = "group",
   pricingGrid,
+  slotsLoading = false,
+  pricingError = null,
+  refetchPricing,
   todayFullyBlocked = false,
 }: TimeSlotPickerProps) {
   const [selectedStart, setSelectedStart] = useState<string | null>(startTime);
@@ -88,14 +97,21 @@ export function TimeSlotPicker({
     if (initialStudioId) setActiveStudio(initialStudioId);
   }, [startTime, endTime, initialStudioId]);
 
-  // Per-studio visible slots (based on opening hours)
+  // Per-studio visible slots (based on opening hours).
+  // NOTE: getStudioTimeSlots reads a module-level opening-hours store
+  // populated by usePricing, so this memo can't key on the hours directly.
+  // Keying on pricingGrid is the pragmatic fix: usePricing calls
+  // setOpeningHours() in the same tick as setPricing(), so when the grid
+  // flips null → loaded the memo recomputes with the real DB hours.
+  // Combined with the slotsLoading || !pricingGrid skeleton gate below,
+  // the slot grid only ever renders with correct geometry.
   const studioSlots = useMemo(() => {
     const result: Record<StudioId, string[]> = { "la-scene": [], "le-podium": [] };
     for (const studioId of ["la-scene", "le-podium"] as StudioId[]) {
       result[studioId] = getStudioTimeSlots(studioId, date);
     }
     return result;
-  }, [date]);
+  }, [date, pricingGrid]);
 
   // Exact DB rates for a studio + the current group type, straight from the
   // grid. null = grid not loaded yet (the legend renders skeletons).
@@ -141,6 +157,61 @@ export function TimeSlotPicker({
     },
     [slotsByStudio, studioSlots]
   );
+
+  // Run-based slot analysis, per studio. Mirrors canBeStartTime's slice(0,-1)
+  // runway semantics: the closing-boundary slot (last visible, end-only by
+  // design) never counts as a bookable half-hour.
+  // - deadFree[i]: free slot whose maximal contiguous free run holds fewer
+  //   than 2 real slots — it can never belong to any booking (min 1h), so it
+  //   renders as plain unavailable.
+  // - endCapable[i]: occupied slot immediately preceded by ≥ 2 contiguous
+  //   free real slots — a ≥1h booking can legally end on it. Covers the last
+  //   visible slot with no special case.
+  const slotRuns = useMemo(() => {
+    const result: Record<StudioId, { deadFree: boolean[]; endCapable: boolean[] }> = {
+      "la-scene": { deadFree: [], endCapable: [] },
+      "le-podium": { deadFree: [], endCapable: [] },
+    };
+    for (const studioId of ["la-scene", "le-podium"] as StudioId[]) {
+      const visible = studioSlots[studioId];
+      const n = visible.length;
+      const deadFree = new Array<boolean>(n).fill(false);
+      const endCapable = new Array<boolean>(n).fill(false);
+      result[studioId] = { deadFree, endCapable };
+      if (n === 0) continue;
+
+      const isFree = (i: number) => !checkSlotBooked(visible[i], studioId);
+      const realCount = n - 1; // closing-boundary slot excluded from runway
+
+      // Maximal contiguous free runs over real slots → run length per index.
+      const runLenAt = new Array<number>(n).fill(0);
+      let i = 0;
+      while (i < realCount) {
+        if (!isFree(i)) {
+          i++;
+          continue;
+        }
+        let j = i;
+        while (j + 1 < realCount && isFree(j + 1)) j++;
+        for (let k = i; k <= j; k++) runLenAt[k] = j - i + 1;
+        i = j + 1;
+      }
+      // Free real slots immediately before idx = length of the run containing
+      // idx-1 (runs are maximal, so 0 when idx-1 is occupied or idx is 0).
+      const precedingRun = (idx: number) => (idx > 0 ? runLenAt[idx - 1] : 0);
+
+      for (let k = 0; k < realCount; k++) {
+        if (isFree(k) && runLenAt[k] < 2) deadFree[k] = true;
+      }
+      // Closing-boundary slot: its only runway is the run right before it.
+      if (isFree(n - 1) && precedingRun(n - 1) < 2) deadFree[n - 1] = true;
+      // Occupied slots (incl. the closing one) reachable as a ≥1h booking end.
+      for (let k = 1; k < n; k++) {
+        if (!isFree(k) && precedingRun(k) >= 2) endCapable[k] = true;
+      }
+    }
+    return result;
+  }, [studioSlots, checkSlotBooked]);
 
   const handleClear = useCallback(() => {
     setSelectedStart(null);
@@ -243,19 +314,29 @@ export function TimeSlotPicker({
   const getSlotStyle = useCallback(
     (slot: string, studioId: StudioId): SlotPresentation => {
       const isBooked = checkSlotBooked(slot, studioId);
-      // Peak hue only ever applies to free slots — unavailable trumps peak.
-      const isPeak = !isBooked && studioHasPeakPricing(studioId) && isPeakTime(date, slot);
+      // Peak hue for the NORMAL free rendering — unavailable trumps peak.
+      // The soft treatment hues by time instead (isPeakAtTime), so an
+      // end-capable occupied boundary keeps its evening tint.
+      const isPeakAtTime = studioHasPeakPricing(studioId) && isPeakTime(date, slot);
+      const isPeak = !isBooked && isPeakAtTime;
       const isSameStudio = activeStudio === studioId;
       const isSelectedStart = selectedStart === slot && isSameStudio;
       const isSelectedEnd = selectedEnd === slot && isSameStudio;
       const isOccupiedBoundary = isStartOfOccupiedBlock(slot, studioId);
       const visibleSlots = studioSlots[studioId];
+      const slotIdx = visibleSlots.indexOf(slot);
+      const runs = slotRuns[studioId];
+      // Free slot whose contiguous free run can't hold a 1h booking.
+      const isDeadFree = !isBooked && slotIdx >= 0 && runs.deadFree[slotIdx] === true;
+      // Occupied boundary a ≥1h booking can legally close on.
+      const isEndCapableBoundary = isOccupiedBoundary && slotIdx >= 0 && runs.endCapable[slotIdx] === true;
 
       const ok = (className: string): SlotPresentation => ({ className, hint: null });
-      // Free slot, valid inside a range but not as a start/end here →
-      // softened normal hue + min-duration tooltip.
+      // Slot usable as a booking END but not as a start (free without 1h
+      // runway, or end-capable occupied boundary) → softened hue, tinted by
+      // time of day, + min-duration tooltip.
       const soft = (cursor: string): SlotPresentation => ({
-        className: softFreeStyle(isPeak, cursor),
+        className: softFreeStyle(isPeakAtTime, cursor),
         hint: MIN_DURATION_HINT,
       });
 
@@ -271,7 +352,6 @@ export function TimeSlotPicker({
 
       // Confirmed range: fill the interior so the booking reads as one block.
       if (selectionMode === "done" && isSameStudio && selectedStart && selectedEnd) {
-        const slotIdx = visibleSlots.indexOf(slot);
         const startIdx = visibleSlots.indexOf(selectedStart);
         let endIdx = visibleSlots.indexOf(selectedEnd);
         if (selectedEnd === "00:00" && endIdx === -1) endIdx = visibleSlots.length;
@@ -289,10 +369,16 @@ export function TimeSlotPicker({
         return ok("bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60");
       }
 
+      // Dead free slot — its contiguous free run holds fewer than 2 real
+      // slots, so it can never be part of any booking (min 1h): paint it
+      // unavailable in every mode, no tooltip.
+      if (isDeadFree) {
+        return ok("bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60");
+      }
+
       if (selectionMode === "end" && selectedStart) {
         if (isSameStudio) {
           const startIdx = visibleSlots.indexOf(selectedStart);
-          const slotIdx = visibleSlots.indexOf(slot);
 
           if (slotIdx > startIdx) {
             // Only genuine end candidates get the end-zone treatment — free
@@ -324,7 +410,14 @@ export function TimeSlotPicker({
 
         // Other studio: every slot is a potential new START here, never an end.
         if (!canBeStartTime(slot, visibleSlots, (t) => checkSlotBooked(t, studioId))) {
-          if (isBooked) return ok("bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60");
+          if (isBooked) {
+            // End-capable occupied boundary: a ≥1h booking may close on it —
+            // softened hue + min-duration hint. A dead boundary (preceding
+            // free run < 2) is plain unavailable.
+            return isEndCapableBoundary
+              ? soft("cursor-not-allowed")
+              : ok("bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60");
+          }
           return soft("cursor-not-allowed");
         }
         if (hoveredSlot?.studioId === studioId && hoveredSlot.slot === slot) {
@@ -338,12 +431,17 @@ export function TimeSlotPicker({
         );
       }
 
-      // Start/done mode: slots that can't open a range. Booked ones (occupied
-      // boundary, min-advance blocked) stay fully muted with no tooltip; free
-      // ones without a 1h runway (incl. the closing-boundary slot) get the
-      // softened hue + min-duration tooltip.
+      // Start/done mode: slots that can't open a range. Only occupied-boundary
+      // booked slots reach this branch (interiors returned red above): an
+      // end-capable boundary gets the softened hue + min-duration tooltip, a
+      // dead boundary goes red. Free slots without a 1h runway (incl. the
+      // closing-boundary slot) keep the softened hue + tooltip.
       if (!canBeStartTime(slot, visibleSlots, (t) => checkSlotBooked(t, studioId))) {
-        if (isBooked) return ok("bg-white/5 border-white/10 opacity-30 cursor-not-allowed");
+        if (isBooked) {
+          return isEndCapableBoundary
+            ? soft("cursor-not-allowed")
+            : ok("bg-red-500/30 border-red-500/50 cursor-not-allowed opacity-60");
+        }
         return soft("cursor-not-allowed");
       }
 
@@ -354,7 +452,7 @@ export function TimeSlotPicker({
           : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer"
       );
     },
-    [checkSlotBooked, isStartOfOccupiedBlock, studioHasPeakPricing, date, selectedStart, selectedEnd, activeStudio, selectionMode, hoveredSlot, studioSlots]
+    [checkSlotBooked, isStartOfOccupiedBlock, studioHasPeakPricing, date, selectedStart, selectedEnd, activeStudio, selectionMode, hoveredSlot, studioSlots, slotRuns]
   );
 
   const formatHourLabel = (slot: string) => {
@@ -437,7 +535,42 @@ export function TimeSlotPicker({
           </div>
         </div>
 
-        {/* Slot grid — max 3 rows */}
+        {/* Slot grid — max 3 rows. Skeleton while availability or the
+            pricing grid loads (C7: gating on the grid also masks the
+            opening-hours race and guarantees exact geometry — same row/col
+            shape as the real buttons, so no layout shift). Studio headers
+            and photos stay visible. */}
+        {slotsLoading || (!pricingGrid && !pricingError) ? (
+          <div
+            className="flex flex-col gap-1.5"
+            aria-busy="true"
+            aria-label="Chargement des créneaux"
+          >
+            {rows.map((row, rowIdx) => (
+              <div key={rowIdx} className="flex gap-1.5">
+                {row.map((slot) => (
+                  <div
+                    key={slot}
+                    className="h-10 flex-1 animate-pulse rounded-lg border border-white/10 bg-white/10"
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : pricingError && !pricingGrid ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5">
+            <span className="text-sm text-red-300">Impossible de charger les tarifs.</span>
+            {refetchPricing && (
+              <button
+                type="button"
+                onClick={refetchPricing}
+                className="shrink-0 rounded-md border border-red-400/40 px-2.5 py-1 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
+              >
+                Réessayer
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="flex flex-col gap-1.5">
           {rows.map((row, rowIdx) => (
             <div key={rowIdx} className="flex gap-1.5">
@@ -513,6 +646,7 @@ export function TimeSlotPicker({
             </div>
           ))}
         </div>
+        )}
 
         {/* Per-studio price legend — exact DB rates via the pricing grid */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/50">

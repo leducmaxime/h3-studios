@@ -174,9 +174,20 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
               minAdvanceCutoffTime: json.data.minAdvanceCutoffTime ?? null,
               todayFullyBlocked: json.data.todayFullyBlocked ?? false,
             }));
+          } else {
+            // Error path: degrade to the legacy optimistic behavior (day
+            // shows "Disponible", actual availability is enforced by the
+            // slot grid) instead of leaving a stuck pending indicator.
+            setWeekOccupancy((prev) => new Map(prev).set(dateStr, new Set()));
           }
         })
-        .catch(console.error);
+        .catch((err) => {
+          // Same fallback as above — never a stuck pending day.
+          if (gen === weekFetchGenRef.current) {
+            setWeekOccupancy((prev) => new Map(prev).set(dateStr, new Set()));
+          }
+          console.error(err);
+        });
     });
   }, [weekDates, maxAdvanceDays]);
 
@@ -231,6 +242,10 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
           const hasAvailability = hasBookableAvailability(merged, date, studioFilter, cutoff, fullyBlocked);
           const isFull = !past && !tooFar && !hasAvailability;
           const disabled = past || tooFar || !hasAvailability;
+          // C6: pending derived from the map itself — no separate flag.
+          // A bookable day that hasn't answered yet shows a pulse bar
+          // instead of a premature "Disponible".
+          const isPending = !past && !tooFar && !weekOccupancy.has(dateKey);
 
           return (
             <button
@@ -270,12 +285,21 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
                       ? "text-primary/70"
                       : "text-emerald-400/80"
               }`}>
-                <span className="lg:hidden">
-                  {past || tooFar ? "" : isFull ? "Complet" : "Dispo"}
-                </span>
-                <span className="hidden lg:inline">
-                  {past || tooFar ? "" : isFull ? "Complet" : "Disponible"}
-                </span>
+                {isPending ? (
+                  <span
+                    className="block h-2.5 w-8 animate-pulse rounded bg-white/15 lg:h-3 lg:w-12"
+                    aria-label="Chargement"
+                  />
+                ) : (
+                  <>
+                    <span className="lg:hidden">
+                      {past || tooFar ? "" : isFull ? "Complet" : "Dispo"}
+                    </span>
+                    <span className="hidden lg:inline">
+                      {past || tooFar ? "" : isFull ? "Complet" : "Disponible"}
+                    </span>
+                  </>
+                )}
               </span>
             </button>
           );

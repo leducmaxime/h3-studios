@@ -83,7 +83,9 @@ interface ExtendedBookingState {
 - **No dead clicks**: every click either selects, extends, changes studio, or deselects
 - **Cross-studio**: clicking the other studio mid-selection moves the start there
 - **Peak highlighting**: peak hours (evenings/weekends) shown in calm sky blue (`sky-400/*` family + `text-sky-200`) via grid-driven `isPeakTime` — deliberately cool to stay clear of the occupied-slot red
-- **End-only slots**: free slots that can't open a range (no 1h runway, closing boundary) or the slot right after a selected start render in their normal hue but softened (lower bg/border opacity, dimmed text — never greyed out), keep `cursor-not-allowed` visually, and show a min-duration tooltip (« Durée minimum de réservation : 1 heure ») on hover/focus-visible with `aria-disabled` + `aria-describedby`; booked slots keep the muted/red styles with no tooltip
+- **End-only slots**: free slots that can't open a range (no 1h runway, closing boundary), the slot right after a selected start, and end-capable occupied boundaries render in a softened hue tinted by time of day (sky for peak hours, neutral otherwise — lower bg/border opacity, dimmed text, never greyed out), keep `cursor-not-allowed` visually, and show a min-duration tooltip (« Durée minimum de réservation : 1 heure ») on hover/focus-visible with `aria-disabled` + `aria-describedby`
+- **Dead free slots**: a free slot whose maximal contiguous free run holds fewer than 2 real slots (the closing-boundary slot never counts as runway — mirrors `canBeStartTime`'s `slice(0,-1)`) can never belong to any booking → renders occupied-red in ALL modes, no tooltip (below the selection/confirmed-range branches)
+- **Occupied-boundary rule**: the first slot of an occupied block is end-capable iff the free run immediately before it holds ≥ 2 real slots → soft + min-1h tooltip in start/done and end other-studio modes; a dead boundary (run < 2) renders red instead. End same-studio mode is unchanged (the boundary may be a valid end candidate). No special case for the last visible slot — the same run rule decides soft vs red
 - **Per-studio price legend**: exact DB rates from `/api/pricing` grid
 - **1-hour minimum**: `slotDuration(selectedStart, endCandidate) >= 2` — enforced by `canBeEndTime`
 - **Closing boundary**: last slot in `getStudioTimeSlots` (e.g. "00:00" for la-scene) is end-only; `canBeStartTime` excludes it, `hasBookableRun` excludes it
@@ -130,6 +132,22 @@ Both the selected-date availability fetch and the week calendar batch fetch use 
 - Progress indicator: circular icons with ping animation on current step
 - Time slots: 3-row grid, 11px-12px font, borderline styles for states
 - "DÉBUT"/"FIN" labels on selected range boundaries
+
+## LOADING STATES
+
+### TimeSlotPicker – slot grid skeleton + pricing error banner
+
+- **`slotsLoading`**: set synchronously when `selectedDate` changes (the availability fetch fires in a `useEffect` in `useBookingWithRouter`). Cleared on both success and error via a generation counter (`useRef`) that discards stale responses — the flag stays `true` until the response for the *current* generation arrives.
+- **Grid skeleton gate**: `slotsLoading || (!pricingGrid && !pricingError)` — the skeleton replaces the slot grid while either availability is loading **or** the pricing grid is missing *without* a prior error. Once `pricingError` is set, the skeleton disappears and the error banner renders instead.
+- **Pricing error banner**: when `pricingError && !pricingGrid`, each studio block renders a red-bordered banner (`border-red-500/40 bg-red-500/10`) with the text « Impossible de charger les tarifs. » and a « Réessayer » button wired to `refetchPricing`. The banner replaces the slot grid (skeleton is hidden, no overlap). Studio photos and price legends remain visible.
+
+### EquipmentSelector – inline loading
+
+- **`loading` prop**: passed from `useEquipment().loading`, shows a single skeleton row in place of the equipment list (matched height to reduce layout shift).
+
+### WeekCalendar – per-day pending state
+
+- **Per-day pending**: derived from `!weekOccupancy.has(dateKey)` — when the batch-fetch response hasn't arrived for a given date, the day cell renders a subtle shimmer. On fetch error the cell falls back to `useOptimisticFallback(dateKey)`, which returns an optimistic availability (all slots free) so the user can still interact with the calendar.
 
 ## FORMER FEATURES (REMOVED)
 

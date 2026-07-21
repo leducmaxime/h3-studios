@@ -286,6 +286,7 @@ export function useBookingWithRouter(urlStep?: string) {
     appliedPromoRef.current = state.appliedPromo;
   }, [state.appliedPromo]);
   const [slotsByStudio, setSlotsByStudio] = useState<Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>>({});
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [minAdvanceHours, setMinAdvanceHours] = useState<number>(0);
   const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
   const [todayFullyBlocked, setTodayFullyBlocked] = useState<boolean>(false);
@@ -326,10 +327,15 @@ export function useBookingWithRouter(urlStep?: string) {
     if (!state.selectedDate) return;
     const dateStr = formatDateISO(state.selectedDate);
     const gen = ++availabilityFetchGenRef.current;
+    // Set synchronously on date change so TimeSlotPicker swaps to its
+    // skeleton on the same pass — the previous date's slots never linger
+    // and missing data never flashes as all-red slots.
+    setSlotsLoading(true);
     fetch(`/api/availability?date=${dateStr}`)
       .then((res) => res.json())
       .then((data) => {
         if (gen !== availabilityFetchGenRef.current) return; // stale guard
+        setSlotsLoading(false);
         const json = data as { success: boolean; data: { slots: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>>; minAdvanceHours: number; minAdvanceCutoffTime: string | null; todayFullyBlocked: boolean } };
         if (json.success && json.data) {
           setSlotsByStudio(json.data.slots);
@@ -338,7 +344,13 @@ export function useBookingWithRouter(urlStep?: string) {
           setTodayFullyBlocked(json.data.todayFullyBlocked ?? false);
         }
       })
-      .catch(console.error);
+      .catch((err) => {
+        // C5: clear the skeleton on error too (gen-guarded) so a failed
+        // fetch never leaves an infinite skeleton. Slots keep their
+        // previous defensive state — the pre-existing error behavior.
+        if (gen === availabilityFetchGenRef.current) setSlotsLoading(false);
+        console.error(err);
+      });
   }, [state.selectedDate]);
 
   // -------------------------------------------------------------------------
@@ -1067,6 +1079,7 @@ export function useBookingWithRouter(urlStep?: string) {
   return {
     state,
     slotsByStudio: mergedSlotsByStudio,
+    slotsLoading,
     minAdvanceHours,
     minAdvanceCutoffTime,
     todayFullyBlocked,

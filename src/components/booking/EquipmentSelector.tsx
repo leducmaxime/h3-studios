@@ -21,6 +21,8 @@ interface EquipmentSelectorProps {
   onChange: (equipment: EquipmentSelection[]) => void;
   durationHours: number;
   availableEquipment: ApiEquipment[];
+  /** True while /api/equipment loads — renders skeleton rows. */
+  loading?: boolean;
 }
 
 function getQuantity(equipment: EquipmentSelection[], id: EquipmentId): number {
@@ -45,6 +47,7 @@ export function EquipmentSelector({
   onChange,
   durationHours,
   availableEquipment,
+  loading = false,
 }: EquipmentSelectorProps) {
 
   const handleIncrement = (id: EquipmentId, max: number) => {
@@ -78,6 +81,33 @@ export function EquipmentSelector({
 
   return (
     <div className="rounded-xl border border-white/20 bg-white/15 p-4">
+      {loading ? (
+        // Skeleton rows mirror the real row geometry (name + price lines
+        // left, stepper right) and the same 1-col / lg:2-col grid, so the
+        // card doesn't jump when the list lands.
+        <div
+          className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-x-6"
+          aria-busy="true"
+          aria-label="Chargement des options"
+        >
+          {[40, 32, 36, 28, 34, 30].map((nameWidth, i) => (
+            <div key={i} className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-1.5">
+                <span
+                  className="h-3.5 animate-pulse rounded bg-white/10"
+                  style={{ width: `${nameWidth * 4}px` }}
+                />
+                <span className="h-3 w-24 animate-pulse rounded bg-white/10" />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="h-7 w-7 animate-pulse rounded-md bg-white/10" />
+                <span className="w-6" />
+                <span className="h-7 w-7 animate-pulse rounded-md bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-x-6">
         {availableEquipment.map((eq) => {
           const quantity = getQuantity(equipment, eq.id);
@@ -87,18 +117,18 @@ export function EquipmentSelector({
           if (eq.pricingType === "session" && eq.sessionPricing) {
             if (eq.id === "mic") {
               if (quantity === 0) {
-                priceDisplay = "à partir de 3€ par séance (tarif dégressif)";
+                priceDisplay = `dès ${eq.sessionPricing[0]}€/séance`;
               } else if (quantity === 4) {
                 priceDisplay = `${subtotal}€/séance`;
               } else {
-                priceDisplay = `${subtotal}€/séance (tarif dégressif)`;
+                priceDisplay = `${subtotal}€/séance (dégressif)`;
               }
             } else {
               const unitPrice = eq.sessionPricing[0];
               const isDegressive = eq.id === "cymbal";
               priceDisplay = quantity === 0
-                ? `${unitPrice}€/séance${isDegressive ? " (tarif dégressif)" : ""}`
-                : `${subtotal}€/séance${isDegressive && quantity > 0 ? " (tarif dégressif)" : ""}`;
+                ? `${unitPrice}€/séance${isDegressive ? " (dégressif)" : ""}`
+                : `${subtotal}€/séance${isDegressive && quantity > 0 ? " (dégressif)" : ""}`;
             }
           } else {
             priceDisplay = `+${eq.pricePerHour}€/h`;
@@ -163,8 +193,9 @@ export function EquipmentSelector({
           );
         })}
       </div>
+      )}
 
-      {totalCost > 0 && (
+      {!loading && totalCost > 0 && (
         <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
           <span className="text-sm text-white/70">Total options supplémentaires</span>
           <span className="font-semibold text-primary">
