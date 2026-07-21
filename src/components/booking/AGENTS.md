@@ -82,7 +82,8 @@ interface ExtendedBookingState {
 
 - **No dead clicks**: every click either selects, extends, changes studio, or deselects
 - **Cross-studio**: clicking the other studio mid-selection moves the start there
-- **Amber highlighting**: peak hours (evenings/weekends) shown in amber via grid-driven `isPeakTime`
+- **Peak highlighting**: peak hours (evenings/weekends) shown in calm sky blue (`sky-400/*` family + `text-sky-200`) via grid-driven `isPeakTime` — deliberately cool to stay clear of the occupied-slot red
+- **End-only slots**: free slots that can't open a range (no 1h runway, closing boundary) or the slot right after a selected start render in their normal hue but softened (lower bg/border opacity, dimmed text — never greyed out), keep `cursor-not-allowed` visually, and show a min-duration tooltip (« Durée minimum de réservation : 1 heure ») on hover/focus-visible with `aria-disabled` + `aria-describedby`; booked slots keep the muted/red styles with no tooltip
 - **Per-studio price legend**: exact DB rates from `/api/pricing` grid
 - **1-hour minimum**: `slotDuration(selectedStart, endCandidate) >= 2` — enforced by `canBeEndTime`
 - **Closing boundary**: last slot in `getStudioTimeSlots` (e.g. "00:00" for la-scene) is end-only; `canBeStartTime` excludes it, `hasBookableRun` excludes it
