@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronLeft, UserCheck } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import {
   type StudioId,
   type GroupType,
@@ -75,13 +75,25 @@ interface LoginCardProps {
   clientUser: BookingClientUser | null;
   clientUserLoading: boolean;
   clientLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  initialEmail?: string;
 }
 
-function LoginCard({ clientUser, clientUserLoading, clientLogin }: LoginCardProps) {
+function LoginCard({ clientUser, clientUserLoading, clientLogin, initialEmail }: LoginCardProps) {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
+  const prevInitialEmail = useRef<string | undefined>(undefined);
+
+  // Sync initialEmail into loginEmail when it changes to a non-empty value
+  useEffect(() => {
+    if (initialEmail && initialEmail !== prevInitialEmail.current) {
+      prevInitialEmail.current = initialEmail;
+      setLoginEmail(initialEmail);
+      // Focus the email input so the user can enter their password
+      setTimeout(() => document.getElementById("loginEmail-bf")?.focus(), 100);
+    }
+  }, [initialEmail]);
 
   const handleLoginSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -319,6 +331,8 @@ export function BookingForm({
   canContinue,
 }: BookingFormProps) {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [continueLoading, setContinueLoading] = useState(false);
+  const [prefillLoginEmail, setPrefillLoginEmail] = useState("");
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -353,12 +367,44 @@ export function BookingForm({
     return Object.keys(errors).length === 0;
   };
 
-  const handleContinue = () => {
-    if (!canContinue) return;
+  const handleContinue = async () => {
+    if (!canContinue || continueLoading) return;
 
-    if (validateForm()) {
-      onContinue();
+    if (!validateForm()) return;
+
+    // Guest email check: does this email belong to an existing account?
+    if (!clientUser) {
+      const emailToCheck = userEmail.trim();
+      if (emailToCheck) {
+        setContinueLoading(true);
+        try {
+          const res = await fetch("/api/client/check-email?email=" + encodeURIComponent(emailToCheck));
+          const json = await res.json() as { success: boolean; data?: { hasAccount: boolean } };
+          if (json.success && json.data?.hasAccount) {
+            setValidationErrors((prev) => ({
+              ...prev,
+              userEmail: "Un compte existe avec cet email — connectez-vous ci-dessus pour continuer",
+            }));
+            setPrefillLoginEmail(emailToCheck);
+            // Scroll LoginCard into view and focus the email input
+            setTimeout(() => {
+              document.getElementById("loginEmail-bf")?.focus();
+              document.getElementById("loginEmail-bf")?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 100);
+            setContinueLoading(false);
+            return;
+          }
+        } catch (err) {
+          // Fail open: network error → let the user through
+          // (server-side enforcement in /api/bookings is the backstop)
+          console.warn("[Booking] check-email fetch failed, proceeding:", err);
+        } finally {
+          setContinueLoading(false);
+        }
+      }
     }
+
+    onContinue();
   };
 
   const updateFields = (fields: Partial<BookingFormFields>) => {
@@ -391,6 +437,7 @@ export function BookingForm({
         clientUser={clientUser}
         clientUserLoading={clientUserLoading}
         clientLogin={clientLogin}
+        initialEmail={prefillLoginEmail}
       />
 
       <div className="border-t border-white/10" aria-hidden="true" />
@@ -552,16 +599,16 @@ export function BookingForm({
 
       <button
         onClick={handleContinue}
-        disabled={!canContinue}
+        disabled={!canContinue || continueLoading}
         className={`
           w-full rounded-lg py-3.5 text-base font-semibold transition-all sm:py-4 sm:text-lg
-          ${canContinue
+          ${canContinue && !continueLoading
             ? "bg-primary text-black hover:bg-primary/90"
             : "bg-white/15 text-white/50 cursor-not-allowed"
           }
         `}
       >
-        {canContinue ? "Continuer →" : "Remplissez tous les champs obligatoires"}
+        {continueLoading ? "Vérification..." : canContinue ? "Continuer →" : "Remplissez tous les champs obligatoires"}
       </button>
     </div>
   );

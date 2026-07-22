@@ -840,6 +840,14 @@ const app = defineApp([
         guestWasCreated = wasCreated;
         accountStatus = "guest";
 
+        // Guest with an existing password_hash → has a real account, must log in
+        if (!wasCreated && guestUser.password_hash) {
+          return jsonResponse(
+            { success: false, error: "Un compte existe avec cet email. Connectez-vous pour réserver.", code: "account-exists" },
+            409,
+          );
+        }
+
         if (guestUser.is_blocked) {
           return jsonError("Votre compte a été bloqué. Veuillez nous contacter pour plus d'informations.", 403);
         }
@@ -4280,6 +4288,33 @@ const app = defineApp([
     }
   }),
 
+  route("/api/client/check-email", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const url = new URL(request.url);
+      const rawEmail = url.searchParams.get("email");
+      if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+        return jsonError("Email invalide", 400);
+      }
+
+      const normalizedEmail = rawEmail.trim().toLowerCase();
+      const user = await env.DB
+        .prepare("SELECT id FROM users WHERE email = ? AND password_hash IS NOT NULL")
+        .bind(normalizedEmail)
+        .first<{ id: string }>();
+
+      return jsonResponse(
+        { success: true, data: { hasAccount: user !== null } },
+        200,
+        { "Cache-Control": "no-store" },
+      );
+    } catch (error) {
+      console.error("GET /api/client/check-email error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed", 500);
+    }
+  }),
+
   route("/api/client/forgot-password", async ({ request }) => {
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
 
@@ -4355,6 +4390,12 @@ const app = defineApp([
 
       if (!row || row.used || new Date(row.expires_at) < new Date()) {
         return jsonError("Token invalide ou expiré", 400);
+      }
+
+      // Check if the user account is blocked (ora-2 finding 1)
+      const resetUser = await getUserById(env.DB, row.user_id);
+      if (resetUser?.is_blocked) {
+        return jsonError("Compte bloqué", 403);
       }
 
       const passwordHash = await hashPassword(body.password);
