@@ -58,6 +58,18 @@ export interface CompletedBooking {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
 }
+/**
+ * Sort booking cart items chronologically by date ascending, then startTime ascending.
+ * Returns a NEW array — does not mutate the input.
+ */
+export function sortBookingsByStart<T extends { date: Date; startTime: string }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => {
+    const dateDiff = a.date.getTime() - b.date.getTime();
+    if (dateDiff !== 0) return dateDiff;
+    return a.startTime.localeCompare(b.startTime);
+  });
+}
+
 // --- Promo codes ---
 export interface PromoCode {
   code: string;

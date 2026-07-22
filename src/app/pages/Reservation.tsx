@@ -17,7 +17,7 @@ import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, sortBookingsByStart, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
 import { useEquipment } from "@/components/booking/useEquipment";
 
@@ -566,7 +566,7 @@ export function Reservation({ step }: ReservationProps) {
 
                 <>
                   <div className="space-y-3">
-                    {state.cart.map((booking) => {
+                    {sortBookingsByStart(state.cart).map((booking) => {
                       const displayPrice = recomputeCartItemPrice(booking);
                       return (
                         <div
@@ -576,9 +576,7 @@ export function Reservation({ step }: ReservationProps) {
                           <div className="flex items-start justify-between">
                             <div>
                               <h4 className="font-semibold">
-                                {booking.groupType === "group"
-                                  ? STUDIOS[booking.studioId].name
-                                  : "Répétition"}
+                                {STUDIOS[booking.studioId].name}
                               </h4>
                               <p className="text-xs text-primary">Réf: {booking.bookingRef}</p>
                             </div>

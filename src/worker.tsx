@@ -4359,12 +4359,27 @@ const app = defineApp([
 
       const passwordHash = await hashPassword(body.password);
       await updateUserPassword(env.DB, row.user_id, passwordHash);
+
+      // Invalidate ALL reset tokens for this user
       await env.DB
-        .prepare("UPDATE password_reset_tokens SET used = 1 WHERE token = ?")
-        .bind(body.token)
+        .prepare("UPDATE password_reset_tokens SET used = 1 WHERE user_id = ?")
+        .bind(row.user_id)
         .run();
 
-      return jsonSuccess({ reset: true });
+      // Delete existing CLIENT sessions only (cls- prefix filter on shared sessions table)
+      await env.DB
+        .prepare("DELETE FROM sessions WHERE user_id = ? AND id LIKE 'cls-%'")
+        .bind(row.user_id)
+        .run();
+
+      // Create fresh client session and set cookie (same as /api/client/login)
+      const sessionToken = await createClientSession(env.DB, row.user_id);
+
+      return jsonResponse(
+        { success: true, data: { reset: true } },
+        200,
+        { "Set-Cookie": buildClientSessionCookie(sessionToken) },
+      );
     } catch (error) {
       console.error("POST /api/client/reset-password error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed", 500);

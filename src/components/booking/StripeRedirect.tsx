@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CreditCard, Lock, ShieldCheck, ChevronLeft, Loader2, ExternalLink } from "lucide-react";
-import { formatPrice, type CompletedBooking, STUDIOS, formatDate } from "@/lib/booking";
+import { formatPrice, type CompletedBooking, STUDIOS, formatDate, sortBookingsByStart } from "@/lib/booking";
 
 interface StripeRedirectProps {
   cart: CompletedBooking[];
@@ -150,11 +150,11 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
             <h4 className="mb-4 font-semibold">Récapitulatif de commande</h4>
             
             <div className="space-y-3">
-              {cart.map((booking) => (
+              {sortBookingsByStart(cart).map((booking) => (
                 <div key={booking.id} className="flex justify-between text-sm">
                   <div>
                     <p className="font-medium">
-                      {booking.groupType === "group" ? STUDIOS[booking.studioId].name : "Répétition"}
+                      {STUDIOS[booking.studioId].name}
                     </p>
                     <p className="text-white/50">
                       {formatDate(booking.date, "short")} - {booking.startTime}-{booking.endTime}

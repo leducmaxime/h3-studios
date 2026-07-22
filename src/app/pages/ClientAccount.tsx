@@ -250,12 +250,10 @@ function BookingCard({ booking }: { booking: BookingRow }) {
             </span>
           </div>
           <div className="flex items-center gap-3 mt-1.5 text-sm text-zinc-400 flex-wrap">
-            {booking.group_type === "group" && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 text-zinc-500" />
-                {studio}
-              </span>
-            )}
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+              {studio}
+            </span>
             <span className="flex items-center gap-1">
               <Users className="h-3.5 w-3.5 text-zinc-500" />
               {group}

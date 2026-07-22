@@ -9,6 +9,7 @@ import {
   generateICS,
   downloadICS,
   generateGoogleCalendarUrl,
+  sortBookingsByStart,
   type CompletedBooking,
 } from "@/lib/booking";
 import { useEquipment } from "./useEquipment";
@@ -93,7 +94,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
       )}
 
       <div className="space-y-3">
-        {cart.map((booking) => (
+        {sortBookingsByStart(cart).map((booking) => (
           <div
             key={booking.id}
             className="rounded-xl border border-white/10 bg-white/15 p-4"
@@ -101,7 +102,7 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
             <div className="mb-3 flex items-start justify-between">
               <div>
                 <h4 className="font-semibold">
-                  {booking.groupType === "group" ? STUDIOS[booking.studioId].name : "Répétition"}
+                  {STUDIOS[booking.studioId].name}
                 </h4>
                 <p className="text-sm text-primary">Réf: {booking.bookingRef}</p>
               </div>

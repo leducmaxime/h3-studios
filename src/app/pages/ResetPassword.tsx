@@ -34,8 +34,8 @@ export function ResetPassword() {
       setError("Veuillez entrer un mot de passe");
       return;
     }
-    if (password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères");
+    if (password.length < 8) {
+      setError("Le mot de passe doit contenir au moins 8 caractères");
       return;
     }
     if (password !== confirmPassword) {
@@ -65,6 +65,33 @@ export function ResetPassword() {
       setLoading(false);
     }
   };
+
+  const handleContinue = () => {
+    if (typeof window === "undefined") {
+      navigate("/");
+      return;
+    }
+    try {
+      const raw = localStorage.getItem("h3-studios-booking-state-v2");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.cart?.length >= 1) {
+          navigate("/reservation/coordonnees");
+          return;
+        }
+      }
+    } catch {
+      // Defensive: if parsing fails, redirect to home
+    }
+    navigate("/");
+  };
+
+  // Auto-redirect after 2 seconds on successful reset
+  useEffect(() => {
+    if (!reset) return;
+    const timer = setTimeout(handleContinue, 2000);
+    return () => clearTimeout(timer);
+  }, [reset]);
 
   if (!token) {
     return (
@@ -107,11 +134,14 @@ export function ResetPassword() {
             <p className="text-sm text-zinc-400 mb-6">
               Votre mot de passe a été réinitialisé avec succès.
             </p>
+            <p className="text-xs text-zinc-500 mb-6">
+              Vous allez être redirigé automatiquement...
+            </p>
             <Button
-              onClick={() => navigate("/mon-compte/connexion")}
+              onClick={handleContinue}
               className="w-full h-10 text-sm font-semibold"
             >
-              Se connecter
+              Continuer
             </Button>
           </div>
         ) : (
@@ -133,7 +163,7 @@ export function ResetPassword() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimum 6 caractères"
+                  placeholder="Minimum 8 caractères"
                   disabled={loading}
                   className="pl-10 bg-white/15 border-white/20 text-white placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/30"
                 />
