@@ -508,6 +508,12 @@ export function TimeSlotPicker({
     const isDimmed = activeStudio !== null && !isActive;
     const studio = STUDIOS[studioId];
     const rates = getStudioRates(studioId);
+    // True when this studio/day has at least one visible off-peak bookable
+    // slot (closing-boundary slot excluded — it is end-only, often 00:00, and
+    // must not fake an off-peak band on a peak-only evening schedule).
+    // Opening-hours based, NOT availability: a fully booked off-peak slot
+    // still counts, this is a pricing legend.
+    const hasOffPeakSlot = slots.slice(0, -1).some((slot) => !isPeakTime(date, slot));
 
     return (
       <div
@@ -671,10 +677,12 @@ export function TimeSlotPicker({
             </>
           ) : rates.peak !== rates.offPeak ? (
             <>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3.5 w-3.5 rounded border border-white/10 bg-white/5" />
-                Heure creuse — {formatPrice(rates.offPeak)}/h
-              </span>
+              {hasOffPeakSlot && (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-3.5 w-3.5 rounded border border-white/10 bg-white/5" />
+                  Heure creuse — {formatPrice(rates.offPeak)}/h
+                </span>
+              )}
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-3.5 w-3.5 rounded border border-amber-400/50 bg-white/5" />
                 Heure pleine — {formatPrice(rates.peak)}/h
