@@ -16,6 +16,7 @@ import {
 } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
 import type { PricingGrid } from "@/lib/pricing";
+import { ImageCarousel } from "@/components/common/ImageCarousel";
 
 type SlotData = { time: string; available: boolean; groupType?: string; bookingId?: string };
 
@@ -530,23 +531,21 @@ export function TimeSlotPicker({
               : "border-white/15 group-hover:border-primary/40 group-hover:shadow-[0_0_20px_-6px_var(--color-primary,theme(colors.primary))]"
           }`}
         >
-          {/* Photo */}
+          {/* Photo — same shared embla carousel as /les-studios (compact mode,
+              manual navigation only: two auto-playing blocks side by side in
+              the booking grid would be distracting). */}
           <div className="relative h-[100px] w-full overflow-hidden">
-            <img
-              src={studio.image}
-              alt={studio.name}
-              width={1200}
-              height={675}
-              loading="lazy"
-              decoding="async"
-              className="h-full w-full object-cover"
-            />
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-            {/* Studio name */}
-            <div className="absolute bottom-0 left-0 right-0 flex flex-col gap-0.5 px-3 pb-2.5">
+            <ImageCarousel images={studio.images} autoPlay={false} compact />
+            {/* Gradient overlay — pointer-events-none so the carousel arrows
+                and dots underneath stay clickable. */}
+            <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+            {/* Studio name + area */}
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-0.5 px-3 pb-2.5">
               <span className="text-sm font-bold tracking-widest text-white drop-shadow-lg uppercase">
                 {studio.name}
+                <span className="ml-1.5 font-semibold tracking-normal text-white/85 normal-case">
+                  · {studio.size}
+                </span>
               </span>
               {isDimmed && (
                 <span className="text-[10px] font-medium normal-case tracking-normal text-white/70 drop-shadow-lg">

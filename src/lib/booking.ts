@@ -13,6 +13,8 @@ export interface Studio {
   description: string;
   features: string[];
   image: string;
+  /** Canonical photo gallery — shared by /les-studios and the booking mini-cards. */
+  images: { src: string; alt: string }[];
 }
 
 export interface Equipment {
@@ -139,6 +141,13 @@ export const STUDIOS: Record<StudioId, Studio> = {
     description: "Avec une hauteur de 3,50m et une superficie de 42m², notre studio propose une scène intimiste avec sa rampe d'éclairage. Convenant à tous styles musicaux, ce lieu chaleureux et fonctionnel saura répondre à vos besoins.",
     features: ["Scène", "Éclairage", "Écran géant", "Vidéoprojecteur"],
     image: "/images/studios/scene-1.webp",
+    images: [
+      { src: "/images/studios/scene-2.webp", alt: "Studio La Scène - scène avec éclairage professionnel, 42m²" },
+      { src: "/images/studios/scene-5.webp", alt: "Studio La Scène H3 Studios - vue d'ensemble de la salle" },
+      { src: "/images/studios/scene-3.webp", alt: "Studio La Scène - équipement batterie et amplis" },
+      { src: "/images/studios/scene-1.webp", alt: "Studio La Scène Sucy-en-Brie - espace de répétition groupe" },
+      { src: "/images/studios/scene-4.webp", alt: "Studio La Scène - sono et matériel professionnel inclus" },
+    ],
   },
   "le-podium": {
     id: "le-podium",
@@ -147,6 +156,12 @@ export const STUDIOS: Record<StudioId, Studio> = {
     description: "Conçu pour la répétition, cet espace de 35m² offre un cadre simple et fonctionnel, idéal pour vos sessions musicales, en groupe ou en solo. Cette salle est également adapté aux enseignants souhaitant donner des cours à un ou plusieurs élèves.",
     features: ["Compact", "Fonctionnel", "Cours"],
     image: "/images/studios/podium-1.webp",
+    images: [
+      { src: "/images/studios/podium-2.webp", alt: "Studio Le Podium - salle de répétition 35m², H3 Studios" },
+      { src: "/images/studios/podium-1.webp", alt: "Studio Le Podium Sucy-en-Brie - vue d'ensemble" },
+      { src: "/images/studios/podium-3.webp", alt: "Studio Le Podium - équipement batterie et amplis inclus" },
+      { src: "/images/studios/podium-4.webp", alt: "Studio Le Podium - espace idéal répétitions et cours" },
+    ],
   },
 };
 
