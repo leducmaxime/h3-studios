@@ -253,8 +253,12 @@ export function Reservation({ step }: ReservationProps) {
 
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-white/60">{gt === "group" ? "Studio" : "Formule"}</span>
-              <span className="font-medium">{gt === "group" ? studio.name : RECAP_GROUP_LABELS[gt]}</span>
+              <span className="text-white/60">Formule</span>
+              <span className="font-medium">{RECAP_GROUP_LABELS[gt]}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-white/60">Studio</span>
+              <span className="font-medium">{studio.name}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-white/60">Date</span>
@@ -264,12 +268,6 @@ export function Reservation({ step }: ReservationProps) {
               <span className="text-white/60">Horaire</span>
               <span className="font-medium">{state.startTime} - {state.endTime} ({duration})</span>
             </div>
-            {gt === "group" && (
-              <div className="flex items-center justify-between">
-                <span className="text-white/60">Formule</span>
-                <span className="font-medium">{RECAP_GROUP_LABELS[gt]}</span>
-              </div>
-            )}
           </div>
 
           <div className="mt-3 border-t border-white/10 pt-3 space-y-1.5 text-sm">
@@ -302,7 +300,7 @@ export function Reservation({ step }: ReservationProps) {
                       <span>{formatPrice(offPeakSubtotal)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-primary/70">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€/h <span className="text-xs">(soir &amp; week-end)</span></span>
+                      <span className="text-primary/70">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€/h</span>
                       <span className="text-primary">{formatPrice(peakSubtotal)}</span>
                     </div>
                   </>
@@ -310,7 +308,7 @@ export function Reservation({ step }: ReservationProps) {
                   <div className="flex items-center justify-between">
                     {peakSlots.length > 0 ? (
                       <>
-                        <span className="text-primary/70">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€/h <span className="text-xs">(soir &amp; week-end)</span></span>
+                        <span className="text-primary/70">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€/h</span>
                         <span className="text-primary">{formatPrice(total)}</span>
                       </>
                     ) : (
