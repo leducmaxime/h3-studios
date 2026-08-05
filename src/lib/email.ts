@@ -414,7 +414,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                     <p style="margin:0;color:#aaaaaa;font-size:13px;line-height:1.6;">
                       <strong style="color:#ffffff;">Adresse :</strong> <a href="https://maps.google.com/?q=3+Rue+de+la+Grande+Ceinture+94370+Sucy-en-Brie" style="color:#facc15;text-decoration:none;">3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie</a><br>
                       <strong style="color:#ffffff;">Accès :</strong> RER A - Gare de Sucy - Bonneuil (2 min à pied)<br>
-                      <strong style="color:#ffffff;">Modification :</strong> pour toute modification, veuillez nous contacter au plus tôt au <a href="tel:+33613440875" style="color:#facc15;text-decoration:none;">06.13.44.08.75</a>.<br>
+                      <strong style="color:#ffffff;">Modification :</strong> pour toute modification, veuillez nous contacter au plus tôt au <a href="tel:+33613440875" style="color:#facc15;text-decoration:none;">06.13.44.08.75</a>. En cas d'absence sans annulation préalable, le créneau vous sera facturé.<br>
                       <strong style="color:#ffffff;">Horaire :</strong> merci de respecter votre créneau de réservation.
                     </p>
                   </td>
