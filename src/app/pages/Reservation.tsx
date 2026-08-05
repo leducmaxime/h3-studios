@@ -192,8 +192,21 @@ export function Reservation({ step }: ReservationProps) {
     const offPeakSubtotal = offPeakHours * offPeakRate;
     const peakSubtotal = peakHours * peakRate;
     // Two-band view when both off-peak and peak slots exist with differing rates.
-    // When only one band is present (or rates are equal), the flat view is identical.
     const hasPeakPricing = offPeakSlots.length > 0 && peakSlots.length > 0 && offPeakRate !== peakRate;
+    // Whether this studio/group-type distinguishes peak vs off-peak AT ALL
+    // (grid-driven) — when it does but the booking spans a single band, the
+    // flat line still names the band. When rates are equal, naming the band
+    // would be meaningless.
+    const bandRates = grid?.[state.studioId as StudioId]?.[gt];
+    const hasBandDistinction = bandRates ? bandRates.peak !== bandRates.offPeak : false;
+    // French-style compact durations: 2 → "2h", 1.5 → "1h30", 0.5 → "30min".
+    const formatBandDuration = (hours: number): string => {
+      const h = Math.floor(hours);
+      const m = Math.round((hours - h) * 60);
+      if (m === 0) return `${h}h`;
+      if (h === 0) return `${m}min`;
+      return `${h}h${String(m).padStart(2, "0")}`;
+    };
 
     const handleConfirmRecap = () => {
       confirmBooking();
@@ -284,22 +297,32 @@ export function Reservation({ step }: ReservationProps) {
               <>
                 {hasPeakPricing ? (
                   <>
-                    {offPeakHours > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/60">{offPeakHours}h x {offPeakRate}€/h</span>
-                        <span>{formatPrice(offPeakSubtotal)}</span>
-                      </div>
-                    )}
-                    {peakHours > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-primary/70">{peakHours}h x {peakRate}€/h <span className="text-xs">(soir/WE)</span></span>
-                        <span className="text-primary">{formatPrice(peakSubtotal)}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/60">Heure creuse — {formatBandDuration(offPeakHours)} x {offPeakRate}€/h</span>
+                      <span>{formatPrice(offPeakSubtotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-primary/70">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€/h <span className="text-xs">(soir &amp; week-end)</span></span>
+                      <span className="text-primary">{formatPrice(peakSubtotal)}</span>
+                    </div>
                   </>
+                ) : hasBandDistinction ? (
+                  <div className="flex items-center justify-between">
+                    {peakSlots.length > 0 ? (
+                      <>
+                        <span className="text-primary/70">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€/h <span className="text-xs">(soir &amp; week-end)</span></span>
+                        <span className="text-primary">{formatPrice(total)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-white/60">Heure creuse — {formatBandDuration(durationH)} x {anyRate}€/h</span>
+                        <span>{formatPrice(total)}</span>
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <div className="flex items-center justify-between">
-                    <span className="text-white/60">{durationH}h x {anyRate}€/h</span>
+                    <span className="text-white/60">{formatBandDuration(durationH)} x {anyRate}€/h</span>
                     <span>{formatPrice(total)}</span>
                   </div>
                 )}

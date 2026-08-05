@@ -503,13 +503,18 @@ export function TimeSlotPicker({
   const renderStudioBlock = (studioId: StudioId) => {
     const slots = studioSlots[studioId];
     const isActive = activeStudio === studioId;
+    // The other studio has a selection in progress or confirmed — recede
+    // this block, but keep it clickable (hover partially restores it).
+    const isDimmed = activeStudio !== null && !isActive;
     const studio = STUDIOS[studioId];
     const rates = getStudioRates(studioId);
 
     return (
       <div
         key={studioId}
-        className="group flex flex-col gap-3 rounded-2xl p-2 -m-2 transition-colors duration-200 hover:bg-white/[0.04]"
+        className={`group flex flex-col gap-3 rounded-2xl p-2 -m-2 transition-all duration-300 hover:bg-white/[0.04] ${
+          isDimmed ? "saturate-[0.35] brightness-[0.72] hover:saturate-[0.9] hover:brightness-[0.95]" : ""
+        }`}
       >
         {/* Mini-card */}
         <div
@@ -533,10 +538,15 @@ export function TimeSlotPicker({
             {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
             {/* Studio name */}
-            <div className="absolute bottom-0 left-0 right-0 flex items-end px-3 pb-2.5">
+            <div className="absolute bottom-0 left-0 right-0 flex flex-col gap-0.5 px-3 pb-2.5">
               <span className="text-sm font-bold tracking-widest text-white drop-shadow-lg uppercase">
                 {studio.name}
               </span>
+              {isDimmed && (
+                <span className="text-[10px] font-medium normal-case tracking-normal text-white/70 drop-shadow-lg">
+                  Cliquez pour sélectionner ce studio
+                </span>
+              )}
             </div>
           </div>
         </div>
