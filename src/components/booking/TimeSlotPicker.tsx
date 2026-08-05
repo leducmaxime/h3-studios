@@ -54,11 +54,12 @@ type SlotPresentation = { className: string; hint: string | null };
 // Softer variant of the normal free-slot hue: the slot stays in its color
 // family (peak amber / off-peak neutral) at reduced intensity — free, just not
 // a valid boundary here. Never the greyed-out "unavailable" look.
-// Peak slots are outline-only: amber border + tinted text on the neutral
-// background, no amber fill — the fill is reserved for the selection.
+// Peak slots are outline-only: an amber border on the neutral background,
+// white text like off-peak, no amber fill — the fill is reserved for the
+// selection.
 const softFreeStyle = (isPeak: boolean, cursor: string): string =>
   isPeak
-    ? `bg-white/[0.03] border-amber-400/20 text-amber-200/60 ${cursor}`
+    ? `bg-white/[0.03] border-amber-400/20 text-white/50 ${cursor}`
     : `bg-white/[0.03] border-white/5 text-white/50 ${cursor}`;
 
 export function TimeSlotPicker({
@@ -401,7 +402,7 @@ export function TimeSlotPicker({
             }
             return ok(
               isPeak
-                ? "bg-white/10 hover:bg-white/20 border-amber-400/50 hover:border-amber-400/80 text-amber-200 cursor-pointer"
+                ? "bg-white/10 hover:bg-white/20 border-amber-400/50 hover:border-amber-400/80 cursor-pointer"
                 : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer"
             );
           }
@@ -428,7 +429,7 @@ export function TimeSlotPicker({
         }
         return ok(
           isPeak
-            ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 text-amber-200 cursor-pointer"
+            ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 cursor-pointer"
             : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer"
         );
       }
@@ -450,7 +451,7 @@ export function TimeSlotPicker({
       // Default free slot — equal prominence on both studios.
       return ok(
         isPeak
-          ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 text-amber-200 cursor-pointer"
+          ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 cursor-pointer"
           : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer"
       );
     },
