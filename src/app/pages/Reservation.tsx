@@ -300,16 +300,16 @@ export function Reservation({ step }: ReservationProps) {
                       <span>{formatPrice(offPeakSubtotal)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-primary/70">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€/h</span>
-                      <span className="text-primary">{formatPrice(peakSubtotal)}</span>
+                      <span className="text-white/60">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€/h</span>
+                      <span>{formatPrice(peakSubtotal)}</span>
                     </div>
                   </>
                 ) : hasBandDistinction ? (
                   <div className="flex items-center justify-between">
                     {peakSlots.length > 0 ? (
                       <>
-                        <span className="text-primary/70">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€/h</span>
-                        <span className="text-primary">{formatPrice(total)}</span>
+                        <span className="text-white/60">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€/h</span>
+                        <span>{formatPrice(total)}</span>
                       </>
                     ) : (
                       <>
