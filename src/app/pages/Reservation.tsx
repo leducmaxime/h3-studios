@@ -626,14 +626,17 @@ export function Reservation({ step }: ReservationProps) {
                       );})}
                     </div>
 
-                    {/* Code promo (gauche) + Total (droite) sur desktop, empilés sur mobile */}
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
-                      <PromoCodeInput
-                        total={cartTotal}
-                        appliedPromo={state.appliedPromo}
-                        onApply={applyPromo}
-                        onRemove={removePromo}
-                      />
+                    {/* Code promo (gauche) + Total (droite) sur desktop, empilés sur mobile.
+                        Les deux cartes s'étirent à la même hauteur (grid stretch + h-full). */}
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      <div className="flex h-full flex-col justify-center rounded-xl border border-white/10 bg-white/5 p-4">
+                        <PromoCodeInput
+                          total={cartTotal}
+                          appliedPromo={state.appliedPromo}
+                          onApply={applyPromo}
+                          onRemove={removePromo}
+                        />
+                      </div>
 
                       <div className="rounded-xl bg-primary/10 p-4">
                         <div className="space-y-2">
