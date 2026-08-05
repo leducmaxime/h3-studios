@@ -154,7 +154,6 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
   const promoLabel = data.promoType === "percentage" ? `${data.promoValue ?? data.promoDiscount}%` : `${formatPrice(data.promoDiscount || 0)}`;
   const durationHours = calculateDurationHours(data.startTime, data.endTime);
-  const isGroup = data.groupType === "group";
   const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, durationHours);
 
   const isMultiSlot = data.allSlots && data.allSlots.length > 1;
@@ -184,12 +183,10 @@ function buildEmailHtml(data: BookingConfirmationData): string {
     <td style="padding:14px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
         <tr>
-          ${slot.groupType === "group" ? `
           <td width="50%" style="padding-bottom:8px;">
             <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Studio</p>
             <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">${slotStudio}</p>
           </td>
-          ` : ""}
           <td width="50%" style="padding-bottom:8px;">
             <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
             <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">${getGroupTypeLabel(slot.groupType)}</p>
@@ -236,8 +233,8 @@ function buildEmailHtml(data: BookingConfirmationData): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
       <tr>
         <td>
-          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">${isGroup ? "Studio" : "Type"}</p>
-          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${isGroup ? studioName : groupLabel}</p>
+          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Studio</p>
+          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${studioName}</p>
         </td>
       </tr>
     </table>
@@ -246,8 +243,8 @@ function buildEmailHtml(data: BookingConfirmationData): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
       <tr>
         <td>
-          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">${isGroup ? "Type" : "Horaire"}</p>
-          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${isGroup ? groupLabel : timeLabel}</p>
+          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
+          <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${groupLabel}</p>
         </td>
       </tr>
     </table>
@@ -268,8 +265,8 @@ function buildEmailHtml(data: BookingConfirmationData): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
       <tr>
         <td>
-          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">${isGroup ? "Horaire" : "Studio"}</p>
-          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${isGroup ? timeLabel : studioName}</p>
+          <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Horaire</p>
+          <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${timeLabel}</p>
         </td>
       </tr>
     </table>
