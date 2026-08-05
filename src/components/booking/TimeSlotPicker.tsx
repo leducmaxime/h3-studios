@@ -59,7 +59,7 @@ type SlotPresentation = { className: string; hint: string | null };
 // selection.
 const softFreeStyle = (isPeak: boolean, cursor: string): string =>
   isPeak
-    ? `bg-white/5 border-amber-400/50 text-white/50 ${cursor}`
+    ? `bg-white/5 border-amber-400/50 text-white ${cursor}`
     : `bg-white/[0.03] border-white/5 text-white/50 ${cursor}`;
 
 export function TimeSlotPicker({
