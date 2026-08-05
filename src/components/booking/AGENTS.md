@@ -130,7 +130,7 @@ Both the selected-date availability fetch and the week calendar batch fetch use 
 - Dark theme with primary accent (cyan/teal)
 - Cards: rounded-xl, white/10 borders, white/5–20 backgrounds
 - Progress indicator: circular icons with ping animation on current step
-- Time slots: 3-row grid, 11px-12px font, borderline styles for states
+- Time slots: 3-row grid with shared fixed columns and `box-border` cells for identical dimensions, 11px-12px font, borderline styles for states
 - "DÉBUT"/"FIN" labels on selected range boundaries
 
 ## LOADING STATES

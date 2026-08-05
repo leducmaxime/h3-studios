@@ -490,18 +490,21 @@ export function TimeSlotPicker({
     };
   }, [selectedStart, selectedEnd, activeStudio, groupType, date, pricingGrid]);
 
+  // Shared column count across both studios (max 3 rows each), rendered as
+  // one CSS grid per studio with fixed `minmax(0,1fr)` tracks: every slot
+  // cell — every row, both studios, every state — gets the exact same
+  // width. (The old flex rows stretched the cells of a partially-filled
+  // last row, and each studio used its own column count.)
+  const gridCols = Math.max(
+    1,
+    ...(["la-scene", "le-podium"] as StudioId[]).map((id) => Math.ceil(studioSlots[id].length / 3))
+  );
+
   const renderStudioBlock = (studioId: StudioId) => {
     const slots = studioSlots[studioId];
     const isActive = activeStudio === studioId;
     const studio = STUDIOS[studioId];
     const rates = getStudioRates(studioId);
-
-    // Max 3 rows — compute columns needed
-    const cols = Math.ceil(slots.length / 3);
-    const rows: string[][] = [];
-    for (let i = 0; i < slots.length; i += cols) {
-      rows.push(slots.slice(i, Math.min(i + cols, slots.length)));
-    }
 
     return (
       <div
@@ -545,19 +548,16 @@ export function TimeSlotPicker({
             and photos stay visible. */}
         {slotsLoading || (!pricingGrid && !pricingError) ? (
           <div
-            className="flex flex-col gap-1.5"
+            className="grid gap-1.5"
+            style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
             aria-busy="true"
             aria-label="Chargement des créneaux"
           >
-            {rows.map((row, rowIdx) => (
-              <div key={rowIdx} className="flex gap-1.5">
-                {row.map((slot) => (
-                  <div
-                    key={slot}
-                    className="h-10 flex-1 animate-pulse rounded-lg border border-white/10 bg-white/10"
-                  />
-                ))}
-              </div>
+            {slots.map((slot) => (
+              <div
+                key={slot}
+                className="box-border h-10 min-w-0 animate-pulse rounded-lg border border-white/10 bg-white/10"
+              />
             ))}
           </div>
         ) : pricingError && !pricingGrid ? (
@@ -574,80 +574,81 @@ export function TimeSlotPicker({
             )}
           </div>
         ) : (
-        <div className="flex flex-col gap-1.5">
-          {rows.map((row, rowIdx) => (
-            <div key={rowIdx} className="flex gap-1.5">
-              {row.map((slot, colIdx) => {
-                const { className: style, hint } = getSlotStyle(slot, studioId);
-                const isStart = selectedStart === slot && activeStudio === studioId;
-                const isEnd = selectedEnd === slot && activeStudio === studioId;
-                // Tooltip flips below the slot on the first row so it never
-                // overlays the studio photo card above the grid.
-                const hintPlacement = rowIdx === 0 ? "top-full mt-1.5" : "bottom-full mb-1.5";
-                // Column-aware horizontal alignment to prevent overflow-hidden
-                // clipping on the first/last 1-2 columns of each row.
-                const hintHorz =
-                  colIdx < 2
-                    ? "left-0"
-                    : colIdx >= row.length - 2
-                      ? "right-0"
-                      : "left-1/2 -translate-x-1/2";
-                const hintId = `slot-hint-${studioId}-${slot.replace(":", "")}`;
-                // Mid-selection, the other studio previews this slot as a
-                // potential new start — never as an end.
-                const isStartPreview =
-                  selectionMode === "end" &&
-                  activeStudio !== null &&
-                  activeStudio !== studioId &&
-                  hoveredSlot?.studioId === studioId &&
-                  hoveredSlot.slot === slot &&
-                  canBeStartTime(slot, slots, (t) => checkSlotBooked(t, studioId));
+        <div
+          className="grid gap-1.5"
+          style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+        >
+          {slots.map((slot, idx) => {
+            const rowIdx = Math.floor(idx / gridCols);
+            const colIdx = idx % gridCols;
+            const { className: style, hint } = getSlotStyle(slot, studioId);
+            const isStart = selectedStart === slot && activeStudio === studioId;
+            const isEnd = selectedEnd === slot && activeStudio === studioId;
+            // Tooltip flips below the slot on the first row so it never
+            // overlays the studio photo card above the grid.
+            const hintPlacement = rowIdx === 0 ? "top-full mt-1.5" : "bottom-full mb-1.5";
+            // Column-aware horizontal alignment to prevent overflow-hidden
+            // clipping on the first/last 1-2 columns of the grid.
+            const hintHorz =
+              colIdx < 2
+                ? "left-0"
+                : colIdx >= gridCols - 2
+                  ? "right-0"
+                  : "left-1/2 -translate-x-1/2";
+            const hintId = `slot-hint-${studioId}-${slot.replace(":", "")}`;
+            // Mid-selection, the other studio previews this slot as a
+            // potential new start — never as an end.
+            const isStartPreview =
+              selectionMode === "end" &&
+              activeStudio !== null &&
+              activeStudio !== studioId &&
+              hoveredSlot?.studioId === studioId &&
+              hoveredSlot.slot === slot &&
+              canBeStartTime(slot, slots, (t) => checkSlotBooked(t, studioId));
 
-                return (
-                  <button
-                    key={slot}
-                    type="button"
-                    className={`group/slot relative flex-1 h-10 rounded-lg border transition-all duration-150 ${style}`}
-                    onClick={() => handleSlotClick(slot, studioId)}
-                    onMouseEnter={() => handleSlotMouseEnter(slot, studioId)}
-                    onMouseLeave={handleSlotMouseLeave}
-                    aria-disabled={hint ? true : undefined}
-                    aria-describedby={hint ? hintId : undefined}
+            return (
+              <button
+                key={slot}
+                type="button"
+                className={`group/slot relative box-border h-10 min-w-0 rounded-lg border transition-all duration-150 ${style}`}
+                onClick={() => handleSlotClick(slot, studioId)}
+                onMouseEnter={() => handleSlotMouseEnter(slot, studioId)}
+                onMouseLeave={handleSlotMouseLeave}
+                aria-disabled={hint ? true : undefined}
+                aria-describedby={hint ? hintId : undefined}
+              >
+                <div className="flex h-full items-center justify-center">
+                  <span className="text-[11px] font-semibold leading-none sm:text-xs">
+                    {formatHourLabel(slot)}
+                  </span>
+                </div>
+                {hint && (
+                  <span
+                    id={hintId}
+                    role="tooltip"
+                    className={`pointer-events-none invisible absolute ${hintHorz} z-20 ${hintPlacement} whitespace-nowrap rounded-md border border-white/15 bg-zinc-900 px-2 py-1 text-[10px] font-medium text-white/80 opacity-0 shadow-lg transition-opacity duration-150 group-hover/slot:visible group-hover/slot:opacity-100 group-focus-visible/slot:visible group-focus-visible/slot:opacity-100`}
                   >
-                    <div className="flex items-center justify-center h-full">
-                      <span className="text-[11px] sm:text-xs font-semibold leading-none">
-                        {formatHourLabel(slot)}
-                      </span>
-                    </div>
-                    {hint && (
-                      <span
-                        id={hintId}
-                        role="tooltip"
-                        className={`pointer-events-none invisible absolute ${hintHorz} z-20 ${hintPlacement} whitespace-nowrap rounded-md border border-white/15 bg-zinc-900 px-2 py-1 text-[10px] font-medium text-white/80 opacity-0 shadow-lg transition-opacity duration-150 group-hover/slot:visible group-hover/slot:opacity-100 group-focus-visible/slot:visible group-focus-visible/slot:opacity-100`}
-                      >
-                        {hint}
-                      </span>
-                    )}
-                    {isStart && (
-                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                        DÉBUT
-                      </div>
-                    )}
-                    {isEnd && (
-                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                        FIN
-                      </div>
-                    )}
-                    {isStartPreview && (
-                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary/70 text-black text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                        DÉBUT
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+                    {hint}
+                  </span>
+                )}
+                {isStart && (
+                  <div className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold text-black">
+                    DÉBUT
+                  </div>
+                )}
+                {isEnd && (
+                  <div className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold text-black">
+                    FIN
+                  </div>
+                )}
+                {isStartPreview && (
+                  <div className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-primary/70 px-1.5 py-0.5 text-[9px] font-bold text-black">
+                    DÉBUT
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
         )}
 
