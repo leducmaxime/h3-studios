@@ -52,11 +52,11 @@ const MIN_DURATION_HINT = "Durée minimum de réservation : 1 heure";
 type SlotPresentation = { className: string; hint: string | null };
 
 // Softer variant of the normal free-slot hue: the slot stays in its color
-// family (peak sky / off-peak neutral) at reduced intensity — free, just not
+// family (peak amber / off-peak neutral) at reduced intensity — free, just not
 // a valid boundary here. Never the greyed-out "unavailable" look.
 const softFreeStyle = (isPeak: boolean, cursor: string): string =>
   isPeak
-    ? `bg-sky-400/5 border-sky-400/20 text-sky-200/60 ${cursor}`
+    ? `bg-amber-400/5 border-amber-400/20 text-amber-200/60 ${cursor}`
     : `bg-white/[0.03] border-white/5 text-white/50 ${cursor}`;
 
 export function TimeSlotPicker({
@@ -340,12 +340,12 @@ export function TimeSlotPicker({
         hint: MIN_DURATION_HINT,
       });
 
-      // Selection highlight always wins; the sky border keeps the peak
+      // Selection highlight always wins; the amber border keeps the peak
       // nature of the slot legible.
       if (isSelectedStart || isSelectedEnd) {
         return ok(
           isPeak
-            ? "bg-primary/50 border-sky-400 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer"
+            ? "bg-primary/50 border-amber-400 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer"
             : "bg-primary/40 border-primary/60 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer"
         );
       }
@@ -358,7 +358,7 @@ export function TimeSlotPicker({
         if (slotIdx > startIdx && slotIdx < endIdx) {
           return ok(
             isPeak
-              ? "bg-primary/25 border-sky-400/50 cursor-pointer"
+              ? "bg-primary/25 border-amber-400/50 cursor-pointer"
               : "bg-primary/20 border-primary/30 cursor-pointer"
           );
         }
@@ -399,7 +399,7 @@ export function TimeSlotPicker({
             }
             return ok(
               isPeak
-                ? "bg-sky-400/15 hover:bg-sky-400/25 border-sky-400/40 text-sky-200 cursor-pointer"
+                ? "bg-amber-400/15 hover:bg-amber-400/25 border-amber-400/40 text-amber-200 cursor-pointer"
                 : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer"
             );
           }
@@ -426,7 +426,7 @@ export function TimeSlotPicker({
         }
         return ok(
           isPeak
-            ? "bg-sky-400/10 hover:bg-sky-400/20 border-sky-400/40 text-sky-200 cursor-pointer"
+            ? "bg-amber-400/10 hover:bg-amber-400/20 border-amber-400/40 text-amber-200 cursor-pointer"
             : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer"
         );
       }
@@ -448,7 +448,7 @@ export function TimeSlotPicker({
       // Default free slot — equal prominence on both studios.
       return ok(
         isPeak
-          ? "bg-sky-400/10 hover:bg-sky-400/20 border-sky-400/40 text-sky-200 cursor-pointer"
+          ? "bg-amber-400/10 hover:bg-amber-400/20 border-amber-400/40 text-amber-200 cursor-pointer"
           : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer"
       );
     },
@@ -662,7 +662,7 @@ export function TimeSlotPicker({
                 Heure creuse — {formatPrice(rates.offPeak)}/h
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3.5 w-3.5 rounded border border-sky-400/40 bg-sky-400/15" />
+                <span className="inline-block h-3.5 w-3.5 rounded border border-amber-400/40 bg-amber-400/15" />
                 Heure pleine — {formatPrice(rates.peak)}/h
               </span>
             </>
