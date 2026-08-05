@@ -626,32 +626,35 @@ export function Reservation({ step }: ReservationProps) {
                       );})}
                     </div>
 
-                    <PromoCodeInput
-                      total={cartTotal}
-                      appliedPromo={state.appliedPromo}
-                      onApply={applyPromo}
-                      onRemove={removePromo}
-                    />
+                    {/* Code promo (gauche) + Total (droite) sur desktop, empilés sur mobile */}
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+                      <PromoCodeInput
+                        total={cartTotal}
+                        appliedPromo={state.appliedPromo}
+                        onApply={applyPromo}
+                        onRemove={removePromo}
+                      />
 
-                    <div className="rounded-xl bg-primary/10 p-4">
-                      <div className="space-y-2">
-                        {state.promoDiscount > 0 && (
-                          <>
-                            <div className="flex items-center justify-between text-sm text-white/70">
-                              <span>Sous-total</span>
-                              <span>{formatPrice(cartTotal)}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-sm text-green-400">
-                              <span>Réduction ({state.appliedPromo?.code})</span>
-                              <span>-{formatPrice(state.promoDiscount)}</span>
-                            </div>
-                          </>
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg font-semibold">Total</span>
-                          <span className="text-2xl font-bold text-primary">
-                            {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
-                          </span>
+                      <div className="rounded-xl bg-primary/10 p-4">
+                        <div className="space-y-2">
+                          {state.promoDiscount > 0 && (
+                            <>
+                              <div className="flex items-center justify-between text-sm text-white/70">
+                                <span>Sous-total</span>
+                                <span>{formatPrice(cartTotal)}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-sm text-green-400">
+                                <span>Réduction ({state.appliedPromo?.code})</span>
+                                <span>-{formatPrice(state.promoDiscount)}</span>
+                              </div>
+                            </>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-lg font-semibold">Total</span>
+                            <span className="text-2xl font-bold text-primary">
+                              {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
