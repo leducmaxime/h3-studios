@@ -115,7 +115,6 @@ export function Reservation({ step }: ReservationProps) {
 
   // Refs for auto-scroll within unified booking step
   const timeSlotRef = useRef<HTMLDivElement>(null);
-  const recapRef = useRef<HTMLDivElement>(null);
 
   const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -127,13 +126,6 @@ export function Reservation({ step }: ReservationProps) {
       scrollToRef(timeSlotRef);
     }
   }, [state.step, state.selectedDate, state.startTime]);
-
-  // Auto-scroll when studio is selected (recap appears)
-  useEffect(() => {
-    if (state.step === "creneau" && state.studioId && state.startTime && state.endTime) {
-      scrollToRef(recapRef);
-    }
-  }, [state.step, state.studioId, state.startTime, state.endTime]);
 
   useEffect(() => {
     if (state.duplicateError) {
@@ -517,7 +509,7 @@ export function Reservation({ step }: ReservationProps) {
 
                 {/* Recap — appears after time selection (studio is implicit from slot) */}
                 {state.studioId && state.startTime && state.endTime && (
-                  <div ref={recapRef}>
+                  <div>
                     {renderRecapSection()}
                   </div>
                 )}
