@@ -54,9 +54,11 @@ type SlotPresentation = { className: string; hint: string | null };
 // Softer variant of the normal free-slot hue: the slot stays in its color
 // family (peak amber / off-peak neutral) at reduced intensity — free, just not
 // a valid boundary here. Never the greyed-out "unavailable" look.
+// Peak slots are outline-only: amber border + tinted text on the neutral
+// background, no amber fill — the fill is reserved for the selection.
 const softFreeStyle = (isPeak: boolean, cursor: string): string =>
   isPeak
-    ? `bg-amber-400/5 border-amber-400/20 text-amber-200/60 ${cursor}`
+    ? `bg-white/[0.03] border-amber-400/20 text-amber-200/60 ${cursor}`
     : `bg-white/[0.03] border-white/5 text-white/50 ${cursor}`;
 
 export function TimeSlotPicker({
@@ -399,7 +401,7 @@ export function TimeSlotPicker({
             }
             return ok(
               isPeak
-                ? "bg-amber-400/15 hover:bg-amber-400/25 border-amber-400/40 text-amber-200 cursor-pointer"
+                ? "bg-white/10 hover:bg-white/20 border-amber-400/50 hover:border-amber-400/80 text-amber-200 cursor-pointer"
                 : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer"
             );
           }
@@ -426,7 +428,7 @@ export function TimeSlotPicker({
         }
         return ok(
           isPeak
-            ? "bg-amber-400/10 hover:bg-amber-400/20 border-amber-400/40 text-amber-200 cursor-pointer"
+            ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 text-amber-200 cursor-pointer"
             : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer"
         );
       }
@@ -448,7 +450,7 @@ export function TimeSlotPicker({
       // Default free slot — equal prominence on both studios.
       return ok(
         isPeak
-          ? "bg-amber-400/10 hover:bg-amber-400/20 border-amber-400/40 text-amber-200 cursor-pointer"
+          ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 text-amber-200 cursor-pointer"
           : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer"
       );
     },
@@ -662,7 +664,7 @@ export function TimeSlotPicker({
                 Heure creuse — {formatPrice(rates.offPeak)}/h
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3.5 w-3.5 rounded border border-amber-400/40 bg-amber-400/15" />
+                <span className="inline-block h-3.5 w-3.5 rounded border border-amber-400/50 bg-white/5" />
                 Heure pleine — {formatPrice(rates.peak)}/h
               </span>
             </>
