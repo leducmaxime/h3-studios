@@ -4,6 +4,10 @@ import {
   getBookingBalance,
   parseAmountInput,
   isBookingPast,
+  getDisplayPaymentStatus,
+  getDisplayPaymentStatusFromSummary,
+  getTotalPaid,
+  getTotalRefunded,
 } from "@/lib/booking-totals";
 
 // ─── getBookingAmountDue ─────────────────────────────────────────────────────
@@ -229,5 +233,130 @@ describe("isBookingPast", () => {
     // Use a far-future date to avoid timezone flakiness
     const booking = { date: "2099-12-31", end_time: "12:00" };
     expect(isBookingPast(booking)).toBe(false);
+  });
+});
+
+// ─── Total invariant : 23€ brut − 20€ remise = 3€ dû ─────────────────────────
+
+describe("total invariant (23€ gross / 20€ discount)", () => {
+  const booking = {
+    base_price: 23,
+    equipment_price: 0,
+    total_price: 23, // convention : total_price = base + equipment (brut)
+    promo_discount: 20,
+  };
+
+  it("never lets the client-derived net total double the deduction", () => {
+    // The stored gross is 23. Due = max(0, gross − discount) = 3.
+    expect(getBookingAmountDue(booking)).toBe(3);
+  });
+
+  it("keeps balance consistent with the single 3€ due", () => {
+    expect(getBookingBalance(booking, [])).toBe(3);
+    expect(getBookingBalance(booking, [{ amount: 3, status: "paid" as const }])).toBe(0);
+  });
+});
+
+// ─── Statut d'affichage du paiement / annulations ────────────────────────────
+
+describe("getDisplayPaymentStatus", () => {
+  const base = {
+    base_price: 23,
+    equipment_price: 0,
+    total_price: 23,
+    promo_discount: 0,
+  };
+
+  it("cancelled + unpaid (pay-on-site) → Annulée, never an amount due", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
+      [],
+    );
+    expect(status).toBe("cancelled");
+  });
+
+  it("cancelled + prior payment → Payée avant annulation", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
+      [{ amount: 10, status: "paid" as const, refunded_amount: 0 }],
+    );
+    expect(status).toBe("paid-before-cancel");
+  });
+
+  it("cancelled + full refund recorded → Remboursé", () => {
+    // Un paiement remboursé intégralement passe au statut 'refunded' (son
+    // montant n'apparaît plus dans "paid"), mais il a bien été collecté.
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
+      [{ amount: 23, status: "refunded" as const, refunded_amount: 23 }],
+    );
+    expect(status).toBe("refunded");
+  });
+
+  it("cancelled + partial refund → Payée avant annulation (not refunded)", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
+      [
+        { amount: 23, status: "partial-refund" as const, refunded_amount: 10 },
+      ],
+    );
+    expect(status).toBe("paid-before-cancel");
+  });
+
+  it("cancelled + partially refunded with still-paid remainder → Payée avant annulation", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
+      [
+        { amount: 23, status: "paid" as const, refunded_amount: 0 },
+        { amount: 23, status: "partial-refund" as const, refunded_amount: 10 },
+      ],
+    );
+    expect(status).toBe("paid-before-cancel");
+  });
+
+  it("active paid booking → Payé", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "confirmed" as const, payment_status: "paid" },
+      [{ amount: 23, status: "paid" as const, refunded_amount: 0 }],
+    );
+    expect(status).toBe("paid");
+  });
+
+  it("active pay-on-site booking → pay-on-site (orange due allowed)", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "confirmed" as const, payment_status: "pay-on-site" },
+      [],
+    );
+    expect(status).toBe("pay-on-site");
+  });
+});
+
+describe("getDisplayPaymentStatusFromSummary (list enrichment)", () => {
+  it("maps server-side totals identically to the payments array variant", () => {
+    expect(getDisplayPaymentStatusFromSummary("cancelled", "pay-on-site", 0, 0)).toBe("cancelled");
+    expect(getDisplayPaymentStatusFromSummary("cancelled", "paid", 23, 0)).toBe("paid-before-cancel");
+    expect(getDisplayPaymentStatusFromSummary("cancelled", "paid", 23, 23)).toBe("refunded");
+    expect(getDisplayPaymentStatusFromSummary("confirmed", "paid", 23, 0)).toBe("paid");
+    expect(getDisplayPaymentStatusFromSummary("confirmed", "pay-on-site", 0, 0)).toBe("pay-on-site");
+  });
+});
+
+// ─── Grand livre (payments) helpers ──────────────────────────────────────────
+
+describe("getTotalPaid / getTotalRefunded", () => {
+  const payments = [
+    { amount: 20, status: "paid" as const, refunded_amount: 0 },
+    { amount: 10, status: "paid" as const, refunded_amount: 0 },
+    { amount: 5, status: "pending" as const, refunded_amount: 0 },
+    { amount: 30, status: "partial-refund" as const, refunded_amount: 10 },
+    { amount: 20, status: "refunded" as const, refunded_amount: 20 },
+  ];
+
+  it("sums only paid amounts", () => {
+    expect(getTotalPaid(payments)).toBe(30);
+  });
+
+  it("sums refunded amounts from refunded/partial-refund records only", () => {
+    expect(getTotalRefunded(payments)).toBe(30);
   });
 });

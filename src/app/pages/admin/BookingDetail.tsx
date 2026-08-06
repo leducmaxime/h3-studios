@@ -47,7 +47,7 @@ import {
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPrice, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue, getBookingBalance, parseAmountInput } from "@/lib/booking-totals";
+import { getBookingAmountDue, getBookingBalance, parseAmountInput, getDisplayPaymentStatus, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
 
 interface BookingWithPromo extends DbBooking {
   promo_code_type?: string | null;
@@ -366,11 +366,12 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     if (discount > booking.total_price) { toast.error("La remise ne peut pas dépasser le prix total"); return; }
     setSavingDiscount(true);
     try {
-      const newTotal = Math.max(0, booking.base_price + (booking.equipment_price || 0) - discount);
+      // Convention : total_price reste le brut (base + équipement), seul
+      // promo_discount change. Le serveur recalcule/plafonne l'invariant.
       const res = await fetch(`/api/admin/bookings/${booking.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ promo_discount: discount, total_price: newTotal }),
+        body: JSON.stringify({ promo_discount: discount }),
       });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
@@ -389,14 +390,14 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     setSavingEquipment(true);
     try {
       const newEquipmentPrice = calculateEquipmentPrice(equipmentDraft, durationHours, equipmentCatalogue);
-      const newTotalPrice = booking.base_price + newEquipmentPrice - (booking.promo_discount || 0);
+      // Convention : le brut (total_price) est recalculé par le serveur à partir
+      // de base_price + equipment_price — le client n'envoie jamais total_price.
       const res = await fetch(`/api/admin/bookings/${booking.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           equipment: JSON.stringify(equipmentDraft.filter(e => e.quantity > 0)),
           equipment_price: newEquipmentPrice,
-          total_price: newTotalPrice,
         }),
       });
       const json = await res.json() as { success: boolean; error?: string };
@@ -413,6 +414,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const handleAddPayment = async () => {
     if (!booking || !newPayment.amount) return;
+    if (booking.status === "cancelled") {
+      toast.error("Impossible d'encaisser une réservation annulée");
+      return;
+    }
     const amount = parseAmountInput(newPayment.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error("Montant invalide");
@@ -518,6 +523,12 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const totalPrice = Number(booking.total_price) || 0;
   const finalTotal = getBookingAmountDue(booking);
   const balance = getBookingBalance(booking, payments);
+
+  // Présentation du paiement : une réservation annulée ne présente jamais de
+  // montant dû — on dérive le libellé du grand livre (Annulée / Payée avant
+  // annulation / Remboursé) sans persister de nouvel état.
+  const isCancelled = booking.status === "cancelled";
+  const displayPaymentStatus = getDisplayPaymentStatus(booking, payments);
 
   const methodLabels: Record<string, string> = {
     card: "Carte bancaire",
@@ -723,7 +734,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 <CreditCard className="h-5 w-5 text-primary" />
                 Paiement
               </h2>
-              {balance <= 0 ? (
+              {isCancelled ? (
+                <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">
+                  {PAYMENT_STATUS_LABELS[displayPaymentStatus]}
+                </Badge>
+              ) : balance <= 0 ? (
                 <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
                   <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                   Soldé
@@ -770,10 +785,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       )}
                     </div>
                   )}
-                  {booking.promo_discount > 0 && (
+                  {booking.promo_discount > 0 && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm flex items-center gap-2">
-                        Réduction
+                        {booking.promo_code ? "Réduction" : "Remise manuelle"}
                         {booking.promo_code && (
                           <span className="px-2 py-0.5 rounded bg-primary/10 text-xs">{booking.promo_code}</span>
                         )}
@@ -783,10 +798,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           </span>
                         )}
                       </span>
-                      <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
+                        <Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </span>
                     </div>
                   )}
-                  {booking.promo_code && booking.promo_discount === 0 && (
+                  {booking.promo_code && booking.promo_discount === 0 && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm flex items-center gap-2">
                         Code promo
@@ -795,10 +815,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       <span className="font-medium text-zinc-500">-</span>
                     </div>
                   )}
-                  {/* Remise manuelle */}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-500">Remise</span>
-                    {editingDiscount ? (
+                  {/* Remise manuelle (édition directe de promo_discount — une seule
+                      ligne de réduction, pas de double affichage ni double déduction) */}
+                  {editingDiscount && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-500">Remise manuelle</span>
                       <div className="flex items-center gap-2">
                         <Input
                           type="number" step="0.01" min="0"
@@ -812,20 +833,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setEditingDiscount(false)} className="h-7 text-xs px-2">✕</Button>
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className={booking?.promo_discount ? "text-emerald-400" : "text-zinc-600"}>
-                          {booking?.promo_discount ? `-${formatPrice(booking.promo_discount)}` : "—"}
-                        </span>
-                        <Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
                     <span className="font-semibold">Total</span>
-                    <span className="text-xl font-bold text-primary">{formatPrice(finalTotal)}</span>
+                    <span className="text-xl font-bold text-primary">{isCancelled ? "—" : formatPrice(finalTotal)}</span>
                   </div>
                   {totalPaid > 0 && (
                     <div className="flex justify-between items-center text-emerald-400 text-sm">
@@ -864,8 +876,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
-                            {p.status === "paid" ? "Payé" : "En attente"}
+                          <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : p.status === "refunded" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : p.status === "partial-refund" ? "bg-blue-500/10 text-blue-300 border-blue-500/20" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
+                            {p.status === "paid" ? "Payé" : p.status === "refunded" ? "Remboursé" : p.status === "partial-refund" ? "Remboursé partiel" : "En attente"}
                           </Badge>
                           <Button
                             size="sm"
@@ -901,7 +913,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               </div>
 
               {/* Nouvel encaissement */}
-              {balance > 0 && (
+              {!isCancelled && balance > 0 && (
                 <div className="mt-6 pt-6 border-t border-zinc-800">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-4">Nouvel encaissement</p>
                   <div className="grid grid-cols-2 gap-4 mb-4">
@@ -1030,7 +1042,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 variant="outline"
                 className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
                 onClick={async () => { await generateInvoicePDF(booking, payments[0] || null, user || ({} as DbUser)); }}
-                disabled={!user}
+                disabled={!user || isCancelled}
+                title={isCancelled ? "Aucune facture pour une réservation annulée" : undefined}
               >
                 <FileText className="mr-3 h-4 w-4 text-zinc-400" />
                 Générer la facture PDF

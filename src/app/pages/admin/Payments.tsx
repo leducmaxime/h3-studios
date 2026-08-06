@@ -649,6 +649,7 @@ export function AdminPayments() {
 
       const booking = bJson.data as {
         booking_ref: string;
+        status?: string;
         base_price: number;
         equipment_price: number;
         total_price: number;
@@ -661,6 +662,11 @@ export function AdminPayments() {
         user_name?: string | null;
         user_band_name?: string | null;
       };
+      // Une réservation annulée ne présente jamais de montant dû.
+      if (booking.status === "cancelled") {
+        toast.error("Cette réservation est annulée — aucun encaissement possible");
+        return;
+      }
       const paymentsRows = pJson.data as Array<{ amount: number; status: string }>;
       const totalPaid = paymentsRows.reduce((acc, p) => (p.status === "paid" ? acc + p.amount : acc), 0);
       const finalTotal = getBookingAmountDue(booking);

@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { STUDIOS, TIME_SLOTS, generateBookingRef, formatPrice, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
+import { parseAmountInput } from "@/lib/booking-totals";
 
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { type PromoCode } from "@/lib/booking";
@@ -112,6 +113,8 @@ export function AdminBookingNew() {
   // Promo code
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [promoDiscount, setPromoDiscount] = useState<number>(0);
+  // Remise manuelle (saisie directe, persistée via promo_discount)
+  const [manualDiscount, setManualDiscount] = useState<string>("");
   // Recalculate promo discount when cart changes
   const recalculatePromo = useCallback(async (currentSubtotal: number) => {
     if (!appliedPromo) return;
@@ -197,7 +200,9 @@ export function AdminBookingNew() {
     checkConflict();
   }, [checkConflict]);
 
-  // Calculate price when relevant fields change
+  // Calculate price via the server quote endpoint — the SAME calculation as
+  // public booking creation (computeBookingQuote), so admin-created bookings
+  // cannot diverge on peak_start_hour / public_holidays. No client copy.
   useEffect(() => {
     if (!date || !startTime || !endTime || !studioId || !groupType) {
       setEstimatedPrice(null);
@@ -206,52 +211,36 @@ export function AdminBookingNew() {
       return;
     }
 
-    const isPeak = startTime >= "18:00" || (() => {
-      const d = new Date(date + "T00:00:00");
-      const day = d.getDay();
-      return day === 0 || day === 6;
-    })();
+    const manualDiscountValue = parseAmountInput(manualDiscount);
 
     setPricingLoading(true);
-    fetch("/api/admin/pricing")
-      .then((r) => r.json() as Promise<{ success: boolean; data?: Array<{ studio_id: string; group_type: string; is_peak: number; price_per_half_hour: number }> }>)
+    const params = new URLSearchParams({
+      studioId,
+      groupType,
+      date,
+      startTime,
+      endTime,
+    });
+    if (selectedEquipment.length > 0) {
+      params.set("equipment", JSON.stringify(selectedEquipment.map((s) => ({ id: s.id, quantity: s.quantity }))));
+    }
+
+    fetch(`/api/admin/bookings/quote?${params.toString()}`)
+      .then((r) => r.json() as Promise<{ success: boolean; data?: { basePrice: number; totalPrice: number; equipment: { name: string; price: number }[] }; error?: string }>)
       .then((json) => {
         if (json.success && json.data) {
-          const rule = json.data.find(
-            (p) => p.studio_id === studioId && p.group_type === groupType && p.is_peak === (isPeak ? 1 : 0)
-          );
-          if (rule) {
-            const startParts = startTime.split(":").map(Number);
-            const endParts = endTime.split(":").map(Number);
-            const halfHours = ((endParts[0] * 60 + endParts[1]) - (startParts[0] * 60 + startParts[1])) / 30;
-            if (halfHours > 0) {
-              const studioPrice = (rule.price_per_half_hour * halfHours) / 100;
-              let eqPrice = 0;
-              const eqPrices: {name: string; price: number}[] = [];
-              for (const eq of selectedEquipment) {
-                if (eq.pricingType === "session" && eq.sessionPricing) {
-                  const price = eq.sessionPricing[eq.quantity - 1] || 0;
-                  eqPrice += price;
-                  if (price > 0) {
-                    eqPrices.push({ name: eq.name, price });
-                  }
-                }
-              }
-              const subtotal = studioPrice + eqPrice;
-              setBasePrice(studioPrice);
-              setEquipmentPrices(eqPrices);
-              // Apply promo discount if any
-              const finalPrice = Math.max(0, subtotal - promoDiscount);
-              setEstimatedPrice(finalPrice);
-              // Recalculate promo if applied (cart changed)
-              recalculatePromo(subtotal);
-            }
-          }
+          const subtotal = json.data.totalPrice;
+          setBasePrice(json.data.basePrice);
+          setEquipmentPrices(json.data.equipment || []);
+          const finalPrice = Math.max(0, subtotal - promoDiscount - (Number.isFinite(manualDiscountValue) ? manualDiscountValue : 0));
+          setEstimatedPrice(finalPrice);
+          // Recalculate promo if applied (cart changed)
+          recalculatePromo(subtotal);
         }
       })
       .catch(() => {})
       .finally(() => setPricingLoading(false));
-  }, [date, startTime, endTime, studioId, groupType, selectedEquipment, promoDiscount, recalculatePromo]);
+  }, [date, startTime, endTime, studioId, groupType, selectedEquipment, promoDiscount, manualDiscount, recalculatePromo]);
 
   const handleCreateUser = async () => {
     if (!newUserFirstName.trim()) { toast.error("Le prénom est obligatoire"); return; }
@@ -364,6 +353,11 @@ export function AdminBookingNew() {
         ? JSON.stringify(selectedEquipment.map((s) => ({ id: s.id, quantity: s.quantity })))
         : null;
 
+      // Remise totale persistée via promo_discount (convention brut/remise) :
+      // promo + remise manuelle.
+      const manualDiscountValue = parseAmountInput(manualDiscount);
+      const totalDiscount = promoDiscount + (Number.isFinite(manualDiscountValue) && manualDiscountValue > 0 ? manualDiscountValue : 0);
+
       const res = await fetch("/api/admin/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -378,7 +372,7 @@ export function AdminBookingNew() {
           equipment: equipmentJson,
           notes: notes.trim() || null,
           promo_code: appliedPromo?.code || null,
-          promo_discount: promoDiscount > 0 ? promoDiscount : null,
+          promo_discount: totalDiscount > 0 ? totalDiscount : null,
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: { id: string }; error?: string };
@@ -845,10 +839,37 @@ export function AdminBookingNew() {
               )}
               {promoDiscount > 0 && (
                 <div className="flex justify-between text-sm text-green-400">
-                  <span>Réduction</span>
+                  <span>Réduction (promo)</span>
                   <span>-{formatPrice(promoDiscount)}</span>
                 </div>
               )}
+              {(() => {
+                const manualDiscountValue = parseAmountInput(manualDiscount);
+                const validManual = Number.isFinite(manualDiscountValue) && manualDiscountValue > 0;
+                return (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-400">Remise manuelle</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0"
+                        value={manualDiscount}
+                        onChange={(e) => setManualDiscount(e.target.value)}
+                        className="w-20 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-right text-xs focus:border-primary focus:outline-none"
+                        aria-label="Remise manuelle en euros"
+                      />
+                    </div>
+                    {validManual && (
+                      <div className="flex justify-between text-sm text-green-400">
+                        <span>Remise</span>
+                        <span>-{formatPrice(manualDiscountValue)}</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               <div className="border-t border-zinc-800 pt-3">
                 <div className="flex items-center justify-between text-lg font-semibold">
                   <span>Total</span>

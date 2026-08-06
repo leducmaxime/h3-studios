@@ -884,6 +884,95 @@ export function calculateEquipmentPrice(
   }, 0);
 }
 
+// ─── Server-authoritative quote (shared by public + admin creation) ─────────
+// Single source of truth for price computation on creation. Pure function:
+// takes DB rates + settings (peak_start_hour, public_holidays) as inputs, so
+// admin creation and the public booking flow cannot diverge on the peak
+// threshold or holidays. Reschedules never pass through here — they keep the
+// historical price stored on the row.
+
+export interface QuoteEquipmentItem {
+  id: string;
+  quantity: number;
+}
+
+export interface QuoteEquipmentCatalogueItem {
+  id: string;
+  pricingType: string; // "session" | "hourly"
+  sessionPricing: number[] | null;
+  pricePerHour: number;
+}
+
+export interface BookingQuoteInput {
+  studioId: StudioId;
+  groupType: GroupType;
+  date: string; // ISO yyyy-mm-dd
+  startTime: string;
+  endTime: string;
+  equipment?: QuoteEquipmentItem[];
+  peakStartHour: number;
+  publicHolidays: string[];
+  peakRatePerHalfHour: number; // € / half-hour (already /100)
+  offPeakRatePerHalfHour: number; // € / half-hour
+  equipmentCatalogue?: QuoteEquipmentCatalogueItem[];
+}
+
+export interface BookingQuote {
+  basePrice: number;
+  equipmentPrice: number;
+  totalPrice: number;
+  durationHours: number;
+  halfHours: number;
+  slotBreakdown: Array<{ time: string; isPeak: boolean }>;
+}
+
+export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
+  const halfHours = slotDurationSlots(input.startTime, input.endTime);
+  const durationHours = halfHours * 0.5;
+
+  const startIdx = ALL_TIME_SLOTS.indexOf(input.startTime);
+  let endIdx = ALL_TIME_SLOTS.indexOf(input.endTime);
+  if (input.endTime === "00:00" && endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    return { basePrice: 0, equipmentPrice: 0, totalPrice: 0, durationHours: 0, halfHours: 0, slotBreakdown: [] };
+  }
+
+  const dayOfWeek = new Date(input.date + "T00:00:00").getDay();
+  const isHoliday = input.publicHolidays.includes(input.date);
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+  let basePrice = 0;
+  const slotBreakdown: BookingQuote["slotBreakdown"] = [];
+  for (let i = startIdx; i < endIdx; i++) {
+    const slot = ALL_TIME_SLOTS[i];
+    const hour = parseInt(slot.split(":")[0], 10);
+    const isPeak = hour >= input.peakStartHour || isWeekend || isHoliday;
+    basePrice += isPeak ? input.peakRatePerHalfHour : input.offPeakRatePerHalfHour;
+    slotBreakdown.push({ time: slot, isPeak });
+  }
+
+  let equipmentPrice = 0;
+  for (const eq of input.equipment ?? []) {
+    const eqData = input.equipmentCatalogue?.find((e) => e.id === eq.id);
+    if (eqData && eq.quantity > 0) {
+      if (eqData.pricingType === "session" && eqData.sessionPricing) {
+        equipmentPrice += eqData.sessionPricing[eq.quantity - 1] || 0;
+      } else {
+        equipmentPrice += eqData.pricePerHour * eq.quantity * durationHours;
+      }
+    }
+  }
+
+  return {
+    basePrice,
+    equipmentPrice,
+    totalPrice: basePrice + equipmentPrice,
+    durationHours,
+    halfHours,
+    slotBreakdown,
+  };
+}
+
 // Urgency indicator (mock - based on time of day and random factor)
 export function getUrgencyIndicator(date: Date, time: string): { viewers: number; recentBookings: number } | null {
   const seed = date.getDate() + date.getMonth() * 31 + parseInt(time.split(":")[0], 10);

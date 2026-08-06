@@ -5,6 +5,7 @@ import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, User } from "lucide-react";
 import { getParisDateISO } from "@/lib/utils";
+import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, type DisplayPaymentStatus } from "@/lib/booking-totals";
 
 interface ClientUser {
   id: string;
@@ -29,9 +30,13 @@ interface BookingRow {
   end_time: string;
   group_type: string;
   total_price: number;
+  promo_discount: number;
   status: string;
   payment_status: string | null;
   band_name: string | null;
+  total_paid?: number;
+  total_collected?: number;
+  total_refunded?: number;
 }
 
 const STUDIO_LABELS: Record<string, string> = {
@@ -52,10 +57,12 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; b
   "no-show": { label: "Absent", bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
 };
 
-const PAYMENT_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
+const PAYMENT_CONFIG: Record<DisplayPaymentStatus, { label: string; bg: string; text: string; border: string }> = {
   paid: { label: "Payé", bg: "bg-emerald-600/10", text: "text-emerald-400", border: "border-emerald-600/20" },
   "pay-on-site": { label: "À payer sur place", bg: "bg-orange-600/10", text: "text-orange-400", border: "border-orange-600/20" },
   pending: { label: "En attente", bg: "bg-amber-600/10", text: "text-amber-400", border: "border-amber-600/20" },
+  cancelled: { label: "Annulée", bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" },
+  "paid-before-cancel": { label: "Payée avant annulation", bg: "bg-blue-600/10", text: "text-blue-400", border: "border-blue-600/20" },
   refunded: { label: "Remboursé", bg: "bg-blue-600/10", text: "text-blue-400", border: "border-blue-600/20" },
 };
 
@@ -129,12 +136,25 @@ export function ClientAccount() {
   const upcoming = bookings.filter((b) => b.date >= today && b.status !== "cancelled" && b.status !== "completed" && b.status !== "no-show");
   const past = bookings.filter((b) => b.date < today || b.status === "cancelled" || b.status === "completed" || b.status === "no-show");
 
+  // first_name/last_name are the source of truth; fall back to `name` for
+  // guest-created accounts (auto-created at booking time, no split name).
+  const fullName = [user.first_name, user.last_name]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+  const displayName = fullName || user.name.trim();
+
   return (
     <div className="min-h-[80vh] bg-black px-2 sm:px-4 pt-32 pb-16">
       <div className="container max-w-4xl mx-auto">
         <div className="mb-12 text-center">
           <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes reservations</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          {displayName && (
+            <p className="mt-4 text-sm text-zinc-400 sm:text-base">
+              Bonjour <span className="font-medium text-zinc-100">{displayName}</span>
+            </p>
+          )}
           <div className="flex items-center justify-center gap-3 mt-6">
             <Button
               variant="outline"
@@ -224,10 +244,20 @@ function StatCard({ value, label, icon: Icon }: { value: string | number; label:
 
 function BookingCard({ booking }: { booking: BookingRow }) {
   const status = STATUS_CONFIG[booking.status] ?? { label: booking.status, bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
-  const payment = PAYMENT_CONFIG[booking.payment_status || ""] ?? { label: booking.payment_status || "—", bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
+  const displayPaymentStatus = getDisplayPaymentStatusFromSummary(
+    booking.status,
+    booking.payment_status,
+    booking.total_collected ?? booking.total_paid ?? 0,
+    booking.total_refunded ?? 0,
+  );
+  const payment = PAYMENT_CONFIG[displayPaymentStatus] ?? { label: displayPaymentStatus, bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
   const studio = STUDIO_LABELS[booking.studio_id] ?? booking.studio_id;
   const group = GROUP_LABELS[booking.group_type] ?? booking.group_type;
   const isPast = booking.date < getParisDateISO() || ["cancelled", "completed", "no-show"].includes(booking.status);
+  // Une réservation annulée ne présente jamais de montant dû.
+  const amount = booking.status === "cancelled"
+    ? null
+    : getBookingAmountDue({ base_price: 0, equipment_price: 0, total_price: booking.total_price, promo_discount: booking.promo_discount ?? 0 });
 
   return (
     <div className={`group bg-zinc-900/50 border rounded-2xl p-5 transition-all duration-200 hover:bg-zinc-900/70 ${isPast ? "border-zinc-800/50" : "border-zinc-800 hover:border-zinc-700"}`}>
@@ -275,7 +305,9 @@ function BookingCard({ booking }: { booking: BookingRow }) {
           <span className={`text-xs font-medium px-3 py-1.5 rounded-full border ${payment.bg} ${payment.text} ${payment.border}`}>
             {payment.label}
           </span>
-          <span className="text-white font-bold text-sm ml-1">{booking.total_price.toFixed(2).replace(".", ",")} €</span>
+          <span className="text-white font-bold text-sm ml-1">
+            {amount === null ? "—" : `${amount.toFixed(2).replace(".", ",")} €`}
+          </span>
         </div>
       </div>
     </div>

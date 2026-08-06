@@ -1,5 +1,5 @@
 import { render, route, layout } from "rwsdk/router";
-import { getBookingAmountDue } from "@/lib/booking-totals";
+import { getBookingAmountDue, getBookingGrossTotal } from "@/lib/booking-totals";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
 import { env, waitUntil } from "cloudflare:workers";
@@ -93,6 +93,7 @@ import {
   refundPayment,
   updatePayment,
   deletePayment,
+  recomputeBookingPaymentStatus,
   getBlockedSlots,
   getBlockedSlotsByDateRange,
   addBlockedSlot,
@@ -125,7 +126,7 @@ import {
 } from "@/lib/db";
 import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, slotDurationSlots, type StudioId, type EquipmentSelection } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, type StudioId, type GroupType, type EquipmentSelection, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import {
   getParisDateISO,
   getParisNow,
@@ -1034,11 +1035,9 @@ const app = defineApp([
       }
 
       // ── Server-authoritative pricing ──────────────────────────────────────
-      const halfHours = slotDurationSlots(body.startTime, body.endTime);
-      const durationHours = halfHours * 0.5;
-      const bDate = new Date(body.date + "T00:00:00");
-      const dayOfWeek = bDate.getDay();
-
+      // Shared with admin creation (computeBookingQuote): the peak threshold
+      // (peak_start_hour) and public holidays are always evaluated identically,
+      // so the public flow and admin-created bookings cannot diverge.
       const peakStartHour = parseInt(await getSetting(env.DB, "peak_start_hour") || "18", 10);
       const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
       const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
@@ -1046,37 +1045,37 @@ const app = defineApp([
       const peakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, true);
       const offPeakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, false);
 
-      const startIdx = ALL_TIME_SLOTS.indexOf(body.startTime);
-      let endIdx = ALL_TIME_SLOTS.indexOf(body.endTime);
-      if (body.endTime === "00:00") endIdx = ALL_TIME_SLOTS.indexOf("00:00");
+      const allEquipment = await getEquipment(env.DB);
+      const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
+        id: e.equipment_id,
+        pricingType: e.pricing_type,
+        sessionPricing: e.session_pricing ? (JSON.parse(e.session_pricing) as number[]) : null,
+        pricePerHour: e.price_per_hour,
+      }));
 
-      let serverBasePrice = 0;
-      for (let i = startIdx; i < endIdx; i++) {
-        const slot = ALL_TIME_SLOTS[i];
-        const hour = parseInt(slot.split(":")[0], 10);
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const isHoliday = publicHolidays.includes(body.date);
-        const isPeak = hour >= peakStartHour || isWeekend || isHoliday;
-        serverBasePrice += isPeak ? peakRate : offPeakRate;
+      const quote = computeBookingQuote({
+        studioId: body.studioId as StudioId,
+        groupType: body.groupType as GroupType,
+        date: body.date,
+        startTime: body.startTime,
+        endTime: body.endTime,
+        equipment: body.equipment as QuoteEquipmentItem[] | undefined,
+        peakStartHour,
+        publicHolidays,
+        peakRatePerHalfHour: peakRate,
+        offPeakRatePerHalfHour: offPeakRate,
+        equipmentCatalogue,
+      });
+
+      // Refus des créneaux invalides/vides : aucune réservation 0€ silencieuse.
+      if (quote.halfHours === 0 || quote.slotBreakdown.length === 0) {
+        return jsonError("Créneau invalide — l'heure de fin doit être après l'heure de début", 400);
       }
 
-      let serverEquipmentPrice = 0;
-      if (body.equipment && body.equipment.length > 0) {
-        const allEquipment = await getEquipment(env.DB);
-        for (const eq of body.equipment) {
-          const eqData = allEquipment.find((e) => e.equipment_id === eq.id);
-          if (eqData && eq.quantity > 0) {
-            if (eqData.pricing_type === "session" && eqData.session_pricing) {
-              const prices = JSON.parse(eqData.session_pricing) as number[];
-              serverEquipmentPrice += prices[eq.quantity - 1] || 0;
-            } else {
-              serverEquipmentPrice += eqData.price_per_hour * eq.quantity * durationHours;
-            }
-          }
-        }
-      }
-
-      const serverTotalPrice = serverBasePrice + serverEquipmentPrice;
+      const serverBasePrice = quote.basePrice;
+      const serverEquipmentPrice = quote.equipmentPrice;
+      const durationHours = quote.durationHours;
+      const serverTotalPrice = quote.totalPrice;
 
       // ── Cart-level promo recompute (Phase 5A: server authoritative) ──────
       let serverPromoDiscount = 0;
@@ -1699,6 +1698,12 @@ const app = defineApp([
             const totalPaid = payments
               .filter((p) => p.status === "paid")
               .reduce((acc, p) => acc + p.amount, 0);
+            const totalCollected = payments
+              .filter((p) => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
+              .reduce((acc, p) => acc + p.amount, 0);
+            const totalRefunded = payments
+              .filter((p) => p.status === "refunded" || p.status === "partial-refund")
+              .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
             const finalTotal = getBookingAmountDue(booking);
             const isFullyPaid = totalPaid >= finalTotal;
 
@@ -1706,6 +1711,8 @@ const app = defineApp([
               ...booking,
               payment_status: isFullyPaid ? "paid" : booking.payment_status,
               total_paid: totalPaid,
+              total_collected: totalCollected,
+              total_refunded: totalRefunded,
               remaining: Math.max(0, finalTotal - totalPaid),
             };
           })
@@ -1791,34 +1798,54 @@ const app = defineApp([
         const user = await env.DB.prepare("SELECT band_name FROM users WHERE id = ?").bind(body.user_id).first<{ band_name: string | null }>();
         const bookingBandName = user?.band_name ?? null;
 
-        const isPeak = body.start_time >= "18:00" || new Date(body.date).getDay() === 0 || new Date(body.date).getDay() === 6;
-        const pricePerHalfHour = await getPricingForBooking(env.DB, body.studio_id, body.group_type, isPeak);
+        // Server-authoritative quote, identical to the public booking flow
+        // (computeBookingQuote). Removes the previous hard-coded 18:00 peak
+        // threshold / weekend-only rule so admin-created bookings respect
+        // peak_start_hour and public_holidays exactly like public ones.
+        const peakStartHour = parseInt(await getSetting(env.DB, "peak_start_hour") || "18", 10);
+        const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
+        const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
-        const startParts = body.start_time.split(":").map(Number);
-        const endParts = body.end_time.split(":").map(Number);
-        const halfHours = ((endParts[0] * 60 + endParts[1]) - (startParts[0] * 60 + startParts[1])) / 30;
-        const durationHours = halfHours * 0.5;
-        const basePrice = pricePerHalfHour * halfHours;
+        const peakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, true);
+        const offPeakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, false);
 
-        // Calculate equipment price
-        let equipmentPrice = 0;
-        if (body.equipment) {
-          const equipmentList = JSON.parse(body.equipment) as Array<{ id: string; quantity: number }>;
-          const allEquipment = await getEquipment(env.DB);
-          for (const eq of equipmentList) {
-            const eqData = allEquipment.find((e) => e.equipment_id === eq.id);
-            if (eqData && eq.quantity > 0) {
-              if (eqData.pricing_type === "session" && eqData.session_pricing) {
-                const prices = JSON.parse(eqData.session_pricing) as number[];
-                equipmentPrice += prices[eq.quantity - 1] || 0;
-              } else {
-                equipmentPrice += eqData.price_per_hour * eq.quantity * durationHours;
-              }
-            }
-          }
+        const allEquipment = await getEquipment(env.DB);
+        const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
+          id: e.equipment_id,
+          pricingType: e.pricing_type,
+          sessionPricing: e.session_pricing ? (JSON.parse(e.session_pricing) as number[]) : null,
+          pricePerHour: e.price_per_hour,
+        }));
+
+        const equipmentList: QuoteEquipmentItem[] = body.equipment
+          ? (JSON.parse(body.equipment) as Array<{ id: string; quantity: number }>)
+          : [];
+
+        const quote = computeBookingQuote({
+          studioId: body.studio_id as StudioId,
+          groupType: body.group_type as GroupType,
+          date: body.date,
+          startTime: body.start_time,
+          endTime: body.end_time,
+          equipment: equipmentList,
+          peakStartHour,
+          publicHolidays,
+          peakRatePerHalfHour: peakRate,
+          offPeakRatePerHalfHour: offPeakRate,
+          equipmentCatalogue,
+        });
+
+        // Refus des créneaux invalides/vides : aucune réservation 0€ silencieuse.
+        if (quote.halfHours === 0 || quote.slotBreakdown.length === 0) {
+          return jsonError("Créneau invalide — l'heure de fin doit être après l'heure de début", 400);
         }
 
-        const promoDiscount = (body as { promo_discount?: number }).promo_discount || 0;
+        const basePrice = quote.basePrice;
+        const equipmentPrice = quote.equipmentPrice;
+        const durationHours = quote.durationHours;
+        const subtotal = quote.totalPrice;
+
+        const promoDiscount = Math.max(0, Math.min((body as { promo_discount?: number }).promo_discount || 0, subtotal));
         const promoCode = (body as { promo_code?: string }).promo_code || null;
         let promoType: string | null = null;
         if (promoCode) {
@@ -1829,7 +1856,6 @@ const app = defineApp([
             promoType = promoRow.type;
           }
         }
-        const subtotal = basePrice + equipmentPrice;
 
         const booking = await createBooking(env.DB, {
           booking_ref: body.booking_ref,
@@ -1911,6 +1937,99 @@ const app = defineApp([
     return jsonError("Method not allowed", 405);
   }),
 
+  // Devis serveur pour la création admin — même calcul que la création
+  // publique (computeBookingQuote). Évite une troisième copie côté client du
+  // calcul de prix (dérive peak_start_hour + public_holidays comprise).
+  route("/api/admin/bookings/quote", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const url = new URL(request.url);
+      const studioId = url.searchParams.get("studioId") || "";
+      const groupType = url.searchParams.get("groupType") || "";
+      const date = url.searchParams.get("date") || "";
+      const startTime = url.searchParams.get("startTime") || "";
+      const endTime = url.searchParams.get("endTime") || "";
+      const equipmentRaw = url.searchParams.get("equipment");
+
+      const validStudios = ["la-scene", "le-podium"];
+      const validGroupTypes = ["solo", "duo", "group"];
+      if (!validStudios.includes(studioId)) return jsonError("Studio invalide", 400);
+      if (!validGroupTypes.includes(groupType)) return jsonError("Type de groupe invalide", 400);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return jsonError("Format de date invalide", 400);
+      if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) return jsonError("Format d'heure invalide", 400);
+
+      let equipment: QuoteEquipmentItem[] = [];
+      if (equipmentRaw) {
+        try {
+          const parsed = JSON.parse(equipmentRaw);
+          if (Array.isArray(parsed)) {
+            equipment = parsed.filter((e) => e && typeof e.id === "string" && Number.isFinite(e.quantity));
+          }
+        } catch {
+          return jsonError("Équipement invalide", 400);
+        }
+      }
+
+      const peakStartHour = parseInt(await getSetting(env.DB, "peak_start_hour") || "18", 10);
+      const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
+      const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
+
+      const peakRate = await getPricingForBooking(env.DB, studioId, groupType, true);
+      const offPeakRate = await getPricingForBooking(env.DB, studioId, groupType, false);
+
+      const allEquipment = await getEquipment(env.DB);
+      const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
+        id: e.equipment_id,
+        pricingType: e.pricing_type,
+        sessionPricing: e.session_pricing ? (JSON.parse(e.session_pricing) as number[]) : null,
+        pricePerHour: e.price_per_hour,
+      }));
+
+      const quote = computeBookingQuote({
+        studioId: studioId as StudioId,
+        groupType: groupType as GroupType,
+        date,
+        startTime,
+        endTime,
+        equipment,
+        peakStartHour,
+        publicHolidays,
+        peakRatePerHalfHour: peakRate,
+        offPeakRatePerHalfHour: offPeakRate,
+        equipmentCatalogue,
+      });
+
+      // Refus des créneaux invalides/vides : pas de devis 0€ silencieux.
+      if (quote.halfHours === 0 || quote.slotBreakdown.length === 0) {
+        return jsonError("Créneau invalide — l'heure de fin doit être après l'heure de début", 400);
+      }
+
+      const equipmentLines = equipment
+        .map((eq) => {
+          const eqData = equipmentCatalogue.find((e) => e.id === eq.id);
+          if (!eqData || eq.quantity <= 0) return null;
+          const price = eqData.pricingType === "session" && eqData.sessionPricing
+            ? eqData.sessionPricing[eq.quantity - 1] || 0
+            : eqData.pricePerHour * eq.quantity * quote.durationHours;
+          const name = allEquipment.find((e) => e.equipment_id === eq.id)?.name || eq.id;
+          return { id: eq.id, name, quantity: eq.quantity, price };
+        })
+        .filter((line): line is { id: string; name: string; quantity: number; price: number } => line !== null);
+
+      return jsonSuccess({
+        basePrice: quote.basePrice,
+        equipmentPrice: quote.equipmentPrice,
+        totalPrice: quote.totalPrice,
+        durationHours: quote.durationHours,
+        equipment: equipmentLines,
+      });
+    } catch (error) {
+      console.error("GET /api/admin/bookings/quote error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to compute quote", 500);
+    }
+  }),
+
   route("/api/admin/bookings/:id", async ({ request, params }) => {
     const { id } = params;
 
@@ -1934,9 +2053,13 @@ const app = defineApp([
       try {
         const rawBody = await request.json() as Record<string, unknown>;
 
-        // Whitelist runtime — empêche la modification de champs sensibles (payment_status, user_id, id, etc.)
+        // Whitelist runtime — empêche la modification de champs sensibles
+        // (payment_status, user_id, id, etc.). total_price est volontairement
+        // exclu : le serveur est l'opérateur d'invariance. Le client ne peut
+        // jamais persister un montant dérivé/net — le brut est toujours
+        // recalculé depuis base_price + equipment_price.
         const ALLOWED_BOOKING_FIELDS = ["date", "start_time", "end_time", "notes", "base_price",
-          "equipment_price", "total_price", "equipment", "promo_discount", "cancelled_at", "cancel_reason"] as const;
+          "equipment_price", "equipment", "promo_discount", "cancelled_at", "cancel_reason"] as const;
         const body = Object.fromEntries(
           Object.entries(rawBody).filter(([k]) => (ALLOWED_BOOKING_FIELDS as readonly string[]).includes(k))
         ) as {
@@ -1946,36 +2069,79 @@ const app = defineApp([
           notes?: string;
           base_price?: number;
           equipment_price?: number;
-          total_price?: number;
           equipment?: string;
           promo_discount?: number;
           cancelled_at?: string;
           cancel_reason?: string;
+          // Défini côté serveur uniquement (jamais accepté depuis le client).
+          total_price?: number;
         };
+
+        // Une lecture n'est nécessaire que si un champ dépend de l'existant
+        // (déplacement, recalcul du brut, plafonnement de la remise).
+        const needsExisting = Boolean(
+          body.date || body.start_time || body.end_time ||
+          body.base_price !== undefined || body.equipment_price !== undefined ||
+          body.promo_discount !== undefined,
+        );
+        const existing = needsExisting ? await getBookingById(env.DB, id) : null;
+        if (needsExisting && !existing) return jsonError("Réservation introuvable", 404);
 
         // If rescheduling, check for conflicts
         if (body.date || body.start_time || body.end_time) {
-          const existing = await getBookingById(env.DB, id);
-          if (!existing) return jsonError("Réservation introuvable", 404);
+          const ex = existing!;
+          const newDate = body.date || ex.date;
+          const newStart = body.start_time || ex.start_time;
+          const newEnd = body.end_time || ex.end_time;
 
-          const newDate = body.date || existing.date;
-          const newStart = body.start_time || existing.start_time;
-          const newEnd = body.end_time || existing.end_time;
-
-          const conflict = await checkConflict(env.DB, existing.studio_id, newDate, newStart, newEnd, id);
+          const conflict = await checkConflict(env.DB, ex.studio_id, newDate, newStart, newEnd, id);
           if (conflict) {
             return jsonError("Conflit avec une autre réservation", 409);
           }
 
           // Check for blocked slots when rescheduling
-          const blockedSlot = await checkBlockedSlotConflict(env.DB, existing.studio_id, newDate, newStart, newEnd);
+          const blockedSlot = await checkBlockedSlotConflict(env.DB, ex.studio_id, newDate, newStart, newEnd);
           if (blockedSlot) {
             return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
           }
         }
 
+        // Invariant de stockage : total_price = base_price + equipment_price (brut),
+        // promo_discount séparé. Toute modification de base/équipement recalcule
+        // le brut côté serveur. Un simple déplacement conserve le prix historique
+        // (aucune mise à jour de base_price/equipment_price → pas de recalcul).
+        if (body.base_price !== undefined || body.equipment_price !== undefined) {
+          body.total_price = getBookingGrossTotal({
+            base_price: Number(body.base_price ?? existing!.base_price) || 0,
+            equipment_price: Number(body.equipment_price ?? existing!.equipment_price) || 0,
+          });
+        }
+
+        // Brut canonique = base_price + equipment_price (jamais le total_price
+        // hérité, potentiellement corrompu sur les lignes legacy post-remise).
+        const canonicalGross = getBookingGrossTotal({
+          base_price: body.base_price ?? existing!.base_price,
+          equipment_price: body.equipment_price ?? existing!.equipment_price,
+        });
+
+        // La remise reste séparée du brut et est plafonnée au brut canonique
+        // pour garder un grand livre sain (due = max(0, brut - remise)).
+        if (body.promo_discount !== undefined) {
+          body.promo_discount = Math.max(0, Math.min(Number(body.promo_discount) || 0, canonicalGross));
+        } else if (body.base_price !== undefined || body.equipment_price !== undefined) {
+          // Le brut a baissé : re-plafonner la remise existante pour qu'elle ne
+          // dépasse jamais le nouveau brut canonique.
+          const existingDiscount = Number(existing!.promo_discount) || 0;
+          if (existingDiscount > canonicalGross) {
+            body.promo_discount = canonicalGross;
+          }
+        }
+
         const result = await updateBooking(env.DB, id, body);
         if (!result.success) return jsonError(result.error || "Update failed", 400);
+
+        // Recalcule payment_status après modification de prix/remise (idempotent).
+        await recomputeBookingPaymentStatus(env.DB, id);
 
         await addAuditLog(env.DB, "booking", id, "update", body, request.headers.get("X-Admin-User-Id") || "admin");
 
@@ -2133,6 +2299,9 @@ const app = defineApp([
         const booking = await getBookingById(env.DB, params.id);
         if (!booking) {
           return jsonError("Réservation introuvable", 404);
+        }
+        if (booking.status === "cancelled") {
+          return jsonError("Impossible d'ajouter un paiement à une réservation annulée", 400);
         }
 
         const validMethods = ["cash", "card", "transfer", "check"] as const;
@@ -3674,7 +3843,7 @@ const app = defineApp([
 
       if (groupByMonth) {
         const rows = await env.DB.prepare(
-          `SELECT substr(date, 1, 7) as date, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue
+          `SELECT substr(date, 1, 7) as date, COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as revenue
            FROM bookings
            WHERE date >= ? AND date <= ? AND status != 'cancelled'
            GROUP BY substr(date, 1, 7)
@@ -3685,7 +3854,7 @@ const app = defineApp([
       }
 
       const bookings = await env.DB.prepare(
-        "SELECT date, COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date ORDER BY date ASC",
+        "SELECT date, COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date ORDER BY date ASC",
       ).bind(fromStr, toStr).all<{ date: string; revenue: number }>();
 
       return jsonSuccess(bookings.results.map((row) => ({ date: row.date, revenue: row.revenue })));
@@ -3740,7 +3909,7 @@ const app = defineApp([
          occupancyStmt,
         // Studio distribution
         env.DB.prepare(
-          `SELECT studio_id, COUNT(*) as count, SUM(total_price - COALESCE(promo_discount, 0)) as revenue
+          `SELECT studio_id, COUNT(*) as count, SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)) as revenue
            FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
            GROUP BY studio_id`,
         ).bind(fromStr, toStr),
@@ -3759,7 +3928,7 @@ const app = defineApp([
         env.DB.prepare(
           `SELECT
             COUNT(*) as count,
-            COALESCE(SUM(total_price - COALESCE(promo_discount, 0)), 0) as revenue
+            COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as revenue
           FROM bookings
           WHERE date >= ? AND date <= ?
             AND status != 'cancelled'
@@ -3803,7 +3972,7 @@ const app = defineApp([
              SELECT
                'on-site:' || b.id as id,
                b.id as booking_id,
-               (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+               MAX(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0), 0) as amount,
                u.name as user_name,
                b.date as booking_date,
                b.start_time as start_time,
@@ -3815,14 +3984,14 @@ const app = defineApp([
              WHERE b.status != 'cancelled'
                AND b.payment_status = 'pay-on-site'
                AND b.date >= ? AND b.date <= ?
-               AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
+               AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
 
              UNION ALL
 
              SELECT
                'card:' || b.id as id,
                b.id as booking_id,
-               (b.total_price - COALESCE(paid.paid_amount, 0)) as amount,
+               MAX(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0), 0) as amount,
                u.name as user_name,
                b.date as booking_date,
                b.start_time as start_time,
@@ -3835,7 +4004,7 @@ const app = defineApp([
                AND b.payment_method = 'card'
                AND b.payment_status = 'pending'
                AND b.date >= ? AND b.date <= ?
-               AND (b.total_price - COALESCE(paid.paid_amount, 0)) > 0
+               AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
            )
            ORDER BY booking_date ASC, start_time ASC
            LIMIT 5`,
@@ -4534,19 +4703,45 @@ const app = defineApp([
       const user = await requireClientAuth(request, env.DB);
       const bookings = await getBookings(env.DB, { userId: user.id }, 1, 500);
 
+      // Grand livre par réservation (une seule requête agrégée) pour permettre
+      // à la fiche client de présenter correctement les annulations
+      // (Annulée / Payée avant annulation / Remboursé) sans montant dû.
+      const bookingIds = bookings.data.map((b) => b.id);
+      let paymentTotals = new Map<string, { totalPaid: number; totalCollected: number; totalRefunded: number }>();
+      if (bookingIds.length > 0) {
+        const placeholders = bookingIds.map(() => "?").join(", ");
+        const rows = await env.DB.prepare(
+          `SELECT booking_id,
+             COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as totalPaid,
+             COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount ELSE 0 END), 0) as totalCollected,
+             COALESCE(SUM(CASE WHEN status IN ('refunded', 'partial-refund') THEN refunded_amount ELSE 0 END), 0) as totalRefunded
+           FROM payments
+           WHERE booking_id IN (${placeholders})
+           GROUP BY booking_id`,
+        ).bind(...bookingIds).all<{ booking_id: string; totalPaid: number; totalCollected: number; totalRefunded: number }>();
+        paymentTotals = new Map(rows.results.map((r) => [r.booking_id, { totalPaid: r.totalPaid, totalCollected: r.totalCollected, totalRefunded: r.totalRefunded }]));
+      }
+
       // Transform past confirmed bookings to completed (same logic as admin API)
       const parisNow = getParisNow();
       const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
       const bookingsWithStatus = bookings.data.map((booking) => {
+        let b: (typeof booking) & { total_paid?: number; total_collected?: number; total_refunded?: number } = booking;
         if (booking.status === "confirmed") {
           const isPast =
             booking.date < parisNow.dateISO ||
             (booking.date === parisNow.dateISO && booking.end_time <= nowTimeStr);
           if (isPast) {
-            return { ...booking, status: "completed" as const };
+            b = { ...booking, status: "completed" as const };
           }
         }
-        return booking;
+        const totals = paymentTotals.get(b.id);
+        return {
+          ...b,
+          total_paid: totals?.totalPaid ?? 0,
+          total_collected: totals?.totalCollected ?? 0,
+          total_refunded: totals?.totalRefunded ?? 0,
+        };
       });
 
       return jsonSuccess(bookingsWithStatus);

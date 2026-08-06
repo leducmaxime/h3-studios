@@ -295,5 +295,12 @@ export interface AuditLogFilters {
   dateTo?: string;
 }
 
-// Extended type with user data from LEFT JOIN
-export interface BookingWithUser extends DbBooking {}
+// Extended type with user data from LEFT JOIN + grand livre enrichi côté
+// serveur (GET /api/admin/bookings) : totaux de paiement pour la présentation
+// des annulations sans montant dû.
+export interface BookingWithUser extends DbBooking {
+  total_paid?: number;
+  total_collected?: number;
+  total_refunded?: number;
+  remaining?: number;
+}

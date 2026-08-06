@@ -36,7 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue, getDisplayStatus } from "@/lib/booking-totals";
+import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus, type BookingWithUser, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
@@ -475,13 +475,20 @@ export function AdminBookings() {
                   const statusConfig = STATUS_CONFIG[displayStatus] ?? STATUS_CONFIG[booking.status];
                   const studioName = STUDIOS[booking.studio_id as StudioId]?.name || booking.studio_id;
 
-                  const paymentStatus = booking.payment_status;
+                  const displayPaymentStatus = getDisplayPaymentStatusFromSummary(
+                    booking.status,
+                    booking.payment_status,
+                    booking.total_collected ?? booking.total_paid ?? 0,
+                    booking.total_refunded ?? 0,
+                  );
                   let paymentBadge: React.ReactNode = <span className="text-zinc-500">—</span>;
 
-                  if (paymentStatus === "paid") {
+                  if (displayPaymentStatus === "paid") {
                     paymentBadge = <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Payé</Badge>;
+                  } else if (displayPaymentStatus === "cancelled" || displayPaymentStatus === "paid-before-cancel" || displayPaymentStatus === "refunded") {
+                    paymentBadge = <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">{PAYMENT_STATUS_LABELS[displayPaymentStatus]}</Badge>;
                   } else {
-                    const remaining = (booking as any).remaining;
+                    const remaining = booking.remaining;
                     paymentBadge = (
                       <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
                         {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : "Reste à payer"}
@@ -538,7 +545,11 @@ export function AdminBookings() {
                         {paymentBadge}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
-                        {formatPrice(getBookingAmountDue(booking))}
+                        {booking.status === "cancelled" ? (
+                          <span className="text-zinc-600">—</span>
+                        ) : (
+                          formatPrice(getBookingAmountDue(booking))
+                        )}
                       </td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>

@@ -25,8 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
-import { getBookingAmountDue } from "@/lib/booking-totals";
-import { type DbUser, type DbBooking, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
+import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
+import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 
 function formatDate(dateStr: string): string {
@@ -126,7 +126,7 @@ interface UserDetailProps {
 
 export function AdminUserDetail({ userId }: UserDetailProps) {
   const [user, setUser] = useState<DbUser | null>(null);
-  const [bookings, setBookings] = useState<DbBooking[]>([]);
+  const [bookings, setBookings] = useState<BookingWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -186,7 +186,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
       const res = await fetch(`/api/admin/bookings?${params}`);
       const json = (await res.json()) as {
         success: boolean;
-        data?: { data: DbBooking[]; total: number };
+        data?: { data: BookingWithUser[]; total: number };
       };
       if (json.success && json.data) {
         setBookings(json.data.data);
@@ -803,18 +803,35 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             </Badge>
                           </td>
                           <td className="px-4 py-3">
-                            {b.payment_status === "paid" ? (
-                              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>
-                            ) : b.payment_status === "pay-on-site" ? (
-                              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>
-                            ) : (
-                              <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Reste à payer</Badge>
-                            )}
+                            {(() => {
+                              const payDisplay = getDisplayPaymentStatusFromSummary(
+                                b.status,
+                                b.payment_status,
+                                b.total_collected ?? b.total_paid ?? 0,
+                                b.total_refunded ?? 0,
+                              );
+                              if (payDisplay === "paid") {
+                                return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>;
+                              }
+                              if (payDisplay === "cancelled" || payDisplay === "paid-before-cancel" || payDisplay === "refunded") {
+                                return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">{PAYMENT_STATUS_LABELS[payDisplay]}</Badge>;
+                              }
+                              if (b.payment_status === "pay-on-site") {
+                                return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>;
+                              }
+                              return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Reste à payer</Badge>;
+                            })()}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <span className="font-medium">{formatPrice(getBookingAmountDue(b))}</span>
-                            {b.promo_discount > 0 && (
-                              <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
+                            {b.status === "cancelled" ? (
+                              <span className="font-medium text-zinc-600">—</span>
+                            ) : (
+                              <>
+                                <span className="font-medium">{formatPrice(getBookingAmountDue(b))}</span>
+                                {b.promo_discount > 0 && (
+                                  <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
+                                )}
+                              </>
                             )}
                           </td>
                         </tr>
