@@ -44,7 +44,7 @@ import { ClientAccount } from "@/app/pages/ClientAccount";
 import { ClientProfile } from "@/app/pages/ClientProfile";
 import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
-import { createCheckoutSession, constructWebhookEvent } from "@/lib/stripe";
+import { createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent, type StripeCheckoutSession } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
 import { sendBookingConfirmationEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
 import {
@@ -187,6 +187,16 @@ function jsonSuccess(data: unknown): Response {
 
 function jsonError(error: string, status = 400): Response {
   return jsonResponse({ success: false, error }, status);
+}
+
+function parseBookingEquipment(raw: string | null): unknown[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function validateAdminSettingValue(key: string, rawValue: string): { ok: true; value: string } | { ok: false; error: string } {
@@ -574,14 +584,12 @@ const app = defineApp([
 
       const baseUrl = new URL(request.url).origin;
 
-      const refsParam = encodeURIComponent(body.bookingRefs.join(","));
-      const emailParam = encodeURIComponent(body.email);
       const session = await createCheckoutSession(secretKey, {
         amountCents: totalCents,
         customerEmail: body.email,
         customerName: `${body.firstName} ${body.lastName}`,
         bookingRefs: body.bookingRefs,
-        successUrl: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}&refs=${refsParam}&total=${totalCents}&email=${emailParam}`,
+        successUrl: `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${baseUrl}/payment/cancel`,
       });
 
@@ -600,6 +608,70 @@ const app = defineApp([
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
+    }
+  }),
+
+  route("/api/payment/session", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const url = new URL(request.url);
+      const sessionId = url.searchParams.get("session_id");
+
+      // Strict, length-capped Stripe Checkout Session ID format
+      if (!sessionId || sessionId.length > 200 || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId)) {
+        return jsonError("Not found", 404);
+      }
+
+      const secretKey = env.STRIPE_SECRET_KEY || "";
+      if (!secretKey) {
+        return jsonError("Not found", 404);
+      }
+
+      // Retrieve server-side — never trust refs/email/total from the client
+      const session = await retrieveCheckoutSession(secretKey, sessionId);
+
+      // Only refs authenticated by Stripe metadata
+      const refs = [...new Set((session.metadata?.booking_refs || "")
+        .split(",")
+        .map((r) => r.trim())
+        .filter(Boolean))];
+
+      if (refs.length === 0) {
+        return jsonError("Not found", 404);
+      }
+
+      const bookings = await getBookingsByRefs(env.DB, refs);
+      if (bookings.length !== refs.length) {
+        return jsonError("Not found", 404);
+      }
+
+      const email = session.customer_email || session.metadata?.customer_email || "";
+      const payload: Record<string, unknown> = {
+        paymentStatus: session.payment_status,
+        amountTotal: session.amount_total ?? 0,
+        bookings: bookings.map((b) => ({
+          ref: b.booking_ref,
+          studioId: b.studio_id,
+          date: b.date,
+          startTime: b.start_time,
+          endTime: b.end_time,
+          groupType: b.group_type,
+          equipment: parseBookingEquipment(b.equipment),
+          equipmentPrice: b.equipment_price,
+          totalPrice: b.total_price,
+          promoCode: b.promo_code,
+          promoDiscount: b.promo_discount,
+        })),
+      };
+      if (email) {
+        payload.email = email;
+      }
+
+      return jsonResponse(payload, 200, { "Cache-Control": "no-store" });
+    } catch {
+      // Uniform 404 — never leak Stripe/DB error detail
+      return jsonError("Not found", 404);
     }
   }),
 

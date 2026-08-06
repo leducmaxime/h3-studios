@@ -70,6 +70,31 @@ export async function createCheckoutSession(
 }
 
 /**
+ * Retrieve an existing Stripe Checkout Session (server-side).
+ * Used by the payment success detail endpoint to fetch booking refs
+ * from authenticated Stripe metadata — never trust client-supplied refs.
+ */
+export async function retrieveCheckoutSession(
+  secretKey: string,
+  sessionId: string
+): Promise<StripeCheckoutSession> {
+  const response = await fetch(`${STRIPE_API_URL}/checkout/sessions/${sessionId}`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${secretKey}`,
+      "Stripe-Version": STRIPE_API_VERSION,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json() as { error?: { message?: string } };
+    throw new Error(`Stripe API error: ${error.error?.message || response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
  * Verify Stripe webhook signature using HMAC-SHA256
  * Based on Stripe's signature verification: https://stripe.com/docs/webhooks/signatures
  */
