@@ -19,6 +19,7 @@ import {
   generateBookingRef,
   loadUserPreferences,
   saveUserPreferences,
+  clearUserPreferences,
   TIME_SLOTS,
   applyMinAdvance,
 } from "@/lib/booking";
@@ -85,6 +86,10 @@ interface ExtendedBookingState extends BookingState {
   accountPassword: string;
   accountPasswordConfirm: string;
   accountStatus: string | null;
+  /** Réduction aggregée du panier confirmée par le serveur (dernier POST). */
+  confirmedPromoCode: string | null;
+  confirmedPromoDiscount: number;
+  confirmedNetTotal: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -319,7 +324,29 @@ const initialState: ExtendedBookingState = {
   accountPassword: "",
   accountPasswordConfirm: "",
   accountStatus: null,
+  confirmedPromoCode: null,
+  confirmedPromoDiscount: 0,
+  confirmedNetTotal: null,
 };
+
+/**
+ * Champs d'état nettoyés à la déconnexion : données personnelles + état de
+ * création de compte. Le panier, les créneaux et le groupe ne sont PAS touchés
+ * (données non personnelles conservées pour reprendre la réservation).
+ */
+export const LOGOUT_CLEARED_FIELDS = {
+  userName: "",
+  userEmail: "",
+  userPhone: "",
+  bandName: "",
+  billingAddress: "",
+  billingPostalCode: "",
+  billingCity: "",
+  createAccount: false,
+  accountPassword: "",
+  accountPasswordConfirm: "",
+  accountStatus: null,
+} as const;
 
 // ===========================================================================
 // HOOK
@@ -864,6 +891,10 @@ export function useBookingWithRouter(urlStep?: string) {
       const allCartRefs = state.cart.map(b => b.bookingRef);
       const method = paymentMethod || "cash";
       let accountStatus: string | null = null;
+      // Réduction aggregée du panier confirmée par le serveur (dernier POST).
+      let confirmedPromoCode: string | null = null;
+      let confirmedPromoDiscount = 0;
+      let confirmedNetTotal: number | null = null;
 
       for (let i = 0; i < state.cart.length; i++) {
         const booking = state.cart[i];
@@ -915,30 +946,50 @@ export function useBookingWithRouter(urlStep?: string) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        const json = await res.json() as { success: boolean; data?: { accountStatus?: string }; error?: string };
+        const json = await res.json() as { success: boolean; data?: { accountStatus?: string; promoCode?: string | null; promoDiscount?: number; netTotal?: number }; error?: string };
         if (!json.success) throw new Error(json.error);
 
         // Capture accountStatus from the first response
         if (i === 0 && json.data?.accountStatus) {
           accountStatus = json.data.accountStatus;
         }
+
+        // Capture server-confirmed cart-wide promo from the LAST response
+        if (i === state.cart.length - 1 && json.data) {
+          confirmedPromoCode = typeof json.data.promoCode === "string" ? json.data.promoCode : null;
+          confirmedPromoDiscount = Number(json.data.promoDiscount) || 0;
+          confirmedNetTotal = typeof json.data.netTotal === "number" ? json.data.netTotal : null;
+        }
       }
 
-      // Persist accountStatus in state
-      if (accountStatus) {
-        setState((s) => ({ ...s, accountStatus }));
-      }
-
+      // Persist accountStatus + server-confirmed promo in state
       setState((s) => {
         if (method === "card") {
-          return { ...s, paymentMethod: method, step: "paiement" };
+          return {
+            ...s,
+            accountStatus: accountStatus || s.accountStatus,
+            confirmedPromoCode,
+            confirmedPromoDiscount,
+            confirmedNetTotal: confirmedNetTotal ?? s.confirmedNetTotal,
+            paymentMethod: method,
+            step: "paiement",
+          };
         }
         const updatedCart = s.cart.map((booking) => ({
           ...booking,
           paymentMethod: method as PaymentMethod,
           paymentStatus: "pay-on-site" as const,
         }));
-        return { ...s, paymentMethod: method, cart: updatedCart, step: "termine" };
+        return {
+          ...s,
+          accountStatus: accountStatus || s.accountStatus,
+          confirmedPromoCode,
+          confirmedPromoDiscount,
+          confirmedNetTotal: confirmedNetTotal ?? s.confirmedNetTotal,
+          paymentMethod: method,
+          cart: updatedCart,
+          step: "termine",
+        };
       });
     } catch (err) {
       alert("Erreur lors de la réservation: " + err);
@@ -1040,6 +1091,33 @@ export function useBookingWithRouter(urlStep?: string) {
       return { ok: true };
     } catch (err) {
       return { ok: false, error: "Erreur réseau" };
+    }
+  }, []);
+
+  /**
+   * Déconnexion du compte client dans le parcours de réservation.
+   * Appelle POST /api/client/logout, puis vide localement l'état d'auth et les
+   * données de pré-remplissage du profil (nom/email/tél/groupe/adresse) pour
+   * permettre une nouvelle connexion ou la création d'un autre compte.
+   * Le panier et les créneaux (données non personnelles) sont conservés.
+   */
+  const clientLogout = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch("/api/client/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        return { ok: false, error: "La déconnexion a échoué, veuillez réessayer" };
+      }
+      clearUserPreferences();
+      setClientUser(null);
+      clientUserRef.current = null;
+      setState((s) => ({ ...s, ...LOGOUT_CLEARED_FIELDS }));
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "Erreur réseau lors de la déconnexion" };
     }
   }, []);
 
@@ -1186,6 +1264,7 @@ export function useBookingWithRouter(urlStep?: string) {
     selectPaymentMethod,
     processPayment,
     clientLogin,
+    clientLogout,
     createAccount: state.createAccount,
     accountPassword: state.accountPassword,
     accountPasswordConfirm: state.accountPasswordConfirm,

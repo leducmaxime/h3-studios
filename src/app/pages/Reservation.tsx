@@ -59,6 +59,7 @@ export function Reservation({ step }: ReservationProps) {
     clientUser,
     clientUserLoading,
     clientLogin,
+    clientLogout,
     selectDate,
     selectTimeRange,
     clearTimeRange,
@@ -559,6 +560,7 @@ export function Reservation({ step }: ReservationProps) {
                   clientUser={clientUser}
                   clientUserLoading={clientUserLoading}
                   clientLogin={clientLogin}
+                  clientLogout={clientLogout}
                   onUpdateField={(fields) => {
                     // The hook now accepts Partial<ExtendedBookingState> directly
                     updateUserInfo(fields);
@@ -712,11 +714,13 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === "termine" && (
               <FinalCheckout
                 cart={state.cart}
-                total={Math.max(0, cartTotal - state.promoDiscount)}
+                total={state.confirmedNetTotal ?? Math.max(0, cartTotal - state.promoDiscount)}
                 onNewBooking={resetBooking}
                 onBack={goBack}
                 accountStatus={state.accountStatus}
                 displayPrices={Object.fromEntries(state.cart.map(b => [b.id, recomputeCartItemPrice(b)]))}
+                promoCode={state.confirmedPromoCode}
+                promoDiscount={state.confirmedPromoDiscount}
               />
             )}
 

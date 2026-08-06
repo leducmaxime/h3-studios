@@ -226,6 +226,16 @@ export interface DbSetting {
   updated_at: string;
 }
 
+// --- Payment confirmations (session-level email/finalization dedup) ---
+
+export interface DbPaymentConfirmation {
+  session_id: string;
+  booking_refs: string;
+  finalized_at: string;
+  email_sent_at: string | null;
+  created_at: string;
+}
+
 // --- Audit Logs ---
 
 export type AuditEntityType = "booking" | "user" | "payment" | "setting" | "promo" | "equipment" | "pricing" | "blocked_slot" | "admin_user" | "opening_hours" | "instagram" | "reviews" | "settings";

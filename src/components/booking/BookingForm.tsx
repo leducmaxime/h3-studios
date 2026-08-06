@@ -61,6 +61,7 @@ interface BookingFormProps {
   clientUser: BookingClientUser | null;
   clientUserLoading: boolean;
   clientLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  clientLogout: () => Promise<{ ok: boolean; error?: string }>;
   onUpdateField: (fields: Partial<BookingFormFields>) => void;
   onContinue: () => void;
   onBack: () => void;
@@ -75,14 +76,17 @@ interface LoginCardProps {
   clientUser: BookingClientUser | null;
   clientUserLoading: boolean;
   clientLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  clientLogout: () => Promise<{ ok: boolean; error?: string }>;
   initialEmail?: string;
 }
 
-function LoginCard({ clientUser, clientUserLoading, clientLogin, initialEmail }: LoginCardProps) {
+function LoginCard({ clientUser, clientUserLoading, clientLogin, clientLogout, initialEmail }: LoginCardProps) {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const prevInitialEmail = useRef<string | undefined>(undefined);
 
   // Sync initialEmail into loginEmail when it changes to a non-empty value
@@ -120,6 +124,22 @@ function LoginCard({ clientUser, clientUserLoading, clientLogin, initialEmail }:
     }
   };
 
+  const handleLogout = async () => {
+    if (logoutLoading) return;
+    setLogoutLoading(true);
+    setLogoutError(null);
+    try {
+      const result = await clientLogout();
+      if (!result.ok) {
+        setLogoutError(result.error || "La déconnexion a échoué");
+      }
+    } catch {
+      setLogoutError("Erreur réseau lors de la déconnexion");
+    } finally {
+      setLogoutLoading(false);
+    }
+  };
+
   if (clientUserLoading) {
     return (
       <div
@@ -139,18 +159,32 @@ function LoginCard({ clientUser, clientUserLoading, clientLogin, initialEmail }:
 
   if (clientUser) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20">
-          <UserCheck className="h-4 w-4 text-primary" />
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 sm:p-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20">
+            <UserCheck className="h-4 w-4 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">
+              Connecté en tant que {clientUser.name.trim() || clientUser.email}
+            </p>
+            {clientUser.name.trim() && clientUser.email && (
+              <p className="truncate text-xs text-white/50">{clientUser.email}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={logoutLoading}
+            aria-label="Se déconnecter"
+            className="shrink-0 rounded-lg border border-white/20 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:border-red-400/50 hover:text-red-300 focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {logoutLoading ? "Déconnexion..." : "Se déconnecter"}
+          </button>
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">
-            Connecté en tant que {clientUser.name.trim() || clientUser.email}
-          </p>
-          {clientUser.name.trim() && clientUser.email && (
-            <p className="truncate text-xs text-white/50">{clientUser.email}</p>
-          )}
-        </div>
+        {logoutError && (
+          <p role="status" aria-live="polite" className="mt-2.5 text-xs text-red-400">{logoutError}</p>
+        )}
       </div>
     );
   }
@@ -325,6 +359,7 @@ export function BookingForm({
   clientUser,
   clientUserLoading,
   clientLogin,
+  clientLogout,
   onUpdateField,
   onContinue,
   onBack,
@@ -437,6 +472,7 @@ export function BookingForm({
         clientUser={clientUser}
         clientUserLoading={clientUserLoading}
         clientLogin={clientLogin}
+        clientLogout={clientLogout}
         initialEmail={prefillLoginEmail}
       />
 

@@ -1,5 +1,6 @@
 import { render, route, layout } from "rwsdk/router";
 import { getBookingAmountDue, getBookingGrossTotal } from "@/lib/booking-totals";
+import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
 import { env, waitUntil } from "cloudflare:workers";
@@ -119,6 +120,11 @@ import {
   getDashboardStats,
   getMonthlyReportData,
   getSetting,
+  claimPaymentConfirmation,
+  getPaymentConfirmation,
+  claimPaymentConfirmationEmail,
+  releasePaymentConfirmationEmail,
+  addPaymentIdempotent,
   getUserByEmail,
   findOrCreateUserByEmail,
   getBookingsByRefs,
@@ -667,6 +673,20 @@ const app = defineApp([
       };
       if (email) {
         payload.email = email;
+      }
+
+      // Flux de récupération : si le webhook a été manqué/retardé, finalise ici
+      // (idempotent, exactement un email par session). Ne finalise jamais une
+      // session non payée ni une réservation annulée (audit dans ce cas).
+      if (session.payment_status === "paid" && refs.length > 0) {
+        const finalizePromise = finalizePaidCheckoutSession(session, refs, buildFinalizeDeps())
+          .then((outcome) => {
+            console.log(`Payment session ${session.id} recovery finalize outcome:`, outcome.status);
+          })
+          .catch((err) => {
+            console.error(`Payment session ${session.id} recovery finalize error:`, err);
+          });
+        waitUntil(finalizePromise);
       }
 
       return jsonResponse(payload, 200, { "Cache-Control": "no-store" });
@@ -1238,10 +1258,10 @@ const app = defineApp([
       }
 
       // ── Email (consolidated on last cart request) ─────────────────────────
-      if (env.RESEND_API_KEY && bookingPaymentStatus !== "pending") {
-        const isLastInCart = body.isLastInCart === true;
-        const cartBookingRefs: string[] = Array.isArray(body.cartBookingRefs) ? body.cartBookingRefs : [booking.booking_ref];
+      const isLastInCart = body.isLastInCart === true;
+      const cartBookingRefs: string[] = Array.isArray(body.cartBookingRefs) ? body.cartBookingRefs : [booking.booking_ref];
 
+      if (env.RESEND_API_KEY && bookingPaymentStatus !== "pending") {
         if (isLastInCart) {
           let allSlots: BookingSlot[] = [];
           if (cartBookingRefs.length > 1) {
@@ -1296,7 +1316,21 @@ const app = defineApp([
       }
 
       // ── Response with accountStatus ───────────────────────────────────────
-      const responseData = { bookingId: booking.id, ref: booking.booking_ref, accountStatus };
+      // On the last cart request, also return the server-confirmed cart-wide
+      // promo (code + aggregate reduction) and the net total, so the UI can
+      // present ONE "Réduction (CODE)" next to the total — never the client
+      // cart fields (intentionally 0/null after create).
+      const responseData: Record<string, unknown> = { bookingId: booking.id, ref: booking.booking_ref, accountStatus };
+      if (isLastInCart) {
+        const finalCartRefs = [...new Set(cartBookingRefs.map((r) => r.trim()).filter(Boolean))];
+        const cartRows = finalCartRefs.length > 0
+          ? (await getBookingsByRefs(env.DB, finalCartRefs)).filter((b) => b.user_id === userId)
+          : [];
+        const cartGrossTotal = cartRows.reduce((sum, b) => sum + (b.base_price || 0) + (b.equipment_price || 0), 0);
+        responseData.promoCode = body.promoCode || null;
+        responseData.promoDiscount = cartPromoDiscountTotal;
+        responseData.netTotal = Math.max(0, cartGrossTotal - cartPromoDiscountTotal);
+      }
 
       if (newSessionToken) {
         return jsonResponse({ success: true, data: responseData }, 200, {
@@ -4884,97 +4918,25 @@ const app = defineApp([
       }
       
       switch (event.type) {
-        case "checkout.session.completed": {
+        case "checkout.session.completed":
+        case "checkout.session.async_payment_succeeded": {
           const session = event.data.object;
-          const bookingRefs = (session.metadata.booking_refs || "").split(",").filter(Boolean);
-          
-          console.log("Payment confirmed for refs:", bookingRefs);
+          const bookingRefs = (session.metadata.booking_refs || "").split(",").map((r) => r.trim()).filter(Boolean);
 
-          // Fetch all bookings once (not twice per ref in the loop)
-          const bookings = (await Promise.all(bookingRefs.map(ref => getBookingByRef(env.DB, ref))))
-            .filter((b): b is NonNullable<typeof b> => b !== null);
-
-          // Validate session total against sum of per-booking prices (net of promo)
-          const expectedTotalCents = bookings.reduce((sum, b) => sum + Math.round(getBookingAmountDue(b) * 100), 0);
-          if (session.amount_total && session.amount_total !== expectedTotalCents) {
-            console.warn(`Webhook: total mismatch — Stripe: ${session.amount_total}, DB sum: ${expectedTotalCents}`);
+          if (bookingRefs.length === 0) {
+            return new Response("OK", { status: 200 });
           }
 
-          let anyNewlyPaid = false;
-
-          for (const booking of bookings) {
-            // Idempotency via Stripe event ID: check if this event was already processed
-            const existingEvent = await env.DB.prepare(
-              "SELECT 1 FROM payments WHERE booking_id = ? AND stripe_event_id = ? LIMIT 1"
-            ).bind(booking.id, event.id).first();
-            if (existingEvent) {
-              console.log(`Webhook: event ${event.id} already processed for booking ${booking.booking_ref}, skipping`);
-              continue;
-            }
-
-            // Record per-booking amount in euros net of promo discount
-            const bookingDue = getBookingAmountDue(booking);
-
-            // Skip 0€ due: already got a zero-payment at creation for fully-discounted cart items
-            if (bookingDue <= 0) {
-              console.log(`Webhook: booking ${booking.booking_ref} has 0€ due, skipping addPayment`);
-              continue;
-            }
-
-            await addPayment(env.DB, {
-              booking_id: booking.id,
-              amount: bookingDue,
-              method: "card",
-              status: "paid",
-              paid_at: new Date().toISOString().replace("T", " ").slice(0, 19),
-              stripe_event_id: event.id,
-            });
-
-            anyNewlyPaid = true;
-          }
-
-          // Send ONE consolidated confirmation email if any booking was newly paid
-          if (anyNewlyPaid && env.RESEND_API_KEY && bookings.length > 0) {
-            const firstBooking = bookings[0];
-            const user = await getUserById(env.DB, firstBooking.user_id);
-            if (user && user.email) {
-              const allSlots: BookingSlot[] = bookings.map(b => ({
-                bookingRef: b.booking_ref,
-                studioId: b.studio_id,
-                date: b.date,
-                startTime: b.start_time,
-                endTime: b.end_time,
-                groupType: b.group_type,
-                equipment: b.equipment ? JSON.parse(b.equipment) : [],
-                equipmentPrice: b.equipment_price,
-                totalPrice: b.total_price,
-              }));
-
-              const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
-                bookingRef: firstBooking.booking_ref,
-                studioId: firstBooking.studio_id,
-                date: firstBooking.date,
-                startTime: firstBooking.start_time,
-                endTime: firstBooking.end_time,
-                groupType: firstBooking.group_type,
-                equipment: firstBooking.equipment ? JSON.parse(firstBooking.equipment) : [],
-                equipmentPrice: firstBooking.equipment_price,
-                totalPrice: bookings.reduce((sum, b) => sum + getBookingAmountDue(b), 0),
-                paymentMethod: "card",
-                paymentStatus: "paid",
-                userName: user.name,
-                userEmail: user.email,
-                userPhone: user.phone || "",
-                promoCode: firstBooking.promo_code,
-                promoDiscount: firstBooking.promo_discount,
-                promoType: firstBooking.promo_type,
-                allSlots: allSlots.length > 1 ? allSlots : undefined,
-              }).catch((err) => {
-                console.error(`Webhook: Failed to send consolidated confirmation email:`, err);
-              });
-              waitUntil(emailPromise);
-            }
-          }
+          // Finalisation idempotente partagée avec le flux de récupération
+          // (session lookup). Ne finalise que si Stripe rapporte payment_status
+          // === "paid" ; gère l'idempotence par session, l'audit de l'écart de
+          // montant et le refus de réintégrer une réservation annulée.
+          const outcome = await finalizePaidCheckoutSession(session, bookingRefs, buildFinalizeDeps());
+          console.log(`Webhook ${event.type} for refs:`, bookingRefs, "outcome:", outcome.status, {
+            paymentsAdded: outcome.status === "finalized" ? outcome.paymentsAdded : undefined,
+            cancelledSkipped: outcome.status === "finalized" ? outcome.cancelledSkipped : undefined,
+            emailSent: outcome.status === "finalized" ? outcome.emailSent : undefined,
+          });
 
           return new Response("OK", { status: 200 });
         }
@@ -5012,6 +4974,26 @@ const app = defineApp([
     }
   }),
 ]);
+
+/** Dépendances partagées du finaliseur de paiement (webhook + session lookup). */
+function buildFinalizeDeps(): FinalizePaidSessionDeps {
+  return {
+    getBookingsByRef: (refs) => getBookingsByRefs(env.DB, refs),
+    completePayment: (data) => addPaymentIdempotent(env.DB, data as Parameters<typeof addPaymentIdempotent>[1]),
+    addAuditLog: (entityType, entityId, action, changes, performedBy) =>
+      addAuditLog(env.DB, entityType, entityId, action, changes, performedBy ?? "stripe-webhook"),
+    claimConfirmation: (sessionId, refs) => claimPaymentConfirmation(env.DB, sessionId, refs),
+    getConfirmation: (sessionId) => getPaymentConfirmation(env.DB, sessionId),
+    claimEmail: (sessionId) => claimPaymentConfirmationEmail(env.DB, sessionId),
+    releaseEmailClaim: (sessionId, claimedAt) => releasePaymentConfirmationEmail(env.DB, sessionId, claimedAt),
+    getUserById: (userId) => getUserById(env.DB, userId),
+    sendEmail: async (data) => {
+      if (!env.RESEND_API_KEY) return { success: false };
+      return sendBookingConfirmationEmail(env.RESEND_API_KEY, data);
+    },
+    nowISO: () => new Date().toISOString().replace("T", " ").slice(0, 19),
+  };
+}
 
 async function handleScheduled(controller: ScheduledController) {
   console.log(`[Cron] Triggered: ${controller.cron} at ${new Date().toISOString()}`);

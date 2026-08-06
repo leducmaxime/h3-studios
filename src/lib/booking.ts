@@ -863,6 +863,15 @@ export function loadUserPreferences(): UserPreferences | null {
   }
 }
 
+/** Efface les préférences de pré-remplissage (nom/email/tél/groupe) — utilisé
+    à la déconnexion pour ne pas re-pré-remplir un ancien profil après logout. */
+export function clearUserPreferences(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch { /* ignore */ }
+}
+
 // Equipment price calculation
 export function calculateEquipmentPrice(
   equipment: EquipmentSelection[],

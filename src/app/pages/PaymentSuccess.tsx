@@ -131,6 +131,13 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
     ? [...session.bookings].sort((a, b) => `${a.date}T${a.startTime}`.localeCompare(`${b.date}T${b.startTime}`))
     : [];
 
+  // Réduction aggregée du panier (une seule ligne à côté du total) : le code
+  // promo est partagé par toutes les lignes du panier côté serveur.
+  const aggregatePromoDiscount = session
+    ? session.bookings.reduce((sum, b) => sum + (Number(b.promoDiscount) || 0), 0)
+    : 0;
+  const promoCode = session?.bookings.find((b) => b.promoCode)?.promoCode ?? null;
+
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <div className={`w-full max-w-[600px] px-2 sm:px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
@@ -210,11 +217,6 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                           ))}
                         </div>
                       )}
-                      {booking.promoDiscount > 0 && (
-                        <p className="mt-1 text-xs text-green-400">
-                          Réduction{booking.promoCode ? ` (${booking.promoCode})` : ""} : -{formatPrice(booking.promoDiscount)}
-                        </p>
-                      )}
                     </div>
                     );
                   })}
@@ -225,11 +227,19 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
             {/* Total + e-mail — issus uniquement de la réponse API sécurisée */}
             {session && (
               <div className="mb-6 rounded-xl border border-white/10 bg-white/15 p-4 text-left">
-                <div className="flex items-center justify-between">
-                  <span className="text-white/60">{isPaid ? "Total payé" : "Montant total"}</span>
-                  <span className="text-xl font-bold text-primary">
-                    {formatPrice(session.amountTotal / 100)}
-                  </span>
+                <div className="space-y-1">
+                  {aggregatePromoDiscount > 0 && (
+                    <div className="flex items-center justify-between text-sm text-green-400">
+                      <span>Réduction{promoCode ? ` (${promoCode})` : ""}</span>
+                      <span>-{formatPrice(aggregatePromoDiscount)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">{isPaid ? "Total payé" : "Montant total"}</span>
+                    <span className="text-xl font-bold text-primary">
+                      {formatPrice(session.amountTotal / 100)}
+                    </span>
+                  </div>
                 </div>
                 {session.email && (
                   <div className="mt-3 flex flex-col gap-0.5 border-t border-white/10 pt-3">

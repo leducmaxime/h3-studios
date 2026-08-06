@@ -25,11 +25,14 @@ interface FinalCheckoutProps {
   accountStatus?: string | null;
   /** Per-booking recomputed prices for line-item consistency with total */
   displayPrices?: Record<string, number>;
+  /** Réduction aggregée du panier confirmée par le serveur (une seule ligne). */
+  promoCode?: string | null;
+  promoDiscount?: number;
 }
 
 const LINE_DISPLAY_PRICES_DEFAULT: Record<string, number> = {};
 
-export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPayment, showPaymentButton, accountStatus, displayPrices = LINE_DISPLAY_PRICES_DEFAULT }: FinalCheckoutProps) {
+export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPayment, showPaymentButton, accountStatus, displayPrices = LINE_DISPLAY_PRICES_DEFAULT, promoCode = null, promoDiscount = 0 }: FinalCheckoutProps) {
   const { getEquipmentName } = useEquipment();
   const isPending = cart[0]?.paymentStatus === "pending";
   const isPaid = cart[0]?.paymentStatus === "paid";
@@ -131,11 +134,6 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
                 ).join(", ")} ({formatPrice(booking.equipmentPrice)})
               </div>
             )}
-            {booking.promoDiscount > 0 && (
-              <div className="mb-3 text-xs text-green-400">
-                Code promo {booking.promoCode} : -{formatPrice(booking.promoDiscount)}
-              </div>
-            )}
 
             <div className="mb-3 flex items-center gap-2 text-sm text-white/70">
               <Calendar className="h-4 w-4" />
@@ -174,11 +172,19 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
       </div>
 
       <div className="rounded-xl bg-primary/10 p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-lg">
-            {showPaymentButton ? "Total" : (isPaid ? "Total payé" : "Total à régler sur place (CB ou espèces)")}
-          </span>
-          <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
+        <div className="space-y-1">
+          {promoDiscount > 0 && (
+            <div className="flex items-center justify-between text-sm text-green-400">
+              <span>Réduction{promoCode ? ` (${promoCode})` : ""}</span>
+              <span>-{formatPrice(promoDiscount)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <span className="text-lg">
+              {showPaymentButton ? "Total" : (isPaid ? "Total payé" : "Total à régler sur place (CB ou espèces)")}
+            </span>
+            <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
+          </div>
         </div>
       </div>
 

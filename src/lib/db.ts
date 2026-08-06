@@ -18,6 +18,7 @@ import {
   type AuditLogFilters,
   type BookingStatus,
   type DbPaymentStatus,
+  type DbPaymentConfirmation,
   type CreateBooking,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
@@ -976,6 +977,51 @@ export async function addPayment(
   return { success: true, id };
 }
 
+/**
+ * Insertion de paiement idempotente (INSERT OR IGNORE) clé sur
+ * (booking_id, stripe_event_id) — utilisé par le finaliseur de session Stripe
+ * pour compléter les paiements sans doublon, y compris après un échec partiel
+ * puis un retry (webhook + flux de récupération). Retourne `inserted: false`
+ * quand la ligne existait déjà.
+ */
+export async function addPaymentIdempotent(
+  db: D1Database,
+  data: {
+    booking_id: string;
+    amount: number;
+    method: string;
+    status: DbPaymentStatus;
+    paid_at?: string | null;
+    stripe_event_id?: string | null;
+  }
+): Promise<{ inserted: boolean }> {
+  const id = generateId();
+  const timestamp = now();
+
+  const result = await db.prepare(
+    `INSERT OR IGNORE INTO payments (id, booking_id, amount, method, status, refunded_amount, paid_at, created_at, stripe_event_id)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)`
+  ).bind(
+    id,
+    data.booking_id,
+    data.amount,
+    data.method,
+    data.status,
+    data.paid_at || (data.status === "paid" ? timestamp : null),
+    timestamp,
+    data.stripe_event_id || null,
+  ).run();
+
+  if ((result.meta?.changes ?? 0) === 0) {
+    return { inserted: false };
+  }
+
+  await recomputeBookingPaymentStatus(db, data.booking_id);
+  await addAuditLog(db, "payment", id, "create", { bookingId: data.booking_id, amount: data.amount, method: data.method });
+
+  return { inserted: true };
+}
+
 export async function markPaymentPaid(
   db: D1Database,
   paymentId: string,
@@ -1390,6 +1436,63 @@ export async function setSetting(
   }
 
   return { success: true };
+}
+
+// ─── Payment confirmations (session-level dedup) ────────────────────────────
+
+export async function getPaymentConfirmation(
+  db: D1Database,
+  sessionId: string,
+): Promise<DbPaymentConfirmation | null> {
+  return db.prepare("SELECT * FROM payment_confirmations WHERE session_id = ?")
+    .bind(sessionId)
+    .first<DbPaymentConfirmation>();
+}
+
+/**
+ * Revendique une session Stripe pour la finalisation (ajout de paiements +
+ * email consolidé). INSERT OR IGNORE : un seul appelant devient "owner" —
+ * le webhook et le flux de récupération ne peuvent pas finaliser deux fois.
+ */
+export async function claimPaymentConfirmation(
+  db: D1Database,
+  sessionId: string,
+  bookingRefs: string[],
+): Promise<{ inserted: boolean }> {
+  const result = await db.prepare(
+    `INSERT OR IGNORE INTO payment_confirmations (session_id, booking_refs, finalized_at)
+     VALUES (?, ?, ?)`,
+  ).bind(sessionId, bookingRefs.join(","), now()).run();
+  return { inserted: (result.meta?.changes ?? 0) > 0 };
+}
+
+/**
+ * Claim ATOMIQUE de la livraison email pour une session : UPDATE exclusif sur
+ * `email_sent_at IS NULL`. Un seul appelant (webhook ou récupération, owner ou
+ * retry) gagne le claim et envoie l'email — les concurrents voient
+ * `claimed: false` et n'envoient pas. En cas d'échec d'envoi, le claim peut
+ * être libéré via releasePaymentConfirmationEmail pour un retry ultérieur.
+ */
+export async function claimPaymentConfirmationEmail(
+  db: D1Database,
+  sessionId: string,
+): Promise<{ claimed: boolean; claimedAt: string }> {
+  const claimedAt = now();
+  const result = await db.prepare(
+    "UPDATE payment_confirmations SET email_sent_at = ? WHERE session_id = ? AND email_sent_at IS NULL",
+  ).bind(claimedAt, sessionId).run();
+  return { claimed: (result.meta?.changes ?? 0) > 0, claimedAt };
+}
+
+/** Libère le claim email (email_sent_at) après un échec d'envoi, pour retry. */
+export async function releasePaymentConfirmationEmail(
+  db: D1Database,
+  sessionId: string,
+  claimedAt: string,
+): Promise<void> {
+  await db.prepare(
+    "UPDATE payment_confirmations SET email_sent_at = NULL WHERE session_id = ? AND email_sent_at = ?",
+  ).bind(sessionId, claimedAt).run();
 }
 
 export async function getAllSettings(db: D1Database): Promise<DbSetting[]> {
