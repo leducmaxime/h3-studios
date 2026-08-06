@@ -1054,7 +1054,7 @@ export function AdminCalendar() {
                         const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
                         let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
                         if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                        const top = 24 + (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
+                        const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
                         const height = (endIdx - startIdx) * 30;
                         const leftPos = "4px";
                         const width = "calc(100% - 8px)";
