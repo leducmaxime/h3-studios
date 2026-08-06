@@ -87,6 +87,59 @@ interface ExtendedBookingState extends BookingState {
   accountStatus: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Client profile prefill — single source of truth for mapping a logged-in
+// ClientUser onto empty booking fields. Shared by the hydration fetch, the
+// inline login success path and the focus re-fetch.
+// ---------------------------------------------------------------------------
+export interface ClientProfile {
+  id: string;
+  email: string | null;
+  name: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  band_name: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  postal_code: string | null;
+  city: string | null;
+}
+
+/**
+ * Display name from trimmed `first_name` + `last_name`, falling back to the
+ * `name` field. Returns "" only when every source is absent/blank.
+ */
+export function deriveDisplayName(user: Pick<ClientProfile, "name" | "first_name" | "last_name">): string {
+  const first = user.first_name?.trim() ?? "";
+  const last = user.last_name?.trim() ?? "";
+  const full = [first, last].filter(Boolean).join(" ");
+  if (full) return full;
+  return user.name?.trim() ?? "";
+}
+
+type PrefillFields = Pick<
+  ExtendedBookingState,
+  "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity"
+>;
+
+/**
+ * Merge an account profile onto booking fields. Booking-state values always
+ * win — an account value is applied only when the booking field is empty —
+ * so typed input is never clobbered by inline login or async prefill.
+ */
+export function mergeProfilePrefill(fields: PrefillFields, user: ClientProfile): Partial<PrefillFields> {
+  return {
+    userName: fields.userName || deriveDisplayName(user),
+    userEmail: fields.userEmail || user.email || "",
+    userPhone: fields.userPhone || user.phone || "",
+    bandName: fields.bandName || user.band_name || "",
+    billingAddress: fields.billingAddress || user.address_line1 || "",
+    billingPostalCode: fields.billingPostalCode || user.postal_code || "",
+    billingCity: fields.billingCity || user.city || "",
+  };
+}
+
 /**
  * Slug-based step flow:
  *   groupe → creneau → panier → coordonnees → paiement → termine
@@ -292,20 +345,18 @@ export function useBookingWithRouter(urlStep?: string) {
   const [todayFullyBlocked, setTodayFullyBlocked] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing } = usePricing();
-  const [clientUser, setClientUser] = useState<{
-    id: string;
-    email: string | null;
-    name: string;
-    first_name: string | null;
-    last_name: string | null;
-    phone: string | null;
-    band_name: string | null;
-    address_line1: string | null;
-    address_line2: string | null;
-    postal_code: string | null;
-    city: string | null;
-  } | null>(null);
+  const [clientUser, setClientUser] = useState<ClientProfile | null>(null);
   const [clientUserLoading, setClientUserLoading] = useState(true);
+  // Refs mirroring session/profile knowledge so the focus listener (registered
+  // once) always reads fresh values without stale closures.
+  const clientUserRef = useRef<ClientProfile | null>(null);
+  useEffect(() => {
+    clientUserRef.current = clientUser;
+  }, [clientUser]);
+  const isHydratedRef = useRef(false);
+  useEffect(() => {
+    isHydratedRef.current = isHydrated;
+  }, [isHydrated]);
 
   const mergedSlotsByStudio = useMemo(
     () => {
@@ -352,6 +403,58 @@ export function useBookingWithRouter(urlStep?: string) {
         console.error(err);
       });
   }, [state.selectedDate]);
+
+  // -------------------------------------------------------------------------
+  // Profile prefill — shared by hydration, inline login and the focus
+  // re-fetch (stale-tab/session gap). Booking-state values always win over
+  // account values (mergeProfilePrefill), so typed input is preserved.
+  // Resolves with the profile (or null) and never rejects.
+  // -------------------------------------------------------------------------
+  const prefillFromClientProfile = useCallback((): Promise<ClientProfile | null> => {
+    return fetch("/api/client/me", { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) {
+          console.warn("[Booking] /api/client/me returned", res.status);
+          return null;
+        }
+        return res.json() as Promise<{ data?: ClientProfile }>;
+      })
+      .then((json) => {
+        if (json?.data) {
+          const user = json.data;
+          setClientUser(user);
+          clientUserRef.current = user;
+          setState((s) => ({
+            ...s,
+            ...mergeProfilePrefill(s, user),
+          }));
+          return user;
+        }
+        console.warn("[Booking] /api/client/me: no user data");
+        return null;
+      })
+      .catch((err) => {
+        console.error("[Booking] /api/client/me error:", err);
+        return null;
+      });
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Focus re-fetch — closes the stale-tab/session timing gap. A booking tab
+  // that mounted before a session existed retries /api/client/me when it
+  // regains focus (the session may have been created in another tab). No
+  // polling; never overwrites non-empty booking fields.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleFocus = () => {
+      if (!isHydratedRef.current) return; // let the initial hydration pass finish first
+      if (clientUserRef.current) return; // already know the logged-in profile
+      prefillFromClientProfile();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [prefillFromClientProfile]);
 
   // -------------------------------------------------------------------------
   // Hydration effect
@@ -436,40 +539,12 @@ export function useBookingWithRouter(urlStep?: string) {
       }
     }
 
-    fetch("/api/client/me", { credentials: "include" })
-      .then((res) => {
-        if (!res.ok) {
-          console.warn("[Booking] /api/client/me returned", res.status);
-          return null;
-        }
-        return res.json() as Promise<{ data?: { id: string; email: string | null; name: string; first_name: string | null; last_name: string | null; phone: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null } }>;
-      })
-      .then((json) => {
-        if (json?.data) {
-          const user = json.data;
-          setClientUser(user);
-          setState((s) => ({
-            ...s,
-            userName: user.name || s.userName,
-            userEmail: user.email || s.userEmail,
-            userPhone: user.phone || s.userPhone,
-            bandName: user.band_name || s.bandName,
-            billingAddress: user.address_line1 || s.billingAddress,
-            billingPostalCode: user.postal_code || s.billingPostalCode,
-            billingCity: user.city || s.billingCity,
-          }));
-        } else {
-          console.warn("[Booking] /api/client/me: no user data");
-        }
-        setClientUserLoading(false);
-        setIsHydrated(true);
-      })
-      .catch((err) => {
-        console.error("[Booking] /api/client/me error:", err);
-        setClientUserLoading(false);
-        setIsHydrated(true);
-      });
-  }, [isHydrated, urlStep]);
+    setClientUserLoading(true);
+    prefillFromClientProfile().finally(() => {
+      setClientUserLoading(false);
+      setIsHydrated(true);
+    });
+  }, [isHydrated, urlStep, prefillFromClientProfile]);
 
   // -------------------------------------------------------------------------
   // Persist state to localStorage (skip for termine / initial mount)
@@ -943,7 +1018,7 @@ export function useBookingWithRouter(urlStep?: string) {
       });
       const json = await res.json() as {
         success: boolean;
-        data?: { id: string; email: string | null; name: string; phone: string | null; first_name: string | null; last_name: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null };
+        data?: ClientProfile;
         error?: string;
       };
       if (!json.success) {
@@ -952,21 +1027,14 @@ export function useBookingWithRouter(urlStep?: string) {
       // The login response only carries a subset of the profile — re-fetch
       // /api/client/me for the full record so address/band also prefill.
       const meRes = await fetch("/api/client/me", { credentials: "include" });
-      const meJson = (await meRes.json()) as {
-        data?: { id: string; email: string | null; name: string; phone: string | null; first_name: string | null; last_name: string | null; band_name: string | null; address_line1: string | null; address_line2: string | null; postal_code: string | null; city: string | null };
-      };
+      const meJson = (await meRes.json()) as { data?: ClientProfile };
       const user = meJson?.data ?? null;
       if (user) {
         setClientUser(user);
+        clientUserRef.current = user;
         setState((s) => ({
           ...s,
-          userName: user.name || s.userName,
-          userEmail: user.email || s.userEmail,
-          userPhone: user.phone || s.userPhone,
-          bandName: user.band_name || s.bandName,
-          billingAddress: user.address_line1 || s.billingAddress,
-          billingPostalCode: user.postal_code || s.billingPostalCode,
-          billingCity: user.city || s.billingCity,
+          ...mergeProfilePrefill(s, user),
         }));
       }
       return { ok: true };
