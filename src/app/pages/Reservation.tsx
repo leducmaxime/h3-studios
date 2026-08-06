@@ -406,10 +406,10 @@ export function Reservation({ step }: ReservationProps) {
         <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
       </div>
       
-      <div className={`w-full max-w-none sm:max-w-[900px] lg:max-w-6xl lg:px-4 -mx-1 sm:mx-0 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+      <div className={`w-full max-w-none sm:max-w-[900px] lg:max-w-6xl lg:px-4 -mx-2 sm:mx-0 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         {/* Cart banner — shown when adding a new booking with items already in cart */}
         {showCartBanner && (
-          <div className="mb-4 flex items-center justify-between rounded-xl border-2 border-primary/30 bg-primary/10 px-4 py-3">
+          <div className="mb-4 flex items-center justify-between border-2 border-primary/30 bg-primary/10 px-4 py-3 max-sm:border-x-0 max-sm:rounded-none sm:rounded-xl">
             <div className="flex items-center gap-3">
               <ShoppingCart className="h-5 w-5 text-primary" />
               <div>
@@ -428,7 +428,7 @@ export function Reservation({ step }: ReservationProps) {
           </div>
         )}
 
-        <div className="relative overflow-hidden rounded-2xl border-4 border-primary bg-black/90 backdrop-blur">
+        <div className="relative overflow-hidden border-4 border-primary bg-black/90 backdrop-blur max-sm:border-x-0 max-sm:rounded-none sm:rounded-2xl">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
           <div className="relative p-4 sm:p-6 md:p-8">
