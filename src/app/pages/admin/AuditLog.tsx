@@ -302,6 +302,70 @@ function genericFieldLines(obj: ChangeObj): string[] {
 }
 
 /**
+ * Promo rules in clear French — used by promo:create (all rules present) and
+ * promo:update (only changed fields present). Unknown keys still fall through
+ * to the generic fallback in summarizeLog.
+ */
+function promoRuleLines(obj: ChangeObj, isUpdate: boolean): string[] {
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(obj, k);
+  const str = (k: string) => (typeof obj[k] === "string" ? (obj[k] as string) : undefined);
+  const lines: (string | null | undefined | false)[] = [];
+
+  lines.push(str("code") && `Code : ${str("code")}`);
+
+  const type = str("type");
+  if (type === "percentage" && obj.value !== undefined) {
+    lines.push(`Réduction : ${String(obj.value)} %`);
+  } else if (type === "fixed" && money(obj.value)) {
+    lines.push(`Réduction : ${money(obj.value)}`);
+  } else if (obj.value !== undefined && money(obj.value)) {
+    lines.push(`Réduction : ${money(obj.value)}`);
+  } else if (type) {
+    lines.push(`Type de réduction : ${type === "percentage" ? "Pourcentage" : "Montant fixe"}`);
+  }
+
+  if (has("min_total")) {
+    const m = Number(obj.min_total);
+    lines.push(
+      Number.isFinite(m) ? (m > 0 ? `Montant minimum : ${formatPrice(m)}` : "Montant minimum : aucun") : null
+    );
+  }
+
+  if (has("max_usage")) {
+    lines.push(
+      obj.max_usage === null
+        ? "Utilisations : sans limite"
+        : Number.isFinite(Number(obj.max_usage))
+          ? `Utilisations : limité à ${Number(obj.max_usage)}`
+          : null
+    );
+  }
+
+  if (has("expires_at")) {
+    const exp = str("expires_at");
+    lines.push(exp ? `Valable jusqu'au : ${formatDay(exp)}` : isUpdate ? "Date d'expiration : supprimée" : null);
+  }
+
+  if (typeof obj.is_active === "boolean" || obj.is_active === 0 || obj.is_active === 1) {
+    lines.push(`Statut : ${obj.is_active ? "Actif" : "Désactivé"}`);
+  }
+
+  if (has("round_mode")) {
+    const rm = str("round_mode");
+    if (rm === "down" || rm === "up") {
+      const step = money(obj.round_value);
+      lines.push(
+        `Règle d'arrondi : ${rm === "down" ? "aux 50 centimes inférieurs" : "aux 50 centimes supérieurs"}${step ? ` (pas de ${step})` : ""}`
+      );
+    } else if (isUpdate && rm === "none") {
+      lines.push("Règle d'arrondi : désactivée");
+    }
+  }
+
+  return lines.filter((l): l is string => typeof l === "string" && l.length > 0);
+}
+
+/**
  * Build a human-readable summary (one string per line) for an audit row.
  * Covers every action/entity payload the app actually emits; unknown shapes
  * fall back to labeled generic lines, never raw code.
@@ -433,15 +497,15 @@ function summarizeLog(log: ApiAuditLog): string[] {
     }
     case "equipment:delete":
       return ["Équipement supprimé."];
-    case "promo:create":
-      return compact([
-        str("code") && `Code : ${str("code")}`,
-        str("type") === "percentage" && obj.value !== undefined && `Réduction : ${String(obj.value)} %`,
-        str("type") === "fixed" && money(obj.value) && `Réduction : ${money(obj.value)}`,
-      ]);
+    case "promo:create": {
+      const lines = promoRuleLines(obj, false);
+      return lines.length > 0 ? lines : ["Création d'un code promo."];
+    }
     case "promo:update": {
-      const lines = genericFieldLines(obj);
-      return lines.length > 0 ? lines : ["Modification du code promo."];
+      const lines = promoRuleLines(obj, true);
+      if (lines.length > 0) return lines;
+      const generic = genericFieldLines(obj);
+      return generic.length > 0 ? generic : ["Modification du code promo."];
     }
     case "promo:delete":
       return ["Code promo supprimé."];
