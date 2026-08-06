@@ -3355,6 +3355,7 @@ const app = defineApp([
           min_total?: number;
           expires_at?: string;
           max_usage?: number;
+          round_mode?: "down" | "up" | "none";
         };
 
         if (!body.code || !body.type || body.value === undefined) {
@@ -3368,12 +3369,23 @@ const app = defineApp([
           min_total: body.min_total,
           expires_at: body.expires_at,
           max_usage: body.max_usage,
+          round_mode: body.round_mode,
         });
 
+        // Record the full promo configuration exactly as persisted by
+        // createPromoCode (defaults applied), so the audit entry faithfully
+        // reflects the initial state: is_active is always 1 on create, code is
+        // stored uppercased, and min_total/max_usage/expires_at default to
+        // null-unlimited when omitted.
         await addAuditLog(env.DB, "promo", result.id, "create", {
-          code: body.code,
+          code: body.code.toUpperCase(),
           type: body.type,
           value: body.value,
+          min_total: body.min_total ?? 0,
+          is_active: 1,
+          expires_at: body.expires_at ?? null,
+          max_usage: body.max_usage ?? null,
+          round_mode: body.round_mode ?? "none",
         }, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess(result);
@@ -3399,6 +3411,7 @@ const app = defineApp([
           is_active?: number;
           expires_at?: string;
           max_usage?: number;
+          round_mode?: "down" | "up" | "none";
         };
 
         const result = await updatePromoCode(env.DB, id, body);
@@ -3406,7 +3419,22 @@ const app = defineApp([
           return jsonError("Code promo introuvable", 404);
         }
 
-        await addAuditLog(env.DB, "promo", id, "update", body, request.headers.get("X-Admin-User-Id") || "admin");
+        // Preserve the existing changed-fields semantics: only the keys present
+        // in the request body were applied by updatePromoCode, so the audit
+        // records exactly those (restricted to known promo config fields).
+        // max_usage is guaranteed to be captured whenever it is part of the
+        // update payload.
+        const changes: Record<string, unknown> = {};
+        if (body.code !== undefined) changes.code = body.code;
+        if (body.type !== undefined) changes.type = body.type;
+        if (body.value !== undefined) changes.value = body.value;
+        if (body.min_total !== undefined) changes.min_total = body.min_total;
+        if (body.is_active !== undefined) changes.is_active = body.is_active;
+        if (body.expires_at !== undefined) changes.expires_at = body.expires_at;
+        if (body.max_usage !== undefined) changes.max_usage = body.max_usage;
+        if (body.round_mode !== undefined) changes.round_mode = body.round_mode;
+
+        await addAuditLog(env.DB, "promo", id, "update", changes, request.headers.get("X-Admin-User-Id") || "admin");
 
         return jsonSuccess({ id, updated: true });
       } catch (error) {
