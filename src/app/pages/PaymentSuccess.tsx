@@ -132,7 +132,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
               </div>
             </div>
 
-            <h1 className={`mb-2 font-blanka text-2xl sm:text-3xl ${isPaid ? "text-green-400" : "text-amber-400"}`}>
+            <h1 className={`font-blanka text-2xl sm:text-3xl ${isPaid ? "mb-6 text-green-400" : "mb-2 text-amber-400"}`}>
               {isPaid ? "PAIEMENT CONFIRME" : "PAIEMENT EN COURS"}
             </h1>
 
