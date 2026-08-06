@@ -228,7 +228,7 @@ export interface DbSetting {
 
 // --- Audit Logs ---
 
-export type AuditEntityType = "booking" | "user" | "payment" | "setting" | "promo" | "equipment" | "pricing" | "blocked_slot";
+export type AuditEntityType = "booking" | "user" | "payment" | "setting" | "promo" | "equipment" | "pricing" | "blocked_slot" | "admin_user" | "opening_hours" | "instagram" | "reviews" | "settings";
 
 export interface DbAuditLog {
   id: string;
@@ -238,6 +238,13 @@ export interface DbAuditLog {
   changes: string | null; // JSON
   performed_by: string;
   created_at: string;
+}
+
+// Extended type with joined enrichment fields from LEFT JOINs (getAuditLogs)
+export interface DbAuditLogWithDetails extends DbAuditLog {
+  admin_name?: string | null;
+  booking_ref?: string | null;
+  user_email?: string | null;
 }
 
 // --- Paginated response ---

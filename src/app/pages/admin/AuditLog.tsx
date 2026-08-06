@@ -40,6 +40,8 @@ interface ApiAuditLog {
   changes: string | null;
   performed_by: string;
   admin_name?: string | null;
+  booking_ref?: string | null;
+  user_email?: string | null;
   created_at: string;
 }
 
@@ -86,20 +88,28 @@ const ENTITY_CONFIG: Record<string, { label: string; icon: typeof FileText; colo
   booking: { label: "Réservation", icon: Calendar, color: "text-blue-400" },
   user: { label: "Client", icon: User, color: "text-emerald-400" },
   payment: { label: "Paiement", icon: CreditCard, color: "text-amber-400" },
+  payments: { label: "Paiement", icon: CreditCard, color: "text-amber-400" },
   setting: { label: "Paramètre", icon: Shield, color: "text-purple-400" },
+  settings: { label: "Paramètre", icon: Shield, color: "text-purple-400" },
   promo: { label: "Code promo", icon: FileText, color: "text-pink-400" },
   equipment: { label: "Équipement", icon: Box, color: "text-cyan-400" },
   pricing: { label: "Tarif", icon: FileText, color: "text-orange-400" },
   blocked_slot: { label: "Créneau bloqué", icon: Clock, color: "text-red-400" },
   opening_hours: { label: "Horaires", icon: Clock, color: "text-teal-400" },
+  admin_user: { label: "Compte admin", icon: Shield, color: "text-violet-400" },
+  instagram: { label: "Instagram", icon: FileText, color: "text-fuchsia-400" },
+  reviews: { label: "Avis Google", icon: FileText, color: "text-yellow-400" },
 };
 
 const ACTION_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   create: { label: "Création", variant: "default" },
+  "create-range": { label: "Création (plage)", variant: "default" },
   update: { label: "Modification", variant: "secondary" },
   delete: { label: "Suppression", variant: "destructive" },
+  "bulk-delete": { label: "Suppression groupée", variant: "destructive" },
   cancel: { label: "Annulation", variant: "destructive" },
   "no-show": { label: "Absent", variant: "destructive" },
+  complete: { label: "Terminée", variant: "default" },
   "mark-paid": { label: "Payé", variant: "default" },
   refund: { label: "Remboursement", variant: "destructive" },
   block: { label: "Blocage", variant: "destructive" },
@@ -107,6 +117,12 @@ const ACTION_LABELS: Record<string, { label: string; variant: "default" | "secon
   merge: { label: "Fusion", variant: "secondary" },
   reschedule: { label: "Replanification", variant: "secondary" },
   "batch-update": { label: "Mise à jour groupée", variant: "secondary" },
+  sync: { label: "Synchronisation", variant: "secondary" },
+  update_token: { label: "Jeton mis à jour", variant: "secondary" },
+  role_update: { label: "Changement de rôle", variant: "secondary" },
+  activate: { label: "Activation", variant: "default" },
+  deactivate: { label: "Désactivation", variant: "destructive" },
+  "change-password": { label: "Mot de passe", variant: "secondary" },
 };
 
 function getEntityConfig(entityType: string) {
@@ -132,64 +148,369 @@ function formatJsonPretty(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
-function formatChangesPreview(changes: unknown, entityType?: string): string {
-  if (changes === null || changes === undefined) return "—";
-  if (typeof changes === "string") return changes.slice(0, 60);
-  if (typeof changes === "object" && changes !== null) {
-    const obj = changes as Record<string, unknown>;
-    
-    // Booking-specific formatting
-    if (entityType === "booking") {
-      if (obj.booking_ref && obj.studio_id) {
-        const studio = obj.studio_id === "la-scene" ? "La Scène" : obj.studio_id === "le-podium" ? "Le Podium" : obj.studio_id;
-        return `${obj.booking_ref} - ${studio}`;
-      }
-      if (obj.date && obj.start_time) {
-        return `${obj.date} à ${obj.start_time}`;
-      }
-      if (obj.status) return `Statut: ${obj.status}`;
+// ─── Human-readable summaries ─────────────────────────────────────────────────
+// The audit payloads are internal keys/values; this layer turns them into
+// plain French an administrator can read without technical knowledge.
+
+const STUDIO_LABELS: Record<string, string> = {
+  "la-scene": "La Scène",
+  "le-podium": "Le Podium",
+};
+
+const GROUP_TYPE_LABELS: Record<string, string> = {
+  solo: "Solo",
+  duo: "Duo",
+  group: "Groupe",
+};
+
+const BOOKING_STATUS_LABELS: Record<string, string> = {
+  confirmed: "Confirmée",
+  cancelled: "Annulée",
+  completed: "Terminée",
+  "no-show": "Absence (no-show)",
+  pending: "En attente",
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  paid: "Payé",
+  pending: "En attente",
+  "pay-on-site": "Paiement sur place",
+  refunded: "Remboursé",
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  card: "Carte bancaire",
+  cash: "Espèces",
+  transfer: "Virement",
+  check: "Chèque",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  "super-admin": "Super administrateur",
+  operator: "Opérateur",
+};
+
+const SETTING_KEY_LABELS: Record<string, string> = {
+  maintenance_mode: "Mode maintenance",
+  "materiel.v1": "Liste de matériel",
+  public_holidays: "Jours fériés",
+  peak_start_hour: "Début des heures pleines",
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  booking_ref: "Référence",
+  studio_id: "Studio",
+  date: "Date",
+  date_from: "Du",
+  date_to: "Au",
+  start_time: "Début",
+  end_time: "Fin",
+  group_type: "Formule",
+  status: "Statut",
+  payment_status: "Paiement",
+  reason: "Raison",
+  amount: "Montant",
+  method: "Moyen de paiement",
+  name: "Nom",
+  email: "E-mail",
+  phone: "Téléphone",
+  band_name: "Groupe",
+  role: "Rôle",
+  blocked: "Bloqué",
+  is_active: "Actif",
+  count: "Nombre",
+  code: "Code",
+  type: "Type",
+  value: "Valeur",
+  key: "Paramètre",
+  notes: "Notes",
+  total_price: "Prix total",
+  promo_code: "Code promo",
+  promo_discount: "Réduction",
+  whole_day: "Journée entière",
+  price_per_half_hour: "Tarif (30 min)",
+  equipment_id: "Identifiant équipement",
+  price: "Prix",
+};
+
+type ChangeObj = Record<string, unknown>;
+
+function asChangeObj(changes: unknown): ChangeObj {
+  return changes !== null && typeof changes === "object" && !Array.isArray(changes)
+    ? (changes as ChangeObj)
+    : {};
+}
+
+/** "2026-08-10" → "10 août 2026" (Paris-local reading of a date-only value). */
+function formatDay(dateStr: string): string {
+  const d = new Date(`${dateStr.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function money(value: unknown): string | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? formatPrice(n) : null;
+}
+
+/** Map a stored value to readable French according to its key. */
+function formatFieldValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Oui" : "Non";
+  if (typeof value === "object") return Array.isArray(value) ? `${value.length} élément(s)` : "—";
+  const str = String(value);
+  switch (key) {
+    case "studio_id":
+      return STUDIO_LABELS[str] ?? str;
+    case "group_type":
+      return GROUP_TYPE_LABELS[str] ?? str;
+    case "status":
+      return BOOKING_STATUS_LABELS[str] ?? str;
+    case "payment_status":
+      return PAYMENT_STATUS_LABELS[str] ?? str;
+    case "method":
+    case "previousMethod":
+      return PAYMENT_METHOD_LABELS[str] ?? str;
+    case "role":
+      return ROLE_LABELS[str] ?? str;
+    case "type":
+      return str === "percentage" ? "Pourcentage" : str === "fixed" ? "Montant fixe" : str;
+    case "date":
+    case "date_from":
+    case "date_to":
+      return /^\d{4}-\d{2}-\d{2}/.test(str) ? formatDay(str) : str;
+    case "amount":
+    case "previousAmount":
+    case "total":
+    case "price":
+    case "total_price":
+    case "promo_discount":
+    case "price_per_half_hour": {
+      const m = money(value);
+      return m ?? str;
     }
-    
-    // User-specific formatting
-    if (entityType === "user") {
-      if (obj.name) return `Nom: ${obj.name}`;
-      if (obj.band_name) return `Groupe: ${obj.band_name}`;
-      if (obj.email) return `Email: ${obj.email}`;
+    default:
+      return str;
+  }
+}
+
+/** Generic fallback: labeled lines for every known/unknown stored key. */
+function genericFieldLines(obj: ChangeObj): string[] {
+  return Object.entries(obj)
+    .filter(([k]) => k !== "ids" && k !== "mergedIds") // internal id lists stay in technical data
+    .map(([k, v]) => `${FIELD_LABELS[k] ?? k} : ${formatFieldValue(k, v)}`);
+}
+
+/**
+ * Build a human-readable summary (one string per line) for an audit row.
+ * Covers every action/entity payload the app actually emits; unknown shapes
+ * fall back to labeled generic lines, never raw code.
+ */
+function summarizeLog(log: ApiAuditLog): string[] {
+  const obj = asChangeObj(parseChanges(log.changes));
+  const str = (k: string) => (typeof obj[k] === "string" ? (obj[k] as string) : undefined);
+  const num = (k: string) => (typeof obj[k] === "number" ? (obj[k] as number) : undefined);
+  const compact = (lines: (string | number | null | undefined | false)[]): string[] =>
+    lines.filter((l): l is string => typeof l === "string" && l.length > 0);
+
+  const studio = str("studio_id") ? (STUDIO_LABELS[str("studio_id")!] ?? str("studio_id")!) : undefined;
+  const day = str("date") ? formatDay(str("date")!) : undefined;
+  const session =
+    day && str("start_time")
+      ? `le ${day} de ${str("start_time")} à ${str("end_time") ?? "?"}`
+      : undefined;
+
+  switch (`${log.entity_type}:${log.action}`) {
+    // ─── Réservations ───
+    case "booking:create":
+      return compact([
+        str("booking_ref") && `Référence : ${str("booking_ref")}`,
+        studio && `Studio : ${studio}`,
+        session && `Séance : ${session}`,
+      ]);
+    case "booking:update": {
+      const lines = genericFieldLines(obj);
+      return lines.length > 0 ? lines : ["Modification de la réservation."];
     }
-    
-    // Payment-specific formatting
-    if (entityType === "payment" || entityType === "payments") {
-      if (obj.amount) return `Montant: ${formatPrice(Number(obj.amount))}`;
+    case "booking:cancel":
+      return compact([str("reason") && `Raison : ${str("reason")}`]);
+    case "booking:no-show":
+      return ["Le client ne s'est pas présenté (absence)."];
+    case "booking:complete":
+      return ["La réservation est marquée comme terminée."];
+    case "booking:mark-paid":
+      return compact([
+        money(obj.amount) && `Montant encaissé : ${money(obj.amount)}`,
+        str("method") && `Moyen de paiement : ${PAYMENT_METHOD_LABELS[str("method")!] ?? str("method")}`,
+      ]);
+    case "booking:bulk-delete":
+      return [`${num("bookingsDeleted") ?? "?"} réservation(s) orpheline(s) supprimée(s).`];
+
+    // ─── Paiements ───
+    case "payment:create":
+      return compact([
+        money(obj.amount) && `Montant : ${money(obj.amount)}`,
+        str("method") && `Moyen de paiement : ${PAYMENT_METHOD_LABELS[str("method")!] ?? str("method")}`,
+      ]);
+    case "payment:mark-paid":
+      return ["Paiement marqué comme payé."];
+    case "payment:refund":
+      return compact([
+        money(obj.amount) && `Montant remboursé : ${money(obj.amount)}`,
+        money(obj.total) && `Total remboursé à ce jour : ${money(obj.total)}`,
+      ]);
+    case "payment:update":
+      return compact([
+        money(obj.previousAmount) && money(obj.amount) &&
+          `Montant : ${money(obj.previousAmount)} → ${money(obj.amount)}`,
+        str("previousMethod") && str("method") &&
+          `Moyen de paiement : ${PAYMENT_METHOD_LABELS[str("previousMethod")!] ?? str("previousMethod")} → ${PAYMENT_METHOD_LABELS[str("method")!] ?? str("method")}`,
+      ]);
+    case "payment:delete":
+      return compact([money(obj.amount) && `Paiement de ${money(obj.amount)} supprimé.`]);
+
+    // ─── Clients ───
+    case "user:create":
+      return compact([str("name") && `Nom : ${str("name")}`, str("email") && `E-mail : ${str("email")}`]);
+    case "user:update": {
+      const lines = genericFieldLines(obj);
+      return lines.length > 0 ? lines : ["Modification de la fiche client."];
     }
-    
-    // Setting-specific formatting
-    if (entityType === "setting") {
-      if (obj.key && obj.value !== undefined) return `${obj.key}: ${obj.value}`;
-      if (obj.key) return obj.key as string;
+    case "user:block":
+      return ["Le compte client a été bloqué."];
+    case "user:unblock":
+      return ["Le compte client a été débloqué."];
+    case "user:merge": {
+      const emails = Array.isArray(obj.mergedEmails) ? (obj.mergedEmails as unknown[]).map(String) : [];
+      const count = Array.isArray(obj.mergedIds) ? obj.mergedIds.length : emails.length;
+      return compact([
+        `${count || "?"} compte(s) fusionné(s) dans cette fiche.`,
+        emails.length > 0 && `E-mails fusionnés : ${emails.join(", ")}`,
+      ]);
     }
-    
-    // Promo-specific formatting
-    if (entityType === "promo") {
-      if (obj.code) return `Code: ${obj.code}`;
+
+    // ─── Créneaux bloqués ───
+    case "blocked_slot:create":
+    case "blocked_slot:create-range": {
+      const from = str("date_from") ? formatDay(str("date_from")!) : undefined;
+      const to = str("date_to") ? formatDay(str("date_to")!) : undefined;
+      const period = from && to && from !== to ? `Du ${from} au ${to}` : from ? `Le ${from}` : undefined;
+      const hours =
+        obj.whole_day === true
+          ? "Journée entière"
+          : str("start_time")
+            ? `De ${str("start_time")} à ${str("end_time") ?? "?"}`
+            : undefined;
+      return compact([
+        `Studio : ${studio ?? "Les deux studios"}`,
+        period,
+        hours,
+        num("count") && num("count")! > 1 && `${num("count")} créneau(x) bloqué(s)`,
+        str("reason") && `Raison : ${str("reason")}`,
+      ]);
     }
-    
-    // Generic fallback with readable labels
-    const labels: Record<string, string> = {
-      status: "Statut", payment_status: "Paiement", price: "Prix",
-      name: "Nom", email: "Email", phone: "Tél", reason: "Raison",
-      blocked: "Bloqué", is_active: "Actif", role: "Rôle"
-    };
-    
-    const entries = Object.entries(obj).slice(0, 2);
-    if (entries.length > 0) {
-      return entries.map(([k, v]) => {
-        const label = labels[k] || k;
-        const val = String(v).slice(0, 20);
-        return `${label}: ${val}`;
-      }).join(", ");
+    case "blocked_slot:delete":
+      return ["Créneau débloqué."];
+
+    // ─── Paramètres / tarifs / équipements / promos / horaires ───
+    case "setting:create":
+    case "setting:update": {
+      const key = str("key") ?? log.entity_id;
+      return compact([
+        `Paramètre : ${SETTING_KEY_LABELS[key] ?? key}`,
+        obj.value !== undefined && `Nouvelle valeur : ${formatSettingValue(key, obj.value)}`,
+        obj.previous_value !== undefined && obj.previous_value !== null &&
+          `Ancienne valeur : ${formatSettingValue(key, obj.previous_value)}`,
+      ]);
+    }
+    case "pricing:update":
+      return compact([money(obj.price_per_half_hour) && `Nouveau tarif : ${money(obj.price_per_half_hour)} / 30 min`]);
+    case "equipment:create":
+      return compact([str("name") && `Nom : ${str("name")}`]);
+    case "equipment:update": {
+      const lines = genericFieldLines(obj);
+      return lines.length > 0 ? lines : ["Modification de l'équipement."];
+    }
+    case "equipment:delete":
+      return ["Équipement supprimé."];
+    case "promo:create":
+      return compact([
+        str("code") && `Code : ${str("code")}`,
+        str("type") === "percentage" && obj.value !== undefined && `Réduction : ${String(obj.value)} %`,
+        str("type") === "fixed" && money(obj.value) && `Réduction : ${money(obj.value)}`,
+      ]);
+    case "promo:update": {
+      const lines = genericFieldLines(obj);
+      return lines.length > 0 ? lines : ["Modification du code promo."];
+    }
+    case "promo:delete":
+      return ["Code promo supprimé."];
+    case "opening_hours:batch-update":
+      return compact([num("count") && `${num("count")} horaire(s) d'ouverture mis à jour.`]);
+
+    // ─── Comptes administrateurs ───
+    case "admin_user:create":
+      return compact([
+        str("name") && `Nom : ${str("name")}`,
+        str("email") && `E-mail : ${str("email")}`,
+        str("role") && `Rôle : ${ROLE_LABELS[str("role")!] ?? str("role")}`,
+      ]);
+    case "admin_user:role_update":
+      return compact([str("role") && `Nouveau rôle : ${ROLE_LABELS[str("role")!] ?? str("role")}`]);
+    case "admin_user:delete":
+      return ["Compte administrateur supprimé."];
+    case "admin_user:activate":
+      return ["Compte administrateur activé."];
+    case "admin_user:deactivate":
+      return ["Compte administrateur désactivé."];
+    case "admin_user:change-password":
+      return ["Mot de passe du compte administrateur modifié."];
+
+    // ─── Intégrations ───
+    case "instagram:sync":
+      return compact([num("count") !== undefined && `${num("count")} publication(s) Instagram synchronisée(s).`]);
+    case "settings:update_token":
+      return ["Jeton d'accès Instagram mis à jour."];
+    case "reviews:sync":
+      return compact([
+        num("reviewsCount") !== undefined && `${num("reviewsCount")} avis Google synchronisés.`,
+        num("averageRating") !== undefined && `Note moyenne : ${num("averageRating")}/5`,
+      ]);
+
+    default: {
+      const lines = genericFieldLines(obj);
+      return lines.length > 0 ? lines : ["Aucun détail disponible."];
     }
   }
-  return "—";
+}
+
+/** Setting values: booleans become Activé/Désactivé, hours stay readable. */
+function formatSettingValue(key: string, value: unknown): string {
+  if (typeof value === "boolean") return value ? "Activé" : "Désactivé";
+  if (key === "peak_start_hour" && Number.isFinite(Number(value))) return `${Number(value)}h`;
+  if (typeof value === "object" && value !== null) return "Voir données techniques";
+  return String(value);
+}
+
+/** Identity lines for the table's entity cell — never a raw internal id first. */
+function getIdentityLines(log: ApiAuditLog): string[] {
+  const lines: string[] = [];
+  if ((log.entity_type === "booking" || log.entity_type === "payment" || log.entity_type === "payments")) {
+    lines.push(log.booking_ref ? `Réf. ${log.booking_ref}` : log.entity_type === "booking" ? "Réservation supprimée" : "Référence indisponible");
+  }
+  if ((log.entity_type === "booking" || log.entity_type === "user") && log.user_email) {
+    lines.push(`Client : ${log.user_email}`);
+  }
+  if (log.entity_type === "user" && !log.user_email) {
+    lines.push("Compte supprimé");
+  }
+  return lines;
+}
+
+/** Actor display: admin name when known, plain fallback for the literal "admin". */
+function getActorLabel(log: ApiAuditLog): string {
+  if (log.admin_name) return log.admin_name;
+  return log.performed_by === "admin" ? "Administrateur" : log.performed_by;
 }
 // ─── Detail Dialog ──────────────────────────────────────────────────────────────
 
@@ -207,7 +528,9 @@ function AuditDetailDialog({
   const entityCfg = getEntityConfig(log.entity_type);
   const actionCfg = getActionConfig(log.action);
   const changes = parseChanges(log.changes);
+  const summaryLines = summarizeLog(log);
   const EntityIcon = entityCfg.icon;
+  const isBookingLike = log.entity_type === "booking" || log.entity_type === "payment" || log.entity_type === "payments";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -218,7 +541,7 @@ function AuditDetailDialog({
             Détail de l&apos;action
           </DialogTitle>
           <DialogDescription>
-            {actionCfg.label} sur {entityCfg.label.toLowerCase()} — {formatDateTime(log.created_at)}
+            {actionCfg.label} — {entityCfg.label.toLowerCase()} — {formatDateTime(log.created_at)}
           </DialogDescription>
         </DialogHeader>
 
@@ -227,11 +550,15 @@ function AuditDetailDialog({
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
               <p className="mb-1 text-xs text-zinc-500">Entité</p>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="border-zinc-700">
                   {entityCfg.label}
                 </Badge>
-                <span className="font-mono text-xs text-zinc-400">{log.entity_id}</span>
+                {isBookingLike && log.booking_ref ? (
+                  <span className="text-xs text-zinc-300">Réf. {log.booking_ref}</span>
+                ) : (
+                  <span className="font-mono text-xs text-zinc-500">{log.entity_id}</span>
+                )}
               </div>
             </div>
             <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
@@ -240,23 +567,43 @@ function AuditDetailDialog({
             </div>
             <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
               <p className="mb-1 text-xs text-zinc-500">Réalisé par</p>
-              <p className="font-medium text-zinc-200">{log.performed_by}</p>
+              <p className="font-medium text-zinc-200">{getActorLabel(log)}</p>
             </div>
             <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
               <p className="mb-1 text-xs text-zinc-500">Date</p>
               <p className="font-medium text-zinc-200">{formatDateTime(log.created_at)}</p>
             </div>
+            {log.user_email && (
+              <div className="col-span-2 rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+                <p className="mb-1 text-xs text-zinc-500">Client</p>
+                <p className="break-all font-medium text-zinc-200">{log.user_email}</p>
+              </div>
+            )}
           </div>
 
-          {/* Changes JSON */}
+          {/* Résumé lisible */}
           <div>
-            <p className="mb-2 text-sm font-medium text-zinc-300">Changements</p>
-            <div className="max-h-72 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-zinc-300">
+            <p className="mb-2 text-sm font-medium text-zinc-300">Résumé</p>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+              <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-200">
+                {summaryLines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Données brutes — support/debug uniquement */}
+          <details className="group rounded-lg border border-zinc-800 bg-zinc-950">
+            <summary className="cursor-pointer select-none px-4 py-2.5 text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-300">
+              Données techniques
+            </summary>
+            <div className="max-h-72 overflow-auto border-t border-zinc-800 p-4">
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-zinc-400">
                 {formatJsonPretty(changes)}
               </pre>
             </div>
-          </div>
+          </details>
         </div>
       </DialogContent>
     </Dialog>
@@ -307,11 +654,14 @@ export function AdminAuditLog() {
       if (json.success) {
         setLogs(json.data.data);
         setTotal(json.data.total);
-        // Extract unique admins with names from the logs
+        // Extract unique admins with display names from the logs
         const adminMap = new Map<string, string>();
         for (const log of json.data.data) {
           if (!adminMap.has(log.performed_by)) {
-            adminMap.set(log.performed_by, log.admin_name || log.performed_by);
+            adminMap.set(
+              log.performed_by,
+              log.admin_name || (log.performed_by === "admin" ? "Administrateur" : log.performed_by)
+            );
           }
         }
         const adminList = Array.from(adminMap.entries())
@@ -336,7 +686,7 @@ export function AdminAuditLog() {
     setPage(1);
   }, [entityTypeFilter, actionFilter, adminFilter, dateFrom, dateTo, sortBy, sortOrder]);
 
-  // Client-side search on entity_id, action, performed_by
+  // Client-side search on identity fields, actor, content
   const filteredLogs = searchQuery
     ? logs.filter((log) => {
         const q = searchQuery.toLowerCase();
@@ -345,6 +695,9 @@ export function AdminAuditLog() {
           log.action.toLowerCase().includes(q) ||
           log.performed_by.toLowerCase().includes(q) ||
           log.entity_type.toLowerCase().includes(q) ||
+          (log.booking_ref && log.booking_ref.toLowerCase().includes(q)) ||
+          (log.user_email && log.user_email.toLowerCase().includes(q)) ||
+          (log.admin_name && log.admin_name.toLowerCase().includes(q)) ||
           (log.changes && log.changes.toLowerCase().includes(q))
         );
       })
@@ -425,6 +778,9 @@ export function AdminAuditLog() {
             <option value="pricing">Tarif</option>
             <option value="blocked_slot">Créneau bloqué</option>
             <option value="opening_hours">Horaires</option>
+            <option value="admin_user">Compte admin</option>
+            <option value="instagram">Instagram</option>
+            <option value="reviews">Avis Google</option>
           </select>
           <select
             value={actionFilter}
@@ -433,10 +789,13 @@ export function AdminAuditLog() {
           >
             <option value="all">Action</option>
             <option value="create">Création</option>
+            <option value="create-range">Création (plage)</option>
             <option value="update">Modification</option>
             <option value="delete">Suppression</option>
+            <option value="bulk-delete">Suppression groupée</option>
             <option value="cancel">Annulation</option>
             <option value="no-show">Absent</option>
+            <option value="complete">Terminée</option>
             <option value="mark-paid">Payé</option>
             <option value="refund">Remboursement</option>
             <option value="block">Blocage</option>
@@ -444,6 +803,12 @@ export function AdminAuditLog() {
             <option value="merge">Fusion</option>
             <option value="reschedule">Replanification</option>
             <option value="batch-update">Mise à jour groupée</option>
+            <option value="sync">Synchronisation</option>
+            <option value="update_token">Jeton mis à jour</option>
+            <option value="role_update">Changement de rôle</option>
+            <option value="activate">Activation</option>
+            <option value="deactivate">Désactivation</option>
+            <option value="change-password">Mot de passe</option>
           </select>
           <select
             value={adminFilter}
@@ -576,8 +941,8 @@ export function AdminAuditLog() {
                 const entityCfg = getEntityConfig(log.entity_type);
                 const actionCfg = getActionConfig(log.action);
                 const EntityIcon = entityCfg.icon;
-                const changes = parseChanges(log.changes);
-                const changesPreview = formatChangesPreview(changes, log.entity_type);
+                const summaryLines = summarizeLog(log);
+                const identityLines = getIdentityLines(log);
                 return (
                   <tr
                     key={log.id}
@@ -591,23 +956,31 @@ export function AdminAuditLog() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-sm text-zinc-300">{log.performed_by}</span>
+                      <span className="text-sm text-zinc-300">{getActorLabel(log)}</span>
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={actionCfg.variant}>{actionCfg.label}</Badge>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <EntityIcon className={`h-4 w-4 ${entityCfg.color}`} />
+                        <EntityIcon className={`h-4 w-4 shrink-0 ${entityCfg.color}`} />
                         <div>
                           <p className="text-sm">{entityCfg.label}</p>
-                          <p className="font-mono text-xs text-zinc-500">{log.entity_id}</p>
+                          {identityLines.length > 0 ? (
+                            identityLines.map((line, i) => (
+                              <p key={i} className={`text-xs ${i === 0 ? "text-zinc-400" : "text-zinc-500"}`}>
+                                {line}
+                              </p>
+                            ))
+                          ) : (
+                            <p className="font-mono text-xs text-zinc-600">{log.entity_id}</p>
+                          )}
                         </div>
                       </div>
                     </td>
-                    <td className="max-w-[200px] px-4 py-3">
-                      <p className="truncate font-mono text-xs text-zinc-500">
-                        {changesPreview}{changesPreview.length >= 60 ? "…" : ""}
+                    <td className="max-w-[240px] px-4 py-3">
+                      <p className="truncate text-xs text-zinc-400">
+                        {summaryLines[0] ?? "—"}
                       </p>
                     </td>
                     <td className="px-4 py-3">

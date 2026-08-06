@@ -11,6 +11,7 @@ import {
   type DbOpeningHours,
   type DbSetting,
   type DbAuditLog,
+  type DbAuditLogWithDetails,
   type PaginatedResult,
   type BookingFilters,
   type UserFilters,
@@ -1422,32 +1423,32 @@ export async function getAuditLogs(
   limit = 50,
   sortBy = "date",
   sortOrder = "desc",
-): Promise<PaginatedResult<DbAuditLog & { admin_name?: string | null }>> {
+): Promise<PaginatedResult<DbAuditLogWithDetails>> {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
   if (filters.entityType) {
-    conditions.push("entity_type = ?");
+    conditions.push("a.entity_type = ?");
     params.push(filters.entityType);
   }
   if (filters.entityId) {
-    conditions.push("entity_id = ?");
+    conditions.push("a.entity_id = ?");
     params.push(filters.entityId);
   }
   if (filters.action) {
-    conditions.push("action = ?");
+    conditions.push("a.action = ?");
     params.push(filters.action);
   }
   if (filters.performedBy) {
-    conditions.push("performed_by = ?");
+    conditions.push("a.performed_by = ?");
     params.push(filters.performedBy);
   }
   if (filters.dateFrom) {
-    conditions.push("created_at >= ?");
+    conditions.push("a.created_at >= ?");
     params.push(filters.dateFrom);
   }
   if (filters.dateTo) {
-    conditions.push("created_at <= ?");
+    conditions.push("a.created_at <= ?");
     params.push(filters.dateTo);
   }
 
@@ -1462,8 +1463,17 @@ export async function getAuditLogs(
 
   const offset = (page - 1) * limit;
   const result = await db.prepare(
-    `SELECT a.*, au.name as admin_name FROM audit_logs a LEFT JOIN admin_users au ON a.performed_by = au.id ${where} ORDER BY ${orderColumn} ${orderDirection} LIMIT ? OFFSET ?`,
-  ).bind(...params, limit, offset).all<DbAuditLog & { admin_name: string | null }>();
+    `SELECT a.*, au.name as admin_name, b.booking_ref as booking_ref,
+            COALESCE(booking_user.email, entity_user.email) as user_email
+     FROM audit_logs a
+     LEFT JOIN admin_users au ON a.performed_by = au.id
+     LEFT JOIN payments p ON a.entity_type = 'payment' AND p.id = a.entity_id
+     LEFT JOIN bookings b ON (a.entity_type = 'booking' AND b.id = a.entity_id)
+                          OR (a.entity_type = 'payment' AND b.id = p.booking_id)
+     LEFT JOIN users booking_user ON b.user_id = booking_user.id
+     LEFT JOIN users entity_user ON a.entity_type = 'user' AND entity_user.id = a.entity_id
+     ${where} ORDER BY a.${orderColumn} ${orderDirection} LIMIT ? OFFSET ?`,
+  ).bind(...params, limit, offset).all<DbAuditLogWithDetails>();
 
   return { data: result.results, total, page, limit };
 }
