@@ -65,7 +65,7 @@ const ALL_NAV_ITEMS = [
   { href: "/admin/users", label: "Clients", icon: Users, superAdminOnly: false },
   { href: "/admin/payments", label: "Paiements", icon: CreditCard, superAdminOnly: false },
   { href: "/admin/equipements", label: "Équipements", icon: Package, superAdminOnly: true },
-  { href: "/admin/pricing", label: "Tarifs", icon: Euro, superAdminOnly: true },
+  { href: "/admin/pricing", label: "Tarification", icon: Euro, superAdminOnly: true },
   { href: "/admin/settings", label: "Paramètres", icon: Settings, superAdminOnly: true },
   { href: "/admin/audit-log", label: "Journal d'audit", icon: FileText, superAdminOnly: true },
 ];
@@ -108,7 +108,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zinc-900 transition-all duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zinc-900 transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } ${sidebarCollapsed ? "w-16" : "w-56"}`}
       >
