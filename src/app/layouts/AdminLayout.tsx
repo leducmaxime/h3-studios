@@ -108,7 +108,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zinc-900 transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zinc-900 transition-all duration-200 lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } ${sidebarCollapsed ? "w-16" : "w-56"}`}
       >
@@ -178,7 +178,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        className={`flex min-w-0 flex-1 flex-col transition-all duration-200 ${
+          sidebarCollapsed ? "lg:pl-16" : "lg:pl-56"
+        }`}
+      >
         <header className="flex h-16 items-center gap-4 border-b border-zinc-800 bg-zinc-900/50 px-4 backdrop-blur lg:px-6">
           <button
             type="button"
