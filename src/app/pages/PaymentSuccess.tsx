@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Calendar, Clock, Home, Loader2, PackageCheck } from "lucide-react";
 import { STUDIOS, formatDate, formatDuration, formatPrice, type GroupType, type StudioId } from "@/lib/booking";
+import { useEquipment } from "@/components/booking/useEquipment";
 
 interface PaymentSuccessProps {
   paymentId?: string;
@@ -42,11 +43,26 @@ const GROUP_LABELS: Record<GroupType, string> = {
   group: "Groupe (3+)",
 };
 
+/** Defensive parse of the API's unknown[] equipment payload: keep only
+    well-formed items with a positive quantity. */
+function parseEquipment(raw: unknown[]): { id: string; quantity: number }[] {
+  return raw.filter(
+    (e): e is { id: string; quantity: number } =>
+      typeof e === "object" &&
+      e !== null &&
+      typeof (e as { id?: unknown }).id === "string" &&
+      typeof (e as { quantity?: unknown }).quantity === "number" &&
+      (e as { quantity: number }).quantity > 0
+  );
+}
+
 export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
   const [session, setSession] = useState<SessionData | null>(null);
   const [fallback, setFallback] = useState<FallbackData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isVisible, setIsVisible] = useState(false);
+  // Canonical DB-driven equipment catalog (same lookup as FinalCheckout).
+  const { getEquipmentName } = useEquipment();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -154,7 +170,9 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                   </h2>
                 </div>
                 <div className="space-y-3">
-                  {sortedBookings.map((booking) => (
+                  {sortedBookings.map((booking) => {
+                    const equipmentItems = parseEquipment(booking.equipment);
+                    return (
                     <div
                       key={booking.ref}
                       className="rounded-xl border border-white/20 bg-black/30 p-4"
@@ -178,10 +196,19 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                       <p className="mt-1 text-xs text-white/40">
                         {GROUP_LABELS[booking.groupType] ?? booking.groupType}
                       </p>
-                      {booking.equipment.length > 0 && booking.equipmentPrice > 0 && (
-                        <p className="mt-1 text-xs text-white/40">
-                          Équipements supplémentaires : {formatPrice(booking.equipmentPrice)}
-                        </p>
+                      {equipmentItems.length > 0 && (
+                        <div className="mt-1.5 space-y-0.5">
+                          {booking.equipmentPrice > 0 && (
+                            <p className="text-xs text-white/40">
+                              Équipements supplémentaires : {formatPrice(booking.equipmentPrice)}
+                            </p>
+                          )}
+                          {equipmentItems.map((item) => (
+                            <p key={item.id} className="text-xs text-white/40">
+                              + {getEquipmentName(item.id)}{item.quantity > 1 ? ` ×${item.quantity}` : ""}
+                            </p>
+                          ))}
+                        </div>
                       )}
                       {booking.promoDiscount > 0 && (
                         <p className="mt-1 text-xs text-green-400">
@@ -189,7 +216,8 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                         </p>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
