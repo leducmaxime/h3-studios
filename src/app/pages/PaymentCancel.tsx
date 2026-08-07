@@ -13,18 +13,18 @@ export function PaymentCancel() {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
-      <div className={`w-full max-w-[600px] px-2 sm:px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+      <div className={`w-full max-w-[600px] px-2 lg:px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <div className="relative overflow-hidden rounded-2xl border-4 border-yellow-500 bg-black/90 backdrop-blur">
           <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent" />
 
-          <div className="relative p-6 sm:p-8 text-center">
+          <div className="relative p-6 lg:p-8 text-center">
             <div className="mb-6 flex justify-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/20">
                 <XCircle className="h-12 w-12 text-yellow-500" />
               </div>
             </div>
 
-            <h1 className="mb-2 font-blanka text-2xl sm:text-3xl text-yellow-400">
+            <h1 className="mb-2 font-blanka text-2xl lg:text-3xl text-yellow-400">
               PAIEMENT ANNULE
             </h1>
             

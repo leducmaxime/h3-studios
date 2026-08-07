@@ -1,6 +1,6 @@
 export function Footer() {
   return (
-    <footer className="mt-auto w-full border-t border-white/5 bg-black px-2 sm:px-4 py-6">
+    <footer className="mt-auto w-full border-t border-white/5 bg-black px-2 lg:px-4 py-6">
       <div className="mx-auto flex max-w-6xl items-center justify-center gap-4 text-xs text-white/30 flex-wrap">
         <a href="/mentions-legales" className="transition-colors hover:text-primary">
           Mentions Légales

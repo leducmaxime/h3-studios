@@ -10,6 +10,9 @@
   --font-secondary: "Inter", sans-serif;
   --font-blanka: "Blanka", sans-serif;
 
+  /* Breakpoints unchanged in @theme: tablet-as-mobile is achieved by
+     rewriting xs:/sm:/md: utilities to lg: in source (equal min-width
+     values break the variant cascade in the emitted CSS). */
   --breakpoint-xs: 450px;
   --breakpoint-sm: 575px;
   --breakpoint-md: 768px;
@@ -119,17 +122,14 @@
     padding-right: 0.5rem;
   }
 
+  /* Tablet (575–991px) renders the mobile layout, so the content column
+     is capped at 640px and centered: wide enough to breathe, narrow
+     enough that text, forms and cards keep an intentional measure. */
   @media (min-width: 575px) {
     .container {
-      max-width: 540px;
+      max-width: 640px;
       padding-left: 1rem;
       padding-right: 1rem;
-    }
-  }
-
-  @media (min-width: 768px) {
-    .container {
-      max-width: 720px;
     }
   }
 

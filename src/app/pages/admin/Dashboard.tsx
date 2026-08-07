@@ -495,7 +495,7 @@ function ActivityCalendarYear({
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {months.map((monthIdx) => {
           const monthKey = `${year}-${String(monthIdx + 1).padStart(2, "0")}`;
           const grid = getMonthGrid(year, monthIdx);
@@ -1307,12 +1307,12 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Tableau de bord</h1>
           <p className="text-zinc-400">Vue d&apos;ensemble de votre activité</p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="flex flex-wrap items-center gap-2">
             <Select value={rangeMode} onValueChange={(v) => {
               const mode = v as "today" | "week" | "month" | "year" | "custom";
@@ -1428,8 +1428,8 @@ export function AdminDashboard() {
             className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-black transition-colors hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Nouvelle réservation</span>
-            <span className="sm:hidden">Réserver</span>
+            <span className="hidden lg:inline">Nouvelle réservation</span>
+            <span className="lg:hidden">Réserver</span>
           </a>
         </div>
       </div>
@@ -1632,8 +1632,8 @@ export function AdminDashboard() {
 
                 return (
                   <div className="h-[280px]">
-                    <div className="flex h-full flex-col gap-4 sm:flex-row sm:items-center">
-                      <div className="h-[220px] w-full sm:h-full sm:w-1/2">
+                    <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-center">
+                      <div className="h-[220px] w-full lg:h-full lg:w-1/2">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
@@ -1657,7 +1657,7 @@ export function AdminDashboard() {
                         </ResponsiveContainer>
                       </div>
 
-                      <div className="w-full sm:w-1/2">
+                      <div className="w-full lg:w-1/2">
                         <div className="space-y-2">
                           {labels.map((l, i) => (
                             <div key={l.studio} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
@@ -1689,8 +1689,8 @@ export function AdminDashboard() {
                   });
 
                   return (
-                    <div className="flex h-full flex-col gap-4 sm:flex-row sm:items-center">
-                      <div className="h-[220px] w-full sm:h-full sm:w-1/2">
+                    <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-center">
+                      <div className="h-[220px] w-full lg:h-full lg:w-1/2">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
@@ -1714,7 +1714,7 @@ export function AdminDashboard() {
                         </ResponsiveContainer>
                       </div>
 
-                      <div className="w-full sm:w-1/2">
+                      <div className="w-full lg:w-1/2">
                         <div className="space-y-2">
                           {labels.map((l, i) => (
                             <div key={l.method} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">

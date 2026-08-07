@@ -95,10 +95,10 @@ export function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="min-h-[80vh] bg-black flex items-start justify-center px-2 sm:px-4 pt-32 pb-16">
+      <div className="min-h-[80vh] bg-black flex items-start justify-center px-2 lg:px-4 pt-32 pb-16">
         <div className="w-full max-w-md">
           <div className="mb-12 text-center">
-            <h1 className="font-blanka text-4xl md:text-5xl">MOT DE PASSE</h1>
+            <h1 className="font-blanka text-4xl lg:text-5xl">MOT DE PASSE</h1>
             <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           </div>
           <div className="rounded-2xl border border-red-900/50 bg-red-950/30 p-8 text-center">
@@ -120,10 +120,10 @@ export function ResetPassword() {
   }
 
   return (
-    <div className="min-h-[80vh] bg-black flex items-start justify-center px-2 sm:px-4 pt-32 pb-16">
+    <div className="min-h-[80vh] bg-black flex items-start justify-center px-2 lg:px-4 pt-32 pb-16">
       <div className="w-full max-w-md">
         <div className="mb-12 text-center">
-          <h1 className="font-blanka text-4xl md:text-5xl">MOT DE PASSE</h1>
+          <h1 className="font-blanka text-4xl lg:text-5xl">MOT DE PASSE</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
         </div>
 

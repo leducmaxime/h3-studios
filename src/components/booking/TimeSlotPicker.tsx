@@ -633,7 +633,7 @@ export function TimeSlotPicker({
                 aria-describedby={hint ? hintId : undefined}
               >
                 <div className="flex h-full items-center justify-center">
-                  <span className="text-[11px] font-semibold leading-none sm:text-xs">
+                  <span className="text-[11px] font-semibold leading-none lg:text-xs">
                     {formatHourLabel(slot)}
                   </span>
                 </div>
@@ -731,7 +731,7 @@ export function TimeSlotPicker({
         </div>
 
         {/* Two studios side by side on desktop, stacked on mobile */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {renderStudioBlock("la-scene")}
           {renderStudioBlock("le-podium")}
         </div>

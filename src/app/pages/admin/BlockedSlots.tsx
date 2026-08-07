@@ -318,16 +318,16 @@ export function AdminBlockedSlots() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between flex-wrap">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-white sm:text-3xl">Blocages d'Agenda</h1>
+          <h1 className="text-2xl font-bold text-white lg:text-3xl">Blocages d'Agenda</h1>
           <p className="mt-1 text-sm text-zinc-400">
             Gérez les créneaux et journées non disponibles pour les réservations
           </p>
         </div>
         <Button
           onClick={() => setAddDialogOpen(true)}
-          className="w-full gap-2 bg-primary text-black hover:bg-primary/90 sm:w-auto"
+          className="w-full gap-2 bg-primary text-black hover:bg-primary/90 lg:w-auto"
         >
           <Plus className="h-4 w-4" />
           <span className="whitespace-nowrap">Bloquer</span>
@@ -453,7 +453,7 @@ export function AdminBlockedSlots() {
       )}
 
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="border-white/10 bg-zinc-900 text-white sm:max-w-[500px]">
+        <DialogContent className="border-white/10 bg-zinc-900 text-white lg:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Bloquer un créneau ou une journée</DialogTitle>
             <DialogDescription>

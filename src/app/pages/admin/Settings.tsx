@@ -115,7 +115,7 @@ function BookingRulesTab({ settings, onUpdate }: {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -187,7 +187,7 @@ function BookingRulesTab({ settings, onUpdate }: {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <ToggleCard
           icon={<Phone className="h-4 w-4" />}
           label="Téléphone obligatoire"
@@ -885,7 +885,7 @@ export function AdminSettings() {
       </div>
 
       <Tabs defaultValue="booking" className="w-full">
-        <TabsList className="w-full sm:w-auto">
+        <TabsList className="w-full lg:w-auto">
           <TabsTrigger value="booking" className="gap-2">
             <Clock className="h-4 w-4" />
             Règles de réservation

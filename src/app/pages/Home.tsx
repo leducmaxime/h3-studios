@@ -35,7 +35,7 @@ export function Home() {
 
       <div className="w-full max-w-6xl px-4">
         <h1 className="sr-only">H3 Studios - Studios de Répétition à Sucy-en-Brie</h1>
-        <div className="flex min-h-[calc(100dvh-6rem)] flex-col items-center justify-center md:min-h-[calc(100dvh-8rem)]">
+        <div className="flex min-h-[calc(100dvh-6rem)] flex-col items-center justify-center lg:min-h-[calc(100dvh-8rem)]">
           <div className={`mb-8 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
             <img
               src="/images/home/hero.webp"
@@ -53,17 +53,17 @@ export function Home() {
           </div>
 
           <div className={`mb-8 flex flex-col items-center gap-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
-            <div className="flex flex-col items-center gap-4 sm:flex-row">
+            <div className="flex flex-col items-center gap-4 lg:flex-row">
               <a
                 href="/reservation"
-                className="group inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 md:px-12 md:py-5 md:text-2xl"
+                className="group inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 lg:px-12 lg:py-5 lg:text-2xl"
               >
-                <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1 md:h-7 md:w-7" />
+                <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1 lg:h-7 lg:w-7" />
                 Réserver maintenant
               </a>
               <a
                 href="/les-studios"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 bg-black px-8 py-4 text-base font-medium text-white transition-all hover:border-primary/60 hover:bg-black/80 hover:text-primary md:px-10 md:py-5 md:text-lg"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 bg-black px-8 py-4 text-base font-medium text-white transition-all hover:border-primary/60 hover:bg-black/80 hover:text-primary lg:px-10 lg:py-5 lg:text-lg"
               >
                 Découvrir les studios
               </a>
@@ -90,7 +90,7 @@ export function Home() {
           </div>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mx-auto grid gap-6 sm:max-w-[640px] lg:max-w-none lg:grid-cols-3">
           {services.map((service, i) => {
             const Icon = service.icon;
             return (
@@ -116,11 +116,11 @@ export function Home() {
         </div>
 
         {/* Quote */}
-        <div className={`mx-auto mt-20 max-w-5xl text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "600ms" }}>
+        <div className={`mx-auto mt-20 max-w-5xl sm:max-w-2xl lg:max-w-5xl text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "600ms" }}>
           <div className="mb-6 flex justify-center">
             <Star className="h-8 w-8 text-primary/60" />
           </div>
-          <blockquote className="text-xl font-light italic leading-relaxed text-white/80 md:text-2xl">
+          <blockquote className="text-xl font-light italic leading-relaxed text-white/80 lg:text-2xl">
             "La musique est le langage universel qui transcende les mots.
             <br />
             Notre mission est de vous offrir un espace où chaque note trouve sa place."

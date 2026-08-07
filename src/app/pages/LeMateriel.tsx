@@ -102,9 +102,9 @@ export function LeMateriel() {
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
       <ScrollUp />
 
-      <div className="w-full max-w-6xl px-2 sm:px-4">
+      <div className="w-full max-w-6xl sm:max-w-[640px] lg:max-w-6xl px-2 lg:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">LE MATERIEL</h1>
+          <h1 className="font-blanka text-4xl lg:text-6xl">LE MATERIEL</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           <p className="mt-6 text-lg text-white/60 max-w-2xl mx-auto">
             Du matériel de qualité professionnelle pour des répétitions et enregistrements dans les meilleures conditions
@@ -143,10 +143,10 @@ export function LeMateriel() {
 
         <div className="mt-20">
           <div className="mb-8 text-center">
-            <h2 className="font-blanka text-2xl md:text-3xl">EQUIPEMENT D'ENREGISTREMENT</h2>
+            <h2 className="font-blanka text-2xl lg:text-3xl">EQUIPEMENT D'ENREGISTREMENT</h2>
             <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-primary/50" />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3">
             {materiel.recording.map((item, i) => (
               <RecordingCard key={item.id} item={item} index={i} isVisible={isVisible} />
             ))}
@@ -155,11 +155,11 @@ export function LeMateriel() {
 
         <div className="mt-20">
           <div className="mb-8 text-center">
-            <h2 className="font-blanka text-2xl md:text-3xl">LOCATION D'INSTRUMENTS</h2>
+            <h2 className="font-blanka text-2xl lg:text-3xl">LOCATION D'INSTRUMENTS</h2>
             <div className="mx-auto mt-3 h-0.5 w-16 rounded-full bg-primary/50" />
             <p className="mt-3 text-sm text-white/50">Disponibles sur demande lors de votre réservation</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3">
             {materiel.rental.map((item, i) => (
               <RecordingCard key={item.id} item={item} index={i} isVisible={isVisible} />
             ))}

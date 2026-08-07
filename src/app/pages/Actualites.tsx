@@ -89,9 +89,9 @@ export function Actualites() {
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
       <ScrollUp />
 
-      <div className="w-full max-w-6xl px-2 sm:px-4">
+      <div className="w-full max-w-6xl sm:max-w-[640px] lg:max-w-6xl px-2 lg:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">ACTUALITES</h1>
+          <h1 className="font-blanka text-4xl lg:text-6xl">ACTUALITES</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
         </div>
 
@@ -122,7 +122,7 @@ export function Actualites() {
             Aucune publication trouvée.
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 lg:grid-cols-3">
             {posts.map((post, i) => {
               const currentImage = getCurrentImage(post);
               const hasCarousel = post.children && post.children.length > 1;

@@ -214,7 +214,7 @@ export function Reservation({ step }: ReservationProps) {
     };
 
     return (
-      <div className="flex flex-col gap-5 pb-24 md:pb-0">
+      <div className="flex flex-col gap-5 pb-24 lg:pb-0">
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
           <div className="mb-3 flex items-center gap-2">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20">
@@ -365,7 +365,7 @@ export function Reservation({ step }: ReservationProps) {
         <button
           onClick={handleConfirmRecap}
           disabled={!grid}
-          className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 md:block"
+          className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 lg:block"
         >
           {grid ? `Ajouter au panier - ${formatPrice(grandTotal)}` : pricingError ? "Tarifs indisponibles" : "Chargement des tarifs…"}
         </button>
@@ -388,7 +388,7 @@ export function Reservation({ step }: ReservationProps) {
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
           <WrenchIcon className="h-10 w-10" />
         </div>
-        <h1 className="font-blanka text-3xl md:text-4xl">MAINTENANCE</h1>
+        <h1 className="font-blanka text-3xl lg:text-4xl">MAINTENANCE</h1>
         <p className="max-w-md text-zinc-400 leading-relaxed">
           Les réservations en ligne sont temporairement indisponibles. Pour toute réservation, veuillez nous contacter au{" "}
           <a href="tel:0613440875" className="font-semibold text-primary hover:underline">06 13 44 08 75</a>.
@@ -401,13 +401,13 @@ export function Reservation({ step }: ReservationProps) {
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <ScrollUp />
       <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-        <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">
+        <h1 className="font-blanka text-4xl lg:text-6xl">
           RESERVATION
         </h1>
         <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
       </div>
       
-      <div className={`w-auto self-stretch sm:w-full max-w-none sm:max-w-[900px] lg:max-w-6xl lg:px-4 -mx-2 sm:mx-0 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+      <div className={`w-auto self-stretch lg:w-full max-w-none lg:max-w-6xl lg:px-4 -mx-2 lg:mx-0 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         {/* Cart banner — shown when adding a new booking with items already in cart */}
         {showCartBanner && (
           <div className="mb-4 flex items-center justify-between rounded-xl border-2 border-primary/30 bg-primary/10 px-4 py-3">
@@ -429,10 +429,10 @@ export function Reservation({ step }: ReservationProps) {
           </div>
         )}
 
-        <div className="relative overflow-hidden rounded-none border-0 border-primary bg-black/90 backdrop-blur sm:rounded-2xl sm:border-4">
+        <div className="relative overflow-hidden rounded-none border-0 border-primary bg-black/90 backdrop-blur lg:rounded-2xl lg:border-4">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
 
-          <div className="relative p-3 sm:p-6 md:p-8">
+          <div className="relative p-3 sm:mx-auto sm:max-w-[640px] lg:max-w-none lg:p-8">
             <div className="mb-4">
                 <ProgressIndicator
                   currentStep={state.step}

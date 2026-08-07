@@ -598,7 +598,7 @@ function AuditDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg border-zinc-800 bg-zinc-900 sm:max-w-2xl">
+      <DialogContent className="max-w-lg border-zinc-800 bg-zinc-900 lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <EntityIcon className={`h-5 w-5 ${entityCfg.color}`} />
@@ -805,7 +805,7 @@ export function AdminAuditLog() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Journal d&apos;audit</h1>
           <p className="text-zinc-400">

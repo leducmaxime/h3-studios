@@ -61,7 +61,7 @@ export function ProgressIndicator({
                     }
                   }}
                   className={`
-                    relative flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full
+                    relative flex h-8 w-8 lg:h-10 lg:w-10 items-center justify-center rounded-full
                     transition-all duration-300
                     ${
                       isCompleted
@@ -78,14 +78,14 @@ export function ProgressIndicator({
                   )}
                 <Icon
                   className={`
-                    relative h-4 w-4 sm:h-5 sm:w-5 transition-colors duration-300
+                    relative h-4 w-4 lg:h-5 lg:w-5 transition-colors duration-300
                     ${isCompleted || isCurrent ? "text-primary" : "text-white/30"}
                   `}
                 />
                 </button>
                 <span
                   className={`
-                    mt-1.5 text-xs font-medium transition-colors duration-300 hidden sm:block
+                    mt-1.5 text-xs font-medium transition-colors duration-300 hidden lg:block
                     ${isCompleted || isCurrent ? "text-primary" : "text-white/40"}
                   `}
                 >
@@ -96,7 +96,7 @@ export function ProgressIndicator({
               {index < STEP_DEFS.length - 1 && (
                 <div
                   className={`
-                    mx-1 sm:mx-2 h-0.5 w-3 sm:w-6 md:w-10 transition-colors duration-300
+                    mx-1 lg:mx-2 h-0.5 w-3 lg:w-10 transition-colors duration-300
                     ${currentIdx > thisIdx ? "bg-primary" : "bg-white/20"}
                   `}
                 />

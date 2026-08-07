@@ -1,8 +1,8 @@
 export function PolitiqueConfidentialite() {
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
-      <div className="w-full max-w-3xl px-2 sm:px-4">
-        <h1 className="mb-8 text-center font-blanka text-4xl md:text-5xl">
+      <div className="w-full max-w-3xl px-2 lg:px-4">
+        <h1 className="mb-8 text-center font-blanka text-4xl lg:text-5xl">
           POLITIQUE DE CONFIDENTIALITE
         </h1>
         <div className="mx-auto mb-12 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />

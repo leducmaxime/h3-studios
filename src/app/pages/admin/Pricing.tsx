@@ -411,7 +411,7 @@ function PeakHoursSection() {
       </div>
 
       <div className="p-6">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
             <div className="mb-3 flex items-center gap-2">
               <Sun className="h-5 w-5 text-zinc-400" />
@@ -815,7 +815,7 @@ function PromoCodeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="lg:max-w-md">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Modifier le code promo" : "Nouveau code promo"}

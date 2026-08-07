@@ -459,8 +459,8 @@ export function AdminBookingNew() {
                   </Button>
                 ) : (
                   <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-800 p-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="sm:col-span-2">
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <div className="lg:col-span-2">
                         <label htmlFor="newUserName" className="mb-1 block text-xs text-zinc-400">Prénom et Nom <span className="text-primary">*</span></label>
                         <input
                           id="newUserName"
@@ -498,7 +498,7 @@ export function AdminBookingNew() {
                           className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                         />
                       </div>
-                      <div className="sm:col-span-2">
+                      <div className="lg:col-span-2">
                         <label htmlFor="newUserBand" className="mb-1 block text-xs text-zinc-400">Nom du groupe <span className="text-zinc-500">(optionnel)</span></label>
                         <input
                           id="newUserBand"
@@ -583,7 +583,7 @@ export function AdminBookingNew() {
           {/* Studio + Date + Time */}
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
             <h2 className="mb-4 font-semibold">Créneau</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <div>
                 <label htmlFor="groupType" className="mb-1 block text-sm text-zinc-400">Type de groupe *</label>
                 <select
@@ -614,7 +614,7 @@ export function AdminBookingNew() {
                   ))}
                 </select>
               </div>
-              <div className="sm:col-span-2">
+              <div className="lg:col-span-2">
                 <div className="grid gap-4 grid-cols-3">
                   <div>
                     <label htmlFor="bookingDate" className="mb-1 block text-sm text-zinc-400">Date *</label>

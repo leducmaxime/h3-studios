@@ -24,7 +24,7 @@ export function StickyBookingCTA({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-50 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 lg:hidden"
       style={{
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
         animation: "slideUp 0.3s ease-out forwards",

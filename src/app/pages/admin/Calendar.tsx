@@ -295,7 +295,7 @@ export function AdminCalendar() {
   });
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    const checkMobile = () => setIsMobile(window.innerWidth < 992);
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
@@ -1163,7 +1163,7 @@ export function AdminCalendar() {
 
     return (
       <div className="overflow-x-auto">
-        <div className="min-w-[350px] md:min-w-[700px]">
+        <div className="min-w-[350px] lg:min-w-[700px]">
           {/* Day names header */}
           <div className="grid grid-cols-7 border-b border-zinc-800">
             {dayNames.map((name) => (
@@ -1324,7 +1324,7 @@ export function AdminCalendar() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-6 py-4 md:grid-cols-2">
+          <div className="grid gap-6 py-4 lg:grid-cols-2">
             <div className="space-y-4">
               <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Détails de la session</h4>
               <div className="grid gap-2">
@@ -1550,7 +1550,7 @@ export function AdminCalendar() {
         </div>
       )}
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Calendrier</h1>
           <p className="text-zinc-400">{subtitle}</p>
@@ -1565,7 +1565,7 @@ export function AdminCalendar() {
       </div>
 
       {/* Navigation + Tabs */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-2">
           <button type="button" onClick={goToPrev} className="rounded-lg p-2 transition-colors hover:bg-zinc-800">
             <ChevronLeft className="h-5 w-5" />
@@ -1607,7 +1607,7 @@ export function AdminCalendar() {
 
       {/* Cancel dialog */}
       <Dialog open={calCancelOpen} onOpenChange={setCalCancelOpen}>
-        <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-md">
+        <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-md">
           <DialogHeader>
             <DialogTitle>Annuler la réservation</DialogTitle>
             <DialogDescription>{selectedBooking?.booking_ref}</DialogDescription>
@@ -1628,7 +1628,7 @@ export function AdminCalendar() {
 
       {/* Reschedule dialog */}
       <Dialog open={calRescheduleOpen} onOpenChange={setCalRescheduleOpen}>
-        <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-md">
+        <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-md">
           <DialogHeader>
             <DialogTitle>Déplacer la réservation</DialogTitle>
             <DialogDescription>{selectedBooking?.booking_ref}</DialogDescription>

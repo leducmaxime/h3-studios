@@ -445,7 +445,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 </div>
 
                 {editing ? (
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-4 lg:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="edit-name">Nom</Label>
                       <Input
@@ -480,7 +480,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         onChange={(e) => setEditForm({ ...editForm, band_name: e.target.value })}
                       />
                     </div>
-                    <div className="grid gap-2 sm:col-span-2">
+                    <div className="grid gap-2 lg:col-span-2">
                       <Label htmlFor="edit-notes">Notes internes</Label>
                       <textarea
                         id="edit-notes"
@@ -490,10 +490,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] dark:bg-input/30"
                       />
                     </div>
-                    <div className="grid gap-2 sm:col-span-2">
+                    <div className="grid gap-2 lg:col-span-2">
                       <p className="text-sm font-medium text-zinc-400">Adresse</p>
                     </div>
-                    <div className="grid gap-2 sm:col-span-2">
+                    <div className="grid gap-2 lg:col-span-2">
                       <Label htmlFor="edit-address-line1">Nom et numéro de rue</Label>
                       <Input
                         id="edit-address-line1"
@@ -523,7 +523,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-4 lg:grid-cols-2">
                       <div className="flex items-center gap-3">
                         <Mail className="h-5 w-5 text-zinc-400" />
                         <div>

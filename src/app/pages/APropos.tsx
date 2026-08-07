@@ -70,7 +70,7 @@ function ContactForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="contact-name" className="text-sm font-medium text-white/70">
             Nom <span className="text-primary">*</span>
@@ -243,9 +243,9 @@ export function APropos() {
     <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
       <ScrollUp />
 
-      <div className="w-full max-w-5xl px-2 sm:px-4">
+      <div className="w-full max-w-5xl sm:max-w-[640px] lg:max-w-5xl px-2 lg:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">A PROPOS</h1>
+          <h1 className="font-blanka text-4xl lg:text-6xl">A PROPOS</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           <p className="mt-6 text-lg text-white/60">
             Un son authentique pour des artistes authentiques
@@ -253,7 +253,7 @@ export function APropos() {
         </div>
       </div>
 
-      <div className="w-full max-w-5xl px-2 sm:px-4 space-y-6">
+      <div className="w-full max-w-5xl sm:max-w-[640px] lg:max-w-5xl px-2 lg:px-4 space-y-6">
         <div className={`overflow-hidden rounded-2xl border border-white/10 bg-black transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
           <div className="relative aspect-[21/9] overflow-hidden">
             <video
@@ -279,7 +279,7 @@ export function APropos() {
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-3">
           <div className={`rounded-2xl border border-white/10 bg-black p-6 text-center transition-all duration-700 hover:border-primary/50 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/20">
               <Music className="h-6 w-6 text-primary" />
@@ -317,7 +317,7 @@ export function APropos() {
           style={{ transitionDelay: "500ms" }}
         >
           <h2 className="mb-6 text-xl font-bold text-primary">Contact</h2>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 relative z-10">
+          <div className="mb-6 grid gap-4 lg:grid-cols-2 relative z-10">
             <a
               href="mailto:contact@h3-studios.fr"
               className="group flex items-center justify-center gap-3 rounded-lg border border-primary/20 bg-primary/10 px-6 py-4 transition-all hover:bg-primary/20 hover:scale-[1.02] active:scale-95 cursor-pointer relative z-20"
@@ -391,9 +391,9 @@ export function APropos() {
       </div>
 
       {/* FAQ */}
-      <section className="w-full py-16 sm:py-20">
-        <div className="mx-auto w-full max-w-4xl px-4">
-          <h2 className="mb-2 text-center font-blanka text-3xl sm:text-4xl">FAQ</h2>
+      <section className="w-full py-16 lg:py-20">
+        <div className="mx-auto w-full max-w-4xl sm:max-w-[640px] lg:max-w-4xl px-4">
+          <h2 className="mb-2 text-center font-blanka text-3xl lg:text-4xl">FAQ</h2>
           <p className="mb-10 text-center text-white/60">Questions fréquentes</p>
           <div className="space-y-3">
             {FAQ_ITEMS.map((item, i) => (

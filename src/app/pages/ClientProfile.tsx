@@ -140,15 +140,15 @@ export function ClientProfile() {
   }
 
   return (
-    <div className="min-h-[80vh] bg-black px-2 sm:px-4 pt-32 pb-16">
+    <div className="min-h-[80vh] bg-black px-2 lg:px-4 pt-32 pb-16">
       <div className="container max-w-3xl mx-auto">
         <div className="mb-10 text-center">
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">MON PROFIL</h1>
+          <h1 className="font-blanka text-4xl lg:text-6xl">MON PROFIL</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 lg:p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <User className="h-4 w-4 text-primary" />
@@ -157,7 +157,7 @@ export function ClientProfile() {
             </div>
 
             <div className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <div className="space-y-2">
                   <FieldLabel htmlFor="profile-firstname" icon={User} required>Prénom</FieldLabel>
                   <Input
@@ -195,7 +195,7 @@ export function ClientProfile() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <div className="space-y-2">
                   <FieldLabel htmlFor="profile-phone" icon={Phone}>Téléphone</FieldLabel>
                   <Input
@@ -277,7 +277,7 @@ export function ClientProfile() {
             </div>
           </section>
 
-          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+          <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 lg:p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Lock className="h-4 w-4 text-primary" />
@@ -314,7 +314,7 @@ export function ClientProfile() {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <div className="flex flex-col lg:flex-row gap-3 pt-2">
             <Button
               type="submit"
               className="flex-1 h-11 text-sm font-semibold bg-primary text-black hover:bg-primary/90"

@@ -145,13 +145,13 @@ export function ClientAccount() {
   const displayName = fullName || user.name.trim();
 
   return (
-    <div className="min-h-[80vh] bg-black px-2 sm:px-4 pt-32 pb-16">
+    <div className="min-h-[80vh] bg-black px-2 lg:px-4 pt-32 pb-16">
       <div className="container max-w-4xl mx-auto">
         <div className="mb-12 text-center">
-          <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">Mes reservations</h1>
+          <h1 className="font-blanka text-4xl lg:text-6xl">Mes reservations</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
           {displayName && (
-            <p className="mt-4 text-sm text-zinc-400 sm:text-base">
+            <p className="mt-4 text-sm text-zinc-400 lg:text-base">
               Bonjour <span className="font-medium text-zinc-100">{displayName}</span>
             </p>
           )}
@@ -261,13 +261,13 @@ function BookingCard({ booking }: { booking: BookingRow }) {
 
   return (
     <div className={`group bg-zinc-900/50 border rounded-2xl p-5 transition-all duration-200 hover:bg-zinc-900/70 ${isPast ? "border-zinc-800/50" : "border-zinc-800 hover:border-zinc-700"}`}>
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-4">
         <div className="flex items-center gap-4 shrink-0">
           <div className={`h-14 w-14 rounded-xl flex flex-col items-center justify-center shrink-0 ${isPast ? "bg-zinc-800/50" : "bg-primary/10"}`}>
             <span className={`text-xs font-medium ${isPast ? "text-zinc-500" : "text-primary/70"}`}>{getDayName(booking.date)}</span>
             <span className={`text-lg font-bold leading-tight ${isPast ? "text-zinc-400" : "text-white"}`}>{formatShortDate(booking.date).split(" ")[0]}</span>
           </div>
-          <div className="hidden sm:block h-10 w-px bg-zinc-800" />
+          <div className="hidden lg:block h-10 w-px bg-zinc-800" />
         </div>
 
         <div className="flex-1 min-w-0">

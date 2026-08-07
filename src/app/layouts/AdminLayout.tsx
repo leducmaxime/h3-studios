@@ -202,7 +202,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold">
                     {user.name.charAt(0).toUpperCase()}
                   </div>
-                  <span className="hidden sm:inline">
+                  <span className="hidden lg:inline">
                     {user.name}
                   </span>
                 </button>

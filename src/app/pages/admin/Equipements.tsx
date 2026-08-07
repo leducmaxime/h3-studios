@@ -179,7 +179,7 @@ function StudioBlock({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         {studio.items.map((item) => {
           const Icon = ICONS[item.icon];
           return (
@@ -815,7 +815,7 @@ export function AdminEquipements() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Équipements</h1>
           <p className="text-zinc-400">

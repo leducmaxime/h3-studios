@@ -105,7 +105,7 @@ export function Header() {
       }`}
     >
       <div className="container">
-        <div className="flex h-16 sm:h-20 items-center justify-between">
+        <div className="flex h-16 lg:h-20 items-center justify-between">
           <a
             href="/"
             onClick={(e) => {

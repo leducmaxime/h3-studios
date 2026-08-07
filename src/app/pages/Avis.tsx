@@ -117,11 +117,11 @@ export function Avis() {
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <ScrollUp />
       <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-        <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">AVIS CLIENTS</h1>
+        <h1 className="font-blanka text-4xl lg:text-6xl">AVIS CLIENTS</h1>
         <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
       </div>
 
-      <div className="w-full max-w-[900px] px-2 sm:px-4">
+      <div className="w-full max-w-[900px] sm:max-w-[640px] lg:max-w-[900px] px-2 lg:px-4">
         <div className={`mb-6 flex flex-col items-center gap-4 rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-transparent p-6 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
           <div className="flex items-center gap-2">
             <Star className="h-6 w-6 fill-primary text-primary" />

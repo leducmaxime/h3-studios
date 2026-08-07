@@ -23,13 +23,13 @@ export function Tarifs() {
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
       <ScrollUp />
       <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
-        <h1 className="font-blanka text-4xl md:text-5xl lg:text-6xl">
+        <h1 className="font-blanka text-4xl lg:text-6xl">
           TARIFS
         </h1>
         <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
       </div>
 
-      <div className={`mt-4 flex w-full max-w-[1048px] flex-col gap-8 px-2 sm:px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+      <div className={`mt-4 flex w-full max-w-[1048px] sm:max-w-[640px] lg:max-w-[1048px] flex-col gap-8 px-2 lg:px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="flex w-full flex-col items-center gap-8 text-center">
             <h2 className="text-center font-blanka text-2xl">GRILLE TARIFAIRE</h2>
@@ -37,7 +37,7 @@ export function Tarifs() {
               <Table className="w-full border-8 border-primary text-center">
                 <TableHeader>
                   <TableRow className="border-primary">
-                    <TableHead className="hidden sm:table-cell"></TableHead>
+                    <TableHead className="hidden lg:table-cell"></TableHead>
                     <TableHead></TableHead>
                     <TableHead className="text-center">
                       Studio <span className="whitespace-nowrap">La Scène</span>
@@ -49,11 +49,11 @@ export function Tarifs() {
                 </TableHeader>
                 <TableBody>
                   <TableRow>
-                    <TableCell rowSpan={2} className="hidden font-bold sm:table-cell">
+                    <TableCell rowSpan={2} className="hidden font-bold lg:table-cell">
                       Groupe <span className="whitespace-nowrap">(3 ou +)</span>
                     </TableCell>
                     <TableCell>
-                      <span className="mb-2 block font-bold sm:hidden">
+                      <span className="mb-2 block font-bold lg:hidden">
                         Groupe <span className="whitespace-nowrap">(3 ou +)</span>
                         <br />
                       </span>
@@ -64,7 +64,7 @@ export function Tarifs() {
                   </TableRow>
                   <TableRow>
                     <TableCell>
-                      <span className="mb-2 block font-bold sm:hidden">
+                      <span className="mb-2 block font-bold lg:hidden">
                         Groupe <span className="whitespace-nowrap">(3 ou +)</span>
                         <br />
                       </span>
@@ -76,9 +76,9 @@ export function Tarifs() {
                     <TableCell className="text-center">18€/Heure</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="hidden font-bold sm:table-cell">Duo</TableCell>
+                    <TableCell className="hidden font-bold lg:table-cell">Duo</TableCell>
                     <TableCell>
-                      <span className="mb-2 block font-bold sm:hidden">
+                      <span className="mb-2 block font-bold lg:hidden">
                         Duo
                         <br />
                       </span>
@@ -89,11 +89,11 @@ export function Tarifs() {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="hidden font-bold sm:table-cell">
+                    <TableCell className="hidden font-bold lg:table-cell">
                       Solo et enseignant
                     </TableCell>
                     <TableCell>
-                      <span className="mb-2 block font-bold sm:hidden">
+                      <span className="mb-2 block font-bold lg:hidden">
                         Solo et enseignant
                         <br />
                       </span>
