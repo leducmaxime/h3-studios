@@ -6,6 +6,16 @@ import type { PricingData } from "@/lib/pricing";
 import { calculatePrice } from "@/lib/pricing";
 import { usePricing } from "./usePricing";
 import {
+  accountFieldValues,
+  BOOKING_FIELD_KEYS,
+  canConfirmBookingFields,
+  computeAccountFieldStatus,
+  getBookingFieldIssues,
+  type BookingFieldIssue,
+  type BookingUserFields,
+} from "@/lib/booking-fields";
+export { deriveDisplayName } from "@/lib/booking-fields";
+import {
   BOOKING_STEPS,
   type BookingStep,
   type BookingState,
@@ -111,38 +121,27 @@ export interface ClientProfile {
   city: string | null;
 }
 
-/**
- * Display name from trimmed `first_name` + `last_name`, falling back to the
- * `name` field. Returns "" only when every source is absent/blank.
- */
-export function deriveDisplayName(user: Pick<ClientProfile, "name" | "first_name" | "last_name">): string {
-  const first = user.first_name?.trim() ?? "";
-  const last = user.last_name?.trim() ?? "";
-  const full = [first, last].filter(Boolean).join(" ");
-  if (full) return full;
-  return user.name?.trim() ?? "";
-}
-
 type PrefillFields = Pick<
   ExtendedBookingState,
   "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity"
 >;
 
 /**
- * Merge an account profile onto booking fields. Booking-state values always
- * win — an account value is applied only when the booking field is empty —
- * so typed input is never clobbered by inline login or async prefill.
+ * Apply non-empty account values onto booking fields. Account values win when
+ * present; fields absent from the account retain their existing state value.
  */
-export function mergeProfilePrefill(fields: PrefillFields, user: ClientProfile): Partial<PrefillFields> {
-  return {
-    userName: fields.userName || deriveDisplayName(user),
-    userEmail: fields.userEmail || user.email || "",
-    userPhone: fields.userPhone || user.phone || "",
-    bandName: fields.bandName || user.band_name || "",
-    billingAddress: fields.billingAddress || user.address_line1 || "",
-    billingPostalCode: fields.billingPostalCode || user.postal_code || "",
-    billingCity: fields.billingCity || user.city || "",
-  };
+export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile): Partial<PrefillFields> {
+  const account = accountFieldValues(user);
+  const status = computeAccountFieldStatus(user);
+  const next: Partial<PrefillFields> = {};
+  for (const key of BOOKING_FIELD_KEYS) {
+    if (status[key] === "filled") {
+      next[key] = account[key];
+    } else if (status[key] === "invalid" && fields[key] === account[key]) {
+      next[key] = "";
+    }
+  }
+  return next;
 }
 
 /**
@@ -371,12 +370,14 @@ export function useBookingWithRouter(urlStep?: string) {
   const [minAdvanceCutoffTime, setMinAdvanceCutoffTime] = useState<string | null>(null);
   const [todayFullyBlocked, setTodayFullyBlocked] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing } = usePricing();
   const [clientUser, setClientUser] = useState<ClientProfile | null>(null);
   const [clientUserLoading, setClientUserLoading] = useState(true);
   // Refs mirroring session/profile knowledge so the focus listener (registered
   // once) always reads fresh values without stale closures.
   const clientUserRef = useRef<ClientProfile | null>(null);
+  const lastProfileCheckAtRef = useRef(0);
   useEffect(() => {
     clientUserRef.current = clientUser;
   }, [clientUser]);
@@ -433,8 +434,8 @@ export function useBookingWithRouter(urlStep?: string) {
 
   // -------------------------------------------------------------------------
   // Profile prefill — shared by hydration, inline login and the focus
-  // re-fetch (stale-tab/session gap). Booking-state values always win over
-  // account values (mergeProfilePrefill), so typed input is preserved.
+  // re-fetch (stale-tab/session gap). Non-empty account values are applied once
+  // per profile identity; subsequent arrivals preserve typed input.
   // Resolves with the profile (or null) and never rejects.
   // -------------------------------------------------------------------------
   const prefillFromClientProfile = useCallback((): Promise<ClientProfile | null> => {
@@ -442,6 +443,10 @@ export function useBookingWithRouter(urlStep?: string) {
       .then((res) => {
         if (!res.ok) {
           console.warn("[Booking] /api/client/me returned", res.status);
+          if (res.status === 401 || res.status === 403) {
+            setClientUser(null);
+            clientUserRef.current = null;
+          }
           return null;
         }
         return res.json() as Promise<{ data?: ClientProfile }>;
@@ -451,10 +456,7 @@ export function useBookingWithRouter(urlStep?: string) {
           const user = json.data;
           setClientUser(user);
           clientUserRef.current = user;
-          setState((s) => ({
-            ...s,
-            ...mergeProfilePrefill(s, user),
-          }));
+          setState((s) => ({ ...s, ...applyProfilePrefill(s, user) }));
           return user;
         }
         console.warn("[Booking] /api/client/me: no user data");
@@ -476,7 +478,8 @@ export function useBookingWithRouter(urlStep?: string) {
     if (typeof window === "undefined") return;
     const handleFocus = () => {
       if (!isHydratedRef.current) return; // let the initial hydration pass finish first
-      if (clientUserRef.current) return; // already know the logged-in profile
+      if (Date.now() - lastProfileCheckAtRef.current < 30_000) return;
+      lastProfileCheckAtRef.current = Date.now();
       prefillFromClientProfile();
     };
     window.addEventListener("focus", handleFocus);
@@ -732,7 +735,7 @@ export function useBookingWithRouter(urlStep?: string) {
           (prefs as Record<string, unknown>)[key] = fields[key as keyof typeof fields];
         }
       }
-      if (Object.keys(prefs).length > 0) {
+      if (Object.keys(prefs).length > 0 && !clientUserRef.current) {
         saveUserPreferences(prefs);
       }
     },
@@ -883,6 +886,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const submitCart = useCallback(async (paymentMethod: PaymentMethod | null) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
       const promoCodeToApply = appliedPromoRef.current?.code ?? null;
@@ -946,8 +950,17 @@ export function useBookingWithRouter(urlStep?: string) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        const json = await res.json() as { success: boolean; data?: { accountStatus?: string; promoCode?: string | null; promoDiscount?: number; netTotal?: number }; error?: string };
-        if (!json.success) throw new Error(json.error);
+        const json = await res.json() as { success: boolean; data?: { accountStatus?: string; promoCode?: string | null; promoDiscount?: number; netTotal?: number }; error?: string; code?: string };
+        if (!json.success) {
+          if (json.code === "account-exists" && clientUser) {
+            await prefillFromClientProfile();
+            throw new Error("Votre session a expiré. Reconnectez-vous pour finaliser votre réservation.");
+          }
+          if (json.code === "booking-ref-conflict") {
+            throw new Error("Ce créneau a été réservé entre-temps. Retirez-le de votre panier pour continuer.");
+          }
+          throw new Error(json.error || "Erreur lors de la réservation");
+        }
 
         // Capture accountStatus from the first response
         if (i === 0 && json.data?.accountStatus) {
@@ -992,11 +1005,11 @@ export function useBookingWithRouter(urlStep?: string) {
         };
       });
     } catch (err) {
-      alert("Erreur lors de la réservation: " + err);
+      setSubmitError(err instanceof Error ? err.message : "Erreur lors de la réservation");
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, isSubmitting, clientUser, state.createAccount, state.accountPassword]);
+  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, isSubmitting, clientUser, state.createAccount, state.accountPassword, prefillFromClientProfile]);
 
   /** From coordonnées: proceed to payment choice or skip if free */
   const goToPaymentFromCoordonnees = useCallback(async () => {
@@ -1083,10 +1096,7 @@ export function useBookingWithRouter(urlStep?: string) {
       if (user) {
         setClientUser(user);
         clientUserRef.current = user;
-        setState((s) => ({
-          ...s,
-          ...mergeProfilePrefill(s, user),
-        }));
+        setState((s) => ({ ...s, ...applyProfilePrefill(s, user) }));
       }
       return { ok: true };
     } catch (err) {
@@ -1205,13 +1215,20 @@ export function useBookingWithRouter(urlStep?: string) {
   }, [state.cart, pricingData]);
 
   const canProceedToStudio = state.startTime !== null && state.endTime !== null;
-  const canConfirmBooking =
-    state.userName.trim() !== "" &&
-    state.userEmail.trim() !== "" &&
-    state.userPhone.trim() !== "" &&
-    state.billingAddress.trim() !== "" &&
-    state.billingPostalCode.trim() !== "" &&
-    state.billingCity.trim() !== "";
+  const bookingUserFields = useMemo<BookingUserFields>(() => ({
+    userName: state.userName,
+    userEmail: state.userEmail,
+    userPhone: state.userPhone,
+    bandName: state.bandName,
+    billingAddress: state.billingAddress,
+    billingPostalCode: state.billingPostalCode,
+    billingCity: state.billingCity,
+  }), [state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity]);
+  const bookingFieldIssues: BookingFieldIssue[] = useMemo(
+    () => getBookingFieldIssues(bookingUserFields),
+    [bookingUserFields],
+  );
+  const canConfirmBooking = canConfirmBookingFields(bookingUserFields);
 
   /** Exposed for ProgressIndicator — checks if a slug step is reachable via user click */
   const canNavigateToStep = useCallback((targetStep: BookingStep): boolean => {
@@ -1238,6 +1255,9 @@ export function useBookingWithRouter(urlStep?: string) {
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,
+    bookingFieldIssues,
+    submitError,
+    clearSubmitError: () => setSubmitError(null),
     clientUser,
     clientUserLoading,
     setStep,

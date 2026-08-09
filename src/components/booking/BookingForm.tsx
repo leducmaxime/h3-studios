@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, ChevronLeft, Pencil, UserCheck } from "lucide-react";
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { AlertTriangle, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import {
   type StudioId,
   type GroupType,
 } from "@/lib/booking";
+import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, BOOKING_FIELD_LABELS, computeAccountFieldStatus, isValidBookingFieldValue, isValidEmail, isValidPhone, isValidPostalCode, type BookingFieldIssue, type BookingFieldKey } from "@/lib/booking-fields";
 
 /**
  * Fields of the booking state this form reads/writes.
@@ -66,6 +67,41 @@ interface BookingFormProps {
   onContinue: () => void;
   onBack: () => void;
   canContinue: boolean;
+  bookingFieldIssues?: BookingFieldIssue[];
+  /** Failed POST /api/bookings — already French, ready to display. */
+  submitError?: string | null;
+  onClearSubmitError?: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Field definitions — shared by the guest form and the logged-in editable
+// block, so every required field is guaranteed an input AND an error site.
+// Labels come from BOOKING_FIELD_LABELS (single source with the gate).
+// ---------------------------------------------------------------------------
+
+interface BookingFieldDef {
+  key: BookingFieldKey;
+  optional?: boolean;
+  placeholder: string;
+  type?: string;
+  inputMode?: "numeric";
+  maxLength?: number;
+  digitsOnly?: boolean;
+  autoComplete?: string;
+}
+
+const BOOKING_FIELD_DEFS: readonly BookingFieldDef[] = [
+  { key: "userName", placeholder: "Jean Dupont", autoComplete: "name" },
+  { key: "userEmail", placeholder: "jean@exemple.fr", type: "email", autoComplete: "email" },
+  { key: "userPhone", placeholder: "0612345678", type: "tel", inputMode: "numeric", maxLength: 10, digitsOnly: true, autoComplete: "tel" },
+  { key: "bandName", optional: true, placeholder: "Les Rockers", autoComplete: "organization" },
+  { key: "billingAddress", placeholder: "12 Rue de la Musique", autoComplete: "street-address" },
+  { key: "billingPostalCode", placeholder: "94370", inputMode: "numeric", maxLength: 5, digitsOnly: true, autoComplete: "postal-code" },
+  { key: "billingCity", placeholder: "Sucy-en-Brie", autoComplete: "address-level2" },
+];
+
+function fieldDef(key: BookingFieldKey): BookingFieldDef {
+  return BOOKING_FIELD_DEFS.find((def) => def.key === key) as BookingFieldDef;
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +400,9 @@ export function BookingForm({
   onContinue,
   onBack,
   canContinue,
+  bookingFieldIssues = [],
+  submitError = null,
+  onClearSubmitError,
 }: BookingFormProps) {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [continueLoading, setContinueLoading] = useState(false);
@@ -372,20 +411,17 @@ export function BookingForm({
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (userEmail && !emailRegex.test(userEmail)) {
+    if (userEmail && !isValidEmail(userEmail)) {
       errors.userEmail = "L'email est invalide";
     }
 
-    const phoneDigits = userPhone.replace(/\D/g, "");
     if (!userPhone.trim()) {
       errors.userPhone = "Le numéro de téléphone est obligatoire";
-    } else if (phoneDigits.length !== 10) {
+    } else if (!isValidPhone(userPhone)) {
       errors.userPhone = "Le numéro de téléphone est invalide";
     }
 
-    const postalCodeDigits = billingPostalCode.replace(/\D/g, "");
-    if (billingPostalCode && postalCodeDigits.length !== 5) {
+    if (billingPostalCode && !isValidPostalCode(billingPostalCode)) {
       errors.billingPostalCode = "Le code postal est invalide";
     }
 
@@ -403,7 +439,20 @@ export function BookingForm({
   };
 
   const handleContinue = async () => {
-    if (!canContinue || continueLoading) return;
+    if (continueLoading) return;
+    // Retrying dismisses the previous submission failure.
+    onClearSubmitError?.();
+    if (!canContinue) {
+      setValidationErrors((prev) => ({ ...prev, ...Object.fromEntries(bookingFieldIssues.map((issue) => [issue.key, issue.reason])) }));
+      // Bring the first blocking field into view so the click self-explains.
+      const firstIssue = bookingFieldIssues[0];
+      if (firstIssue) {
+        setTimeout(() => {
+          document.getElementById(firstIssue.key)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 50);
+      }
+      return;
+    }
 
     if (!validateForm()) return;
 
@@ -454,78 +503,79 @@ export function BookingForm({
     onUpdateField(fields);
   };
 
-  // Logged-in: fields with a value on the account render as a read-only
-  // summary. Fields missing on the account (old accounts may lack
-  // phone/address) stay as normal inputs — otherwise the user dead-ends,
-  // since the booking requires all 6 fields non-empty. State prefill from
-  // the hook is untouched: validation always reads state, not the DOM.
-  type AccountFieldKey =
-    | "userName"
-    | "userEmail"
-    | "userPhone"
-    | "bandName"
-    | "billingAddress"
-    | "billingPostalCode"
-    | "billingCity";
+  // Logged-in: fields with a usable value on the account render as a
+  // read-only summary. Fields missing or malformed on the account (old
+  // accounts may lack phone/address, or store an outdated format) stay as
+  // normal inputs — otherwise the user dead-ends, since the booking requires
+  // all 6 fields non-empty. State prefill from the hook is untouched:
+  // validation always reads state, not the DOM.
+  const accountValues = useMemo(() => accountFieldValues(clientUser), [clientUser]);
+  const accountStatus = useMemo(() => computeAccountFieldStatus(clientUser), [clientUser]);
+  const bookingValues: Record<BookingFieldKey, string> = { userName, userEmail, userPhone, bandName, billingAddress, billingPostalCode, billingCity };
+  const filledAccountFieldDefinitions: BookingFieldDef[] = clientUser
+    ? BOOKING_FIELD_DEFS.filter((field) => accountStatus[field.key] === "filled")
+    : [];
+  const editableAccountFieldDefinitions: BookingFieldDef[] = clientUser
+    ? BOOKING_FIELD_DEFS.filter((field) => accountStatus[field.key] !== "filled")
+    : [];
 
-  interface AccountField {
-    key: AccountFieldKey;
-    label: string;
-    value: string;
-    optional?: boolean;
-    placeholder: string;
-    type?: string;
-    inputMode?: "numeric";
-    maxLength?: number;
-    digitsOnly?: boolean;
-    autoComplete?: string;
-  }
-
-  const accountFields: AccountField[] = clientUser ? [
-    { key: "userName", label: "Prénom et nom", value: userName, placeholder: "Jean Dupont", autoComplete: "name" },
-    { key: "userEmail", label: "Email", value: clientUser.email || userEmail, placeholder: "jean@exemple.fr", type: "email", autoComplete: "email" },
-    { key: "userPhone", label: "Téléphone", value: userPhone, placeholder: "0612345678", type: "tel", inputMode: "numeric", maxLength: 10, digitsOnly: true, autoComplete: "tel" },
-    { key: "bandName", label: "Nom du groupe / Raison sociale", value: bandName, optional: true, placeholder: "Les Rockers", autoComplete: "organization" },
-    { key: "billingAddress", label: "Adresse de facturation", value: billingAddress, placeholder: "12 Rue de la Musique", autoComplete: "street-address" },
-    { key: "billingPostalCode", label: "Code postal", value: billingPostalCode, placeholder: "94370", inputMode: "numeric", maxLength: 5, digitsOnly: true, autoComplete: "postal-code" },
-    { key: "billingCity", label: "Ville", value: billingCity, placeholder: "Sucy-en-Brie", autoComplete: "address-level2" },
-  ] : [];
-  const filledAccountFields = accountFields.filter((field) => field.value.trim().length > 0);
-  const emptyAccountFields = accountFields.filter((field) => field.value.trim().length === 0);
-
-  const renderAccountInput = (field: AccountField) => (
-    <div key={field.key} className="flex flex-col gap-1.5">
-      <label htmlFor={field.key} className="text-sm font-medium text-white/70">
-        {field.label}{" "}
-        {field.optional ? (
-          <span className="text-white/40">(optionnel)</span>
-        ) : (
-          <span className="text-primary">*</span>
+  /**
+   * Single renderer for every coordonnées input — guest and logged-in.
+   * `invalidAccountValue` marks a field whose saved account value failed the
+   * booking's format rules: the input is pre-cleared, and an amber hint
+   * explains why until the user types a usable value (or a red validation
+   * error takes over). Red is reserved for actual errors, amber for
+   * "the saved value could not be used", neutral for everything else.
+   */
+  const renderFieldInput = (
+    field: BookingFieldDef,
+    options?: { label?: string; invalidAccountValue?: boolean },
+  ) => {
+    const error = validationErrors[field.key];
+    const currentValue = bookingValues[field.key];
+    const currentValueUsable = currentValue.trim().length > 0 && isValidBookingFieldValue(field.key, currentValue);
+    const showInvalidAccountHint = options?.invalidAccountValue === true && !error && !currentValueUsable;
+    return (
+      <div key={field.key} className="flex flex-col gap-1.5">
+        <label htmlFor={field.key} className="text-sm font-medium text-white/70">
+          {options?.label ?? BOOKING_FIELD_LABELS[field.key]}{" "}
+          {field.optional ? (
+            <span className="text-white/40">(optionnel)</span>
+          ) : (
+            <span className="text-primary">*</span>
+          )}
+        </label>
+        <input
+          id={field.key}
+          type={field.type ?? "text"}
+          inputMode={field.inputMode}
+          maxLength={field.maxLength}
+          autoComplete={field.autoComplete}
+          value={currentValue}
+          onChange={(e) =>
+            updateFields({
+              [field.key]: field.digitsOnly ? e.target.value.replace(/\D/g, "") : e.target.value,
+            } as Partial<BookingFormFields>)
+          }
+          placeholder={field.placeholder}
+          required={!field.optional}
+          aria-invalid={error ? true : undefined}
+          className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3 ${
+            error ? "border-red-500" : showInvalidAccountHint ? "border-amber-400/50" : "border-white/20"
+          }`}
+        />
+        {showInvalidAccountHint && (
+          <span className="text-xs text-amber-300/80">
+            La valeur enregistrée sur votre compte n'a pas pu être reprise — saisissez-la à nouveau.
+            {BOOKING_FIELD_FORMAT_HINTS[field.key] ? ` ${BOOKING_FIELD_FORMAT_HINTS[field.key]}.` : ""}
+          </span>
         )}
-      </label>
-      <input
-        id={field.key}
-        type={field.type ?? "text"}
-        inputMode={field.inputMode}
-        maxLength={field.maxLength}
-        autoComplete={field.autoComplete}
-        value={field.value}
-        onChange={(e) =>
-          updateFields({
-            [field.key]: field.digitsOnly ? e.target.value.replace(/\D/g, "") : e.target.value,
-          } as Partial<BookingFormFields>)
-        }
-        placeholder={field.placeholder}
-        required={!field.optional}
-        className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3 ${
-          validationErrors[field.key] ? "border-red-500" : "border-white/20"
-        }`}
-      />
-      {validationErrors[field.key] && (
-        <span className="text-xs text-red-400">{validationErrors[field.key]}</span>
-      )}
-    </div>
-  );
+        {error && (
+          <span className="text-xs text-red-400">{error}</span>
+        )}
+      </div>
+    );
+  };
 
   const editAccountLink = (
     <a
@@ -550,6 +600,25 @@ export function BookingForm({
         <h3 className="text-base font-semibold lg:text-lg">Vos coordonnées</h3>
       </div>
 
+      {/* Échec de l'envoi de la réservation — action réelle, affiché en évidence */}
+      {submitError && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3"
+        >
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" aria-hidden="true" />
+          <p className="flex-1 text-sm font-medium text-red-200">{submitError}</p>
+          <button
+            type="button"
+            onClick={onClearSubmitError}
+            aria-label="Fermer le message"
+            className="shrink-0 rounded-full p-1 text-red-300 transition-colors hover:bg-red-500/20"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Compte client : connexion inline */}
       <LoginCard
         clientUser={clientUser}
@@ -563,7 +632,7 @@ export function BookingForm({
 
       {clientUser ? (
         <div className="flex flex-col gap-4 lg:gap-5">
-          {filledAccountFields.length > 0 && (
+          {filledAccountFieldDefinitions.length > 0 && (
             <section
               aria-label="Coordonnées de votre compte"
               className="rounded-xl border border-white/10 bg-white/5 p-4 lg:p-5"
@@ -573,13 +642,13 @@ export function BookingForm({
                 {editAccountLink}
               </div>
               <dl className="grid gap-x-6 gap-y-3 lg:grid-cols-2 lg:gap-y-4">
-                {filledAccountFields.map((field) => (
+                {filledAccountFieldDefinitions.map((field) => (
                   <div key={field.key} className="min-w-0">
                     <dt className="text-xs font-medium uppercase tracking-wide text-white/40">
-                      {field.label}
+                      {BOOKING_FIELD_LABELS[field.key]}
                     </dt>
                     <dd className="mt-0.5 break-words text-sm text-white/90 lg:text-base">
-                      {field.value}
+                      {accountValues[field.key]}
                     </dd>
                   </div>
                 ))}
@@ -587,18 +656,18 @@ export function BookingForm({
             </section>
           )}
 
-          {emptyAccountFields.length > 0 && (
+          {editableAccountFieldDefinitions.length > 0 && (
             <div className="flex flex-col gap-3 lg:gap-4">
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <p className="text-xs text-white/50 lg:text-sm">
-                  {filledAccountFields.length > 0
-                    ? "Ces informations sont absentes de votre compte — complétez-les pour cette réservation :"
-                    : "Votre compte ne contient pas encore vos coordonnées — complétez-les pour cette réservation :"}
+                  Ces informations ne sont pas disponibles sur votre compte — complétez-les pour cette réservation :
                 </p>
-                {filledAccountFields.length === 0 && editAccountLink}
+                {filledAccountFieldDefinitions.length === 0 && editAccountLink}
               </div>
               <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
-                {emptyAccountFields.map(renderAccountInput)}
+                {editableAccountFieldDefinitions.map((field) =>
+                  renderFieldInput(field, { invalidAccountValue: accountStatus[field.key] === "invalid" }),
+                )}
               </div>
             </div>
           )}
@@ -606,129 +675,17 @@ export function BookingForm({
       ) : (
         <>
           <div className="grid gap-3 lg:gap-4 lg:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="userName" className="text-sm font-medium text-white/70">
-                Prénom et Nom <span className="text-primary">*</span>
-              </label>
-              <input
-                id="userName"
-                type="text"
-                value={userName}
-                onChange={(e) => updateFields({ userName: e.target.value })}
-                placeholder="Jean Dupont"
-                required
-                className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="userEmail" className="text-sm font-medium text-white/70">
-                Email <span className="text-primary">*</span>
-              </label>
-              <input
-                id="userEmail"
-                type="email"
-                value={userEmail}
-                onChange={(e) => updateFields({ userEmail: e.target.value })}
-                placeholder="jean@exemple.fr"
-                required
-                className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3 ${
-                  validationErrors.userEmail ? "border-red-500" : "border-white/20"
-                }`}
-              />
-              {validationErrors.userEmail && (
-                <span className="text-xs text-red-400">{validationErrors.userEmail}</span>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="userPhone" className="text-sm font-medium text-white/70">
-                Téléphone <span className="text-primary">*</span>
-              </label>
-              <input
-                id="userPhone"
-                type="tel"
-                value={userPhone}
-                onChange={(e) => updateFields({ userPhone: e.target.value.replace(/\D/g, "") })}
-                placeholder="0612345678"
-                maxLength={10}
-                required
-                className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3 ${
-                  validationErrors.userPhone ? "border-red-500" : "border-white/20"
-                }`}
-              />
-              {validationErrors.userPhone && (
-                <span className="text-xs text-red-400">{validationErrors.userPhone}</span>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="bandName" className="text-sm font-medium text-white/70">
-                Nom du groupe / Raison Sociale <span className="text-white/40">(optionnel)</span>
-              </label>
-              <input
-                id="bandName"
-                type="text"
-                value={bandName}
-                onChange={(e) => updateFields({ bandName: e.target.value })}
-                placeholder="Les Rockers"
-                className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3"
-              />
-            </div>
+            {(["userName", "userEmail", "userPhone", "bandName"] as BookingFieldKey[]).map((key) =>
+              renderFieldInput(fieldDef(key)),
+            )}
           </div>
 
           <div className="flex flex-col gap-3 lg:gap-4">
             <h4 className="text-sm font-semibold text-white/80">Adresse de facturation</h4>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="billingAddress" className="text-sm font-medium text-white/70">
-                Nom et numéro de rue <span className="text-primary">*</span>
-              </label>
-              <input
-                id="billingAddress"
-                type="text"
-                value={billingAddress}
-                onChange={(e) => updateFields({ billingAddress: e.target.value })}
-                placeholder="12 Rue de la Musique"
-                required
-                className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3"
-              />
-            </div>
+            {renderFieldInput(fieldDef("billingAddress"), { label: "Nom et numéro de rue" })}
             <div className="grid gap-3 lg:gap-4 lg:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="billingPostalCode" className="text-sm font-medium text-white/70">
-                  Code postal <span className="text-primary">*</span>
-                </label>
-                <input
-                  id="billingPostalCode"
-                  type="text"
-                  inputMode="numeric"
-                  value={billingPostalCode}
-                  onChange={(e) => updateFields({ billingPostalCode: e.target.value.replace(/\D/g, "") })}
-                  placeholder="94370"
-                  maxLength={5}
-                  required
-                  className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3 ${
-                    validationErrors.billingPostalCode ? "border-red-500" : "border-white/20"
-                  }`}
-                />
-                {validationErrors.billingPostalCode && (
-                  <span className="text-xs text-red-400">{validationErrors.billingPostalCode}</span>
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="billingCity" className="text-sm font-medium text-white/70">
-                  Ville <span className="text-primary">*</span>
-                </label>
-                <input
-                  id="billingCity"
-                  type="text"
-                  value={billingCity}
-                  onChange={(e) => updateFields({ billingCity: e.target.value })}
-                  placeholder="Sucy-en-Brie"
-                  required
-                  className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3"
-                />
-              </div>
+              {renderFieldInput(fieldDef("billingPostalCode"))}
+              {renderFieldInput(fieldDef("billingCity"))}
             </div>
           </div>
         </>
@@ -759,9 +716,32 @@ export function BookingForm({
         />
       )}
 
+      {/* Raisons du blocage — visibles avant le clic, mises à jour en direct.
+          Puce ambre = valeur enregistrée inutilisable, puce cyan = champ à compléter. */}
+      {!canContinue && !continueLoading && bookingFieldIssues.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-xs font-medium text-white/60 lg:text-sm">
+            À compléter ou à corriger avant de continuer :
+          </p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {bookingFieldIssues.map((issue) => (
+              <li key={issue.key} className="flex items-start gap-2.5 text-xs text-white/75 lg:text-sm">
+                <span
+                  className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${issue.status === "invalid" ? "bg-amber-400/80" : "bg-primary/70"}`}
+                  aria-hidden="true"
+                />
+                <span>{issue.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <button
+        type="button"
         onClick={handleContinue}
-        disabled={!canContinue || continueLoading}
+        disabled={continueLoading}
+        aria-disabled={!canContinue}
         className={`
           w-full rounded-lg py-3.5 text-base font-semibold transition-all lg:py-4 lg:text-lg
           ${canContinue && !continueLoading
@@ -770,7 +750,7 @@ export function BookingForm({
           }
         `}
       >
-        {continueLoading ? "Vérification..." : canContinue ? "Continuer →" : "Remplissez tous les champs obligatoires"}
+        {continueLoading ? "Vérification..." : "Continuer →"}
       </button>
     </div>
   );

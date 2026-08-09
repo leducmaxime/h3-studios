@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  deriveDisplayName,
-  mergeProfilePrefill,
-  type ClientProfile,
-} from "@/components/booking/useBookingWithRouter";
+import { applyProfilePrefill, type ClientProfile } from "@/components/booking/useBookingWithRouter";
+import { computeAccountFieldStatus, deriveDisplayName } from "@/lib/booking-fields";
 
 const baseUser: ClientProfile = {
   id: "u1",
@@ -17,6 +14,16 @@ const baseUser: ClientProfile = {
   address_line2: null,
   postal_code: "75001",
   city: "Paris",
+};
+
+const emptyBookingFields = {
+  userName: "",
+  userEmail: "",
+  userPhone: "",
+  bandName: "",
+  billingAddress: "",
+  billingPostalCode: "",
+  billingCity: "",
 };
 
 describe("deriveDisplayName", () => {
@@ -44,22 +51,36 @@ describe("deriveDisplayName", () => {
   });
 });
 
-describe("mergeProfilePrefill", () => {
-  const emptyFields = {
-    userName: "",
-    userEmail: "",
-    userPhone: "",
-    bandName: "",
-    billingAddress: "",
-    billingPostalCode: "",
-    billingCity: "",
-  };
+describe("profile classification with nullable names", () => {
+  it("uses the non-empty account name when first and last names are null", () => {
+    const user = { ...baseUser, first_name: null, last_name: null };
+    expect(computeAccountFieldStatus(user).userName).toBe("filled");
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user).userName).toBe("JANE DOE");
+  });
 
-  it("fills empty booking fields from the account", () => {
-    expect(mergeProfilePrefill(emptyFields, baseUser)).toEqual({
+  it.each([
+    [{ first_name: null, last_name: "Doe" }, "Doe"],
+    [{ first_name: "Jane", last_name: null }, "Jane"],
+  ])("classifies a one-sided name as filled (%s)", (names, expected) => {
+    const user = { ...baseUser, ...names };
+    expect(computeAccountFieldStatus(user).userName).toBe("filled");
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user).userName).toBe(expected);
+  });
+
+  it("classifies an all-blank name as missing", () => {
+    const user = { ...baseUser, name: "   ", first_name: null, last_name: null };
+    expect(computeAccountFieldStatus(user).userName).toBe("missing");
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user)).not.toHaveProperty("userName");
+  });
+});
+
+describe("applyProfilePrefill", () => {
+  const emptyFields = emptyBookingFields;
+
+  it("syncs filled account fields and leaves invalid account fields editable", () => {
+    expect(applyProfilePrefill(emptyFields, baseUser)).toEqual({
       userName: "Jane Doe",
       userEmail: "jane@example.fr",
-      userPhone: "+33612345678",
       bandName: "Les Oiseaux",
       billingAddress: "12 rue de Paris",
       billingPostalCode: "75001",
@@ -67,7 +88,7 @@ describe("mergeProfilePrefill", () => {
     });
   });
 
-  it("state values win over account values — typed input is never clobbered", () => {
+  it("filled account values win while a differing invalid state value is kept", () => {
     const typed = {
       userName: "Typed Name",
       userEmail: "typed@example.fr",
@@ -77,10 +98,39 @@ describe("mergeProfilePrefill", () => {
       billingPostalCode: "69000",
       billingCity: "Lyon",
     };
-    expect(mergeProfilePrefill(typed, baseUser)).toEqual(typed);
+    expect(applyProfilePrefill(typed, baseUser)).toEqual({
+      userName: "Jane Doe",
+      userEmail: "jane@example.fr",
+      bandName: "Les Oiseaux",
+      billingAddress: "12 rue de Paris",
+      billingPostalCode: "75001",
+      billingCity: "Paris",
+    });
   });
 
-  it("mixes: keeps non-empty typed fields and fills the remaining empty ones", () => {
+  it("overwrites stale state for every filled account field", () => {
+    const account = { ...baseUser, phone: "0612345678" };
+    const stale = {
+      userName: "Ancien nom",
+      userEmail: "ancien@example.fr",
+      userPhone: "0600000000",
+      bandName: "Ancien groupe",
+      billingAddress: "1 rue ancienne",
+      billingPostalCode: "69000",
+      billingCity: "Lyon",
+    };
+    expect(applyProfilePrefill(stale, account)).toEqual({
+      userName: "Jane Doe",
+      userEmail: "jane@example.fr",
+      userPhone: "0612345678",
+      bandName: "Les Oiseaux",
+      billingAddress: "12 rue de Paris",
+      billingPostalCode: "75001",
+      billingCity: "Paris",
+    });
+  });
+
+  it("keeps state values for fields missing or invalid on the account", () => {
     const partial = {
       userName: "Alice",
       userEmail: "",
@@ -90,12 +140,23 @@ describe("mergeProfilePrefill", () => {
       billingPostalCode: "",
       billingCity: "",
     };
-    expect(mergeProfilePrefill(partial, baseUser)).toEqual({
-      userName: "Alice",
+    expect(applyProfilePrefill(partial, baseUser)).toEqual({
+      userName: "Jane Doe",
       userEmail: "jane@example.fr",
-      userPhone: "+33612345678",
       bandName: "Les Oiseaux",
-      billingAddress: "Somewhere",
+      billingAddress: "12 rue de Paris",
+      billingPostalCode: "75001",
+      billingCity: "Paris",
+    });
+  });
+
+  it("clears an invalid account value when state still contains that value", () => {
+    expect(applyProfilePrefill({ ...emptyFields, userPhone: "+33612345678" }, baseUser)).toEqual({
+      userName: "Jane Doe",
+      userEmail: "jane@example.fr",
+      userPhone: "",
+      bandName: "Les Oiseaux",
+      billingAddress: "12 rue de Paris",
       billingPostalCode: "75001",
       billingCity: "Paris",
     });
@@ -114,14 +175,12 @@ describe("mergeProfilePrefill", () => {
       first_name: null,
       last_name: null,
     };
-    expect(mergeProfilePrefill(emptyFields, sparse)).toEqual({
-      userName: "",
-      userEmail: "",
-      userPhone: "",
-      bandName: "",
-      billingAddress: "",
-      billingPostalCode: "",
-      billingCity: "",
-    });
+    expect(applyProfilePrefill(emptyFields, sparse)).toEqual({});
+  });
+
+  it("keeps a state value when the account field is missing", () => {
+    const sparse = { ...baseUser, email: null };
+    const state = { ...emptyFields, userEmail: "saisi@example.fr" };
+    expect({ ...state, ...applyProfilePrefill(state, sparse) }).toHaveProperty("userEmail", "saisi@example.fr");
   });
 });

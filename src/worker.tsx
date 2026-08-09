@@ -1,5 +1,6 @@
 import { render, route, layout } from "rwsdk/router";
 import { getBookingAmountDue, getBookingGrossTotal } from "@/lib/booking-totals";
+import { isValidEmail, resolveBookingIdentity, validateBookingUserFields, type BookingUserBody } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
@@ -874,22 +875,6 @@ const app = defineApp([
         accountPassword?: string;
       };
 
-      const name = body.user?.name?.trim() || "";
-      const email = body.user?.email?.trim().toLowerCase() || "";
-      const phone = body.user?.phone?.trim() || "";
-      const bandNameRaw = body.user?.bandName?.trim() || "";
-      const bookingBandName = bandNameRaw ? bandNameRaw : null;
-      const addressLine1 = body.user?.addressLine1?.trim() || "";
-      const postalCode = body.user?.postalCode?.trim() || "";
-      const city = body.user?.city?.trim() || "";
-
-      if (!name || !email || !phone) {
-        return jsonError("Merci de renseigner nom, email et téléphone.", 400);
-      }
-      if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-        return jsonError("Adresse email invalide.", 400);
-      }
-
       type AccountStatus = "authenticated" | "created" | "activation-email-sent" | "guest";
       // ── Identity resolution (Phase 5A: optional auth) ─────────────────────
       let userId: string;
@@ -904,20 +889,48 @@ const app = defineApp([
         sessionUser = await validateClientSession(env.DB, sessionToken);
       }
 
+      const resolved = resolveBookingIdentity(body.user as BookingUserBody, sessionUser);
+      const validation = validateBookingUserFields(resolved);
+      if (!validation.ok) {
+        return jsonResponse(
+          { success: false, error: validation.error, code: "missing-fields", fields: validation.fields },
+          400,
+        );
+      }
+
+      const name = resolved.name;
+      const email = resolved.email;
+      const phone = resolved.phone;
+      const bandNameRaw = resolved.bandName;
+      const bookingBandName = bandNameRaw ? bandNameRaw : null;
+      const addressLine1 = resolved.addressLine1;
+      const postalCode = resolved.postalCode;
+      const city = resolved.city;
+
+      let authenticatedUserUpdates: Parameters<typeof updateUser>[2] | null = null;
       if (sessionUser) {
         // A) Authenticated user — use session identity, ignore body email for identity
         userId = sessionUser.id;
         accountStatus = "authenticated";
 
-        // Profile fields may be updated from form, but NOT email (PII protection)
-        await updateUser(env.DB, userId, {
-          name,
-          phone,
-          ...(bandNameRaw ? { band_name: bandNameRaw } : {}),
-          ...(addressLine1 ? { address_line1: addressLine1 } : {}),
-          ...(postalCode ? { postal_code: postalCode } : {}),
-          ...(city ? { city: city } : {}),
-        });
+        const posted = {
+          phone: body.user?.phone?.trim() || "",
+          band_name: body.user?.bandName?.trim() || "",
+          address_line1: body.user?.addressLine1?.trim() || "",
+          postal_code: body.user?.postalCode?.trim() || "",
+          city: body.user?.city?.trim() || "",
+        };
+        const current = {
+          phone: sessionUser.phone?.trim() || "",
+          band_name: sessionUser.band_name?.trim() || "",
+          address_line1: sessionUser.address_line1?.trim() || "",
+          postal_code: sessionUser.postal_code?.trim() || "",
+          city: sessionUser.city?.trim() || "",
+        };
+        const updates: Parameters<typeof updateUser>[2] = Object.fromEntries(
+          Object.entries(posted).filter(([k, v]) => v && v !== current[k as keyof typeof current]),
+        );
+        if (Object.keys(updates).length > 0) authenticatedUserUpdates = updates;
       } else {
         // B) Guest: find-or-create user by normalized email
         const { user: guestUser, wasCreated } = await findOrCreateUserByEmail(env.DB, email, {
@@ -954,7 +967,28 @@ const app = defineApp([
         if (existingByRef.user_id === userId) {
           return jsonSuccess({ ...existingByRef, accountStatus });
         }
-        return jsonError("Référence de réservation déjà utilisée", 409);
+        return jsonResponse(
+          { success: false, error: "Référence de réservation déjà utilisée", code: "booking-ref-conflict" },
+          409,
+        );
+      }
+
+      if (sessionUser && (!sessionUser.email?.trim() || !isValidEmail(sessionUser.email)) && resolved.email) {
+        const existing = await getUserByEmail(env.DB, resolved.email);
+        if (existing && existing.id !== sessionUser.id) {
+          return jsonResponse(
+            { success: false, error: "Cet email est déjà utilisé par un autre compte." },
+            409,
+          );
+        }
+        authenticatedUserUpdates = {
+          ...(authenticatedUserUpdates ?? {}),
+          email: resolved.email,
+        };
+      }
+
+      if (authenticatedUserUpdates) {
+        await updateUser(env.DB, userId, authenticatedUserUpdates);
       }
 
       // Guest account activation — only for genuinely new bookings

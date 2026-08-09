@@ -13,7 +13,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check, PackageCheck, WrenchIcon } from "lucide-react";
+import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check, PackageCheck, WrenchIcon, AlertTriangle } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -56,6 +56,9 @@ export function Reservation({ step }: ReservationProps) {
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,
+    bookingFieldIssues,
+    submitError,
+    clearSubmitError,
     clientUser,
     clientUserLoading,
     clientLogin,
@@ -568,6 +571,9 @@ export function Reservation({ step }: ReservationProps) {
                   onContinue={goToPaymentFromCoordonnees}
                   onBack={goBack}
                   canContinue={canConfirmBooking}
+                  bookingFieldIssues={bookingFieldIssues}
+                  submitError={submitError}
+                  onClearSubmitError={clearSubmitError}
                 />
               )}
 
@@ -684,6 +690,34 @@ export function Reservation({ step }: ReservationProps) {
             )}
 
             {/* Step paiement: PaymentChoice + StripeRedirect */}
+            {/* Échec de l'envoi (selectPaymentMethod → submitCart) : visible ici,
+                avec un chemin de retour vers les coordonnées (ex. session expirée → se reconnecter). */}
+            {state.step === "paiement" && submitError && (
+              <div
+                role="alert"
+                className="mb-4 flex items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3"
+              >
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-red-200">{submitError}</p>
+                  <button
+                    type="button"
+                    onClick={goBack}
+                    className="mt-2.5 rounded-lg border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
+                  >
+                    Retour aux coordonnées
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearSubmitError}
+                  aria-label="Fermer le message"
+                  className="shrink-0 rounded-full p-1 text-red-300 transition-colors hover:bg-red-500/20"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             {state.step === "paiement" && !state.paymentMethod && (
               <PaymentChoice
                 cart={state.cart}
