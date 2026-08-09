@@ -701,27 +701,6 @@ export function BookingForm({
         />
       )}
 
-      {/* Raisons du blocage — visibles avant le clic, mises à jour en direct.
-          Puce ambre = valeur enregistrée inutilisable, puce cyan = champ à compléter. */}
-      {!clientUserLoading && !canContinue && !continueLoading && bookingFieldIssues.length > 0 && (
-        <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-          <p className="text-xs font-medium text-white/60 lg:text-sm">
-            À compléter ou à corriger avant de continuer :
-          </p>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            {bookingFieldIssues.map((issue) => (
-              <li key={issue.key} className="flex items-start gap-2.5 text-xs text-white/75 lg:text-sm">
-                <span
-                  className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${issue.status === "invalid" ? "bg-amber-400/80" : "bg-primary/70"}`}
-                  aria-hidden="true"
-                />
-                <span>{issue.reason}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <button
         type="button"
         onClick={handleContinue}
