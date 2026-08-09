@@ -228,6 +228,16 @@ export function computeAccountFieldStatus(
   return status;
 }
 
+/** True when an account-owned field has drifted from the booking state. */
+export function accountFieldsDrifted(
+  fields: BookingUserFields,
+  user: BookingAccountProfile,
+): boolean {
+  const account = accountFieldValues(user);
+  const status = computeAccountFieldStatus(user);
+  return BOOKING_FIELD_KEYS.some((key) => status[key] === "filled" && fields[key] !== account[key]);
+}
+
 // ---------------------------------------------------------------------------
 // Gate — what blocks the confirm action, and why
 // ---------------------------------------------------------------------------

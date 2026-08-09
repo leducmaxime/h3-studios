@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyProfilePrefill, type ClientProfile } from "@/components/booking/useBookingWithRouter";
-import { computeAccountFieldStatus, deriveDisplayName, getBookingFieldIssues } from "@/lib/booking-fields";
+import { accountFieldsDrifted, computeAccountFieldStatus, deriveDisplayName, getBookingFieldIssues } from "@/lib/booking-fields";
 
 const baseUser: ClientProfile = {
   id: "u1",
@@ -228,5 +228,43 @@ describe("applyProfilePrefill", () => {
     const once = { ...emptyFields, ...applyProfilePrefill(emptyFields, { ...baseUser, phone: "0612345678" }, { initial: false }) };
     const twice = { ...once, ...applyProfilePrefill(once, { ...baseUser, phone: "0612345678" }, { initial: false }) };
     expect(twice).toEqual(once);
+  });
+});
+
+describe("accountFieldsDrifted", () => {
+  const completeAccount = { ...baseUser, phone: "0612345678" };
+  const completeFields = {
+    ...emptyBookingFields,
+    userName: "Jane Doe",
+    userEmail: "jane@example.fr",
+    userPhone: "0612345678",
+    bandName: "Les Oiseaux",
+    billingAddress: "12 rue de Paris",
+    billingPostalCode: "75001",
+    billingCity: "Paris",
+  };
+
+  it("is false when account-filled state matches", () => {
+    expect(accountFieldsDrifted(completeFields, completeAccount)).toBe(false);
+  });
+
+  it("is true when an account-filled field is empty after reset", () => {
+    expect(accountFieldsDrifted({ ...completeFields, userEmail: "" }, completeAccount)).toBe(true);
+  });
+
+  it("ignores differences in missing and invalid account fields", () => {
+    const missing = { ...completeAccount, city: null };
+    expect(accountFieldsDrifted({ ...completeFields, billingCity: "Lyon" }, missing)).toBe(false);
+
+    const invalid = { ...completeAccount, phone: "+33612345678" };
+    expect(accountFieldsDrifted({ ...completeFields, userPhone: "0600000000" }, invalid)).toBe(false);
+  });
+});
+
+describe("reset prefill composition", () => {
+  it("opens the gate after applying a complete account to empty state", () => {
+    const completeAccount = { ...baseUser, phone: "0612345678" };
+    const merged = { ...emptyBookingFields, ...applyProfilePrefill(emptyBookingFields, completeAccount, { initial: true }) };
+    expect(getBookingFieldIssues(merged)).toEqual([]);
   });
 });

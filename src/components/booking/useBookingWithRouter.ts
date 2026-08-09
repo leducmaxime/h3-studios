@@ -6,6 +6,7 @@ import type { PricingData } from "@/lib/pricing";
 import { calculatePrice } from "@/lib/pricing";
 import { usePricing } from "./usePricing";
 import {
+  accountFieldsDrifted,
   accountFieldValues,
   BOOKING_FIELD_KEYS,
   computeAccountFieldStatus,
@@ -391,6 +392,24 @@ export function useBookingWithRouter(urlStep?: string) {
   useEffect(() => {
     isHydratedRef.current = isHydrated;
   }, [isHydrated]);
+
+  // The read-only account summary renders account values while the gate reads
+  // state. Any path that clears state while a profile is known must re-sync;
+  // this guard covers paths nobody remembered to update.
+  useEffect(() => {
+    if (!clientUser) return;
+    const fields: BookingUserFields = {
+      userName: state.userName,
+      userEmail: state.userEmail,
+      userPhone: state.userPhone,
+      bandName: state.bandName,
+      billingAddress: state.billingAddress,
+      billingPostalCode: state.billingPostalCode,
+      billingCity: state.billingCity,
+    };
+    if (!accountFieldsDrifted(fields, clientUser)) return;
+    setState((s) => ({ ...s, ...applyProfilePrefill(s, clientUser, { initial: false }) }));
+  }, [clientUser, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity]);
 
   const mergedSlotsByStudio = useMemo(
     () => {
@@ -1077,7 +1096,12 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const resetBooking = useCallback(() => {
     clearBookingState();
-    setState(initialState);
+    const user = clientUserRef.current;
+    setState(
+      user
+        ? { ...initialState, ...applyProfilePrefill(initialState, user, { initial: true }) }
+        : initialState,
+    );
   }, []);
 
   /** Login a client user in the booking flow. On success, prefill form fields from the account. */
