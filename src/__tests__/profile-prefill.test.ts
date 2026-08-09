@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyProfilePrefill, type ClientProfile } from "@/components/booking/useBookingWithRouter";
-import { computeAccountFieldStatus, deriveDisplayName } from "@/lib/booking-fields";
+import { computeAccountFieldStatus, deriveDisplayName, getBookingFieldIssues } from "@/lib/booking-fields";
 
 const baseUser: ClientProfile = {
   id: "u1",
@@ -182,5 +182,29 @@ describe("applyProfilePrefill", () => {
     const sparse = { ...baseUser, email: null };
     const state = { ...emptyFields, userEmail: "saisi@example.fr" };
     expect({ ...state, ...applyProfilePrefill(state, sparse) }).toHaveProperty("userEmail", "saisi@example.fr");
+  });
+
+  it("composes with the gate for an account containing only name and email", () => {
+    const account = {
+      ...baseUser,
+      phone: null,
+      band_name: null,
+      address_line1: null,
+      postal_code: null,
+      city: null,
+    };
+    const merged = { ...emptyFields, ...applyProfilePrefill(emptyFields, account) };
+    expect(getBookingFieldIssues(merged).map((issue) => issue.key)).toEqual([
+      "userPhone",
+      "billingAddress",
+      "billingPostalCode",
+      "billingCity",
+    ]);
+  });
+
+  it("is idempotent across repeated profile arrivals", () => {
+    const once = { ...emptyFields, ...applyProfilePrefill(emptyFields, { ...baseUser, phone: "0612345678" }) };
+    const twice = { ...once, ...applyProfilePrefill(once, { ...baseUser, phone: "0612345678" }) };
+    expect(twice).toEqual(once);
   });
 });

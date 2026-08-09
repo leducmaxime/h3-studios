@@ -90,18 +90,18 @@ interface BookingFieldDef {
   autoComplete?: string;
 }
 
-const BOOKING_FIELD_DEFS: readonly BookingFieldDef[] = [
-  { key: "userName", placeholder: "Jean Dupont", autoComplete: "name" },
-  { key: "userEmail", placeholder: "jean@exemple.fr", type: "email", autoComplete: "email" },
-  { key: "userPhone", placeholder: "0612345678", type: "tel", inputMode: "numeric", maxLength: 10, digitsOnly: true, autoComplete: "tel" },
-  { key: "bandName", optional: true, placeholder: "Les Rockers", autoComplete: "organization" },
-  { key: "billingAddress", placeholder: "12 Rue de la Musique", autoComplete: "street-address" },
-  { key: "billingPostalCode", placeholder: "94370", inputMode: "numeric", maxLength: 5, digitsOnly: true, autoComplete: "postal-code" },
-  { key: "billingCity", placeholder: "Sucy-en-Brie", autoComplete: "address-level2" },
-];
+const BOOKING_FIELD_DEFS: Record<BookingFieldKey, BookingFieldDef> = {
+  userName: { key: "userName", placeholder: "Jean Dupont", autoComplete: "name" },
+  userEmail: { key: "userEmail", placeholder: "jean@exemple.fr", type: "email", autoComplete: "email" },
+  userPhone: { key: "userPhone", placeholder: "0612345678", type: "tel", inputMode: "numeric", maxLength: 10, digitsOnly: true, autoComplete: "tel" },
+  bandName: { key: "bandName", optional: true, placeholder: "Les Rockers", autoComplete: "organization" },
+  billingAddress: { key: "billingAddress", placeholder: "12 Rue de la Musique", autoComplete: "street-address" },
+  billingPostalCode: { key: "billingPostalCode", placeholder: "94370", inputMode: "numeric", maxLength: 5, digitsOnly: true, autoComplete: "postal-code" },
+  billingCity: { key: "billingCity", placeholder: "Sucy-en-Brie", autoComplete: "address-level2" },
+};
 
 function fieldDef(key: BookingFieldKey): BookingFieldDef {
-  return BOOKING_FIELD_DEFS.find((def) => def.key === key) as BookingFieldDef;
+  return BOOKING_FIELD_DEFS[key];
 }
 
 // ---------------------------------------------------------------------------
@@ -510,13 +510,13 @@ export function BookingForm({
   // all 6 fields non-empty. State prefill from the hook is untouched:
   // validation always reads state, not the DOM.
   const accountValues = useMemo(() => accountFieldValues(clientUser), [clientUser]);
-  const accountStatus = useMemo(() => computeAccountFieldStatus(clientUser), [clientUser]);
+  const accountFieldStatus = useMemo(() => computeAccountFieldStatus(clientUser), [clientUser]);
   const bookingValues: Record<BookingFieldKey, string> = { userName, userEmail, userPhone, bandName, billingAddress, billingPostalCode, billingCity };
   const filledAccountFieldDefinitions: BookingFieldDef[] = clientUser
-    ? BOOKING_FIELD_DEFS.filter((field) => accountStatus[field.key] === "filled")
+    ? Object.values(BOOKING_FIELD_DEFS).filter((field) => accountFieldStatus[field.key] === "filled")
     : [];
   const editableAccountFieldDefinitions: BookingFieldDef[] = clientUser
-    ? BOOKING_FIELD_DEFS.filter((field) => accountStatus[field.key] !== "filled")
+    ? Object.values(BOOKING_FIELD_DEFS).filter((field) => accountFieldStatus[field.key] !== "filled")
     : [];
 
   /**
@@ -660,13 +660,15 @@ export function BookingForm({
             <div className="flex flex-col gap-3 lg:gap-4">
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <p className="text-xs text-white/50 lg:text-sm">
-                  Ces informations ne sont pas disponibles sur votre compte — complétez-les pour cette réservation :
+                  {editableAccountFieldDefinitions.some((field) => accountFieldStatus[field.key] === "invalid")
+                    ? "Complétez ou corrigez ces informations pour cette réservation :"
+                    : "Ces informations ne sont pas disponibles sur votre compte — complétez-les pour cette réservation :"}
                 </p>
                 {filledAccountFieldDefinitions.length === 0 && editAccountLink}
               </div>
               <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
                 {editableAccountFieldDefinitions.map((field) =>
-                  renderFieldInput(field, { invalidAccountValue: accountStatus[field.key] === "invalid" }),
+                  renderFieldInput(field, { invalidAccountValue: accountFieldStatus[field.key] === "invalid" }),
                 )}
               </div>
             </div>
@@ -718,7 +720,7 @@ export function BookingForm({
 
       {/* Raisons du blocage — visibles avant le clic, mises à jour en direct.
           Puce ambre = valeur enregistrée inutilisable, puce cyan = champ à compléter. */}
-      {!canContinue && !continueLoading && bookingFieldIssues.length > 0 && (
+      {!clientUserLoading && !canContinue && !continueLoading && bookingFieldIssues.length > 0 && (
         <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
           <p className="text-xs font-medium text-white/60 lg:text-sm">
             À compléter ou à corriger avant de continuer :

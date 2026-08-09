@@ -707,6 +707,13 @@ export function Reservation({ step }: ReservationProps) {
                   >
                     Retour aux coordonnées
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateToStep("panier")}
+                    className="mt-2.5 rounded-lg border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
+                  >
+                    Retour au panier
+                  </button>
                 </div>
                 <button
                   type="button"

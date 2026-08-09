@@ -67,7 +67,7 @@ export const BOOKING_FIELD_LABELS: Record<BookingFieldKey, string> = {
 
 export type BookingUserFields = Record<BookingFieldKey, string>;
 
-export const EMPTY_BOOKING_USER_FIELDS: BookingUserFields = {
+const EMPTY_BOOKING_USER_FIELDS: BookingUserFields = {
   userName: "",
   userEmail: "",
   userPhone: "",
@@ -81,7 +81,7 @@ export const EMPTY_BOOKING_USER_FIELDS: BookingUserFields = {
 // Validity predicates — the ONLY definition of "valid" in the booking flow
 // ---------------------------------------------------------------------------
 
-export const EMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const EMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 export function isValidEmail(value: string): boolean {
   return EMAIL_PATTERN.test(value.trim());
@@ -259,7 +259,7 @@ export function getBookingFieldIssues(fields: BookingUserFields): BookingFieldIs
 }
 
 /** Required fields with no value at all, in stable order. */
-export function missingRequiredFields(fields: BookingUserFields): BookingFieldKey[] {
+function missingRequiredFields(fields: BookingUserFields): BookingFieldKey[] {
   return REQUIRED_BOOKING_FIELDS.filter((key) => !(fields[key] ?? "").trim());
 }
 
@@ -304,7 +304,7 @@ const RESOLVED_KEY_BY_FIELD: Record<BookingFieldKey, keyof ResolvedBookingUser> 
 };
 
 /** Booking-field view of a resolved server-side user block. */
-export function resolvedToFields(resolved: ResolvedBookingUser): BookingUserFields {
+function resolvedToFields(resolved: ResolvedBookingUser): BookingUserFields {
   const fields = {} as BookingUserFields;
   for (const key of BOOKING_FIELD_KEYS) {
     fields[key] = resolved[RESOLVED_KEY_BY_FIELD[key]] ?? "";

@@ -8,7 +8,6 @@ import { usePricing } from "./usePricing";
 import {
   accountFieldValues,
   BOOKING_FIELD_KEYS,
-  canConfirmBookingFields,
   computeAccountFieldStatus,
   getBookingFieldIssues,
   type BookingFieldIssue,
@@ -127,8 +126,11 @@ type PrefillFields = Pick<
 >;
 
 /**
- * Apply non-empty account values onto booking fields. Account values win when
- * present; fields absent from the account retain their existing state value.
+ * Prefill writes only fields the account holds (`filled`). Those fields are
+ * rendered read-only and never as inputs, so prefill can never clobber typed
+ * input and no per-identity guard is needed. `invalid` fields are cleared only
+ * when state still holds the account's own unusable value; `missing` fields
+ * are never touched.
  */
 export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile): Partial<PrefillFields> {
   const account = accountFieldValues(user);
@@ -434,8 +436,8 @@ export function useBookingWithRouter(urlStep?: string) {
 
   // -------------------------------------------------------------------------
   // Profile prefill — shared by hydration, inline login and the focus
-  // re-fetch (stale-tab/session gap). Non-empty account values are applied once
-  // per profile identity; subsequent arrivals preserve typed input.
+  // re-fetch (stale-tab/session gap). Filled account values are safely re-synced
+  // on every arrival; invalid and missing account fields remain editable.
   // Resolves with the profile (or null) and never rejects.
   // -------------------------------------------------------------------------
   const prefillFromClientProfile = useCallback((): Promise<ClientProfile | null> => {
@@ -571,6 +573,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
     setClientUserLoading(true);
     prefillFromClientProfile().finally(() => {
+      lastProfileCheckAtRef.current = Date.now();
       setClientUserLoading(false);
       setIsHydrated(true);
     });
@@ -1093,11 +1096,10 @@ export function useBookingWithRouter(urlStep?: string) {
       const meRes = await fetch("/api/client/me", { credentials: "include" });
       const meJson = (await meRes.json()) as { data?: ClientProfile };
       const user = meJson?.data ?? null;
-      if (user) {
-        setClientUser(user);
-        clientUserRef.current = user;
-        setState((s) => ({ ...s, ...applyProfilePrefill(s, user) }));
-      }
+      if (!user) return { ok: false, error: "Connexion établie mais profil indisponible, réessayez" };
+      setClientUser(user);
+      clientUserRef.current = user;
+      setState((s) => ({ ...s, ...applyProfilePrefill(s, user) }));
       return { ok: true };
     } catch (err) {
       return { ok: false, error: "Erreur réseau" };
@@ -1214,6 +1216,8 @@ export function useBookingWithRouter(urlStep?: string) {
     }, 0);
   }, [state.cart, pricingData]);
 
+  const clearSubmitError = useCallback(() => setSubmitError(null), []);
+
   const canProceedToStudio = state.startTime !== null && state.endTime !== null;
   const bookingUserFields = useMemo<BookingUserFields>(() => ({
     userName: state.userName,
@@ -1228,7 +1232,7 @@ export function useBookingWithRouter(urlStep?: string) {
     () => getBookingFieldIssues(bookingUserFields),
     [bookingUserFields],
   );
-  const canConfirmBooking = canConfirmBookingFields(bookingUserFields);
+  const canConfirmBooking = bookingFieldIssues.length === 0;
 
   /** Exposed for ProgressIndicator — checks if a slug step is reachable via user click */
   const canNavigateToStep = useCallback((targetStep: BookingStep): boolean => {
@@ -1257,7 +1261,7 @@ export function useBookingWithRouter(urlStep?: string) {
     canConfirmBooking,
     bookingFieldIssues,
     submitError,
-    clearSubmitError: () => setSubmitError(null),
+    clearSubmitError,
     clientUser,
     clientUserLoading,
     setStep,
