@@ -410,7 +410,7 @@ export function Reservation({ step }: ReservationProps) {
         <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
       </div>
       
-      <div className={`w-auto self-stretch lg:w-full max-w-none lg:max-w-6xl lg:px-4 -mx-2 lg:mx-0 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
+      <div className={`w-auto self-stretch lg:w-full lg:self-center max-w-none -mx-2 lg:mx-auto transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "100ms" }}>
         {/* Cart banner — shown when adding a new booking with items already in cart */}
         {showCartBanner && (
           <div className="mb-4 flex items-center justify-between rounded-xl border-2 border-primary/30 bg-primary/10 px-4 py-3">
