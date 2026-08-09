@@ -124,6 +124,22 @@ export const BOOKING_FIELD_FORMAT_HINTS: Partial<Record<BookingFieldKey, string>
   billingPostalCode: "Le code postal doit contenir 5 chiffres",
 };
 
+/**
+ * Why a required value is missing, in French, for direct display. Written out
+ * per field rather than composed from the label: `${label} est obligatoire`
+ * produces ungrammatical French ("Prénom et nom est obligatoire", "Ville est
+ * obligatoire") because the labels carry no article.
+ */
+const BOOKING_FIELD_REQUIRED_HINTS: Record<BookingFieldKey, string> = {
+  userName: "Le prénom et le nom sont obligatoires",
+  userEmail: "L'email est obligatoire",
+  userPhone: "Le numéro de téléphone est obligatoire",
+  bandName: "", // optional — never reported as missing
+  billingAddress: "L'adresse de facturation est obligatoire",
+  billingPostalCode: "Le code postal est obligatoire",
+  billingCity: "La ville est obligatoire",
+};
+
 // ---------------------------------------------------------------------------
 // Account profile → booking fields
 // ---------------------------------------------------------------------------
@@ -241,7 +257,7 @@ export function getBookingFieldIssues(fields: BookingUserFields): BookingFieldIs
           key,
           label: BOOKING_FIELD_LABELS[key],
           status: "missing",
-          reason: `${BOOKING_FIELD_LABELS[key]} est obligatoire`,
+          reason: BOOKING_FIELD_REQUIRED_HINTS[key],
         });
       }
       continue;

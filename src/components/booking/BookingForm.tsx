@@ -6,7 +6,7 @@ import {
   type StudioId,
   type GroupType,
 } from "@/lib/booking";
-import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, BOOKING_FIELD_LABELS, computeAccountFieldStatus, isValidBookingFieldValue, isValidEmail, isValidPhone, isValidPostalCode, type BookingFieldIssue, type BookingFieldKey } from "@/lib/booking-fields";
+import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, BOOKING_FIELD_LABELS, computeAccountFieldStatus, isValidBookingFieldValue, isValidEmail, isValidPhone, isValidPostalCode, REQUIRED_BOOKING_FIELDS, type BookingFieldIssue, type BookingFieldKey } from "@/lib/booking-fields";
 
 /**
  * Fields of the booking state this form reads/writes.
@@ -662,7 +662,9 @@ export function BookingForm({
                 <p className="text-xs text-white/50 lg:text-sm">
                   {editableAccountFieldDefinitions.some((field) => accountFieldStatus[field.key] === "invalid")
                     ? "Complétez ou corrigez ces informations pour cette réservation :"
-                    : "Ces informations ne sont pas disponibles sur votre compte — complétez-les pour cette réservation :"}
+                    : editableAccountFieldDefinitions.some((field) => REQUIRED_BOOKING_FIELDS.includes(field.key))
+                      ? "Ces informations ne sont pas disponibles sur votre compte — complétez-les pour cette réservation :"
+                      : "Vous pouvez ajouter ces informations facultatives :"}
                 </p>
                 {filledAccountFieldDefinitions.length === 0 && editAccountLink}
               </div>

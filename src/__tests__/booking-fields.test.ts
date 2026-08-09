@@ -57,6 +57,29 @@ describe("booking confirmation gate", () => {
     );
   });
 
+  it("states each missing reason as grammatical French, not label concatenation", () => {
+    const issues = getBookingFieldIssues({
+      userName: "",
+      userEmail: "",
+      userPhone: "",
+      bandName: "",
+      billingAddress: "",
+      billingPostalCode: "",
+      billingCity: "",
+    });
+    expect(issues.map((issue) => issue.reason)).toEqual([
+      "Le prénom et le nom sont obligatoires",
+      "L'email est obligatoire",
+      "Le numéro de téléphone est obligatoire",
+      "L'adresse de facturation est obligatoire",
+      "Le code postal est obligatoire",
+      "La ville est obligatoire",
+    ]);
+    // `${label} est obligatoire` produced "Ville est obligatoire" / "Prénom et
+    // nom est obligatoire" — the labels carry no article.
+    expect(issues.every((issue) => issue.reason !== `${issue.label} est obligatoire`)).toBe(true);
+  });
+
   it("reports malformed present values as invalid", () => {
     const issues = getBookingFieldIssues({ ...validFields, userPhone: "06" });
     expect(issues).toEqual(expect.arrayContaining([
