@@ -132,7 +132,7 @@ type PrefillFields = Pick<
  * when state still holds the account's own unusable value; `missing` fields
  * are never touched.
  */
-export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile): Partial<PrefillFields> {
+export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile, { initial }: { initial: boolean }): Partial<PrefillFields> {
   const account = accountFieldValues(user);
   const status = computeAccountFieldStatus(user);
   const next: Partial<PrefillFields> = {};
@@ -142,6 +142,9 @@ export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile):
     } else if (status[key] === "invalid" && fields[key] === account[key]) {
       next[key] = "";
     }
+  }
+  if (initial && status.userEmail !== "filled") {
+    next.userEmail = "";
   }
   return next;
 }
@@ -380,6 +383,7 @@ export function useBookingWithRouter(urlStep?: string) {
   // once) always reads fresh values without stale closures.
   const clientUserRef = useRef<ClientProfile | null>(null);
   const lastProfileCheckAtRef = useRef(0);
+  const hasAppliedInitialPrefillRef = useRef(false);
   useEffect(() => {
     clientUserRef.current = clientUser;
   }, [clientUser]);
@@ -458,7 +462,9 @@ export function useBookingWithRouter(urlStep?: string) {
           const user = json.data;
           setClientUser(user);
           clientUserRef.current = user;
-          setState((s) => ({ ...s, ...applyProfilePrefill(s, user) }));
+          const initial = !hasAppliedInitialPrefillRef.current;
+          setState((s) => ({ ...s, ...applyProfilePrefill(s, user, { initial }) }));
+          hasAppliedInitialPrefillRef.current = true;
           return user;
         }
         console.warn("[Booking] /api/client/me: no user data");
@@ -1099,7 +1105,7 @@ export function useBookingWithRouter(urlStep?: string) {
       if (!user) return { ok: false, error: "Connexion établie mais profil indisponible, réessayez" };
       setClientUser(user);
       clientUserRef.current = user;
-      setState((s) => ({ ...s, ...applyProfilePrefill(s, user) }));
+      setState((s) => ({ ...s, ...applyProfilePrefill(s, user, { initial: false }) }));
       return { ok: true };
     } catch (err) {
       return { ok: false, error: "Erreur réseau" };

@@ -55,7 +55,7 @@ describe("profile classification with nullable names", () => {
   it("uses the non-empty account name when first and last names are null", () => {
     const user = { ...baseUser, first_name: null, last_name: null };
     expect(computeAccountFieldStatus(user).userName).toBe("filled");
-    expect(applyProfilePrefill({ ...emptyBookingFields }, user).userName).toBe("JANE DOE");
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false }).userName).toBe("JANE DOE");
   });
 
   it.each([
@@ -64,13 +64,13 @@ describe("profile classification with nullable names", () => {
   ])("classifies a one-sided name as filled (%s)", (names, expected) => {
     const user = { ...baseUser, ...names };
     expect(computeAccountFieldStatus(user).userName).toBe("filled");
-    expect(applyProfilePrefill({ ...emptyBookingFields }, user).userName).toBe(expected);
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false }).userName).toBe(expected);
   });
 
   it("classifies an all-blank name as missing", () => {
     const user = { ...baseUser, name: "   ", first_name: null, last_name: null };
     expect(computeAccountFieldStatus(user).userName).toBe("missing");
-    expect(applyProfilePrefill({ ...emptyBookingFields }, user)).not.toHaveProperty("userName");
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false })).not.toHaveProperty("userName");
   });
 });
 
@@ -78,7 +78,7 @@ describe("applyProfilePrefill", () => {
   const emptyFields = emptyBookingFields;
 
   it("syncs filled account fields and leaves invalid account fields editable", () => {
-    expect(applyProfilePrefill(emptyFields, baseUser)).toEqual({
+    expect(applyProfilePrefill(emptyFields, baseUser, { initial: false })).toEqual({
       userName: "Jane Doe",
       userEmail: "jane@example.fr",
       bandName: "Les Oiseaux",
@@ -86,6 +86,28 @@ describe("applyProfilePrefill", () => {
       billingPostalCode: "75001",
       billingCity: "Paris",
     });
+  });
+
+  it("clears a stale persisted email only during the initial prefill", () => {
+    const account = { ...baseUser, email: null };
+    const state = { ...emptyFields, userEmail: "ancien@example.fr" };
+    expect(applyProfilePrefill(state, account, { initial: true })).toHaveProperty("userEmail", "");
+    expect(applyProfilePrefill(state, account, { initial: false })).not.toHaveProperty("userEmail");
+  });
+
+  it("still lets a valid account email win on the initial prefill", () => {
+    const state = { ...emptyFields, userEmail: "ancien@example.fr" };
+    expect(applyProfilePrefill(state, { ...baseUser, phone: "0612345678" }, { initial: true }).userEmail)
+      .toBe("jane@example.fr");
+  });
+
+  it("leaves the other six fields identical for initial and later arrivals", () => {
+    const account = { ...baseUser, email: null, phone: "0612345678" };
+    const initial = applyProfilePrefill(emptyFields, account, { initial: true });
+    const later = applyProfilePrefill(emptyFields, account, { initial: false });
+    const { userEmail: _initialEmail, ...initialOtherFields } = initial;
+    const { userEmail: _laterEmail, ...laterOtherFields } = later;
+    expect(initialOtherFields).toEqual(laterOtherFields);
   });
 
   it("filled account values win while a differing invalid state value is kept", () => {
@@ -98,7 +120,7 @@ describe("applyProfilePrefill", () => {
       billingPostalCode: "69000",
       billingCity: "Lyon",
     };
-    expect(applyProfilePrefill(typed, baseUser)).toEqual({
+    expect(applyProfilePrefill(typed, baseUser, { initial: false })).toEqual({
       userName: "Jane Doe",
       userEmail: "jane@example.fr",
       bandName: "Les Oiseaux",
@@ -119,7 +141,7 @@ describe("applyProfilePrefill", () => {
       billingPostalCode: "69000",
       billingCity: "Lyon",
     };
-    expect(applyProfilePrefill(stale, account)).toEqual({
+    expect(applyProfilePrefill(stale, account, { initial: false })).toEqual({
       userName: "Jane Doe",
       userEmail: "jane@example.fr",
       userPhone: "0612345678",
@@ -140,7 +162,7 @@ describe("applyProfilePrefill", () => {
       billingPostalCode: "",
       billingCity: "",
     };
-    expect(applyProfilePrefill(partial, baseUser)).toEqual({
+    expect(applyProfilePrefill(partial, baseUser, { initial: false })).toEqual({
       userName: "Jane Doe",
       userEmail: "jane@example.fr",
       bandName: "Les Oiseaux",
@@ -151,7 +173,7 @@ describe("applyProfilePrefill", () => {
   });
 
   it("clears an invalid account value when state still contains that value", () => {
-    expect(applyProfilePrefill({ ...emptyFields, userPhone: "+33612345678" }, baseUser)).toEqual({
+    expect(applyProfilePrefill({ ...emptyFields, userPhone: "+33612345678" }, baseUser, { initial: false })).toEqual({
       userName: "Jane Doe",
       userEmail: "jane@example.fr",
       userPhone: "",
@@ -175,13 +197,13 @@ describe("applyProfilePrefill", () => {
       first_name: null,
       last_name: null,
     };
-    expect(applyProfilePrefill(emptyFields, sparse)).toEqual({});
+    expect(applyProfilePrefill(emptyFields, sparse, { initial: false })).toEqual({});
   });
 
   it("keeps a state value when the account field is missing", () => {
     const sparse = { ...baseUser, email: null };
     const state = { ...emptyFields, userEmail: "saisi@example.fr" };
-    expect({ ...state, ...applyProfilePrefill(state, sparse) }).toHaveProperty("userEmail", "saisi@example.fr");
+    expect({ ...state, ...applyProfilePrefill(state, sparse, { initial: false }) }).toHaveProperty("userEmail", "saisi@example.fr");
   });
 
   it("composes with the gate for an account containing only name and email", () => {
@@ -193,7 +215,7 @@ describe("applyProfilePrefill", () => {
       postal_code: null,
       city: null,
     };
-    const merged = { ...emptyFields, ...applyProfilePrefill(emptyFields, account) };
+    const merged = { ...emptyFields, ...applyProfilePrefill(emptyFields, account, { initial: false }) };
     expect(getBookingFieldIssues(merged).map((issue) => issue.key)).toEqual([
       "userPhone",
       "billingAddress",
@@ -203,8 +225,8 @@ describe("applyProfilePrefill", () => {
   });
 
   it("is idempotent across repeated profile arrivals", () => {
-    const once = { ...emptyFields, ...applyProfilePrefill(emptyFields, { ...baseUser, phone: "0612345678" }) };
-    const twice = { ...once, ...applyProfilePrefill(once, { ...baseUser, phone: "0612345678" }) };
+    const once = { ...emptyFields, ...applyProfilePrefill(emptyFields, { ...baseUser, phone: "0612345678" }, { initial: false }) };
+    const twice = { ...once, ...applyProfilePrefill(once, { ...baseUser, phone: "0612345678" }, { initial: false }) };
     expect(twice).toEqual(once);
   });
 });

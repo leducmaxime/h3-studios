@@ -2,11 +2,7 @@
 
 import { AlertTriangle, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
-import {
-  type StudioId,
-  type GroupType,
-} from "@/lib/booking";
-import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, BOOKING_FIELD_LABELS, computeAccountFieldStatus, isValidBookingFieldValue, isValidEmail, isValidPhone, isValidPostalCode, REQUIRED_BOOKING_FIELDS, type BookingFieldIssue, type BookingFieldKey } from "@/lib/booking-fields";
+import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, BOOKING_FIELD_LABELS, computeAccountFieldStatus, isValidBookingFieldValue, REQUIRED_BOOKING_FIELDS, type BookingFieldIssue, type BookingFieldKey } from "@/lib/booking-fields";
 
 /**
  * Fields of the booking state this form reads/writes.
@@ -43,11 +39,6 @@ export interface BookingClientUser {
 }
 
 interface BookingFormProps {
-  date: Date;
-  startTime: string;
-  endTime: string;
-  studioId: StudioId;
-  groupType: GroupType;
   userName: string;
   userEmail: string;
   userPhone: string;
@@ -408,22 +399,8 @@ export function BookingForm({
   const [continueLoading, setContinueLoading] = useState(false);
   const [prefillLoginEmail, setPrefillLoginEmail] = useState("");
 
-  const validateForm = (): boolean => {
+  const validateAccountCreation = (): boolean => {
     const errors: Record<string, string> = {};
-
-    if (userEmail && !isValidEmail(userEmail)) {
-      errors.userEmail = "L'email est invalide";
-    }
-
-    if (!userPhone.trim()) {
-      errors.userPhone = "Le numéro de téléphone est obligatoire";
-    } else if (!isValidPhone(userPhone)) {
-      errors.userPhone = "Le numéro de téléphone est invalide";
-    }
-
-    if (billingPostalCode && !isValidPostalCode(billingPostalCode)) {
-      errors.billingPostalCode = "Le code postal est invalide";
-    }
 
     if (createAccount && !clientUser) {
       if (accountPassword.length < 8) {
@@ -454,7 +431,7 @@ export function BookingForm({
       return;
     }
 
-    if (!validateForm()) return;
+    if (!validateAccountCreation()) return;
 
     // Guest email check: does this email belong to an existing account?
     if (!clientUser) {
@@ -587,6 +564,14 @@ export function BookingForm({
     </a>
   );
 
+  const hasInvalidAccountFields = editableAccountFieldDefinitions.some((field) => accountFieldStatus[field.key] === "invalid");
+  const hasRequiredEditableFields = editableAccountFieldDefinitions.some((field) => REQUIRED_BOOKING_FIELDS.includes(field.key));
+  const headerCopy = hasInvalidAccountFields
+    ? "Complétez ou corrigez ces informations pour cette réservation :"
+    : hasRequiredEditableFields
+      ? "Ces informations ne sont pas disponibles sur votre compte — complétez-les pour cette réservation :"
+      : "Vous pouvez ajouter ces informations facultatives :";
+
   return (
     <div className="flex flex-col gap-5 lg:gap-6">
       <div className="flex items-center gap-3 lg:gap-4">
@@ -660,11 +645,7 @@ export function BookingForm({
             <div className="flex flex-col gap-3 lg:gap-4">
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <p className="text-xs text-white/50 lg:text-sm">
-                  {editableAccountFieldDefinitions.some((field) => accountFieldStatus[field.key] === "invalid")
-                    ? "Complétez ou corrigez ces informations pour cette réservation :"
-                    : editableAccountFieldDefinitions.some((field) => REQUIRED_BOOKING_FIELDS.includes(field.key))
-                      ? "Ces informations ne sont pas disponibles sur votre compte — complétez-les pour cette réservation :"
-                      : "Vous pouvez ajouter ces informations facultatives :"}
+                  {headerCopy}
                 </p>
                 {filledAccountFieldDefinitions.length === 0 && editAccountLink}
               </div>

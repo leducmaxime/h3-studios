@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   BOOKING_FIELD_KEYS,
-  canConfirmBookingFields,
   computeAccountFieldStatus,
   getBookingFieldIssues,
   resolveBookingIdentity,
@@ -35,7 +34,7 @@ const validAccount: BookingAccountProfile = {
 describe("booking confirmation gate", () => {
   it("accepts a complete set and ignores empty optional bandName", () => {
     expect(getBookingFieldIssues(validFields)).toEqual([]);
-    expect(canConfirmBookingFields(validFields)).toBe(true);
+    expect(getBookingFieldIssues(validFields).length === 0).toBe(true);
     expect(getBookingFieldIssues({ ...validFields, bandName: "" })).toEqual([]);
   });
 
@@ -86,7 +85,7 @@ describe("booking confirmation gate", () => {
       expect.objectContaining({ key: "userPhone", status: "invalid" }),
     ]));
     expect(issues.some((issue) => issue.status === "missing")).toBe(false);
-    expect(canConfirmBookingFields({ ...validFields, userPhone: "06" })).toBe(false);
+    expect(getBookingFieldIssues({ ...validFields, userPhone: "06" }).length === 0).toBe(false);
   });
 });
 

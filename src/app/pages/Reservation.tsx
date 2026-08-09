@@ -544,11 +544,6 @@ export function Reservation({ step }: ReservationProps) {
             {/* Step coordonnees: Coordonnées (after cart, before payment) */}
             {state.step === "coordonnees" && (
                 <BookingForm
-                  date={state.cart[0]?.date || new Date()}
-                  startTime={state.cart[0]?.startTime || ""}
-                  endTime={state.cart[0]?.endTime || ""}
-                  studioId={state.cart[0]?.studioId || "la-scene"}
-                  groupType={state.cart[0]?.groupType || "group"}
                   userName={state.userName}
                   userEmail={state.userEmail}
                   userPhone={state.userPhone}
@@ -700,20 +695,22 @@ export function Reservation({ step }: ReservationProps) {
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-red-200">{submitError}</p>
-                  <button
-                    type="button"
-                    onClick={goBack}
-                    className="mt-2.5 rounded-lg border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
-                  >
-                    Retour aux coordonnées
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigateToStep("panier")}
-                    className="mt-2.5 rounded-lg border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
-                  >
-                    Retour au panier
-                  </button>
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={goBack}
+                      className="rounded-lg border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
+                    >
+                      Retour aux coordonnées
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigateToStep("panier")}
+                      className="rounded-lg border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
+                    >
+                      Retour au panier
+                    </button>
+                  </div>
                 </div>
                 <button
                   type="button"

@@ -130,11 +130,10 @@ export const BOOKING_FIELD_FORMAT_HINTS: Partial<Record<BookingFieldKey, string>
  * produces ungrammatical French ("Prénom et nom est obligatoire", "Ville est
  * obligatoire") because the labels carry no article.
  */
-const BOOKING_FIELD_REQUIRED_HINTS: Record<BookingFieldKey, string> = {
+const BOOKING_FIELD_REQUIRED_HINTS: Record<Exclude<BookingFieldKey, "bandName">, string> = {
   userName: "Le prénom et le nom sont obligatoires",
   userEmail: "L'email est obligatoire",
   userPhone: "Le numéro de téléphone est obligatoire",
-  bandName: "", // optional — never reported as missing
   billingAddress: "L'adresse de facturation est obligatoire",
   billingPostalCode: "Le code postal est obligatoire",
   billingCity: "La ville est obligatoire",
@@ -252,7 +251,7 @@ export function getBookingFieldIssues(fields: BookingUserFields): BookingFieldIs
     const value = (fields[key] ?? "").trim();
     const required = REQUIRED_BOOKING_FIELDS.includes(key);
     if (!value) {
-      if (required) {
+      if (required && key !== "bandName") {
         issues.push({
           key,
           label: BOOKING_FIELD_LABELS[key],
@@ -280,10 +279,6 @@ function missingRequiredFields(fields: BookingUserFields): BookingFieldKey[] {
 }
 
 /** True when nothing blocks the confirm action. */
-export function canConfirmBookingFields(fields: BookingUserFields): boolean {
-  return getBookingFieldIssues(fields).length === 0;
-}
-
 // ---------------------------------------------------------------------------
 // Server side — resolve, then validate
 // ---------------------------------------------------------------------------
