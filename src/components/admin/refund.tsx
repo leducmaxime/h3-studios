@@ -32,6 +32,7 @@ import type { RefundFailureCode, RefundOutcome } from "@/lib/refunds";
 export type PaymentRefundInfo = DbPayment & {
   refund_reserved_cents?: number;
   refundable_amount?: number | null;
+  refund_pending_cents?: number;
 };
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {

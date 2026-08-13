@@ -93,6 +93,38 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   "no-show": "Absent",
 };
 
+/**
+ * Libellé secondaire d'état de remboursement d'une ligne carte — trois états
+ * distincts, sans formulation douteuse :
+ *  - refund_pending_cents > 0  → accepté par Stripe, règlement encore en cours
+ *  - aucun pending + refund    → réglé, état final
+ *  - reserved > grand livre    → requires_action, à traiter dans le Dashboard
+ * Les deux derniers peuvent coexister : une seule ligne, ambre, qui fusionne.
+ */
+function refundStateLine(p: PaymentRefundInfo): { text: string; tone: "amber" | "zinc" } | null {
+  if (p.method !== "card") return null;
+  const refundedCents = Math.round(p.refunded_amount * 100);
+  const awaitingActionCents = Math.max(0, (p.refund_reserved_cents ?? 0) - refundedCents);
+  const pendingCents = Math.min(Math.max(0, p.refund_pending_cents ?? 0), refundedCents);
+  if (awaitingActionCents > 0) {
+    const action = `${refundedCents > 0 ? "dont " : ""}${formatPrice(awaitingActionCents / 100)} en attente d'action dans le Dashboard Stripe`;
+    return {
+      tone: "amber",
+      text: pendingCents > 0 ? `${action} · ${formatPrice(pendingCents / 100)} en cours de règlement` : action,
+    };
+  }
+  if (refundedCents <= 0) return null;
+  if (pendingCents > 0) {
+    return {
+      tone: "zinc",
+      text: pendingCents < refundedCents
+        ? `dont ${formatPrice(pendingCents / 100)} en cours de règlement par la banque`
+        : "Remboursement accepté par Stripe — règlement en cours",
+    };
+  }
+  return { tone: "zinc", text: "Remboursement effectué" };
+}
+
 interface BookingDetailProps {
   bookingId: string;
 }
@@ -860,15 +892,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                               {methodLabels[p.method] || p.method} · {formatDbTimestamp(p.created_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                               {p.refunded_amount > 0 && ` · -${formatPrice(p.refunded_amount)} remboursés`}
                             </p>
-                            {p.method === "card" && (p.refund_reserved_cents ?? 0) > Math.round(p.refunded_amount * 100) ? (
-                              <p className="mt-0.5 text-[11px] text-amber-400/90">
-                                dont {formatPrice(((p.refund_reserved_cents ?? 0) - Math.round(p.refunded_amount * 100)) / 100)} en attente d&apos;action dans le Dashboard Stripe
-                              </p>
-                            ) : p.method === "card" && p.refunded_amount > 0 ? (
-                              <p className="mt-0.5 text-[11px] text-zinc-600">
-                                Remboursement accepté par Stripe — le règlement bancaire peut encore être en cours
-                              </p>
-                            ) : null}
+                            {(() => {
+                              const line = refundStateLine(p);
+                              if (!line) return null;
+                              return (
+                                <p className={`mt-0.5 text-[11px] ${line.tone === "amber" ? "text-amber-400/90" : "text-zinc-600"}`}>
+                                  {line.text}
+                                </p>
+                              );
+                            })()}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">

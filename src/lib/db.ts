@@ -698,6 +698,7 @@ function buildPaymentsCTE(): string {
         NULL as stripe_event_id,
         0 as refund_reserved_cents,
         NULL as refundable_amount,
+        0 as refund_pending_cents,
         b.booking_ref as booking_ref,
         COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
         u.band_name as user_band_name,
@@ -727,6 +728,7 @@ function buildPaymentsCTE(): string {
         p.stripe_event_id as stripe_event_id,
         COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0) as refund_reserved_cents,
         MAX(0, ROUND(p.amount * 100) - COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0)) / 100.0 as refundable_amount,
+        COALESCE((SELECT SUM(amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status = 'pending'), 0) as refund_pending_cents,
         b.booking_ref as booking_ref,
         COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
         u.band_name as user_band_name,
@@ -869,6 +871,7 @@ export async function getPaymentsByBookingId(
       p.stripe_event_id as stripe_event_id,
       COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0) as refund_reserved_cents,
       CASE WHEN p.status IN ('paid', 'refunded', 'partial-refund') THEN MAX(0, ROUND(p.amount * 100) - MAX(COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0), ROUND(p.refunded_amount * 100))) / 100.0 ELSE 0 END as refundable_amount
+      ,COALESCE((SELECT SUM(amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status = 'pending'), 0) as refund_pending_cents
     FROM payments p
     WHERE p.booking_id = ?
     ORDER BY p.created_at ASC`,

@@ -146,11 +146,13 @@ export interface DbPaymentRefund {
 export interface DbPaymentWithRefund extends DbPayment {
   refund_reserved_cents: number;
   refundable_amount: number | null;
+  refund_pending_cents: number;
 }
 
 export interface AdminPaymentRow extends DbPayment {
   refund_reserved_cents: number;
   refundable_amount: number | null;
+  refund_pending_cents: number;
   booking_ref: string | null;
   user_name: string | null;
   user_band_name: string | null;
