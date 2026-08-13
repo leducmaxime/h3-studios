@@ -30,6 +30,87 @@ export interface StripeWebhookEvent {
 const STRIPE_API_URL = "https://api.stripe.com/v1";
 const STRIPE_API_VERSION = "2024-06-20";
 
+export interface StripeRefund {
+  id: string;
+  object?: string;
+  amount: number;
+  currency?: string;
+  payment_intent?: string | null;
+  status: "pending" | "requires_action" | "succeeded" | "failed" | "canceled" | null;
+  reason?: string | null;
+  failure_reason?: string | null;
+  metadata?: Record<string, string>;
+  created?: number;
+}
+export interface StripeErrorInfo {
+  type?: string;
+  code?: string;
+  message: string;
+  httpStatus?: number;
+}
+export type StripeResult<T> = { ok: true; data: T } | { ok: false; error: StripeErrorInfo };
+
+function stripeHeaders(secretKey: string, extra: Record<string, string> = {}): Record<string, string> {
+  return { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/x-www-form-urlencoded", "Stripe-Version": STRIPE_API_VERSION, ...extra };
+}
+
+async function safeStripeResponse<T>(response: Response): Promise<StripeResult<T>> {
+  let body: unknown;
+  try { body = await response.json(); } catch { body = undefined; }
+  if (!response.ok) {
+    const e = (body as { error?: { type?: string; code?: string; message?: string } } | undefined)?.error;
+    return { ok: false, error: { type: e?.type, code: e?.code, message: e?.message || response.statusText, httpStatus: response.status } };
+  }
+  if (body === undefined) return { ok: false, error: { message: "Réponse Stripe invalide", httpStatus: response.status } };
+  return { ok: true, data: body as T };
+}
+
+function networkError(error: unknown): StripeResult<never> {
+  return { ok: false, error: { message: error instanceof Error ? error.message : String(error), code: "network_error" } };
+}
+
+export async function createRefund(secretKey: string, params: {
+  paymentIntentId: string; amountCents: number; idempotencyKey: string;
+  metadata?: Record<string, string>; reason?: "requested_by_customer" | "duplicate" | "fraudulent";
+}): Promise<StripeResult<StripeRefund>> {
+  try {
+    const body = new URLSearchParams({ payment_intent: params.paymentIntentId, amount: params.amountCents.toString() });
+    if (params.reason) body.set("reason", params.reason);
+    for (const [key, value] of Object.entries(params.metadata ?? {})) body.set(`metadata[${key}]`, value);
+    return await safeStripeResponse<StripeRefund>(await fetch(`${STRIPE_API_URL}/refunds`, { method: "POST", headers: stripeHeaders(secretKey, { "Idempotency-Key": params.idempotencyKey }), body: body.toString() }));
+  } catch (error) { return networkError(error); }
+}
+
+export async function listRefundsForPaymentIntent(secretKey: string, paymentIntentId: string): Promise<StripeResult<StripeRefund[]>> {
+  const refunds: StripeRefund[] = []; let startingAfter: string | undefined;
+  for (let page = 0; page < 10; page++) {
+    try {
+      const query = new URLSearchParams({ payment_intent: paymentIntentId, limit: "100" });
+      if (startingAfter) query.set("starting_after", startingAfter);
+      const result = await safeStripeResponse<{ data?: StripeRefund[]; has_more?: boolean }>(await fetch(`${STRIPE_API_URL}/refunds?${query}`, { headers: { Authorization: `Bearer ${secretKey}`, "Stripe-Version": STRIPE_API_VERSION } }));
+      if (!result.ok) return result;
+      refunds.push(...(result.data.data ?? []));
+      if (!result.data.has_more) return { ok: true, data: refunds };
+      const last = refunds[refunds.length - 1];
+      if (!last?.id) return { ok: false, error: { code: "pagination_limit", message: "Pagination Stripe invalide" } };
+      startingAfter = last.id;
+    } catch (error) { return networkError(error); }
+  }
+  return { ok: false, error: { code: "pagination_limit", message: "Limite de pagination Stripe atteinte" } };
+}
+
+export async function retrievePaymentIntentIdForSession(secretKey: string, sessionId: string): Promise<StripeResult<string | null>> {
+  try {
+    const result = await safeStripeResponse<{ payment_intent?: string | { id?: string } | null }>(await fetch(`${STRIPE_API_URL}/checkout/sessions/${sessionId}`, { headers: { Authorization: `Bearer ${secretKey}`, "Stripe-Version": STRIPE_API_VERSION } }));
+    if (!result.ok) return result;
+    const intent = result.data.payment_intent;
+    return { ok: true, data: typeof intent === "string" ? intent : intent?.id ?? null };
+  } catch (error) { return networkError(error); }
+}
+
+export function isRefundLedgerAccepted(r: Pick<StripeRefund, "id" | "status">): boolean { return Boolean(r.id) && (r.status === "succeeded" || r.status === "pending"); }
+export function isRefundCommitted(r: Pick<StripeRefund, "id" | "status">): boolean { return Boolean(r.id) && (r.status === "succeeded" || r.status === "pending" || r.status === "requires_action"); }
+
 export async function createCheckoutSession(
   secretKey: string,
   params: CreateCheckoutSessionParams

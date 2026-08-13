@@ -131,7 +131,26 @@ export interface DbPayment {
   stripe_event_id: string | null;
 }
 
+export interface DbPaymentRefund {
+  stripe_refund_id: string;
+  payment_id: string;
+  booking_id: string;
+  amount_cents: number;
+  status: string;
+  reason: string | null;
+  performed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbPaymentWithRefund extends DbPayment {
+  refund_reserved_cents: number;
+  refundable_amount: number | null;
+}
+
 export interface AdminPaymentRow extends DbPayment {
+  refund_reserved_cents: number;
+  refundable_amount: number | null;
   booking_ref: string | null;
   user_name: string | null;
   user_band_name: string | null;

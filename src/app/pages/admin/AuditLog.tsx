@@ -23,6 +23,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/booking";
 import { Button } from "@/components/ui/button";
 import {
+  REFUND_FAILURE_CODE_LABELS,
+  STRIPE_REFUND_STATUS_LABELS,
+} from "@/components/admin/refund";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -112,6 +116,9 @@ const ACTION_LABELS: Record<string, { label: string; variant: "default" | "secon
   complete: { label: "Terminée", variant: "default" },
   "mark-paid": { label: "Payé", variant: "default" },
   refund: { label: "Remboursement", variant: "destructive" },
+  "refund-failed": { label: "Remboursement échoué", variant: "destructive" },
+  "refund-stripe-accepted": { label: "Remboursement accepté (Stripe)", variant: "secondary" },
+  "refund-reconciled": { label: "Rapprochement Stripe", variant: "secondary" },
   block: { label: "Blocage", variant: "destructive" },
   unblock: { label: "Déblocage", variant: "default" },
   merge: { label: "Fusion", variant: "secondary" },
@@ -422,7 +429,32 @@ function summarizeLog(log: ApiAuditLog): string[] {
       return compact([
         money(obj.amount) && `Montant remboursé : ${money(obj.amount)}`,
         money(obj.total) && `Total remboursé à ce jour : ${money(obj.total)}`,
+        str("stripe_refund_status") &&
+          `Statut Stripe : ${STRIPE_REFUND_STATUS_LABELS[str("stripe_refund_status")!] ?? str("stripe_refund_status")}`,
+        str("reason") && `Motif : ${str("reason")}`,
       ]);
+    case "payment:refund-failed":
+      return compact([
+        str("message"),
+        str("code") && `Cause : ${REFUND_FAILURE_CODE_LABELS[str("code")!] ?? str("code")}`,
+      ]);
+    case "payment:refund-stripe-accepted":
+      return compact([
+        money(obj.amount) && `Montant : ${money(obj.amount)}`,
+        str("stripe_refund_status") &&
+          `Stripe a accepté le remboursement (statut : ${STRIPE_REFUND_STATUS_LABELS[str("stripe_refund_status")!] ?? str("stripe_refund_status")}).`,
+        str("stripe_refund_id") && `Référence Stripe : ${str("stripe_refund_id")}`,
+      ]);
+    case "payment:refund-reconciled": {
+      const reconciledIds = Array.isArray(obj.stripe_refund_ids) ? obj.stripe_refund_ids.length : 0;
+      return compact([
+        reconciledIds > 0
+          ? `${reconciledIds} remboursement(s) rapproché(s) depuis Stripe.`
+          : "Rapprochement avec Stripe.",
+        money(obj.refunded_before) && money(obj.refunded_after) &&
+          `Montant remboursé enregistré : ${money(obj.refunded_before)} → ${money(obj.refunded_after)}`,
+      ]);
+    }
     case "payment:update":
       return compact([
         money(obj.previousAmount) && money(obj.amount) &&
@@ -862,6 +894,9 @@ export function AdminAuditLog() {
             <option value="complete">Terminée</option>
             <option value="mark-paid">Payé</option>
             <option value="refund">Remboursement</option>
+            <option value="refund-failed">Remboursement échoué</option>
+            <option value="refund-stripe-accepted">Remboursement accepté (Stripe)</option>
+            <option value="refund-reconciled">Rapprochement Stripe</option>
             <option value="block">Blocage</option>
             <option value="unblock">Déblocage</option>
             <option value="merge">Fusion</option>

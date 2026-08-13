@@ -21,6 +21,7 @@ import {
   Wallet,
   Pencil,
   Trash2,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,6 +49,14 @@ import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPric
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, getBookingBalance, parseAmountInput, getDisplayPaymentStatus, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
+import {
+  CancelBookingDialog,
+  RefundPaymentDialog,
+  isStripeRefundable,
+  refundableCap,
+  hasStripeReference,
+  type PaymentRefundInfo,
+} from "@/components/admin/refund";
 
 interface BookingWithPromo extends DbBooking {
   promo_code_type?: string | null;
@@ -98,7 +107,7 @@ interface EquipmentInfo {
 export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [booking, setBooking] = useState<BookingWithPromo | null>(null);
   const [user, setUser] = useState<DbUser | null>(null);
-  const [payments, setPayments] = useState<DbPayment[]>([]);
+  const [payments, setPayments] = useState<PaymentRefundInfo[]>([]);
   const [equipment, setEquipment] = useState<EquipmentInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -130,8 +139,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   // Cancel dialog
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [cancelLoading, setCancelLoading] = useState(false);
+
+  // Post-hoc refund dialog
+  const [refundTarget, setRefundTarget] = useState<PaymentRefundInfo | null>(null);
+  const [refundOpen, setRefundOpen] = useState(false);
 
   // No-show dialog
   const [noShowOpen, setNoShowOpen] = useState(false);
@@ -263,31 +274,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       }
     }
   }, [payments, booking]);
-
-  const handleCancel = async () => {
-    if (!booking) return;
-    setCancelLoading(true);
-    try {
-      const res = await fetch(`/api/admin/bookings/${booking.id}/cancel`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: cancelReason || "Annulée par l'admin" }),
-      });
-      const json = (await res.json()) as { success: boolean; error?: string };
-      if (json.success) {
-        toast.success("Réservation annulée");
-        setCancelOpen(false);
-        setCancelReason("");
-        fetchBooking();
-      } else {
-        toast.error(json.error || "Erreur lors de l'annulation");
-      }
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setCancelLoading(false);
-    }
-  };
 
   const handleNoShow = async () => {
     if (!booking) return;
@@ -872,13 +858,51 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                             <p className="font-semibold">{formatPrice(p.amount)}</p>
                             <p className="text-xs text-zinc-500">
                               {methodLabels[p.method] || p.method} · {formatDbTimestamp(p.created_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                              {p.refunded_amount > 0 && ` · -${formatPrice(p.refunded_amount)} remboursés`}
                             </p>
+                            {p.method === "card" && (p.refund_reserved_cents ?? 0) > Math.round(p.refunded_amount * 100) ? (
+                              <p className="mt-0.5 text-[11px] text-amber-400/90">
+                                dont {formatPrice(((p.refund_reserved_cents ?? 0) - Math.round(p.refunded_amount * 100)) / 100)} en attente d&apos;action dans le Dashboard Stripe
+                              </p>
+                            ) : p.method === "card" && p.refunded_amount > 0 ? (
+                              <p className="mt-0.5 text-[11px] text-zinc-600">
+                                Remboursement accepté par Stripe — le règlement bancaire peut encore être en cours
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : p.status === "refunded" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : p.status === "partial-refund" ? "bg-blue-500/10 text-blue-300 border-blue-500/20" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
                             {p.status === "paid" ? "Payé" : p.status === "refunded" ? "Remboursé" : p.status === "partial-refund" ? "Remboursé partiel" : "En attente"}
                           </Badge>
+                          {(p.status === "paid" || p.status === "partial-refund") &&
+                            (isStripeRefundable(p) || (p.method !== "card" && refundableCap(p) > 0.004)) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs text-amber-400 hover:text-amber-300"
+                              onClick={() => {
+                                setRefundTarget(p);
+                                setRefundOpen(true);
+                              }}
+                            >
+                              <Undo2 className="h-3 w-3 mr-1" />
+                              Rembourser
+                            </Button>
+                          )}
+                          {(p.status === "paid" || p.status === "partial-refund") &&
+                            p.method === "card" && !hasStripeReference(p) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled
+                              className="h-7 px-2 text-xs text-zinc-600"
+                              title="Remboursement impossible depuis l'application : aucune référence Stripe exploitable"
+                            >
+                              <Undo2 className="h-3 w-3 mr-1" />
+                              Rembourser
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1146,33 +1170,13 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={cancelOpen} onOpenChange={(open) => { if (!open) { setCancelOpen(false); setCancelReason(""); } }}>
-        <DialogContent className="bg-zinc-900 border-zinc-800">
-          <DialogHeader>
-            <DialogTitle>Annuler la réservation</DialogTitle>
-            <DialogDescription>
-              Confirmez l&apos;annulation de <strong>{booking.booking_ref}</strong>. Cette action est irréversible.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label className="text-zinc-400">Raison (optionnel)</Label>
-            <Input
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Raison de l'annulation..."
-              className="bg-zinc-800 border-zinc-700"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setCancelOpen(false); setCancelReason(""); }} disabled={cancelLoading}>
-              Retour
-            </Button>
-            <Button variant="destructive" onClick={handleCancel} disabled={cancelLoading}>
-              {cancelLoading ? "Annulation..." : "Confirmer l'annulation"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CancelBookingDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        bookingId={booking.id}
+        bookingRef={booking.booking_ref}
+        onSettled={fetchBooking}
+      />
 
       <Dialog open={noShowOpen} onOpenChange={(open) => { if (!open) setNoShowOpen(false); }}>
         <DialogContent className="bg-zinc-900 border-zinc-800">
@@ -1250,6 +1254,16 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RefundPaymentDialog
+        payment={refundTarget}
+        open={refundOpen}
+        onOpenChange={setRefundOpen}
+        onSettled={() => {
+          fetchPayments();
+          fetchBooking();
+        }}
+      />
 
       {/* Delete Payment Dialog */}
       <Dialog open={deletePaymentOpen} onOpenChange={setDeletePaymentOpen}>

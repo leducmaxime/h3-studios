@@ -49,6 +49,7 @@ import {
 import { formatPrice } from "@/lib/booking";
 import { getBookingAmountDue } from "@/lib/booking-totals";
 import { exportPaymentsCSV } from "@/lib/export";
+import { RefundPaymentDialog } from "@/components/admin/refund";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,8 @@ interface ApiPayment {
   user_id: string | null;
   booking_date: string | null;
   stripe_event_id: string | null;
+  refund_reserved_cents: number;
+  refundable_amount: number | null;
 }
 
 interface PaymentsResponse {
@@ -147,116 +150,8 @@ const STATUS_CONFIG: Record<
   pending: { label: "En attente", variant: "outline" },
   paid: { label: "Payé", variant: "default" },
   refunded: { label: "Remboursé", variant: "destructive" },
-  "partial-refund": { label: "Partiel", variant: "secondary" },
+  "partial-refund": { label: "Remboursé partiel", variant: "secondary" },
 };
-
-// ─── Refund Dialog ──────────────────────────────────────────────────────────────
-
-function RefundDialog({
-  payment,
-  open,
-  onOpenChange,
-  onConfirm,
-}: {
-  payment: ApiPayment | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (paymentId: string, amount: number) => void;
-}) {
-  const [refundAmount, setRefundAmount] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const maxRefund = payment ? payment.amount - payment.refunded_amount : 0;
-
-  useEffect(() => {
-    if (open && payment) {
-      setRefundAmount((payment.amount - payment.refunded_amount).toFixed(2).replace(".", ","));
-      setSubmitting(false);
-    }
-  }, [open, payment]);
-
-  const parsedAmount = parseFloat(refundAmount.replace(/\s/g, "").replace(",", "."));
-  const isValid =
-    !isNaN(parsedAmount) && parsedAmount > 0 && parsedAmount <= maxRefund;
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!payment || !isValid) return;
-
-    setSubmitting(true);
-    onConfirm(payment.id, parsedAmount);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-zinc-800 bg-zinc-900">
-        <DialogHeader>
-          <DialogTitle>Confirmer le remboursement</DialogTitle>
-          <DialogDescription>
-            {payment && (
-              <>
-                Paiement de{" "}
-                <span className="font-semibold text-foreground">
-                  {formatPrice(payment.amount)}
-                </span>
-                {payment.refunded_amount > 0 && (
-                  <> (déjà remboursé : {formatPrice(payment.refunded_amount)})</>
-                )}
-                <br />
-                Maximum remboursable :{" "}
-                <span className="font-semibold text-foreground">
-                  {formatPrice(maxRefund)}
-                </span>
-              </>
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="refund-amount">Montant à rembourser (€)</Label>
-            <Input
-              id="refund-amount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              max={maxRefund.toFixed(2)}
-              value={refundAmount}
-              onChange={(e) => setRefundAmount(e.target.value)}
-              placeholder="0.00"
-              className="border-zinc-700 bg-zinc-800"
-              autoFocus
-            />
-            {refundAmount && !isValid && (
-              <p className="text-xs text-destructive">
-                Montant invalide (max {formatPrice(maxRefund)})
-              </p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="border-zinc-700"
-            >
-              Annuler
-            </Button>
-            <Button
-              type="submit"
-              variant="destructive"
-              disabled={!isValid || submitting}
-            >
-              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Rembourser {isValid ? formatPrice(parsedAmount) : ""}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ─── Edit Payment Dialog ────────────────────────────────────────────────────────
 
@@ -421,7 +316,18 @@ function PaymentActions({
 }) {
   const isSynthetic = payment.id.startsWith("on-site:") && payment.method === "";
   const canPay = payment.status === "pending" && !isSynthetic;
-  const canRefund = !isSynthetic && payment.status === "paid" && payment.refunded_amount < payment.amount;
+  // Le plafond vient de refundable_amount pour la carte (solde encore
+  // remboursable chez Stripe), du grand livre pour les autres méthodes.
+  // Une ligne partiellement remboursée reste remboursable. Une carte sans
+  // référence Stripe ne peut pas être remboursée depuis l'application.
+  const refundCap = payment.method === "card"
+    ? (payment.refundable_amount ?? 0)
+    : payment.amount - payment.refunded_amount;
+  const canRefund =
+    !isSynthetic &&
+    (payment.status === "paid" || payment.status === "partial-refund") &&
+    refundCap > 0.004 &&
+    (payment.method !== "card" || !!payment.stripe_event_id?.startsWith("cs_"));
   const canEdit = payment.payment_type === "on-site" && !isSynthetic;
   const canDelete = payment.payment_type === "on-site" && !isSynthetic;
   const canAddPayment = !!payment.booking_id;
@@ -774,27 +680,6 @@ export function AdminPayments() {
       toast.error("Erreur réseau");
     } finally {
       setCollectLoading(false);
-    }
-  }
-
-  async function handleRefundConfirm(paymentId: string, amount: number) {
-    try {
-      const res = await fetch(`/api/admin/payments/${paymentId}/refund`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount }),
-      });
-      const json = (await res.json()) as { success: boolean; error?: string };
-      if (json.success) {
-        toast.success(`Remboursement de ${formatPrice(amount)} effectué`);
-        setRefundOpen(false);
-        fetchPayments();
-      } else {
-        toast.error(json.error || "Échec du remboursement");
-      }
-    } catch (error) {
-      console.error("Refund error:", error);
-      toast.error("Erreur réseau");
     }
   }
 
@@ -1245,11 +1130,11 @@ export function AdminPayments() {
       )}
 
       {/* Refund Dialog */}
-      <RefundDialog
+      <RefundPaymentDialog
         payment={refundTarget}
         open={refundOpen}
         onOpenChange={setRefundOpen}
-        onConfirm={handleRefundConfirm}
+        onSettled={fetchPayments}
       />
 
       <EditPaymentDialog

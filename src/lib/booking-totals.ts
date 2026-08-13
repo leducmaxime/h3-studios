@@ -1,5 +1,9 @@
 import type { DbBooking, DbPayment } from "./db-types";
 
+export function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 /**
  * Retourne le montant réellement dû pour une réservation.
  *
@@ -23,13 +27,16 @@ export function getBookingAmountDue(
  */
 export function getBookingBalance(
   booking: Pick<DbBooking, "base_price" | "equipment_price" | "total_price" | "promo_discount">,
-  payments: Pick<DbPayment, "amount" | "status">[],
+  payments: Pick<DbPayment, "amount" | "status" | "refunded_amount">[],
 ): number {
   const amountDue = getBookingAmountDue(booking);
-  const totalPaid = payments
-    .filter((p) => p.status === "paid")
+  const totalCollected = payments
+    .filter((p) => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
     .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-  return Math.max(0, amountDue - totalPaid);
+  const totalRefunded = payments
+    .filter((p) => p.status === "refunded" || p.status === "partial-refund")
+    .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
+  return Math.max(0, amountDue - totalCollected + totalRefunded);
 }
 
 /**
@@ -47,7 +54,7 @@ export function isBookingPast(booking: Pick<DbBooking, "date" | "end_time">): bo
  */
 export function parseAmountInput(value: string): number {
   const n = parseFloat(value.replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+  return Number.isFinite(n) ? round2(n) : NaN;
 }
 
 /**
@@ -85,7 +92,7 @@ export const PAYMENT_STATUS_LABELS: Record<DisplayPaymentStatus, string> = {
 };
 
 /** Somme des paiements réellement encaissés (status 'paid'). */
-export function getTotalPaid(payments: Pick<DbPayment, "amount" | "status">[]): number {
+export function getTotalCurrentlyPaid(payments: Pick<DbPayment, "amount" | "status">[]): number {
   return payments
     .filter((p) => p.status === "paid")
     .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
@@ -142,7 +149,7 @@ export function getDisplayPaymentStatusFromSummary(
   if (bookingStatus === "cancelled") {
     if (totalCollected > 0) {
       // Grand livre factuel : remboursé uniquement après remboursement intégral enregistré.
-      return totalRefunded >= totalCollected ? "refunded" : "paid-before-cancel";
+      return totalRefunded >= totalCollected - 0.005 ? "refunded" : "paid-before-cancel";
     }
     return "cancelled";
   }

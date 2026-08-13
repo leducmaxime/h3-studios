@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CancelBookingDialog } from "@/components/admin/refund";
 import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
@@ -138,8 +139,6 @@ export function AdminBookings() {
     bookingId: "",
     bookingRef: "",
   });
-  const [cancelReason, setCancelReason] = useState("");
-  const [cancelLoading, setCancelLoading] = useState(false);
 
   // No-show dialog state
   const [noShowDialog, setNoShowDialog] = useState<{ open: boolean; bookingId: string; bookingRef: string }>({
@@ -197,30 +196,6 @@ export function AdminBookings() {
     }, 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
-
-  const handleCancel = async () => {
-    setCancelLoading(true);
-    try {
-      const res = await fetch(`/api/admin/bookings/${cancelDialog.bookingId}/cancel`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: cancelReason || "Annulée par l'admin" }),
-      });
-      const json = (await res.json()) as { success: boolean; error?: string };
-      if (json.success) {
-        toast.success(`Réservation ${cancelDialog.bookingRef} annulée`);
-        setCancelDialog({ open: false, bookingId: "", bookingRef: "" });
-        setCancelReason("");
-        fetchBookings();
-      } else {
-        toast.error(json.error || "Erreur lors de l'annulation");
-      }
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setCancelLoading(false);
-    }
-  };
 
   const handleNoShow = async () => {
     setNoShowLoading(true);
@@ -630,43 +605,13 @@ export function AdminBookings() {
       )}
 
       {/* Cancel Dialog */}
-      <Dialog
+      <CancelBookingDialog
         open={cancelDialog.open}
-        onOpenChange={(open) => { if (!open) { setCancelDialog({ open: false, bookingId: "", bookingRef: "" }); setCancelReason(""); } }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Annuler la réservation</DialogTitle>
-            <DialogDescription>
-              Confirmez l&apos;annulation de la réservation <strong>{cancelDialog.bookingRef}</strong>.
-              Cette action est irréversible.
-            </DialogDescription>
-          </DialogHeader>
-          <div>
-            <label htmlFor="cancelReason" className="mb-1.5 block text-sm text-zinc-400">Raison (optionnel)</label>
-            <input
-              id="cancelReason"
-              type="text"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Raison de l'annulation..."
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => { setCancelDialog({ open: false, bookingId: "", bookingRef: "" }); setCancelReason(""); }}
-              disabled={cancelLoading}
-            >
-              Retour
-            </Button>
-            <Button variant="destructive" onClick={handleCancel} disabled={cancelLoading}>
-              {cancelLoading ? "Annulation..." : "Confirmer l'annulation"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={(open) => { if (!open) setCancelDialog({ open: false, bookingId: "", bookingRef: "" }); }}
+        bookingId={cancelDialog.bookingId}
+        bookingRef={cancelDialog.bookingRef}
+        onSettled={fetchBookings}
+      />
 
       {/* Absent Dialog */}
       <Dialog

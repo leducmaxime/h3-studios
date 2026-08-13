@@ -89,13 +89,15 @@ import {
   mergeUsers,
   getPayments,
   getPaymentsByBookingId,
-  getPaymentByBookingId,
+  getPaymentById,
   addPayment,
   markPaymentPaid,
   refundPayment,
   updatePayment,
   deletePayment,
   recomputeBookingPaymentStatus,
+  recomputePaymentRefundState,
+  upsertPaymentRefund,
   getBlockedSlots,
   getBlockedSlotsByDateRange,
   addBlockedSlot,
@@ -131,6 +133,7 @@ import {
   getBookingsByRefs,
   resolveStatsRange,
 } from "@/lib/db";
+import { refundCardPayment, refundPayments } from "@/lib/refunds";
 import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, type StudioId, type GroupType, type EquipmentSelection, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
@@ -1763,15 +1766,13 @@ const app = defineApp([
         let bookingsWithPaymentStatus = await Promise.all(
           result.data.map(async (booking) => {
             const payments = await getPaymentsByBookingId(env.DB, booking.id);
-            const totalPaid = payments
-              .filter((p) => p.status === "paid")
-              .reduce((acc, p) => acc + p.amount, 0);
             const totalCollected = payments
               .filter((p) => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
               .reduce((acc, p) => acc + p.amount, 0);
             const totalRefunded = payments
               .filter((p) => p.status === "refunded" || p.status === "partial-refund")
               .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
+            const totalPaid = totalCollected - totalRefunded;
             const finalTotal = getBookingAmountDue(booking);
             const isFullyPaid = totalPaid >= finalTotal;
 
@@ -2228,30 +2229,76 @@ const app = defineApp([
     if (request.method !== "PUT") return jsonError("Method not allowed", 405);
 
     try {
-      const body = await request.json() as { reason?: string };
+      const body = await request.json() as {
+        reason?: string;
+        refundMode?: "none" | "refund";
+        refunds?: { paymentId: string; amount: number }[];
+      };
+      if (body.refundMode !== "none" && body.refundMode !== "refund") {
+        return jsonError("Choix de remboursement requis : 'none' ou 'refund'", 400);
+      }
+      if (body.refundMode === "refund" && (!Array.isArray(body.refunds) || body.refunds.length === 0 || body.refunds.some((item) =>
+        !item || typeof item.paymentId !== "string" || item.paymentId.trim() === "" || typeof item.amount !== "number" || item.amount <= 0
+      ))) {
+        return jsonError("Aucun paiement à rembourser n'a été fourni", 400);
+      }
       const booking = await getBookingById(env.DB, params.id);
       if (!booking) return jsonError("Réservation introuvable", 404);
 
-      const result = await updateBooking(env.DB, params.id, {
-        status: "cancelled",
-        cancelled_at: new Date().toISOString().replace("T", " ").slice(0, 19),
-        cancel_reason: body.reason || "Annulée par l'admin",
-      });
+      if (booking.status !== "cancelled") {
+        const result = await updateBooking(env.DB, params.id, {
+          status: "cancelled",
+          cancelled_at: new Date().toISOString().replace("T", " ").slice(0, 19),
+          cancel_reason: body.reason || "Annulée par l'admin",
+        });
 
-      if (!result.success) return jsonError(result.error || "Cancel failed", 400);
+        if (!result.success) return jsonError(result.error || "Cancel failed", 400);
 
-      // Décrémenter usage_count du promo code si applicable
-      if (booking.promo_code) {
-        await env.DB.prepare(
-          "UPDATE promo_codes SET usage_count = MAX(0, usage_count - 1) WHERE code = ?"
-        ).bind(booking.promo_code).run();
+        // Décrémenter usage_count du promo code si applicable
+        if (booking.promo_code) {
+          await env.DB.prepare(
+            "UPDATE promo_codes SET usage_count = MAX(0, usage_count - 1) WHERE code = ?"
+          ).bind(booking.promo_code).run();
+        }
+
+        await addAuditLog(env.DB, "booking", params.id, "cancel", {
+          reason: body.reason || "Annulée par l'admin",
+        }, request.headers.get("X-Admin-User-Id") || "admin");
       }
 
-      await addAuditLog(env.DB, "booking", params.id, "cancel", {
-        reason: body.reason || "Annulée par l'admin",
-      }, request.headers.get("X-Admin-User-Id") || "admin");
-
       const updated = await getBookingById(env.DB, params.id);
+      if (body.refundMode === "refund") {
+        const payments = await getPaymentsByBookingId(env.DB, params.id);
+        const paymentIds = new Set(payments.map((payment) => payment.id));
+        const ownershipError = body.refunds!.some((refund) => !paymentIds.has(refund.paymentId));
+        if (ownershipError) {
+          const errorOutcome = {
+            ok: false,
+            paymentId: "",
+            requestedAmount: 0,
+            refundedAmount: 0,
+            refundableAfter: 0,
+            code: "not_in_booking" as const,
+            message: "Un paiement demandé n'appartient pas à cette réservation",
+          };
+          return jsonSuccess({
+            ...updated,
+            refund: { refunded: 0, outcomes: [], errors: [errorOutcome] },
+          });
+        }
+        let refund: Awaited<ReturnType<typeof refundPayments>>;
+        try {
+          refund = await refundPayments({
+            db: env.DB,
+            secretKey: env.STRIPE_SECRET_KEY,
+            performedBy: request.headers.get("X-Admin-User-Id") || "admin",
+          }, body.refunds!, body.reason);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Échec du remboursement";
+          refund = { refunded: 0, outcomes: [], errors: [{ ok: false, paymentId: "", requestedAmount: 0, refundedAmount: 0, refundableAfter: 0, code: "stripe_error", message }] };
+        }
+        return jsonSuccess({ ...updated, refund });
+      }
       return jsonSuccess(updated);
     } catch (error) {
       console.error("PUT /api/admin/bookings/:id/cancel error:", error);
@@ -2323,7 +2370,9 @@ const app = defineApp([
 
       // Recompute remaining server-side
       const payments = await getPaymentsByBookingId(env.DB, params.id);
-      const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+      const totalPaid = payments
+        .filter((p) => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
+        .reduce((acc, p) => acc + p.amount - (Number(p.refunded_amount) || 0), 0);
       const finalTotal = getBookingAmountDue(booking);
       const remaining = finalTotal - totalPaid;
 
@@ -2785,7 +2834,7 @@ const app = defineApp([
       // Stats sur l'ensemble filtré (pas paginé)
       const statsResult = await env.DB.prepare(`
         WITH paid_by_booking AS (
-          SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+          SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
           FROM payments GROUP BY booking_id
         ),
         pay_on_site_pending AS (
@@ -2839,8 +2888,8 @@ const app = defineApp([
         SELECT
           COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
           COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
-          COUNT(CASE WHEN status = 'paid' THEN 1 END) as paidCount,
-          COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paidAmount
+          COUNT(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN 1 END) as paidCount,
+          COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - COALESCE(refunded_amount, 0) ELSE 0 END), 0) as paidAmount
         FROM all_payments ${where}
       `).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number }>();
 
@@ -2911,15 +2960,27 @@ const app = defineApp([
 
     try {
       const body = await request.json() as { amount?: number; reason?: string };
-      if (!body.amount || body.amount <= 0) {
+      if (typeof body.amount !== "number" || body.amount <= 0) {
         return jsonError("Champ obligatoire manquant: amount (> 0)", 400);
       }
 
-      const result = await refundPayment(env.DB, params.id, body.amount);
-      if (!result.success) {
-        return jsonError(result.error || "Refund failed", 400);
+      const payment = await getPaymentById(env.DB, params.id);
+      if (!payment) return jsonError("Paiement introuvable", 404);
+
+      if (payment.method === "card") {
+        const outcome = await refundCardPayment({
+          db: env.DB,
+          secretKey: env.STRIPE_SECRET_KEY,
+          performedBy: request.headers.get("X-Admin-User-Id") || "admin",
+        }, params.id, body.amount, body.reason);
+        if (!outcome.ok) {
+          return jsonResponse({ success: false, error: outcome.message || "Refund failed", code: outcome.code, outcome }, 400);
+        }
+        return jsonSuccess(outcome);
       }
 
+      const result = await refundPayment(env.DB, params.id, body.amount);
+      if (!result.success) return jsonError(result.error || "Refund failed", 400);
       return jsonSuccess({ id: params.id, refundedAmount: body.amount, reason: body.reason });
     } catch (error) {
       console.error("PUT /api/admin/payments/:id/refund error:", error);
@@ -3985,12 +4046,12 @@ const app = defineApp([
           `SELECT
             p.method as method,
             COUNT(*) as count,
-            COALESCE(SUM(p.amount), 0) as revenue
+            COALESCE(SUM(p.amount - COALESCE(p.refunded_amount, 0)), 0) as revenue
           FROM payments p
           JOIN bookings b ON b.id = p.booking_id
           WHERE b.date >= ? AND b.date <= ?
             AND b.status != 'cancelled'
-            AND p.status = 'paid'
+            AND p.status IN ('paid', 'refunded', 'partial-refund')
           GROUP BY p.method`,
         ).bind(fromStr, toStr),
         env.DB.prepare(
@@ -4023,7 +4084,7 @@ const app = defineApp([
          ).bind(fromStr, toStr),
          env.DB.prepare(
            `WITH paid_by_booking AS (
-             SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+             SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
              FROM payments
              GROUP BY booking_id
            )
@@ -4780,7 +4841,7 @@ const app = defineApp([
         const placeholders = bookingIds.map(() => "?").join(", ");
         const rows = await env.DB.prepare(
           `SELECT booking_id,
-             COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as totalPaid,
+             COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as totalPaid,
              COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount ELSE 0 END), 0) as totalCollected,
              COALESCE(SUM(CASE WHEN status IN ('refunded', 'partial-refund') THEN refunded_amount ELSE 0 END), 0) as totalRefunded
            FROM payments
@@ -4975,6 +5036,36 @@ const app = defineApp([
           return new Response("OK", { status: 200 });
         }
 
+        case "refund.updated":
+        case "refund.failed":
+        case "charge.refund.updated": {
+          const refund = event.data.object as unknown as {
+            id: string;
+            amount: number;
+            status: string;
+            metadata?: Record<string, string>;
+          };
+          const paymentId = refund.metadata?.payment_id;
+          if (!paymentId) return new Response("OK", { status: 200 });
+          const payment = await getPaymentById(env.DB, paymentId);
+          if (!payment) return new Response("OK", { status: 200 });
+          await upsertPaymentRefund(env.DB, {
+            stripeRefundId: refund.id,
+            paymentId,
+            bookingId: payment.booking_id,
+            amountCents: refund.amount,
+            status: refund.status,
+            now: new Date().toISOString(),
+          });
+          await recomputePaymentRefundState(env.DB, paymentId);
+          await recomputeBookingPaymentStatus(env.DB, payment.booking_id);
+          await addAuditLog(env.DB, "payment", paymentId, "refund-reconciled", {
+            stripe_refund_id: refund.id,
+            status: refund.status,
+          }, "stripe-webhook");
+          return new Response("OK", { status: 200 });
+        }
+
         case "checkout.session.expired": {
           const session = event.data.object;
           const bookingRefsStr = session.metadata?.booking_refs;
@@ -4987,9 +5078,11 @@ const app = defineApp([
                 if (booking && booking.status === "confirmed") {
                   await updateBooking(env.DB, booking.id, {
                     status: "cancelled",
-                    cancelled_at: new Date().toISOString(),
+                    cancelled_at: new Date().toISOString().replace("T", " ").slice(0, 19),
                     cancel_reason: "Paiement expiré",
                   });
+                  await addAuditLog(env.DB, "booking", booking.id, "cancel", { reason: "Paiement expiré" }, "stripe-webhook");
+                  // Une session expirée n'a jamais été payée : aucun remboursement n'est nécessaire.
                 }
               } catch (e) {
                 console.error(`Failed to cancel expired booking ${ref}:`, e);

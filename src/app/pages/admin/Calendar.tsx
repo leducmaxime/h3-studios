@@ -41,6 +41,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { CancelBookingDialog } from "@/components/admin/refund";
 import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, EQUIPMENT, type StudioId } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue } from "@/lib/booking-totals";
@@ -327,8 +328,6 @@ export function AdminCalendar() {
   }>({ amount: "", method: "cash" });
 
   const [calCancelOpen, setCalCancelOpen] = useState(false);
-  const [calCancelReason, setCalCancelReason] = useState("");
-  const [calCancelLoading, setCalCancelLoading] = useState(false);
   const [calRescheduleOpen, setCalRescheduleOpen] = useState(false);
   const [calRescheduleDate, setCalRescheduleDate] = useState("");
   const [calRescheduleStart, setCalRescheduleStart] = useState("");
@@ -436,28 +435,6 @@ export function AdminCalendar() {
     } catch {
       toast.error("Erreur réseau");
     }
-  };
-
-  const handleCalCancel = async () => {
-    if (!selectedBooking) return;
-    setCalCancelLoading(true);
-    try {
-      const res = await fetch(`/api/admin/bookings/${selectedBooking.id}/cancel`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: calCancelReason }),
-      });
-      const json = await res.json() as { success: boolean; error?: string };
-      if (json.success) {
-        toast.success("Réservation annulée");
-        setCalCancelOpen(false);
-        setSelectedBooking(null);
-        loadBookings();
-      } else {
-        toast.error(json.error || "Erreur");
-      }
-    } catch { toast.error("Erreur réseau"); }
-    finally { setCalCancelLoading(false); }
   };
 
   const handleCalReschedule = async () => {
@@ -1606,25 +1583,17 @@ export function AdminCalendar() {
       {renderBookingDialog()}
 
       {/* Cancel dialog */}
-      <Dialog open={calCancelOpen} onOpenChange={setCalCancelOpen}>
-        <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Annuler la réservation</DialogTitle>
-            <DialogDescription>{selectedBooking?.booking_ref}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Motif (optionnel)</Label>
-            <Input value={calCancelReason} onChange={e => setCalCancelReason(e.target.value)} placeholder="Motif d'annulation..." className="bg-zinc-800 border-zinc-700" />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCalCancelOpen(false)} className="border-zinc-700">Fermer</Button>
-            <Button variant="destructive" onClick={handleCalCancel} disabled={calCancelLoading}>
-              {calCancelLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirmer l'annulation
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CancelBookingDialog
+        open={calCancelOpen}
+        onOpenChange={setCalCancelOpen}
+        bookingId={selectedBooking?.id ?? ""}
+        bookingRef={selectedBooking?.booking_ref ?? ""}
+        contentClassName="border-zinc-800 bg-zinc-900 lg:max-w-md"
+        onSettled={() => {
+          setSelectedBooking(null);
+          loadBookings();
+        }}
+      />
 
       {/* Reschedule dialog */}
       <Dialog open={calRescheduleOpen} onOpenChange={setCalRescheduleOpen}>

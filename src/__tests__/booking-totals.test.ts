@@ -6,7 +6,6 @@ import {
   isBookingPast,
   getDisplayPaymentStatus,
   getDisplayPaymentStatusFromSummary,
-  getTotalPaid,
   getTotalRefunded,
 } from "@/lib/booking-totals";
 
@@ -127,8 +126,8 @@ describe("getBookingBalance", () => {
       promo_discount: 0,
     };
     const payments = [
-      { amount: 20, status: "paid" as const },
-      { amount: 30, status: "paid" as const },
+      { amount: 20, refunded_amount: 0, status: "paid" as const },
+      { amount: 30, refunded_amount: 0, status: "paid" as const },
     ];
     expect(getBookingBalance(booking, payments)).toBe(10);
   });
@@ -141,9 +140,9 @@ describe("getBookingBalance", () => {
       promo_discount: 0,
     };
     const payments = [
-      { amount: 20, status: "paid" as const },
-      { amount: 15, status: "pending" as const },
-      { amount: 10, status: "refunded" as const },
+      { amount: 20, refunded_amount: 0, status: "paid" as const },
+      { amount: 15, refunded_amount: 0, status: "pending" as const },
+      { amount: 10, refunded_amount: 10, status: "refunded" as const },
     ];
     expect(getBookingBalance(booking, payments)).toBe(40);
   });
@@ -156,8 +155,8 @@ describe("getBookingBalance", () => {
       promo_discount: 0,
     };
     const payments = [
-      { amount: 60, status: "paid" as const },
-      { amount: 10, status: "paid" as const },
+      { amount: 60, refunded_amount: 0, status: "paid" as const },
+      { amount: 10, refunded_amount: 0, status: "paid" as const },
     ];
     expect(getBookingBalance(booking, payments)).toBe(0);
   });
@@ -169,27 +168,21 @@ describe("getBookingBalance", () => {
       total_price: 60,
       promo_discount: 20,
     };
-    const payments = [{ amount: 20, status: "paid" as const }];
+    const payments = [{ amount: 20, refunded_amount: 0, status: "paid" as const }];
     expect(getBookingBalance(booking, payments)).toBe(20);
   });
 
-  it("handles refund scenario: refunded > paid", () => {
-    // netPaid = totalPaid - refundedAmount
-    // getBookingBalance filters status === "paid", then sums amount.
-    // It does NOT account for refunds — it returns the gross balance.
-    // This is the existing contract: refund adjustments are separate.
+  it("accounts for refunded payments while preserving unchanged no-refund behavior", () => {
     const booking = {
       base_price: 50,
       equipment_price: 10,
       total_price: 60,
       promo_discount: 0,
     };
-    const payments = [
-      { amount: 60, status: "paid" as const },
-      { amount: 20, status: "refunded" as const },
-    ];
-    // Balance = 60 - 60 = 0 (the 60 paid is still counted as paid)
-    expect(getBookingBalance(booking, payments)).toBe(0);
+    const refundedPayments = [{ amount: 60, refunded_amount: 60, status: "refunded" as const }];
+    const unchangedPayments = [{ amount: 60, refunded_amount: 0, status: "paid" as const }];
+    expect(getBookingBalance(booking, refundedPayments)).toBe(60);
+    expect(getBookingBalance(booking, unchangedPayments)).toBe(0);
   });
 });
 
@@ -253,7 +246,7 @@ describe("total invariant (23€ gross / 20€ discount)", () => {
 
   it("keeps balance consistent with the single 3€ due", () => {
     expect(getBookingBalance(booking, [])).toBe(3);
-    expect(getBookingBalance(booking, [{ amount: 3, status: "paid" as const }])).toBe(0);
+    expect(getBookingBalance(booking, [{ amount: 3, refunded_amount: 0, status: "paid" as const }])).toBe(0);
   });
 });
 
@@ -343,7 +336,7 @@ describe("getDisplayPaymentStatusFromSummary (list enrichment)", () => {
 
 // ─── Grand livre (payments) helpers ──────────────────────────────────────────
 
-describe("getTotalPaid / getTotalRefunded", () => {
+describe("getTotalRefunded", () => {
   const payments = [
     { amount: 20, status: "paid" as const, refunded_amount: 0 },
     { amount: 10, status: "paid" as const, refunded_amount: 0 },
@@ -351,10 +344,6 @@ describe("getTotalPaid / getTotalRefunded", () => {
     { amount: 30, status: "partial-refund" as const, refunded_amount: 10 },
     { amount: 20, status: "refunded" as const, refunded_amount: 20 },
   ];
-
-  it("sums only paid amounts", () => {
-    expect(getTotalPaid(payments)).toBe(30);
-  });
 
   it("sums refunded amounts from refunded/partial-refund records only", () => {
     expect(getTotalRefunded(payments)).toBe(30);

@@ -19,6 +19,8 @@ import {
   type BookingStatus,
   type DbPaymentStatus,
   type DbPaymentConfirmation,
+  type DbPaymentRefund,
+  type DbPaymentWithRefund,
   type CreateBooking,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
@@ -679,7 +681,7 @@ export async function mergeUsers(
 function buildPaymentsCTE(): string {
   return `
     WITH paid_by_booking AS (
-      SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+      SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
       FROM payments
       GROUP BY booking_id
     ),
@@ -693,6 +695,9 @@ function buildPaymentsCTE(): string {
         0 as refunded_amount,
         NULL as paid_at,
         b.created_at as created_at,
+        NULL as stripe_event_id,
+        0 as refund_reserved_cents,
+        NULL as refundable_amount,
         b.booking_ref as booking_ref,
         COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
         u.band_name as user_band_name,
@@ -719,6 +724,9 @@ function buildPaymentsCTE(): string {
         p.refunded_amount as refunded_amount,
         p.paid_at as paid_at,
         p.created_at as created_at,
+        p.stripe_event_id as stripe_event_id,
+        COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0) as refund_reserved_cents,
+        MAX(0, ROUND(p.amount * 100) - COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0)) / 100.0 as refundable_amount,
         b.booking_ref as booking_ref,
         COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
         u.band_name as user_band_name,
@@ -805,8 +813,8 @@ export async function getPayments(
       SELECT
         COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
         COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
-        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paidCount,
-        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paidAmount
+        COUNT(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN 1 END) as paidCount,
+        COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paidAmount
       FROM (
         SELECT * FROM payments_enriched
         UNION ALL
@@ -847,52 +855,25 @@ export async function getPayments(
 export async function getPaymentsByBookingId(
   db: D1Database,
   bookingId: string,
-): Promise<DbPayment[]> {
+): Promise<DbPaymentWithRefund[]> {
   const result = await db.prepare(
     `SELECT
       p.id as id,
       p.booking_id as booking_id,
       p.amount as amount,
-      CASE
-        WHEN p.method IN ('cheque', 'check') THEN 'check'
-        ELSE p.method
-      END as method,
+      CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
       p.status as status,
       p.refunded_amount as refunded_amount,
       p.paid_at as paid_at,
-      p.created_at as created_at
+      p.created_at as created_at,
+      p.stripe_event_id as stripe_event_id,
+      COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0) as refund_reserved_cents,
+      CASE WHEN p.status IN ('paid', 'refunded', 'partial-refund') THEN MAX(0, ROUND(p.amount * 100) - MAX(COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0), ROUND(p.refunded_amount * 100))) / 100.0 ELSE 0 END as refundable_amount
     FROM payments p
-    JOIN bookings b ON b.id = p.booking_id
     WHERE p.booking_id = ?
     ORDER BY p.created_at ASC`,
-  )
-    .bind(bookingId)
-    .all<DbPayment>();
+  ).bind(bookingId).all<DbPaymentWithRefund>();
   return result.results;
-}
-
-export async function getPaymentByBookingId(
-  db: D1Database,
-  bookingId: string,
-): Promise<DbPayment | null> {
-  return db.prepare(
-    `SELECT
-      p.id as id,
-      p.booking_id as booking_id,
-      p.amount as amount,
-      CASE
-        WHEN p.method IN ('cheque', 'check') THEN 'check'
-        ELSE p.method
-      END as method,
-      p.status as status,
-      p.refunded_amount as refunded_amount,
-      p.paid_at as paid_at,
-      p.created_at as created_at
-    FROM payments p
-    JOIN bookings b ON b.id = p.booking_id
-    WHERE p.booking_id = ?
-    ORDER BY p.created_at DESC`,
-  ).bind(bookingId).first<DbPayment>();
 }
 
 /**
@@ -914,11 +895,13 @@ export async function recomputeBookingPaymentStatus(db: D1Database, bookingId: s
   ).bind(bookingId).all<{ amount: number; status: string; refunded_amount: number }>();
 
   const rows = payments.results || [];
-  const totalPaid = rows.filter(p => p.status === "paid").reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+  const totalCollected = rows
+    .filter(p => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
+    .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const totalRefunded = rows
     .filter(p => p.status === "refunded" || p.status === "partial-refund")
     .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
-  const netPaid = totalPaid - totalRefunded;
+  const netPaid = totalCollected - totalRefunded;
 
   // Convention pré-remise simplifiée (audit Phase 7B : zéro ligne post-remise)
   const total = Number(booking.total_price) || 0;
@@ -926,7 +909,7 @@ export async function recomputeBookingPaymentStatus(db: D1Database, bookingId: s
   const finalTotal = Math.max(0, total - discount);
 
   let newStatus: string;
-  if (finalTotal <= 0 || netPaid >= finalTotal) {
+  if (finalTotal <= 0 || netPaid >= finalTotal - 0.005) {
     newStatus = "paid";
   } else if (netPaid > 0) {
     newStatus = "pay-on-site";
@@ -1050,6 +1033,38 @@ export async function markPaymentPaid(
   return { success: true };
 }
 
+export async function getPaymentById(db: D1Database, paymentId: string): Promise<DbPayment | null> {
+  return db.prepare("SELECT * FROM payments WHERE id = ?").bind(paymentId).first<DbPayment>();
+}
+
+export async function upsertPaymentRefund(db: D1Database, refund: { stripeRefundId: string; paymentId: string; bookingId: string; amountCents: number; status: string; reason?: string; performedBy?: string; now: string }): Promise<{ inserted: boolean }> {
+  const result = await db.prepare(`INSERT INTO payment_refunds (stripe_refund_id, payment_id, booking_id, amount_cents, status, reason, performed_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stripe_refund_id) DO NOTHING`)
+    .bind(refund.stripeRefundId, refund.paymentId, refund.bookingId, Math.round(refund.amountCents), refund.status, refund.reason ?? null, refund.performedBy ?? null, refund.now, refund.now).run();
+  await db.prepare("UPDATE payment_refunds SET status = ?, updated_at = ? WHERE stripe_refund_id = ?")
+    .bind(refund.status, refund.now, refund.stripeRefundId).run();
+  return { inserted: (result.meta?.changes ?? 0) > 0 };
+}
+
+export async function recomputePaymentRefundState(db: D1Database, paymentId: string): Promise<{ refundedAmount: number; status: DbPaymentStatus }> {
+  const payment = await getPaymentById(db, paymentId);
+  if (!payment) throw new Error("Paiement introuvable");
+  const sum = await db.prepare("SELECT COALESCE(SUM(amount_cents), 0) as cents FROM payment_refunds WHERE payment_id = ? AND status IN ('succeeded', 'pending')").bind(paymentId).first<{ cents: number }>();
+  const ledgerCents = Math.round(sum?.cents ?? 0);
+  const refundedAmount = ledgerCents / 100;
+  let status = payment.status;
+  if (status === "paid" || status === "refunded" || status === "partial-refund") {
+    const amountCents = Math.round(payment.amount * 100);
+    status = ledgerCents <= 0 ? "paid" : ledgerCents >= amountCents ? "refunded" : "partial-refund";
+    await db.prepare("UPDATE payments SET refunded_amount = ?, status = ? WHERE id = ?").bind(refundedAmount, status, paymentId).run();
+  }
+  return { refundedAmount, status };
+}
+
+export async function getPaymentRefunds(db: D1Database, paymentId: string): Promise<DbPaymentRefund[]> {
+  const result = await db.prepare("SELECT * FROM payment_refunds WHERE payment_id = ? ORDER BY created_at ASC").bind(paymentId).all<DbPaymentRefund>();
+  return result.results;
+}
+
 export async function refundPayment(
   db: D1Database,
   paymentId: string,
@@ -1058,12 +1073,16 @@ export async function refundPayment(
   const payment = await db.prepare("SELECT * FROM payments WHERE id = ?").bind(paymentId).first<DbPayment>();
   if (!payment) return { success: false, error: "Paiement introuvable" };
 
+  if (payment.method === "card") {
+    return { success: false, error: "Les paiements carte doivent être remboursés via Stripe" };
+  }
+
   if (amount > payment.amount - payment.refunded_amount) {
     return { success: false, error: "Montant de remboursement trop élevé" };
   }
 
-  const newRefunded = payment.refunded_amount + amount;
-  const newStatus: DbPaymentStatus = newRefunded >= payment.amount ? "refunded" : "partial-refund";
+  const newRefunded = Math.round((payment.refunded_amount + amount) * 100) / 100;
+  const newStatus: DbPaymentStatus = newRefunded >= payment.amount - 0.005 ? "refunded" : "partial-refund";
 
   await db.prepare(
     "UPDATE payments SET refunded_amount = ?, status = ? WHERE id = ?",
@@ -1797,7 +1816,7 @@ export async function getDashboardStats(
     ).bind(monthFrom, today),
     db.prepare(
       `WITH paid_by_booking AS (
-        SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+        SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
         FROM payments
         GROUP BY booking_id
       )
@@ -1845,7 +1864,7 @@ export async function getDashboardStats(
 
     db.prepare(
       `WITH paid_by_booking AS (
-        SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+        SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
         FROM payments
         GROUP BY booking_id
       )
@@ -1991,10 +2010,10 @@ export async function getMonthlyReportData(
 
     // Payment methods
     db.prepare(
-      `SELECT p.method, COUNT(*) as count, COALESCE(SUM(p.amount), 0) as revenue
+      `SELECT p.method, COUNT(*) as count, COALESCE(SUM(p.amount - COALESCE(p.refunded_amount, 0)), 0) as revenue
        FROM payments p
        JOIN bookings b ON b.id = p.booking_id
-       WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled' AND p.status = 'paid'
+       WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled' AND p.status IN ('paid', 'refunded', 'partial-refund')
        GROUP BY p.method`,
     ).bind(rangeFrom, rangeTo),
 
