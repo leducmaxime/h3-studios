@@ -5,6 +5,7 @@ import { formatDateISO } from "@/lib/utils";
 import type { PricingData } from "@/lib/pricing";
 import { calculatePrice } from "@/lib/pricing";
 import { usePricing } from "./usePricing";
+import { useEquipment } from "./useEquipment";
 import {
   accountFieldsDrifted,
   accountFieldValues,
@@ -32,7 +33,10 @@ import {
   clearUserPreferences,
   TIME_SLOTS,
   applyMinAdvance,
+  timeRangesOverlap,
 } from "@/lib/booking";
+
+export type EquipmentAvailabilityMap = Record<string, { available: number; reserved: number; reservedOnOtherStudio: number; stockTotal: number }>;
 
 // ---------------------------------------------------------------------------
 // Pure helper: merge same-date cart bookings into API slot arrays.
@@ -378,8 +382,11 @@ export function useBookingWithRouter(urlStep?: string) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing } = usePricing();
+  const { equipment: availableEquipment } = useEquipment();
   const [clientUser, setClientUser] = useState<ClientProfile | null>(null);
   const [clientUserLoading, setClientUserLoading] = useState(true);
+  const [equipmentAvailability, setEquipmentAvailability] = useState<EquipmentAvailabilityMap>({});
+  const [equipmentClampMessage, setEquipmentClampMessage] = useState<string | null>(null);
   // Refs mirroring session/profile knowledge so the focus listener (registered
   // once) always reads fresh values without stale closures.
   const clientUserRef = useRef<ClientProfile | null>(null);
@@ -456,6 +463,63 @@ export function useBookingWithRouter(urlStep?: string) {
         console.error(err);
       });
   }, [state.selectedDate]);
+
+  const equipmentAvailabilityFetchGenRef = useRef(0);
+  useEffect(() => {
+    if (!state.selectedDate || !state.startTime || !state.endTime) {
+      setEquipmentAvailability({});
+      return;
+    }
+    const gen = ++equipmentAvailabilityFetchGenRef.current;
+    const params = new URLSearchParams({ date: formatDateISO(state.selectedDate), start: state.startTime, end: state.endTime });
+    if (state.studioId) params.set("studioId", state.studioId);
+    fetch(`/api/equipment-availability?${params}`)
+      .then((r) => r.json() as Promise<{ success: boolean; data?: { items: Array<{ id: string; available: number; reserved: number; reservedOnOtherStudio: number; stockTotal: number }> } }>)
+      .then((json) => {
+        if (gen !== equipmentAvailabilityFetchGenRef.current || !json.success || !json.data) return;
+        const selectedDate = state.selectedDate;
+        const startTime = state.startTime;
+        const endTime = state.endTime;
+        const cartReservedById: Record<string, number> = {};
+        if (selectedDate && startTime && endTime) {
+          for (const booking of state.cart) {
+            if (booking.date.toDateString() !== selectedDate.toDateString()) continue;
+            if (!timeRangesOverlap(booking.startTime, booking.endTime, startTime, endTime)) continue;
+            for (const line of booking.equipment) {
+              cartReservedById[line.id] = (cartReservedById[line.id] || 0) + line.quantity;
+            }
+          }
+        }
+        const map = Object.fromEntries(json.data.items.map((item) => {
+          const cartReserved = cartReservedById[item.id] || 0;
+          return [item.id, {
+            ...item,
+            reserved: item.reserved + cartReserved,
+            available: Math.max(0, item.available - cartReserved),
+          }];
+        }));
+        setEquipmentAvailability(map);
+        let firstCappedAvailable: number | null = null;
+        setState((current) => {
+          let changed = false;
+          const next = current.equipment.map((line) => {
+            const item = map[line.id];
+            if (!item) return line;
+            const catalogueItem = availableEquipment.find((equipment) => equipment.id === line.id);
+            const max = Math.min(catalogueItem?.maxPerSession ?? item.stockTotal, item.available);
+            if (line.quantity <= max) return line;
+            changed = true;
+            if (firstCappedAvailable === null) firstCappedAvailable = item.available;
+            return { ...line, quantity: max };
+          }).filter((line) => line.quantity > 0);
+          return changed ? { ...current, equipment: next } : current;
+        });
+        if (firstCappedAvailable !== null) {
+          setEquipmentClampMessage(`Quantité ajustée : plus que ${firstCappedAvailable} disponible(s) sur ce créneau.`);
+        }
+      })
+      .catch(() => {});
+  }, [state.selectedDate, state.startTime, state.endTime, state.studioId, state.cart, availableEquipment]);
 
   // -------------------------------------------------------------------------
   // Profile prefill — shared by hydration, inline login and the focus
@@ -842,7 +906,7 @@ export function useBookingWithRouter(urlStep?: string) {
       let endIdx = TIME_SLOTS.indexOf(s.endTime);
       if (endIdx === -1 && s.endTime === "00:00") endIdx = TIME_SLOTS.length;
       const durationHours = (endIdx - startIdx) * 0.5;
-      const equipmentPrice = calculateEquipmentPrice(s.equipment, durationHours);
+      const equipmentPrice = availableEquipment.length ? calculateEquipmentPrice(s.equipment, durationHours, availableEquipment) : 0;
 
       const finalPrice = pricingResult.total + equipmentPrice;
 
@@ -1219,14 +1283,14 @@ export function useBookingWithRouter(urlStep?: string) {
     let endIdx = TIME_SLOTS.indexOf(state.endTime);
     if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
     const durationHours = (endIdx - startIdx) * 0.5;
-    const equipmentPrice = calculateEquipmentPrice(state.equipment, durationHours);
+    const equipmentPrice = availableEquipment.length ? calculateEquipmentPrice(state.equipment, durationHours, availableEquipment) : 0;
 
     return {
       ...basePrice,
       equipmentPrice,
       grandTotal: basePrice.total + equipmentPrice,
     };
-  }, [pricingData, state.studioId, state.groupType, state.selectedDate, state.startTime, state.endTime, state.equipment]);
+  }, [pricingData, state.studioId, state.groupType, state.selectedDate, state.startTime, state.endTime, state.equipment, availableEquipment]);
 
   const cartTotal = useMemo(() => {
     const grid = pricingData?.grid;
@@ -1304,6 +1368,8 @@ export function useBookingWithRouter(urlStep?: string) {
     selectStudio,
     updateUserInfo,
     updateEquipment,
+    equipmentAvailability,
+    equipmentClampMessage,
     applyPromo,
     removePromo,
     goToCoordonnees,

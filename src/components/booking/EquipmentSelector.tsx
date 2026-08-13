@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Minus, Gift } from "lucide-react";
+import { Plus, Minus, Gift, Info } from "lucide-react";
 import {
   type EquipmentSelection,
   type EquipmentId,
@@ -16,6 +16,13 @@ interface ApiEquipment {
   pricePerHour: number;
 }
 
+export interface EquipmentAvailability {
+  available: number;
+  reserved: number;
+  reservedOnOtherStudio: number;
+  stockTotal: number;
+}
+
 interface EquipmentSelectorProps {
   equipment: EquipmentSelection[];
   onChange: (equipment: EquipmentSelection[]) => void;
@@ -23,6 +30,23 @@ interface EquipmentSelectorProps {
   availableEquipment: ApiEquipment[];
   /** True while /api/equipment loads — renders skeleton rows. */
   loading?: boolean;
+  /**
+   * Live stock per equipment id for the selected slot (equipment is shared
+   * across both studios). Caps the + stepper at `min(maxPerSession, available)`.
+   * Missing ids fall back to maxPerSession only.
+   */
+  availability?: Record<string, EquipmentAvailability>;
+  /**
+   * One-line notice shown when the parent reduced quantities after a
+   * date/time change. Rendered non-blockingly above the list; the parent
+   * clears it.
+   */
+  clampMessage?: string | null;
+  /**
+   * True while availability refetches (catalogue already loaded). Keeps the
+   * rows in place and dims the reason lines — never swaps in the skeleton.
+   */
+  availabilityLoading?: boolean;
 }
 
 function getQuantity(equipment: EquipmentSelection[], id: EquipmentId): number {
@@ -42,12 +66,37 @@ function updateQuantity(
   return existing;
 }
 
+function pluralizeUnit(count: string, forms: [string, string]): string {
+  return count === "1" ? forms[0] : forms[1];
+}
+
+/**
+ * Short factual reason shown when stock pressure caps the stepper below
+ * maxPerSession. Never names other customers.
+ */
+function getAvailabilityReason(info: EquipmentAvailability): string {
+  if (info.available <= 0) {
+    return info.reservedOnOtherStudio > 0
+      ? "Plus d'unité disponible sur ce créneau (réservé sur l'autre studio)"
+      : "Plus d'unité disponible sur ce créneau";
+  }
+  if (info.reservedOnOtherStudio > 0) {
+    const n = String(info.reservedOnOtherStudio);
+    return `${n} ${pluralizeUnit(n, ["unité déjà réservée", "unités déjà réservées"])} sur l'autre studio sur ce créneau`;
+  }
+  const n = String(info.reserved);
+  return `${n} ${pluralizeUnit(n, ["unité déjà réservée", "unités déjà réservées"])} sur ce créneau`;
+}
+
 export function EquipmentSelector({
   equipment,
   onChange,
   durationHours,
   availableEquipment,
   loading = false,
+  availability,
+  clampMessage = null,
+  availabilityLoading = false,
 }: EquipmentSelectorProps) {
 
   const handleIncrement = (id: EquipmentId, max: number) => {
@@ -108,10 +157,31 @@ export function EquipmentSelector({
           ))}
         </div>
       ) : (
+      <>
+      {clampMessage && (
+        <p
+          role="status"
+          className="mb-3 flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200"
+        >
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          {clampMessage}
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-x-6">
         {availableEquipment.map((eq) => {
           const quantity = getQuantity(equipment, eq.id);
           const subtotal = calculateSubtotal(eq, quantity);
+          const availabilityInfo = availability?.[eq.id];
+          const ceiling = Math.min(
+            eq.maxPerSession,
+            availabilityInfo?.available ?? eq.maxPerSession
+          );
+          // Stock pressure only surfaces when it actually caps the stepper
+          // below the catalogue max — full availability renders as before.
+          const reason =
+            availabilityInfo && availabilityInfo.available < eq.maxPerSession
+              ? getAvailabilityReason(availabilityInfo)
+              : null;
           let priceDisplay = "";
 
           if (eq.pricingType === "session" && eq.sessionPricing) {
@@ -154,6 +224,15 @@ export function EquipmentSelector({
                     Cadeau ! Le 4ème micro est offert
                   </span>
                 )}
+                {reason && (
+                  <span
+                    className={`text-xs text-amber-300/80 transition-opacity ${
+                      availabilityLoading ? "opacity-40" : ""
+                    }`}
+                  >
+                    {reason}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -180,8 +259,8 @@ export function EquipmentSelector({
 
                   <button
                     type="button"
-                    onClick={() => handleIncrement(eq.id, eq.maxPerSession)}
-                    disabled={quantity >= eq.maxPerSession}
+                    onClick={() => handleIncrement(eq.id, ceiling)}
+                    disabled={quantity >= ceiling}
                     className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
                     aria-label={`Ajouter ${eq.name}`}
                   >
@@ -193,6 +272,7 @@ export function EquipmentSelector({
           );
         })}
       </div>
+      </>
       )}
 
       {!loading && totalCost > 0 && (

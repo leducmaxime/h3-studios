@@ -1,5 +1,36 @@
 import type { DbBooking, DbPayment } from "./db-types";
 
+export type PromoRoundMode = "down" | "up" | "none";
+export type ManualDiscountBlockReason = "cancelled" | "promo_code";
+export function getManualDiscountEligibility(
+  booking: { status?: string | null; promo_code?: string | null },
+): { allowed: true } | { allowed: false; reason: ManualDiscountBlockReason } {
+  if (booking.status === "cancelled") return { allowed: false, reason: "cancelled" };
+  if (typeof booking.promo_code === "string" && booking.promo_code.trim() !== "") return { allowed: false, reason: "promo_code" };
+  return { allowed: true };
+}
+export function getManualDiscountBlockMessage(reason: ManualDiscountBlockReason): string {
+  return reason === "cancelled" ? "Impossible d'appliquer une remise sur une réservation annulée" : "Remise manuelle indisponible : un code promo est déjà appliqué";
+}
+
+/** Apply the configured rounding rule to a promo discount. */
+export function applyDiscountRounding(discount: number, mode: PromoRoundMode): number {
+  if (!Number.isFinite(discount) || discount < 0) return 0;
+  if (mode === "none") return discount;
+
+  if (mode === "down") {
+    const euros = Math.floor(discount);
+    const cents = Math.round((discount - euros) * 100);
+
+    if (cents < 25) return euros;
+    if (cents < 75) return euros + 0.5;
+    return euros + 1;
+  }
+
+  const cents = Math.round(discount * 100);
+  return Math.ceil(cents / 50) * 50 / 100;
+}
+
 export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -37,6 +68,9 @@ export function getBookingBalance(
     .filter((p) => p.status === "refunded" || p.status === "partial-refund")
     .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
   return Math.max(0, amountDue - totalCollected + totalRefunded);
+}
+export function getBookingOverpayment(booking: Pick<DbBooking, "base_price" | "equipment_price" | "total_price" | "promo_discount">, payments: Pick<DbPayment, "amount" | "status" | "refunded_amount">[]): number {
+  return Math.max(0, getTotalCollected(payments) - getTotalRefunded(payments) - getBookingAmountDue(booking));
 }
 
 /**

@@ -42,9 +42,10 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CancelBookingDialog } from "@/components/admin/refund";
-import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, EQUIPMENT, type StudioId } from "@/lib/booking";
+import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, parseBookingEquipmentLines, type StudioId } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue } from "@/lib/booking-totals";
+import { useEquipment } from "@/components/booking/useEquipment";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -236,36 +237,20 @@ function getOccupancyColor(rate: number): { bg: string; text: string } {
 }
 
 function hasOptions(equipment: string | null): boolean {
-  if (!equipment) return false;
-  try {
-    const parsed = JSON.parse(equipment);
-    return Array.isArray(parsed) && parsed.length > 0;
-  } catch {
-    return false;
-  }
+  return parseBookingEquipmentLines(equipment).length > 0;
 }
 
 // Helper to format equipment lines for tooltip
-function getEquipmentLines(equipment: string | null): string[] {
+function getEquipmentLines(equipment: string | null, getEquipmentName: (id: string) => string): string[] {
   if (!equipment) return [];
-  try {
-    const parsed = JSON.parse(equipment) as Array<{ id: string; quantity: number; name?: string }>;
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map(eq => {
-        const eqName = eq.name || EQUIPMENT[eq.id]?.name || eq.id;
-        return `${eq.quantity}× ${eqName}`;
-      });
-    }
-  } catch {
-    // ignore
-  }
-  return [];
+  const parsed = parseBookingEquipmentLines(equipment);
+  return parsed.map(eq => `${eq.quantity}× ${eq.name || getEquipmentName(eq.id)}`);
 }
 
-function getBookingTooltipLines(booking: CalendarBooking): string[] {
+function getBookingTooltipLines(booking: CalendarBooking, getEquipmentName: (id: string) => string): string[] {
   const clientName = booking.band_name || booking.user_band_name || booking.user_name || "Client";
   const lines = [clientName, `${booking.start_time} – ${booking.end_time}`];
-  return lines.concat(getEquipmentLines(booking.equipment));
+  return lines.concat(getEquipmentLines(booking.equipment, getEquipmentName));
 }
 
 interface TooltipInfo {
@@ -277,6 +262,7 @@ interface TooltipInfo {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function AdminCalendar() {
+  const { getEquipmentName } = useEquipment();
   const [bookings, setBookings] = useState<CalendarBooking[]>([]);
   const [blockedSlots, setBlockedSlots] = useState<CalendarBlockedSlot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -750,7 +736,7 @@ export function AdminCalendar() {
                               <button
                                 key={booking.id}
                                 type="button"
-                                onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                                onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking, getEquipmentName), x: e.clientX, y: e.clientY })}
                                 onMouseLeave={() => setTooltip(null)}
                                 onClick={() => setSelectedBooking(booking)}
                                 className={`absolute overflow-hidden rounded border px-1.5 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
@@ -799,7 +785,7 @@ export function AdminCalendar() {
                             key={booking.id}
                             type="button"
                             onClick={() => setSelectedBooking(booking)}
-                            onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                            onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking, getEquipmentName), x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setTooltip(null)}
                             className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
                             style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
@@ -997,7 +983,7 @@ export function AdminCalendar() {
                           key={booking.id}
                           type="button"
                           onClick={() => setSelectedBooking(booking)}
-                          onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                          onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking, getEquipmentName), x: e.clientX, y: e.clientY })}
                           onMouseLeave={() => setTooltip(null)}
                           className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
                           style={{
@@ -1042,7 +1028,7 @@ export function AdminCalendar() {
                             key={booking.id}
                             type="button"
                             onClick={() => setSelectedBooking(booking)}
-                            onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking), x: e.clientX, y: e.clientY })}
+                            onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking, getEquipmentName), x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setTooltip(null)}
                             className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
                             style={{
@@ -1362,9 +1348,9 @@ export function AdminCalendar() {
                     <div>
                       <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Options</p>
                       <div className="mt-1 text-xs text-zinc-300">
-                        {JSON.parse(b.equipment!).map((eq: any) => (
+                        {parseBookingEquipmentLines(b.equipment).map((eq) => (
                           <div key={eq.id}>
-                            {eq.quantity}× {eq.name || EQUIPMENT[eq.id]?.name || eq.id}
+                            {eq.quantity}× {eq.name || eq.id}
                           </div>
                         ))}
                       </div>

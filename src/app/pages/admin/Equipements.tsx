@@ -51,6 +51,7 @@ interface EquipmentForm {
   equipmentId: string;
   name: string;
   maxPerSession: number;
+  stockTotal: number;
   pricingType: string;
   sessionPricing: string;
   pricePerHour: number;
@@ -75,6 +76,7 @@ const INITIAL_EQUIPMENT_FORM: EquipmentForm = {
   equipmentId: "",
   name: "",
   maxPerSession: 1,
+  stockTotal: 1,
   pricingType: "session",
   sessionPricing: "3",
   pricePerHour: 0,
@@ -352,6 +354,7 @@ function OptionsPayantesTab() {
       equipmentId: eq.equipment_id,
       name: eq.name,
       maxPerSession: eq.max_per_session,
+      stockTotal: eq.stock_total,
       pricingType: eq.pricing_type,
       sessionPricing: prices.join(", "),
       pricePerHour: eq.price_per_hour,
@@ -373,6 +376,11 @@ function OptionsPayantesTab() {
       return;
     }
 
+    if (eqForm.stockTotal < 1) {
+      toast.error("Le stock physique doit être ≥ 1");
+      return;
+    }
+
     const sessionPrices = eqForm.sessionPricing
       .split(",")
       .map((s) => parseFloat(s.trim()))
@@ -389,6 +397,7 @@ function OptionsPayantesTab() {
         equipment_id: eqForm.equipmentId.trim(),
         name: eqForm.name.trim(),
         max_per_session: eqForm.maxPerSession,
+        stock_total: eqForm.stockTotal,
         pricing_type: eqForm.pricingType,
         session_pricing: JSON.stringify(sessionPrices),
         price_per_hour: eqForm.pricePerHour,
@@ -514,7 +523,7 @@ function OptionsPayantesTab() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 text-sm font-medium">{eq.max_per_session}</span>
+                        <Badge variant="outline">Max {eq.max_per_session}</Badge>{" "}<Badge variant="secondary">Stock {eq.stock_total}</Badge>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
@@ -570,6 +579,7 @@ function OptionsPayantesTab() {
               </div>
             </div>
 
+            <div><Label htmlFor="eqStock">Stock physique</Label><Input id="eqStock" type="number" min={1} value={eqForm.stockTotal} onChange={(e) => setEqForm({ ...eqForm, stockTotal: parseInt(e.target.value, 10) || 1 })} className="border-zinc-700 bg-zinc-800" /><p className="mt-1 text-xs text-zinc-500">Nombre d'unités dans le studio, partagé entre les deux salles.</p></div>
             {eqForm.pricingType === "session" ? (
               <div>
                 <Label htmlFor="eqSessionPricing">Tarifs par séance (séparés par des virgules)</Label>

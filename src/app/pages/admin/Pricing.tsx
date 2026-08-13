@@ -902,8 +902,8 @@ function PromoCodeDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Sans arrondi</SelectItem>
-                <SelectItem value="down">Arrondi aux 50 centimes (x.00-x.24 → x.00, x.25-x.74 → x.50, x.75-x.99 → x+1.00)</SelectItem>
-                <SelectItem value="up">Arrondi aux 50 centimes (x.01-x.50 → x.50, x.51-x.99 → x+1.00)</SelectItem>
+                <SelectItem value="down">Arrondir aux 50 centimes</SelectItem>
+                <SelectItem value="up">Arrondir aux 50 centimes au dessus</SelectItem>
               </SelectContent>
             </Select>
           </div>

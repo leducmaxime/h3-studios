@@ -45,10 +45,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPrice, type EquipmentSelection } from "@/lib/booking";
+import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue, getBookingBalance, parseAmountInput, getDisplayPaymentStatus, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
+import { getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput, getDisplayPaymentStatus, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
 import {
   CancelBookingDialog,
   RefundPaymentDialog,
@@ -133,7 +133,7 @@ interface EquipmentInfo {
   id: string;
   name: string;
   quantity: number;
-  price: number;
+  price?: number;
 }
 
 export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
@@ -203,6 +203,18 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [editingEquipment, setEditingEquipment] = useState(false);
   const [equipmentDraft, setEquipmentDraft] = useState<EquipmentSelection[]>([]);
   const [savingEquipment, setSavingEquipment] = useState(false);
+  const [equipmentAvailability, setEquipmentAvailability] = useState<Record<string, { available: number; reserved: number }>>({});
+
+  useEffect(() => {
+    if (!booking) return;
+    const date = newDate || booking.date;
+    const start = newStartTime || booking.start_time;
+    const end = newEndTime || booking.end_time;
+    fetch(`/api/equipment-availability?${new URLSearchParams({ date, start, end, studioId: booking.studio_id, excludeBookingId: booking.id })}`)
+      .then((r) => r.json() as Promise<{ success: boolean; data?: { items: Array<{ id: string; available: number; reserved: number }> } }>)
+      .then((json) => { if (json.success && json.data) setEquipmentAvailability(Object.fromEntries(json.data.items.map((i) => [i.id, i]))); })
+      .catch(() => {});
+  }, [booking, newDate, newStartTime, newEndTime]);
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -242,18 +254,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           setDurationHours(durHours);
 
           if (json.data.equipment) {
-            const bookingEquipment = JSON.parse(json.data.equipment) as Array<{ id: string; quantity: number }>;
+            const bookingEquipment = parseBookingEquipmentLines(json.data.equipment);
             const matchedEquipment = bookingEquipment.map((eq) => {
               const eqData = equipmentJson.equipment!.find((e) => e.id === eq.id);
-              let price = 0;
-              if (eqData) {
-                if (eqData.pricingType === "session" && Array.isArray(eqData.sessionPricing)) {
-                  price = eqData.sessionPricing[eq.quantity - 1] ?? 0;
-                } else {
-                  price = eqData.pricePerHour * eq.quantity * durHours;
-                }
-              }
-              return { id: eq.id, name: eqData?.name || eq.id, quantity: eq.quantity, price };
+              const price = typeof eq.lineTotal === "number" && Number.isFinite(eq.lineTotal) ? eq.lineTotal : undefined;
+              return { id: eq.id, name: eq.name || eqData?.name || eq.id, quantity: eq.quantity, price };
             });
             setEquipment(matchedEquipment);
           }
@@ -293,9 +298,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   useEffect(() => {
     if (booking && payments.length >= 0) {
       const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
-      const totalPrice = Number(booking.total_price) || 0;
-      const promoDiscount = Number(booking.promo_discount) || 0;
-      const finalTotal = Math.max(0, totalPrice - promoDiscount);
+      const finalTotal = getBookingAmountDue(booking);
       const balance = finalTotal - totalPaid;
       
       if (balance > 0) {
@@ -379,6 +382,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const handleSaveDiscount = async () => {
     if (!booking) return;
+    const eligibility = getManualDiscountEligibility(booking);
+    if (!eligibility.allowed) { toast.error(getManualDiscountBlockMessage(eligibility.reason)); return; }
     const discount = parseAmountInput(discountValue);
     if (isNaN(discount) || discount < 0) { toast.error("Montant invalide"); return; }
     if (discount > booking.total_price) { toast.error("La remise ne peut pas dépasser le prix total"); return; }
@@ -408,13 +413,19 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     setSavingEquipment(true);
     try {
       const newEquipmentPrice = calculateEquipmentPrice(equipmentDraft, durationHours, equipmentCatalogue);
+      const enrichedEquipment = equipmentDraft.filter(e => e.quantity > 0).map((e) => ({
+        id: e.id,
+        name: equipmentCatalogue.find((cat) => cat.id === e.id)?.name || e.id,
+        quantity: e.quantity,
+        lineTotal: calculateEquipmentPrice([e], durationHours, equipmentCatalogue),
+      }));
       // Convention : le brut (total_price) est recalculé par le serveur à partir
       // de base_price + equipment_price — le client n'envoie jamais total_price.
       const res = await fetch(`/api/admin/bookings/${booking.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          equipment: JSON.stringify(equipmentDraft.filter(e => e.quantity > 0)),
+          equipment: JSON.stringify(enrichedEquipment),
           equipment_price: newEquipmentPrice,
         }),
       });
@@ -541,6 +552,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const totalPrice = Number(booking.total_price) || 0;
   const finalTotal = getBookingAmountDue(booking);
   const balance = getBookingBalance(booking, payments);
+  const discountEligibility = getManualDiscountEligibility(booking);
+  const overpayment = getBookingOverpayment(booking, payments);
 
   // Présentation du paiement : une réservation annulée ne présente jamais de
   // montant dû — on dérive le libellé du grand livre (Annulée / Payée avant
@@ -620,7 +633,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     )}
                   </div>
                   <div className="space-y-2">
-                    {(editingEquipment ? equipmentCatalogue : equipmentCatalogue.filter((eq) => equipment.some((e) => e.id === eq.id))).map((eq) => {
+                    {(editingEquipment ? equipmentCatalogue : [...equipmentCatalogue.filter((eq) => equipment.some((e) => e.id === eq.id)), ...equipment.filter((e) => !equipmentCatalogue.some((eq) => eq.id === e.id)).map(e => ({ id: e.id, name: e.name, maxPerSession: e.quantity, pricingType: "session" as const, sessionPricing: null, pricePerHour: 0 }))]).map((eq) => {
                       const draftQty = editingEquipment
                         ? (equipmentDraft.find((d) => d.id === eq.id)?.quantity ?? 0)
                         : (equipment.find((e) => e.id === eq.id)?.quantity ?? 0);
@@ -643,6 +656,9 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                                 ? `à partir de ${eq.sessionPricing[0]}€/séance`
                                 : `+${eq.pricePerHour}€/h`}
                             </span>
+                            {editingEquipment && equipmentAvailability[eq.id] && draftQty > equipmentAvailability[eq.id].available && (
+                              <span className="text-xs text-amber-400">Stock restant {equipmentAvailability[eq.id].available}. Vous pouvez forcer.</span>
+                            )}
                           </div>
                           <div className="flex items-center gap-3">
                             {itemPrice > 0 && (
@@ -778,22 +794,25 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   </div>
                   {booking.equipment_price > 0 && (
                     <div className="space-y-1.5">
-                      {equipment.length > 0 ? (
+                      {resolveEquipmentDisplay(booking.equipment, booking.equipment_price, id => equipmentCatalogue.find(e => e.id === id)?.name).lines.length > 0 ? (
                         <>
-                          {equipment.map((eq) => (
+                          {resolveEquipmentDisplay(booking.equipment, booking.equipment_price, id => equipmentCatalogue.find(e => e.id === id)?.name).lines.map((eq) => {
+                            const linePrice = eq.lineTotal;
+                            return (
                             <div key={eq.id} className="flex justify-between items-center">
                               <span className="text-sm text-zinc-400">
                                 {eq.name}{eq.quantity > 1 ? ` ×${eq.quantity}` : ""}
                               </span>
-                              <span className="text-sm font-medium">{formatPrice(eq.price)}</span>
+                              {resolveEquipmentDisplay(booking.equipment, booking.equipment_price, id => equipmentCatalogue.find(e => e.id === id)?.name).showLinePrices && typeof linePrice === "number" ? (
+                                <span className="text-sm font-medium">{formatPrice(linePrice)}</span>
+                              ) : null}
                             </div>
-                          ))}
-                          {equipment.length > 1 && (
-                            <div className="flex justify-between items-center pt-1 border-t border-zinc-700/50">
-                              <span className="text-sm text-zinc-500">Total équipements</span>
-                              <span className="font-medium">{formatPrice(booking.equipment_price)}</span>
-                            </div>
-                          )}
+                            );
+                          })}
+                          <div className="flex justify-between items-center pt-1 border-t border-zinc-700/50">
+                            <span className="text-sm text-zinc-500">Total équipements</span>
+                            <span className="font-medium">{formatPrice(booking.equipment_price)}</span>
+                          </div>
                         </>
                       ) : (
                         <div className="flex justify-between items-center">
@@ -803,7 +822,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       )}
                     </div>
                   )}
-                  {booking.promo_discount > 0 && !editingDiscount && (
+                  {booking.promo_code && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm flex items-center gap-2">
                         {booking.promo_code ? "Réduction" : "Remise manuelle"}
@@ -818,19 +837,20 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       </span>
                       <span className="flex items-center gap-2">
                         <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
-                        <Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
                       </span>
                     </div>
                   )}
-                  {booking.promo_code && booking.promo_discount === 0 && !editingDiscount && (
+                  {booking.promo_code && !editingDiscount && <p className="text-xs text-zinc-500">{getManualDiscountBlockMessage("promo_code")}</p>}
+                  {!booking.promo_code && booking.status === "cancelled" && booking.promo_discount > 0 && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
-                      <span className="text-sm flex items-center gap-2">
-                        Code promo
-                        <span className="px-2 py-0.5 rounded bg-primary/10 text-xs">{booking.promo_code}</span>
-                      </span>
-                      <span className="font-medium text-zinc-500">-</span>
+                      <span className="text-sm">Remise manuelle</span>
+                      <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
+                    </div>
+                  )}
+                  {!booking.promo_code && booking.status !== "cancelled" && !editingDiscount && (
+                    <div className="flex justify-between items-center text-primary">
+                      <span className="text-sm">Remise manuelle</span>
+                      <span className="flex items-center gap-2"><span className="font-medium">{booking.promo_discount > 0 ? `-${formatPrice(booking.promo_discount)}` : "—"}</span><Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}><Pencil className="h-3 w-3" /></Button></span>
                     </div>
                   )}
                   {/* Remise manuelle (édition directe de promo_discount — une seule
@@ -853,6 +873,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       </div>
                     </div>
                   )}
+                  {!isCancelled && overpayment > 0 && <p className="text-xs text-amber-400">Trop-perçu : {formatPrice(overpayment)} — utiliser le remboursement ci-dessous.</p>}
                   <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
                     <span className="font-semibold">Total</span>
                     <span className="text-xl font-bold text-primary">{isCancelled ? "—" : formatPrice(finalTotal)}</span>

@@ -54,7 +54,7 @@ describe("computeBookingQuote (shared admin + public quote)", () => {
   it("adds equipment price to the gross total (total = base + equipment)", () => {
     const quote = computeBookingQuote(baseInput({
       equipment: [{ id: "cymbal", quantity: 1 }],
-      equipmentCatalogue: [{ id: "cymbal", pricingType: "session", sessionPricing: [3, 5], pricePerHour: 0 }],
+      equipmentCatalogue: [{ id: "cymbal", name: "2 Cymbales Crash", pricingType: "session", sessionPricing: [3, 5], pricePerHour: 0 }],
     }));
     expect(quote.equipmentPrice).toBe(3);
     expect(quote.totalPrice).toBe(44 + 3);

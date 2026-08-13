@@ -205,6 +205,7 @@ export interface DbEquipment {
   equipment_id: string;
   name: string;
   max_per_session: number;
+  stock_total: number;
   pricing_type: string;
   session_pricing: string | null; // JSON array
   price_per_hour: number;

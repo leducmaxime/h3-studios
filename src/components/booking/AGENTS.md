@@ -105,7 +105,8 @@ interface ExtendedBookingState {
 - `usePricing` hook fetches on mount, feeds grid to `calculatePrice` from `@/lib/pricing`
 - **Opening hours**: `setOpeningHours(data.openingHours)` called when pricing loads — falls back to `STUDIO_HOURS` defaults
 - **Cart total recomputed** from grid each render (line items use `recomputeCartItemPrice`)
-- **Promo codes**: `PROMO_CODES` in booking.ts (percentage/fixed), validated client-side
+- **Promo codes**: validated server-side via `POST /api/promo-codes/validate` (`src/lib/db.ts` `validatePromoCode` + `applyDiscountRounding`). The public tunnel displays the returned `discount` and does not recompute rounding.
+- **Equipment stock**: physical pool shared by both studios. Public ceiling is `min(maxPerSession, available)`. `no-show` releases stock (only `confirmed` + `completed` hold). Public `POST /api/bookings` rejects over-stock.
 
 ## MIN-ADVANCE RULES
 
@@ -144,6 +145,7 @@ Both the selected-date availability fetch and the week calendar batch fetch use 
 ### EquipmentSelector – inline loading
 
 - **`loading` prop**: passed from `useEquipment().loading`, shows a single skeleton row in place of the equipment list (matched height to reduce layout shift).
+- **Availability + clamp**: optional `availability` map (per-id `{ available, reserved, reservedOnOtherStudio, stockTotal }`) caps the + stepper at `min(maxPerSession, available)`; capped rows show a short reason line (« N unités déjà réservées sur l'autre studio sur ce créneau » / « Plus d'unité disponible sur ce créneau »), zero-stock rows stay visible with + disabled; `clampMessage` renders a one-line amber notice above the list (parent clears it); `availabilityLoading` only dims the reason lines, never swaps in the skeleton.
 
 ### WeekCalendar – per-day pending state
 

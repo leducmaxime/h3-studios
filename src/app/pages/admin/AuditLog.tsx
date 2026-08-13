@@ -362,10 +362,10 @@ function promoRuleLines(obj: ChangeObj, isUpdate: boolean): string[] {
     if (rm === "down" || rm === "up") {
       const step = money(obj.round_value);
       lines.push(
-        `Règle d'arrondi : ${rm === "down" ? "aux 50 centimes inférieurs" : "aux 50 centimes supérieurs"}${step ? ` (pas de ${step})` : ""}`
+        `Règle d'arrondi : ${rm === "down" ? "Arrondir aux 50 centimes" : "Arrondir aux 50 centimes au dessus"}${step ? ` (pas de ${step})` : ""}`
       );
     } else if (isUpdate && rm === "none") {
-      lines.push("Règle d'arrondi : désactivée");
+      lines.push("Règle d'arrondi : Sans arrondi");
     }
   }
 

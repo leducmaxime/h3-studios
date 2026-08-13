@@ -25,7 +25,7 @@ import {
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
-import { getBookingAmountDue } from "./booking-totals";
+import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
 
 /** Normalise "00:00" en "24:00" pour les comparaisons de strings SQL.
  *  "00:00" est plus petit que toutes les heures en string compare,
@@ -1286,7 +1286,7 @@ export async function getEquipment(db: D1Database): Promise<DbEquipment[]> {
 export async function updateEquipment(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbEquipment, "name" | "max_per_session" | "pricing_type" | "session_pricing" | "price_per_hour">>,
+  data: Partial<Pick<DbEquipment, "name" | "max_per_session" | "stock_total" | "pricing_type" | "session_pricing" | "price_per_hour">>,
 ): Promise<{ success: boolean }> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -1358,16 +1358,6 @@ export async function updatePromoCode(
   return { success: result.meta.changes > 0 };
 }
 
-// Arrondit aux 50 centimes près
-function roundToNearest50Cents(amount: number): number {
-  const euros = Math.floor(amount);
-  const cents = Math.round((amount - euros) * 100);
-
-  if (cents < 25) return euros;
-  if (cents < 75) return euros + 0.5;
-  return euros + 1;
-}
-
 export async function validatePromoCode(
   db: D1Database,
   code: string,
@@ -1390,11 +1380,8 @@ export async function validatePromoCode(
     discount = (total * promo.value) / 100;
   }
 
-  // Appliquer l'arrondi si activé
-  let finalDiscount = discount;
-  if (promo.round_mode === "down" || promo.round_mode === "up") {
-    finalDiscount = roundToNearest50Cents(discount);
-  }
+  // Appliquer l'arrondi configuré
+  const finalDiscount = applyDiscountRounding(discount, promo.round_mode ?? "none");
 
   return { valid: true, promo, roundedDiscount: finalDiscount };
 }

@@ -86,6 +86,8 @@ export function Reservation({ step }: ReservationProps) {
     processPayment,
     todayFullyBlocked,
     maxAdvanceDays,
+    equipmentAvailability,
+    equipmentClampMessage,
   } = useBookingWithRouter(step);
 
   const { equipment: availableEquipment, getEquipmentName, loading: equipmentLoading } = useEquipment();
@@ -249,6 +251,8 @@ export function Reservation({ step }: ReservationProps) {
             durationHours={durationH}
             availableEquipment={availableEquipment}
             loading={equipmentLoading}
+            availability={equipmentAvailability}
+            clampMessage={equipmentClampMessage}
           />
         </div>
 

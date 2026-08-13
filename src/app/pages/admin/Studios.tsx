@@ -28,6 +28,7 @@ interface EquipmentForm {
   equipmentId: string;
   name: string;
   maxPerSession: number;
+  stockTotal: number;
   pricingType: string;
   sessionPricing: string;
   pricePerHour: number;
@@ -52,6 +53,7 @@ const INITIAL_EQUIPMENT_FORM: EquipmentForm = {
   equipmentId: "",
   name: "",
   maxPerSession: 1,
+  stockTotal: 1,
   pricingType: "session",
   sessionPricing: "3",
   pricePerHour: 0,
@@ -110,6 +112,7 @@ export function AdminStudios() {
       equipmentId: eq.equipment_id,
       name: eq.name,
       maxPerSession: eq.max_per_session,
+      stockTotal: eq.stock_total,
       pricingType: eq.pricing_type,
       sessionPricing: prices.join(", "),
       pricePerHour: eq.price_per_hour,
@@ -131,6 +134,11 @@ export function AdminStudios() {
       return;
     }
 
+    if (eqForm.stockTotal < 1) {
+      toast.error("Le stock physique doit être ≥ 1");
+      return;
+    }
+
     const sessionPrices = eqForm.sessionPricing
       .split(",")
       .map((s) => parseFloat(s.trim()))
@@ -147,6 +155,7 @@ export function AdminStudios() {
         equipment_id: eqForm.equipmentId.trim(),
         name: eqForm.name.trim(),
         max_per_session: eqForm.maxPerSession,
+        stock_total: eqForm.stockTotal,
         pricing_type: eqForm.pricingType,
         session_pricing: JSON.stringify(sessionPrices),
         price_per_hour: eqForm.pricePerHour,
@@ -298,7 +307,7 @@ export function AdminStudios() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 text-sm font-medium">
-                            {eq.max_per_session}
+                            Max {eq.max_per_session} · Stock {eq.stock_total}
                           </span>
                         </td>
                         <td className="px-4 py-3">
@@ -397,6 +406,7 @@ export function AdminStudios() {
               </div>
             </div>
 
+            <div><label className="mb-1 block text-sm text-zinc-400">Stock physique</label><input type="number" min={1} value={eqForm.stockTotal} onChange={(e) => setEqForm({ ...eqForm, stockTotal: parseInt(e.target.value, 10) || 1 })} className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm" /><p className="mt-1 text-xs text-zinc-500">Nombre d'unités dans le studio, partagé entre les deux salles.</p></div>
             {eqForm.pricingType === "session" ? (
               <div>
                 <label className="mb-1 block text-sm text-zinc-400">

@@ -1,5 +1,5 @@
 import { type DbBooking, type DbUser, type DbPayment } from "./db-types";
-import { STUDIOS, formatPrice, type StudioId } from "./booking";
+import { STUDIOS, formatPrice, type StudioId, resolveEquipmentDisplay } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -55,7 +55,8 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
     "Durée (h)",
     "Groupe",
     "Statut",
-    "Montant (EUR)",
+    "Montant dû (EUR)",
+    "Remise",
     "Paiement",
   ];
 
@@ -100,7 +101,8 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
       escapeCSV(durationHours),
       escapeCSV(groupTypeLabels[booking.group_type] || booking.group_type),
       escapeCSV(statusLabels[booking.status] || booking.status),
-      escapeCSV(formatPriceForCSV(booking.total_price)),
+      escapeCSV(formatPriceForCSV(getBookingAmountDue(booking))),
+      escapeCSV(formatPriceForCSV(Number(booking.promo_discount) || 0)),
       escapeCSV(paymentLabels[booking.payment_status || ""] || booking.payment_status || "—"),
     ].join(",");
   });
@@ -208,7 +210,8 @@ interface InvoiceBooking extends DbBooking {}
 export async function generateInvoicePDF(
   booking: InvoiceBooking,
   payment: DbPayment | null,
-  user: DbUser
+  user: DbUser,
+  equipmentNames?: Record<string, string>
 ): Promise<void> {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF();
@@ -304,27 +307,24 @@ export async function generateInvoicePDF(
   });
 
   // Equipment
-  let equipmentTotal = 0;
+  const equipmentDisplay = resolveEquipmentDisplay(booking.equipment, booking.equipment_price, id => equipmentNames?.[id]);
+  const equipmentTotal = equipmentDisplay.subtotal;
   if (booking.equipment) {
-    try {
-      const equipmentList: Array<{ id: string; quantity: number; name?: string; price?: number }> = JSON.parse(booking.equipment);
+      const equipmentList = equipmentDisplay.lines;
+      const exact = equipmentDisplay.showLinePrices;
       if (equipmentList.length > 0) {
         y += 4;
         doc.text("Équipements:", 25, y);
         y += 6;
         equipmentList.forEach((eq) => {
-          const eqPrice = eq.price || 0;
-          equipmentTotal += eqPrice;
+          const eqPrice = exact ? eq.lineTotal! : undefined;
           doc.text(`  • ${eq.name || eq.id} ×${eq.quantity}`, 30, y);
-          if (eqPrice > 0) {
+          if (typeof eqPrice === "number") {
             doc.text(`${eqPrice.toFixed(2)} €`, 140, y);
           }
           y += 5;
         });
       }
-    } catch {
-      // Ignore JSON parse errors
-    }
   }
 
   y += 10;
@@ -345,6 +345,12 @@ export async function generateInvoicePDF(
   if (equipmentTotal > 0) {
     doc.text("Équipements:", 100, y);
     doc.text(`${equipmentTotal.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+    y += 6;
+  }
+
+  if ((Number(booking.promo_discount) || 0) > 0) {
+    doc.text("Remise:", 100, y);
+    doc.text(`-${(Number(booking.promo_discount) || 0).toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
     y += 6;
   }
 

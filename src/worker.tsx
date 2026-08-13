@@ -1,5 +1,5 @@
 import { render, route, layout } from "rwsdk/router";
-import { getBookingAmountDue, getBookingGrossTotal } from "@/lib/booking-totals";
+import { getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
 import { isValidEmail, resolveBookingIdentity, validateBookingUserFields, type BookingUserBody } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
@@ -136,7 +136,8 @@ import {
 import { refundCardPayment, refundPayments } from "@/lib/refunds";
 import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, type StudioId, type GroupType, type EquipmentSelection, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
+import { computeEquipmentAvailability } from "@/lib/booking";
 import {
   getParisDateISO,
   getParisNow,
@@ -198,16 +199,6 @@ function jsonSuccess(data: unknown): Response {
 
 function jsonError(error: string, status = 400): Response {
   return jsonResponse({ success: false, error }, status);
-}
-
-function parseBookingEquipment(raw: string | null): unknown[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 function validateAdminSettingValue(key: string, rawValue: string): { ok: true; value: string } | { ok: false; error: string } {
@@ -668,7 +659,7 @@ const app = defineApp([
           startTime: b.start_time,
           endTime: b.end_time,
           groupType: b.group_type,
-          equipment: parseBookingEquipment(b.equipment),
+          equipment: parseBookingEquipmentLines(b.equipment),
           equipmentPrice: b.equipment_price,
           totalPrice: b.total_price,
           promoCode: b.promo_code,
@@ -839,6 +830,37 @@ const app = defineApp([
     } catch (error) {
       console.error("GET /api/availability error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch availability", 500);
+    }
+  }),
+
+  route("/api/equipment-availability", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+    try {
+      const url = new URL(request.url);
+      const date = url.searchParams.get("date");
+      const start = url.searchParams.get("start");
+      const end = url.searchParams.get("end");
+      const studioId = url.searchParams.get("studioId") || undefined;
+      const excludeBookingId = url.searchParams.get("excludeBookingId");
+      const validDate = !!date && /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(new Date(`${date}T00:00:00`).getTime());
+      const validTime = (v: string | null) => !!v && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v);
+      if (!validDate || !validTime(start) || !validTime(end)) return jsonError("Date et horaires invalides", 400);
+      const [catalogue, rawBookings] = await Promise.all([getEquipment(env.DB), getBookingsByDate(env.DB, date!)]);
+      const bookings = rawBookings.filter((b) => b.id !== excludeBookingId).map((b) => ({
+        startTime: b.start_time, endTime: b.end_time, status: b.status, studioId: b.studio_id,
+        equipment: b.equipment,
+      }));
+      return jsonSuccess({ items: catalogue.map((eq) => {
+        const result = computeEquipmentAvailability({
+          stockTotal: eq.stock_total, equipmentId: eq.equipment_id,
+          requested: { startTime: start!, endTime: end! }, requestedStudioId: studioId, bookings,
+        });
+        return { id: eq.equipment_id, stockTotal: eq.stock_total, maxPerSession: eq.max_per_session,
+          reserved: result.reserved, available: result.available, reservedOnOtherStudio: result.reservedOnOtherStudio };
+      }) });
+    } catch (error) {
+      console.error("GET /api/equipment-availability error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch equipment availability", 500);
     }
   }),
 
@@ -1105,6 +1127,7 @@ const app = defineApp([
       const allEquipment = await getEquipment(env.DB);
       const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
         id: e.equipment_id,
+        name: e.name,
         pricingType: e.pricing_type,
         sessionPricing: e.session_pricing ? (JSON.parse(e.session_pricing) as number[]) : null,
         pricePerHour: e.price_per_hour,
@@ -1123,6 +1146,22 @@ const app = defineApp([
         offPeakRatePerHalfHour: offPeakRate,
         equipmentCatalogue,
       });
+
+      // Physical equipment is shared by both studios. Public bookings cannot
+      // reserve more units than remain on the requested overlapping slot.
+      const availabilityBookings = (await getBookingsByDate(env.DB, body.date)).map((b) => ({
+        startTime: b.start_time, endTime: b.end_time, status: b.status, studioId: b.studio_id, equipment: b.equipment,
+      }));
+      for (const line of body.equipment ?? []) {
+        if (!line || line.quantity <= 0) continue;
+        const eq = allEquipment.find((item) => item.equipment_id === line.id);
+        if (!eq) continue;
+        const stock = computeEquipmentAvailability({ stockTotal: eq.stock_total, equipmentId: eq.equipment_id,
+          requested: { startTime: body.startTime, endTime: body.endTime }, requestedStudioId: body.studioId, bookings: availabilityBookings });
+        if (line.quantity > stock.available) {
+          return jsonError(`Stock insuffisant pour « ${eq.name} » : ${stock.available} disponible(s) sur ce créneau`, 409);
+        }
+      }
 
       // Refus des créneaux invalides/vides : aucune réservation 0€ silencieuse.
       if (quote.halfHours === 0 || quote.slotBreakdown.length === 0) {
@@ -1262,7 +1301,7 @@ const app = defineApp([
         base_price: serverBasePrice,
         equipment_price: serverEquipmentPrice,
         total_price: serverTotalPrice,
-        equipment: JSON.stringify(body.equipment),
+        equipment: JSON.stringify(quote.equipmentLines.filter((line) => line.quantity > 0)),
         payment_method: body.paymentMethod,
         payment_status: bookingPaymentStatus,
         notes: body.notes || null,
@@ -1312,7 +1351,7 @@ const app = defineApp([
                   startTime: b.start_time,
                   endTime: b.end_time,
                   groupType: b.group_type,
-                  equipment: b.equipment ? JSON.parse(b.equipment) : [],
+                  equipment: parseBookingEquipmentLines(b.equipment),
                   equipmentPrice: b.equipment_price,
                   totalPrice: b.total_price,
                 });
@@ -1329,7 +1368,7 @@ const app = defineApp([
             startTime: body.startTime,
             endTime: body.endTime,
             groupType: body.groupType,
-            equipment: body.equipment,
+            equipment: quote.equipmentLines,
             equipmentPrice: serverEquipmentPrice,
             // Server-authoritative totals: multi-slot emails show the cart net
             // total, single-slot the booking net — never client-supplied amounts.
@@ -1505,11 +1544,12 @@ const app = defineApp([
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
     try {
       const { results } = await env.DB
-        .prepare("SELECT equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour FROM equipment ORDER BY name")
+        .prepare("SELECT equipment_id, name, max_per_session, stock_total, pricing_type, session_pricing, price_per_hour FROM equipment ORDER BY name")
         .all<{
           equipment_id: string;
           name: string;
           max_per_session: number;
+          stock_total: number;
           pricing_type: string;
           session_pricing: string;
           price_per_hour: number;
@@ -1519,6 +1559,7 @@ const app = defineApp([
         id: eq.equipment_id,
         name: eq.name,
         maxPerSession: eq.max_per_session,
+        stockTotal: eq.stock_total,
         pricingType: eq.pricing_type,
         sessionPricing: eq.session_pricing ? JSON.parse(eq.session_pricing) : null,
         pricePerHour: eq.price_per_hour,
@@ -1881,6 +1922,7 @@ const app = defineApp([
         const allEquipment = await getEquipment(env.DB);
         const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
           id: e.equipment_id,
+          name: e.name,
           pricingType: e.pricing_type,
           sessionPricing: e.session_pricing ? (JSON.parse(e.session_pricing) as number[]) : null,
           pricePerHour: e.price_per_hour,
@@ -1939,7 +1981,7 @@ const app = defineApp([
           base_price: basePrice,
           equipment_price: equipmentPrice,
           total_price: subtotal,
-          equipment: body.equipment || null,
+          equipment: JSON.stringify(quote.equipmentLines.filter((line) => line.quantity > 0)),
           payment_method: body.payment_method || null,
           payment_status: body.payment_method === "card" ? "paid" : "pay-on-site",
           notes: body.notes || null,
@@ -1967,9 +2009,7 @@ const app = defineApp([
           ).bind(body.user_id).first<{ name: string; email: string | null; phone: string | null }>();
 
           if (userRow?.email) {
-            const equipmentSelections: EquipmentSelection[] = body.equipment
-              ? JSON.parse(body.equipment) as EquipmentSelection[]
-              : [];
+            const equipmentSelections = quote.equipmentLines;
 
             const emailPromise = sendBookingConfirmationEmail(env.RESEND_API_KEY, {
               bookingRef: booking.booking_ref,
@@ -2050,6 +2090,7 @@ const app = defineApp([
       const allEquipment = await getEquipment(env.DB);
       const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
         id: e.equipment_id,
+        name: e.name,
         pricingType: e.pricing_type,
         sessionPricing: e.session_pricing ? (JSON.parse(e.session_pricing) as number[]) : null,
         pricePerHour: e.price_per_hour,
@@ -2151,10 +2192,33 @@ const app = defineApp([
         const needsExisting = Boolean(
           body.date || body.start_time || body.end_time ||
           body.base_price !== undefined || body.equipment_price !== undefined ||
-          body.promo_discount !== undefined,
+          body.promo_discount !== undefined || body.equipment !== undefined,
         );
         const existing = needsExisting ? await getBookingById(env.DB, id) : null;
         if (needsExisting && !existing) return jsonError("Réservation introuvable", 404);
+
+        if (body.equipment !== undefined) {
+          const catalogue = await getEquipment(env.DB);
+          const ex = existing!;
+          const start = body.start_time || ex.start_time;
+          const end = body.end_time || ex.end_time;
+          const slots = parseBookingEquipmentLines(body.equipment);
+          const startIdx = ALL_TIME_SLOTS.indexOf(start);
+          let endIdx = end === "00:00" ? ALL_TIME_SLOTS.length : ALL_TIME_SLOTS.indexOf(end);
+          if (endIdx < 0) endIdx = ALL_TIME_SLOTS.length;
+          const hours = Math.max(0, endIdx - startIdx) * 0.5;
+          const lines = slots.flatMap(line => {
+            const item = catalogue.find(e => e.equipment_id === line.id);
+            if (!item) return [];
+            const sessionPricing = item.session_pricing ? (JSON.parse(item.session_pricing) as number[]) : null;
+            const lineTotal = item.pricing_type === "session"
+              ? (sessionPricing?.[line.quantity - 1] || 0)
+              : (Number(item.price_per_hour) || 0) * line.quantity * hours;
+            return [{ id: item.equipment_id, name: item.name, quantity: line.quantity, lineTotal }];
+          });
+          body.equipment = JSON.stringify(lines);
+          body.equipment_price = lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);
+        }
 
         // If rescheduling, check for conflicts
         if (body.date || body.start_time || body.end_time) {
@@ -2184,6 +2248,10 @@ const app = defineApp([
             base_price: Number(body.base_price ?? existing!.base_price) || 0,
             equipment_price: Number(body.equipment_price ?? existing!.equipment_price) || 0,
           });
+        }
+        if (body.promo_discount !== undefined) {
+          if (existing!.status === "cancelled") return jsonError(getManualDiscountBlockMessage("cancelled"), 400);
+          if (typeof existing!.promo_code === "string" && existing!.promo_code.trim() !== "") return jsonError(getManualDiscountBlockMessage("promo_code"), 400);
         }
 
         // Brut canonique = base_price + equipment_price (jamais le total_price
@@ -3542,6 +3610,7 @@ const app = defineApp([
           name?: string;
           equipment_id?: string;
           max_per_session?: number;
+          stock_total?: number;
           pricing_type?: string;
           session_pricing?: string;
           price_per_hour?: number;
@@ -3550,18 +3619,22 @@ const app = defineApp([
         if (!body.name || !body.equipment_id) {
           return jsonError("Champs obligatoires manquants: name, equipment_id", 400);
         }
+        if (body.stock_total !== undefined && (!Number.isFinite(body.stock_total) || body.stock_total < 1)) {
+          return jsonError("Le stock physique doit être au moins 1", 400);
+        }
 
         const id = crypto.randomUUID();
         const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
 
         await env.DB.prepare(`
-          INSERT INTO equipment (id, equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO equipment (id, equipment_id, name, max_per_session, stock_total, pricing_type, session_pricing, price_per_hour, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           id,
           body.equipment_id,
           body.name,
           body.max_per_session ?? 1,
+          body.stock_total ?? 1,
           body.pricing_type ?? "per_session",
           body.session_pricing ?? null,
           body.price_per_hour ?? 0,
@@ -3592,10 +3665,15 @@ const app = defineApp([
         const body = await request.json() as {
           name?: string;
           max_per_session?: number;
+          stock_total?: number;
           pricing_type?: string;
           session_pricing?: string;
           price_per_hour?: number;
         };
+
+        if (body.stock_total !== undefined && (!Number.isFinite(body.stock_total) || body.stock_total < 1)) {
+          return jsonError("Le stock physique doit être au moins 1", 400);
+        }
 
         const result = await updateEquipment(env.DB, id, body);
         if (!result.success) {

@@ -137,6 +137,8 @@ Multi-step wizard in `src/components/booking/`:
 
 ### Admin Panel
 
+- Equipment stock is physical and shared across studios; public ceiling is `min(maxPerSession, available)`, and public POST `/api/bookings` rejects over-stock.
+
 - **Dashboard**: Stats, charts (recharts), monthly PDF reports
 - **Calendar**: Week/day views, drag-to-reschedule
 - **Bookings**: Filterable list, detail view, payments, cancel/no-show

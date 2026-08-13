@@ -1,4 +1,4 @@
-import { type EquipmentSelection, STUDIOS, EQUIPMENT, formatPrice } from "@/lib/booking";
+import { type BookingEquipmentLine, STUDIOS, formatPrice, resolveEquipmentDisplay } from "@/lib/booking";
 
 export interface BookingSlot {
   bookingRef: string;
@@ -7,8 +7,9 @@ export interface BookingSlot {
   startTime: string;
   endTime: string;
   groupType: string;
-  equipment: EquipmentSelection[];
+  equipment: BookingEquipmentLine[];
   equipmentPrice: number;
+  equipmentNames?: Record<string, string>;
   totalPrice: number;
 }
 
@@ -20,8 +21,9 @@ export interface BookingConfirmationData {
   startTime: string;
   endTime: string;
   groupType: string;
-  equipment: EquipmentSelection[];
+  equipment: BookingEquipmentLine[];
   equipmentPrice: number;
+  equipmentNames?: Record<string, string>;
   totalPrice: number;
   paymentMethod: string;
   paymentStatus: string;
@@ -99,15 +101,13 @@ function calculateDurationHours(startTime: string, endTime: string): number {
   return duration;
 }
 
-function buildEquipmentList(equipment: EquipmentSelection[]): string {
+function buildEquipmentList(equipment: BookingEquipmentLine[]): string {
   if (!equipment || equipment.length === 0) {
     return "Aucun matériel supplémentaire";
   }
   return equipment
     .map((item) => {
-      const eq = EQUIPMENT[item.id as keyof typeof EQUIPMENT];
-      if (!eq) return null;
-      let label = `${eq.name} ×${item.quantity}`;
+      let label = `${item.name || item.id} ×${item.quantity}`;
       if (item.id === "mic" && item.quantity === 4) {
         label += " (4ème offert)";
       }
@@ -117,34 +117,29 @@ function buildEquipmentList(equipment: EquipmentSelection[]): string {
     .join(", ");
 }
 
-function buildEquipmentBreakdown(equipment: EquipmentSelection[], durationHours: number): string {
-  if (!equipment || equipment.length === 0) {
+function buildEquipmentBreakdown(equipment: BookingEquipmentLine[] | string | null | undefined, equipmentPrice: number, names?: Record<string, string>): string {
+  const display = resolveEquipmentDisplay(equipment, equipmentPrice, id => names?.[id]);
+  if (display.lines.length === 0 && display.subtotal <= 0) {
     return "";
   }
-  return equipment
+  if (!display.showLinePrices) return `<tr><td style="padding:4px 0;color:#aaaaaa;font-size:13px;">Équipements</td><td align="right" style="padding:4px 0;color:#ffffff;font-size:13px;font-weight:500;">${formatPrice(display.subtotal)}</td></tr>`;
+  return display.lines
     .map((item) => {
-      const eq = EQUIPMENT[item.id as keyof typeof EQUIPMENT];
-      if (!eq) return null;
-      let price = 0;
-      if (eq.pricingType === "session" && eq.sessionPricing) {
-        price = eq.sessionPricing[item.quantity - 1] || 0;
-      } else {
-        price = eq.pricePerHour * item.quantity * durationHours;
-      }
-      let label = `${eq.name} ×${item.quantity}`;
+      const price = item.lineTotal;
+      let label = `${item.name || item.id} ×${item.quantity}`;
       if (item.id === "mic" && item.quantity === 4) {
         label += " — 4ème offert";
       }
       return `<tr>
         <td style="padding:4px 0;color:#aaaaaa;font-size:13px;">${label}</td>
-        <td align="right" style="padding:4px 0;color:#ffffff;font-size:13px;font-weight:500;">${formatPrice(price)}</td>
+        <td align="right" style="padding:4px 0;color:#ffffff;font-size:13px;font-weight:500;">${typeof price === "number" && Number.isFinite(price) ? formatPrice(price) : ""}</td>
       </tr>`;
     })
     .filter(Boolean)
     .join("");
 }
 
-function buildEmailHtml(data: BookingConfirmationData): string {
+export function buildEmailHtml(data: BookingConfirmationData): string {
   const studioName = getStudioName(data.studioId);
   const dateLabel = formatDateFrench(data.date);
   const timeLabel = formatTimeRange(data.startTime, data.endTime);
@@ -153,22 +148,20 @@ function buildEmailHtml(data: BookingConfirmationData): string {
   const equipmentLabel = buildEquipmentList(data.equipment);
   const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
   const promoLabel = data.promoType === "percentage" ? `${data.promoValue ?? data.promoDiscount}%` : `${formatPrice(data.promoDiscount || 0)}`;
-  const durationHours = calculateDurationHours(data.startTime, data.endTime);
-  const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, durationHours);
+  const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, data.equipmentPrice, data.equipmentNames);
 
   const isMultiSlot = data.allSlots && data.allSlots.length > 1;
   const multiSlotTotal = isMultiSlot ? data.allSlots!.reduce((sum, s) => sum + s.totalPrice, 0) : 0;
 
   const bookingRefBadge = isMultiSlot
     ? `<p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Références de réservation</p>
-<p style="margin:0;color:#facc15;font-size:16px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${data.allSlots!.map(s => s.bookingRef).join(" · ")}</p>`
+${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};color:#facc15;font-size:16px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${s.bookingRef}</p>`).join("\n")}`
     : `<p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Référence de réservation</p>
 <p style="margin:0;color:#facc15;font-size:24px;font-weight:700;letter-spacing:1px;font-family:'Courier New',monospace;">${data.bookingRef}</p>`;
 
   // Multi-slot: one card per slot with its own price breakdown + equipment
   const multiSlotCards = isMultiSlot ? data.allSlots!.map((slot, idx) => {
-    const slotDuration = calculateDurationHours(slot.startTime, slot.endTime);
-    const slotEquipBreakdown = buildEquipmentBreakdown(slot.equipment, slotDuration);
+    const slotEquipBreakdown = buildEquipmentBreakdown(slot.equipment, slot.equipmentPrice, slot.equipmentNames || data.equipmentNames);
     const slotEquipLabel = buildEquipmentList(slot.equipment);
     const slotStudio = getStudioName(slot.studioId);
     const slotBasePrice = slot.totalPrice - slot.equipmentPrice;

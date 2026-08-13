@@ -20,11 +20,11 @@ INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VA
 INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour) VALUES ('prc-012', 'le-podium', 'group', 1, 900);
 
 -- Equipment (from booking.ts EQUIPMENT)
-INSERT INTO equipment (id, equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour) VALUES ('eq-001', 'cymbal', '2 Cymbales Crash', 1, 'session', '[3]', 0);
-INSERT INTO equipment (id, equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour) VALUES ('eq-002', 'mic', 'Micro supplémentaire', 4, 'session', '[3,5,6,6]', 2);
-INSERT INTO equipment (id, equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour) VALUES ('eq-003', 'guitar', 'Guitare électrique', 3, 'session', '[3,6,9]', 0);
-INSERT INTO equipment (id, equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour) VALUES ('eq-004', 'bass', 'Basse', 1, 'session', '[3]', 0);
-INSERT INTO equipment (id, equipment_id, name, max_per_session, pricing_type, session_pricing, price_per_hour) VALUES ('eq-005', 'piano', 'Piano numérique', 2, 'session', '[3,6]', 0);
+INSERT INTO equipment (id, equipment_id, name, max_per_session, stock_total, pricing_type, session_pricing, price_per_hour) VALUES ('eq-001', 'cymbal', '2 Cymbales Crash', 1, 2, 'session', '[3]', 0);
+INSERT INTO equipment (id, equipment_id, name, max_per_session, stock_total, pricing_type, session_pricing, price_per_hour) VALUES ('eq-002', 'mic', 'Micro supplémentaire', 4, 6, 'session', '[3,5,6,6]', 2);
+INSERT INTO equipment (id, equipment_id, name, max_per_session, stock_total, pricing_type, session_pricing, price_per_hour) VALUES ('eq-003', 'guitar', 'Guitare électrique', 3, 3, 'session', '[3,6,9]', 0);
+INSERT INTO equipment (id, equipment_id, name, max_per_session, stock_total, pricing_type, session_pricing, price_per_hour) VALUES ('eq-004', 'bass', 'Basse', 1, 1, 'session', '[3]', 0);
+INSERT INTO equipment (id, equipment_id, name, max_per_session, stock_total, pricing_type, session_pricing, price_per_hour) VALUES ('eq-005', 'piano', 'Piano numérique', 2, 2, 'session', '[3,6]', 0);
 
 -- Opening hours (from booking.ts STUDIO_HOURS)
 INSERT INTO opening_hours (id, studio_id, day_of_week, open_time, close_time, is_closed) VALUES ('oh-001', 'le-podium', 0, '10:00', '22:30', 0);

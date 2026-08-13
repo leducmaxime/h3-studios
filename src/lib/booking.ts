@@ -39,6 +39,128 @@ export interface EquipmentSelection {
   quantity: number;
 }
 
+export interface BookingEquipmentLine {
+  id: string;
+  quantity: number;
+  name?: string;
+  lineTotal?: number;
+}
+
+export function parseBookingEquipmentLines(raw: string | null | undefined | unknown): BookingEquipmentLine[] {
+  let value: unknown = raw;
+  if (typeof raw === "string") {
+    try { value = JSON.parse(raw); } catch { return []; }
+  }
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): BookingEquipmentLine[] => {
+    if (!item || typeof item !== "object") return [];
+    const v = item as Record<string, unknown>;
+    if (typeof v.id !== "string" || !v.id.trim()) return [];
+    const quantity = Number(v.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) return [];
+    const line: BookingEquipmentLine = { id: v.id, quantity };
+    if (typeof v.name === "string" && v.name.trim()) line.name = v.name;
+    const total = v.lineTotal !== undefined ? v.lineTotal : v.price;
+    if (typeof total === "number" && Number.isFinite(total)) line.lineTotal = total;
+    return [line];
+  });
+}
+
+function timeToMinutes(time: string): number {
+  if (time === "00:00") return 24 * 60;
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+/** Whether two half-open time ranges overlap (midnight is treated as 24:00). */
+export function timeRangesOverlap(
+  aStart: string, aEnd: string,
+  bStart: string, bEnd: string,
+): boolean {
+  const aStartMinutes = timeToMinutes(aStart);
+  const aEndMinutes = timeToMinutes(aEnd);
+  const bStartMinutes = timeToMinutes(bStart);
+  const bEndMinutes = timeToMinutes(bEnd);
+  return aStartMinutes < bEndMinutes && aEndMinutes > bStartMinutes;
+}
+
+export function computeEquipmentAvailability(input: {
+  stockTotal: number;
+  equipmentId: string;
+  requested: { startTime: string; endTime: string };
+  requestedStudioId?: string;
+  bookings: Array<{
+    startTime: string;
+    endTime: string;
+    status: string;
+    studioId?: string;
+    equipment: unknown;
+  }>;
+  cartItems?: Array<{
+    startTime: string;
+    endTime: string;
+    equipment: unknown;
+  }>;
+}): {
+  reserved: number;
+  available: number;
+  reservedFromBookings: number;
+  reservedFromCart: number;
+  reservedOnOtherStudio: number;
+} {
+  const stockTotal = Number.isFinite(input.stockTotal) && input.stockTotal > 0
+    ? input.stockTotal
+    : 0;
+  const overlapsRequested = (startTime: string, endTime: string) =>
+    timeRangesOverlap(startTime, endTime, input.requested.startTime, input.requested.endTime);
+  const quantityForEquipment = (equipment: unknown) =>
+    parseBookingEquipmentLines(equipment)
+      .filter((line) => line.id === input.equipmentId)
+      .reduce((sum, line) => sum + line.quantity, 0);
+
+  let reservedFromBookings = 0;
+  let reservedOnOtherStudio = 0;
+  for (const booking of input.bookings) {
+    if (booking.status !== "confirmed" && booking.status !== "completed") continue;
+    if (!overlapsRequested(booking.startTime, booking.endTime)) continue;
+    const qty = quantityForEquipment(booking.equipment);
+    reservedFromBookings += qty;
+    if (input.requestedStudioId && booking.studioId && booking.studioId !== input.requestedStudioId) {
+      reservedOnOtherStudio += qty;
+    }
+  }
+  const reservedFromCart = (input.cartItems ?? []).reduce((sum, item) => {
+    if (!overlapsRequested(item.startTime, item.endTime)) return sum;
+    return sum + quantityForEquipment(item.equipment);
+  }, 0);
+  const reserved = reservedFromBookings + reservedFromCart;
+  return {
+    reserved,
+    available: Math.max(0, stockTotal - reserved),
+    reservedFromBookings,
+    reservedFromCart,
+    reservedOnOtherStudio,
+  };
+}
+
+export function equipmentLinesTotal(lines: BookingEquipmentLine[]): number | null {
+  if (lines.some((line) => typeof line.lineTotal !== "number" || !Number.isFinite(line.lineTotal))) return null;
+  return lines.reduce((sum, line) => sum + line.lineTotal!, 0);
+}
+
+export type EquipmentNameLookup = (id: string) => string | undefined;
+export function resolveEquipmentDisplay(raw: string | null | undefined | unknown, equipmentPrice: number, nameFor?: EquipmentNameLookup): {
+  lines: Array<{ id: string; quantity: number; name: string; lineTotal?: number }>;
+  showLinePrices: boolean;
+  subtotal: number;
+} {
+  const parsed = parseBookingEquipmentLines(raw);
+  const lines = parsed.map(line => ({ ...line, name: line.name || nameFor?.(line.id) || line.id }));
+  const subtotal = Number(equipmentPrice) || 0;
+  const sum = equipmentLinesTotal(parsed);
+  return { lines, showLinePrices: sum !== null && Math.abs(sum - subtotal) <= 0.005, subtotal };
+}
+
 export interface CompletedBooking {
   id: string;
   date: Date;
@@ -907,6 +1029,7 @@ export interface QuoteEquipmentItem {
 
 export interface QuoteEquipmentCatalogueItem {
   id: string;
+  name: string;
   pricingType: string; // "session" | "hourly"
   sessionPricing: number[] | null;
   pricePerHour: number;
@@ -933,6 +1056,7 @@ export interface BookingQuote {
   durationHours: number;
   halfHours: number;
   slotBreakdown: Array<{ time: string; isPeak: boolean }>;
+  equipmentLines: Array<{ id: string; name: string; quantity: number; lineTotal: number }>;
 }
 
 export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
@@ -943,7 +1067,7 @@ export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
   let endIdx = ALL_TIME_SLOTS.indexOf(input.endTime);
   if (input.endTime === "00:00" && endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-    return { basePrice: 0, equipmentPrice: 0, totalPrice: 0, durationHours: 0, halfHours: 0, slotBreakdown: [] };
+    return { basePrice: 0, equipmentPrice: 0, totalPrice: 0, durationHours: 0, halfHours: 0, slotBreakdown: [], equipmentLines: [] };
   }
 
   const dayOfWeek = new Date(input.date + "T00:00:00").getDay();
@@ -961,13 +1085,18 @@ export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
   }
 
   let equipmentPrice = 0;
+  const equipmentLines: BookingQuote["equipmentLines"] = [];
   for (const eq of input.equipment ?? []) {
     const eqData = input.equipmentCatalogue?.find((e) => e.id === eq.id);
     if (eqData && eq.quantity > 0) {
       if (eqData.pricingType === "session" && eqData.sessionPricing) {
-        equipmentPrice += eqData.sessionPricing[eq.quantity - 1] || 0;
+        const lineTotal = eqData.sessionPricing[eq.quantity - 1] || 0;
+        equipmentPrice += lineTotal;
+        equipmentLines.push({ id: eq.id, name: eqData.name || eq.id, quantity: eq.quantity, lineTotal });
       } else {
-        equipmentPrice += eqData.pricePerHour * eq.quantity * durationHours;
+        const lineTotal = eqData.pricePerHour * eq.quantity * durationHours;
+        equipmentPrice += lineTotal;
+        equipmentLines.push({ id: eq.id, name: eqData.name || eq.id, quantity: eq.quantity, lineTotal });
       }
     }
   }
@@ -979,6 +1108,7 @@ export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
     durationHours,
     halfHours,
     slotBreakdown,
+    equipmentLines,
   };
 }
 

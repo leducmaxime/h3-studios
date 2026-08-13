@@ -7,7 +7,29 @@ import {
   getDisplayPaymentStatus,
   getDisplayPaymentStatusFromSummary,
   getTotalRefunded,
+  getManualDiscountEligibility,
+  getBookingOverpayment,
 } from "@/lib/booking-totals";
+
+describe("manual discounts", () => {
+  const b = (extra = {}) => ({ status: "confirmed" as const, promo_code: null, base_price: 50, equipment_price: 0, total_price: 50, promo_discount: 0, ...extra });
+  it("blocks cancelled and promo bookings", () => {
+    expect(getManualDiscountEligibility(b({ status: "cancelled" }))).toEqual({ allowed: false, reason: "cancelled" });
+    expect(getManualDiscountEligibility(b({ promo_code: "X", promo_discount: 0 }))).toEqual({ allowed: false, reason: "promo_code" });
+  });
+  it("allows unpaid and paid bookings without a promo", () => {
+    expect(getManualDiscountEligibility(b())).toEqual({ allowed: true });
+    expect(getManualDiscountEligibility(b({ payment_status: "paid" }))).toEqual({ allowed: true });
+  });
+  it("calculates overpayment from net collected payments", () => {
+    expect(getBookingOverpayment(b({ promo_discount: 10 }), [{ amount: 50, status: "paid", refunded_amount: 0 }])).toBe(10);
+    expect(getBookingOverpayment(b({ promo_discount: 10 }), [{ amount: 40, status: "paid", refunded_amount: 0 }])).toBe(0);
+  });
+  it("treats empty and null promo codes as eligible", () => {
+    expect(getManualDiscountEligibility(b({ promo_code: "" }))).toEqual({ allowed: true });
+    expect(getManualDiscountEligibility(b({ promo_code: null }))).toEqual({ allowed: true });
+  });
+});
 
 // ─── getBookingAmountDue ─────────────────────────────────────────────────────
 

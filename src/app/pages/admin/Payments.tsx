@@ -47,7 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatPrice } from "@/lib/booking";
-import { getBookingAmountDue } from "@/lib/booking-totals";
+import { getBookingAmountDue, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
 import { exportPaymentsCSV } from "@/lib/export";
 import { RefundPaymentDialog } from "@/components/admin/refund";
 
@@ -91,6 +91,22 @@ interface PaymentsResponse {
 
 type BookingPaymentMethod = "card" | "cash" | null;
 
+interface CollectBooking {
+  booking_ref: string;
+  status?: string;
+  base_price: number;
+  equipment_price: number;
+  total_price: number;
+  promo_discount: number;
+  promo_code?: string | null;
+  promo_code_type?: string | null;
+  promo_code_value?: number | null;
+  payment_method: BookingPaymentMethod;
+  band_name?: string | null;
+  user_name?: string | null;
+  user_band_name?: string | null;
+}
+
 interface CollectContext {
   bookingId: string;
   bookingRef: string | null;
@@ -103,6 +119,8 @@ interface CollectContext {
   promoCodeType: string | null;
   promoCodeValue: number | null;
   promoDiscount: number;
+  booking: CollectBooking;
+  overpayment: number;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -425,6 +443,8 @@ export function AdminPayments() {
   const [collectEntries, setCollectEntries] = useState<CollectEntry[]>([
     { id: crypto.randomUUID(), amount: "", method: "cash" },
   ]);
+  const [discountInput, setDiscountInput] = useState("");
+  const [discountSaving, setDiscountSaving] = useState(false);
 
   const [serverStats, setServerStats] = useState<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number } | null>(null);
 
@@ -553,21 +573,7 @@ export function AdminPayments() {
       if (!bJson.success) throw new Error(bJson.error || "Booking fetch failed");
       if (!pJson.success) throw new Error(pJson.error || "Payments fetch failed");
 
-      const booking = bJson.data as {
-        booking_ref: string;
-        status?: string;
-        base_price: number;
-        equipment_price: number;
-        total_price: number;
-        promo_discount: number;
-        promo_code?: string | null;
-        promo_code_type?: string | null;
-        promo_code_value?: number | null;
-        payment_method: BookingPaymentMethod;
-        band_name?: string | null;
-        user_name?: string | null;
-        user_band_name?: string | null;
-      };
+      const booking = bJson.data as CollectBooking;
       // Une réservation annulée ne présente jamais de montant dû.
       if (booking.status === "cancelled") {
         toast.error("Cette réservation est annulée — aucun encaissement possible");
@@ -578,7 +584,7 @@ export function AdminPayments() {
       const finalTotal = getBookingAmountDue(booking);
       const remaining = Math.max(finalTotal - totalPaid, 0);
 
-      if (remaining <= 0) {
+      if (remaining <= 0 && !getManualDiscountEligibility(booking).allowed) {
         toast.success("La réservation est déjà soldée");
         return;
       }
@@ -595,7 +601,10 @@ export function AdminPayments() {
         promoCodeType: booking.promo_code_type || null,
         promoCodeValue: booking.promo_code_value ?? null,
         promoDiscount: booking.promo_discount || 0,
+        booking,
+        overpayment: getBookingOverpayment(booking, pJson.data),
       });
+      setDiscountInput(String(booking.promo_discount || 0));
 
       setCollectEntries([
         {
@@ -611,6 +620,23 @@ export function AdminPayments() {
     } finally {
       setCollectLoading(false);
     }
+  }
+
+  async function applyCollectDiscount() {
+    if (!collectContext) return;
+    const eligibility = getManualDiscountEligibility(collectContext.booking);
+    if (!eligibility.allowed) { toast.error(getManualDiscountBlockMessage(eligibility.reason)); return; }
+    const amount = parseAmountInput(discountInput);
+    if (!Number.isFinite(amount) || amount < 0 || amount > collectContext.booking.total_price) { toast.error("Montant invalide"); return; }
+    setDiscountSaving(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${collectContext.bookingId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ promo_discount: amount }) });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (!json.success) { toast.error(json.error || "Erreur"); return; }
+      await openCollectDialog(collectContext.bookingId);
+      fetchPayments();
+      toast.success("Remise appliquée");
+    } catch { toast.error("Erreur réseau"); } finally { setDiscountSaving(false); }
   }
 
   function addCollectEntry() {
@@ -646,7 +672,7 @@ export function AdminPayments() {
     }
 
     const totalToAdd = parsed.reduce((acc, p) => acc + p.amount, 0);
-    if (collectContext.remaining > 0 && totalToAdd > collectContext.remaining) {
+    if (totalToAdd > collectContext.remaining) {
       toast.error(`Le total dépasse le reste à payer (${formatPrice(collectContext.remaining)})`);
       return;
     }
@@ -1186,6 +1212,16 @@ export function AdminPayments() {
           </DialogHeader>
 
           <div className="space-y-3">
+            {collectContext && !collectContext.promoCode && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-zinc-400">Remise manuelle</Label>
+                <Input value={discountInput} onChange={(e) => setDiscountInput(e.target.value)} className="h-7 w-24 border-zinc-700 bg-zinc-800 text-xs" inputMode="decimal" />
+                <Button type="button" size="sm" onClick={applyCollectDiscount} disabled={discountSaving} className="h-7 text-xs">Appliquer</Button>
+              </div>
+            )}
+            {collectContext && collectContext.overpayment > 0 && (
+              <p className="text-xs text-amber-400">Trop-perçu : {formatPrice(collectContext.overpayment)} — utiliser le remboursement.</p>
+            )}
             {collectContext && (
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
                 <div className="flex items-center justify-between text-sm">

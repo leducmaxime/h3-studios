@@ -97,6 +97,7 @@ export function AdminBookingNew() {
   // Equipment
   const [availableEquipment, setAvailableEquipment] = useState<ApiEquipment[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentSelection[]>([]);
+  const [equipmentAvailability, setEquipmentAvailability] = useState<Record<string, { available: number; reserved: number }>>({});
 
   // Pricing
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
@@ -149,6 +150,14 @@ export function AdminBookingNew() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!date || !startTime || !endTime || !studioId) { setEquipmentAvailability({}); return; }
+    fetch(`/api/equipment-availability?${new URLSearchParams({ date, start: startTime, end: endTime, studioId })}`)
+      .then((r) => r.json() as Promise<{ success: boolean; data?: { items: Array<{ id: string; available: number; reserved: number }> } }>)
+      .then((json) => { if (json.success && json.data) setEquipmentAvailability(Object.fromEntries(json.data.items.map((i) => [i.id, i]))); })
+      .catch(() => {});
+  }, [date, startTime, endTime, studioId]);
 
   // Search users (debounced)
   useEffect(() => {
@@ -727,6 +736,7 @@ export function AdminBookingNew() {
                         <span className="text-xs text-zinc-400">
                           {priceDisplay}
                         </span>
+                        {equipmentAvailability[eq.id] && equipmentAvailability[eq.id].available < eq.maxPerSession && <span className="text-xs text-amber-400">{equipmentAvailability[eq.id].reserved} déjà réservée(s) — stock restant {equipmentAvailability[eq.id].available}. Vous pouvez forcer.</span>}
                         {isFourthMicFree && (
                           <span className="flex items-center gap-1 text-xs text-green-400">
                             <Gift className="h-3 w-3" />

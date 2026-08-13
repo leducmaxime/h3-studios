@@ -1,6 +1,7 @@
 import { getBookingAmountDue } from "./booking-totals";
 import type { DbBooking, DbUser } from "./db-types";
 import type { BookingConfirmationData, BookingSlot } from "./email";
+import { parseBookingEquipmentLines } from "./booking";
 
 /**
  * Finalisation idempotente d'un paiement en ligne (Stripe Checkout).
@@ -73,6 +74,7 @@ export function partitionBookingsForFinalization(bookings: DbBooking[]): Finaliz
 export interface PaidConfirmationEmailInput {
   bookings: DbBooking[]; // lignes du panier réellement payées (non annulées)
   user: Pick<DbUser, "name" | "phone"> & { email: string };
+  equipmentNames?: Record<string, string>;
 }
 
 /**
@@ -96,8 +98,9 @@ export function buildPaidConfirmationEmailPayload(input: PaidConfirmationEmailIn
     startTime: b.start_time,
     endTime: b.end_time,
     groupType: b.group_type,
-    equipment: b.equipment ? JSON.parse(b.equipment) : [],
+    equipment: parseBookingEquipmentLines(b.equipment),
     equipmentPrice: Number(b.equipment_price) || 0,
+    equipmentNames: input.equipmentNames,
     totalPrice: Number(b.total_price) || 0,
   }));
 
@@ -108,8 +111,9 @@ export function buildPaidConfirmationEmailPayload(input: PaidConfirmationEmailIn
     startTime: primary.start_time,
     endTime: primary.end_time,
     groupType: primary.group_type,
-    equipment: primary.equipment ? JSON.parse(primary.equipment) : [],
+    equipment: parseBookingEquipmentLines(primary.equipment),
     equipmentPrice: Number(primary.equipment_price) || 0,
+    equipmentNames: input.equipmentNames,
     totalPrice: netTotal,
     paymentMethod: "card",
     paymentStatus: "paid",
@@ -153,6 +157,7 @@ export interface FinalizePaidSessionDeps {
   releaseEmailClaim: (sessionId: string, claimedAt: string) => Promise<void>;
   getUserById: (userId: string) => Promise<Pick<DbUser, "name" | "email" | "phone"> | null>;
   sendEmail: (data: BookingConfirmationData) => Promise<{ success: boolean }>;
+  equipmentNames?: Record<string, string>;
   nowISO: () => string;
 }
 
@@ -246,6 +251,7 @@ export async function finalizePaidCheckoutSession(
         const payload = buildPaidConfirmationEmailPayload({
           bookings: finalizable,
           user: { name: user.name, email: user.email, phone: user.phone },
+          equipmentNames: deps.equipmentNames,
         });
         const sendResult = await deps.sendEmail(payload);
         if (sendResult.success) {
