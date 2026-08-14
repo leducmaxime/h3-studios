@@ -167,10 +167,14 @@ function ContactForm() {
   );
 }
 
-const FAQ_ITEMS = [
+const FAQ_ITEMS: { q: string; a: string | string[] }[] = [
   {
     q: "Peut-on annuler ou modifier une réservation ?",
-    a: "Oui, vous pouvez modifier ou annuler votre réservation en nous contactant au 06 13 44 08 75 ou par email. Nous vous demandons de nous prévenir le plus tôt possible afin de libérer le créneau pour d'autres musiciens."
+    a: [
+      "Oui, vous pouvez modifier ou annuler votre réservation en nous contactant au 06 13 44 08 75 ou par e-mail.",
+      "Nous vous demandons de nous prévenir le plus tôt possible afin de libérer le créneau pour d'autres musiciens.",
+      "À noter : toute annulation effectuée moins de 24 heures avant le début de la réservation est non remboursable. Si vous avez choisi le paiement sur place, le montant de la réservation reste intégralement dû."
+    ]
   },
   {
     q: "Y a-t-il un parking à proximité ?",
@@ -407,8 +411,12 @@ export function APropos() {
                   />
                 </button>
                 {openFaq === i && (
-                  <div className="border-t border-white/10 px-5 py-4">
-                    <p className="text-sm leading-relaxed text-primary">{item.a}</p>
+                  <div className="space-y-3 border-t border-white/10 px-5 py-4">
+                    {(Array.isArray(item.a) ? item.a : [item.a]).map((paragraph, pi) => (
+                      <p key={pi} className="text-sm leading-relaxed text-primary">
+                        {paragraph}
+                      </p>
+                    ))}
                   </div>
                 )}
               </div>

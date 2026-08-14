@@ -48,10 +48,14 @@ export function ConditionsVente() {
               <strong className="text-white">Annulation par le client :</strong>
             </p>
             <ul className="mt-2 list-inside list-disc space-y-1 text-sm leading-relaxed">
-              <li>Plus de 48h avant la séance : remboursement intégral</li>
-              <li>Entre 24h et 48h avant : remboursement de 50%</li>
-              <li>Moins de 24h avant : aucun remboursement</li>
+              <li>24h ou plus avant la séance : remboursement intégral</li>
+              <li>Moins de 24h avant la séance : aucun remboursement</li>
             </ul>
+            <p className="mt-3 text-sm leading-relaxed">
+              Si vous avez choisi le paiement sur place, le montant de la réservation reste
+              intégralement dû pour toute annulation effectuée moins de 24 heures avant le début
+              de la réservation.
+            </p>
             <p className="mt-3 text-sm leading-relaxed">
               <strong className="text-white">Annulation par H3 Studios :</strong> en cas d'annulation de notre part
               (maintenance, force majeure), le client sera intégralement remboursé ou pourra reporter sa séance.

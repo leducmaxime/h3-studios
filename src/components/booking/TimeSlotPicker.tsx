@@ -547,11 +547,6 @@ export function TimeSlotPicker({
                   · {studio.size}
                 </span>
               </span>
-              {isDimmed && (
-                <span className="text-[10px] font-medium normal-case tracking-normal text-white/70 drop-shadow-lg">
-                  Cliquez pour sélectionner ce studio
-                </span>
-              )}
             </div>
           </div>
         </div>

@@ -705,6 +705,67 @@ export function generateBookingRef(): string {
   return `H3-${datePart}-${randomPart}`;
 }
 
+export const DEFAULT_MIN_ADVANCE_HOURS = 2;
+
+/**
+ * Compute the minimum-advance cutoff using Paris wall-clock arithmetic on a
+ * single calendar day. This is deliberately today-only; callers must decide
+ * whether the requested date is today before applying the result.
+ */
+export function computeMinAdvance(
+  now: { hours: number; minutes: number },
+  minAdvanceHours: number,
+): { cutoffTime: string | null; fullyBlocked: boolean } {
+  if (
+    !Number.isFinite(now.hours) || now.hours < 0 || now.hours > 23 ||
+    !Number.isFinite(now.minutes) || now.minutes < 0 || now.minutes > 59
+  ) {
+    return { cutoffTime: null, fullyBlocked: true };
+  }
+  const hours = now.hours;
+  const minutes = now.minutes;
+  const advance = Number.isFinite(minAdvanceHours) && minAdvanceHours >= 0
+    ? minAdvanceHours
+    : DEFAULT_MIN_ADVANCE_HOURS;
+  const cutoffMinutes = hours * 60 + minutes + advance * 60;
+  if (cutoffMinutes >= 24 * 60) {
+    return { cutoffTime: null, fullyBlocked: true };
+  }
+  const cutoffH = Math.floor(cutoffMinutes / 60);
+  const cutoffM = cutoffMinutes % 60;
+  return {
+    cutoffTime: `${String(cutoffH).padStart(2, "0")}:${String(cutoffM).padStart(2, "0")}`,
+    fullyBlocked: false,
+  };
+}
+
+/** Parse the stored setting, falling back when it is not a finite non-negative number. */
+export function parseMinAdvanceHours(
+  rawValue: string | null | undefined,
+  defaultValue = DEFAULT_MIN_ADVANCE_HOURS,
+): number {
+  const parsed = Number.parseInt(rawValue || String(defaultValue), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultValue;
+}
+
+/** Return whether a same-day start time violates the minimum-advance cutoff. */
+export function isMinAdvanceViolation(
+  startTime: string,
+  cutoffTime: string | null,
+  fullyBlocked: boolean,
+): boolean {
+  if (fullyBlocked) return true;
+  if (cutoffTime === null) return false;
+  if (!/^\d{2}:\d{2}$/.test(startTime)) return true;
+  const [hours, minutes] = startTime.split(":").map(Number);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 24 || minutes < 0 || minutes > 59 || (hours === 24 && minutes !== 0)) {
+    return true;
+  }
+  const startMinutes = hours * 60 + minutes;
+  const [cutoffHours, cutoffMinutes] = cutoffTime.split(":").map(Number);
+  return startMinutes < cutoffHours * 60 + cutoffMinutes;
+}
+
 /**
  * Apply min-advance gating to an array of slot entries.
  * Slots before the cutoff are marked unavailable.

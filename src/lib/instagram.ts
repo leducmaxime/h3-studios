@@ -23,14 +23,41 @@ export interface InstagramFeed {
 
 const RSS_APP_FEED_URL = "https://rss.app/feeds/wpmloa9fZdyyGMag.xml";
 
+export async function getInstagramToken(db: D1Database, envToken?: string): Promise<string | undefined> {
+  const storedToken = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind("instagram_access_token")
+    .first<{ value: string }>();
+  const token = storedToken?.value?.trim();
+  return token || envToken;
+}
+
 async function fetchMediaPosts(accessToken: string): Promise<InstagramPost[]> {
   const response = await fetch(
-    `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&limit=51&access_token=${accessToken}`,
+    `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&limit=51&access_token=${encodeURIComponent(accessToken)}`,
     { cf: { cacheTtl: 3600 } }
   );
 
   if (!response.ok) {
     const errorData = await response.text();
+    try {
+      const parsed = JSON.parse(errorData) as {
+        error?: {
+          code?: number;
+          error_subcode?: number;
+          type?: string;
+          message?: string;
+          is_transient?: boolean;
+          fbtrace_id?: string;
+        };
+      };
+      console.error("Instagram Graph API error:", {
+        status: response.status,
+        ...parsed.error,
+      });
+    } catch {
+      console.error("Instagram Graph API error:", response.status, errorData);
+    }
     throw new Error(`Instagram API error: ${response.status} ${errorData}`);
   }
 
@@ -56,7 +83,7 @@ async function fetchMediaPosts(accessToken: string): Promise<InstagramPost[]> {
     if (item.media_type === "CAROUSEL_ALBUM") {
       try {
         const childrenResponse = await fetch(
-          `https://graph.instagram.com/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&access_token=${accessToken}`,
+          `https://graph.instagram.com/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&access_token=${encodeURIComponent(accessToken)}`,
           { cf: { cacheTtl: 3600 } }
         );
 
@@ -105,7 +132,7 @@ async function parseInstagramPosts(data: { data: Array<{ id: string; caption: st
     if (item.media_type === "CAROUSEL_ALBUM") {
       try {
         const childrenResponse = await fetch(
-          `https://graph.instagram.com/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&access_token=${accessToken}`,
+          `https://graph.instagram.com/${item.id}/children?fields=id,media_type,media_url,thumbnail_url&access_token=${encodeURIComponent(accessToken)}`,
           { cf: { cacheTtl: 3600 } }
         );
 
@@ -146,7 +173,7 @@ async function parseInstagramPosts(data: { data: Array<{ id: string; caption: st
 async function fetchTaggedPosts(accessToken: string): Promise<InstagramPost[]> {
   try {
     const response = await fetch(
-      `https://graph.instagram.com/me/tags?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&limit=50&access_token=${accessToken}`,
+      `https://graph.instagram.com/me/tags?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&limit=50&access_token=${encodeURIComponent(accessToken)}`,
       { cf: { cacheTtl: 3600 } }
     );
 
@@ -276,12 +303,16 @@ export async function syncInstagram(db: D1Database, accessToken?: string): Promi
       ? await fetchInstagramFeedFromAPI(accessToken)
       : await fetchInstagramFeedFromRSS();
 
-    await db.prepare(
-      "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
-    ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
-      data: posts,
-      last_updated: new Date().toISOString()
-    })).run();
+    if (posts.length > 0) {
+      await db.prepare(
+        "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
+      ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
+        data: posts,
+        last_updated: new Date().toISOString()
+      })).run();
+    } else {
+      console.warn("Instagram sync returned zero posts; keeping existing cache");
+    }
 
     return { success: true, count: posts.length };
   } catch (error) {

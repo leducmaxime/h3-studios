@@ -104,7 +104,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
               name: "Puis-je annuler ou modifier ma réservation ?",
               acceptedAnswer: {
                 "@type": "Answer",
-                text: "Les annulations sont possibles jusqu'à 48h avant le créneau pour un remboursement intégral. Pour toute modification, contactez-nous.",
+                text: "Oui, vous pouvez modifier ou annuler votre réservation en nous contactant au 06 13 44 08 75 ou par e-mail. Nous vous demandons de nous prévenir le plus tôt possible afin de libérer le créneau pour d'autres musiciens. À noter : toute annulation effectuée moins de 24 heures avant le début de la réservation est non remboursable. Si vous avez choisi le paiement sur place, le montant de la réservation reste intégralement dû.",
               },
             },
             {

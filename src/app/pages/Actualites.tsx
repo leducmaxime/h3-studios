@@ -21,24 +21,62 @@ interface InstagramPost {
   children?: InstagramChild[];
 }
 
+const INSTAGRAM_PROFILE_URL = "https://www.instagram.com/h3_studios_sucy/";
+
+function MediaFallback({ permalink }: { permalink: string }) {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-zinc-900 p-6 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
+        <Instagram className="h-7 w-7 text-primary" />
+      </div>
+      <a
+        href={permalink}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="inline-flex items-center gap-2 rounded-full border border-primary/40 px-5 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-black"
+      >
+        Voir la publication
+        <ExternalLink className="h-4 w-4" />
+      </a>
+    </div>
+  );
+}
+
 export function Actualites() {
   const [isVisible, setIsVisible] = useState(false);
   const [posts, setPosts] = useState<InstagramPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [degraded, setDegraded] = useState(false);
+  const [failedMedia, setFailedMedia] = useState<Record<string, boolean>>({});
   const [selectedPost, setSelectedPost] = useState<InstagramPost | null>(null);
   const [carouselIndex, setCarouselIndex] = useState<Record<string, number>>({});
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
 
+  const markFailed = useCallback((key: string) => {
+    setFailedMedia((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+  }, []);
+
   useEffect(() => {
     setIsVisible(true);
     fetch("/api/instagram/feed")
-      .then(res => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          setDegraded(true);
+          return null;
+        }
+        return res.json();
+      })
       .then((data: any) => {
+        if (!data) return;
         if (data.success && Array.isArray(data.data)) {
           setPosts(data.data);
+          if (data.stale === true) setDegraded(true);
+        } else {
+          setDegraded(true);
         }
       })
-      .catch(console.error)
+      .catch(() => setDegraded(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -111,31 +149,90 @@ export function Actualites() {
           </a>
         </div>
 
+        {degraded && (
+          <div
+            className={`mb-10 flex flex-col items-center gap-5 rounded-2xl border border-primary/20 bg-white/5 p-6 text-center transition-all duration-700 sm:flex-row sm:text-left ${
+              isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"
+            }`}
+            style={{ transitionDelay: "150ms" }}
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+              <Instagram className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-white">Flux Instagram momentanément indisponible</p>
+              <p className="mt-1 text-sm text-white/60">
+                {posts.length > 0
+                  ? "Les publications ci-dessous ne sont plus à jour. Retrouvez toutes nos actualités directement sur notre page Instagram."
+                  : "Nous ne parvenons pas à afficher les publications pour le moment. Retrouvez toutes nos actualités directement sur notre page Instagram."}
+              </p>
+            </div>
+            <a
+              href={INSTAGRAM_PROFILE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-black transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20"
+            >
+              <Instagram className="h-4 w-4" />
+              Voir sur Instagram
+            </a>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           </div>
         ) : posts.length === 0 ? (
-          <div className="py-20 text-center text-white/40">
-            Aucune publication trouvée.
-          </div>
+          degraded ? null : (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-6 py-16 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
+                <Instagram className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-white">Aucune publication à afficher</p>
+                <p className="mt-1 text-sm text-white/60">
+                  Retrouvez toutes nos actualités directement sur notre page Instagram.
+                </p>
+              </div>
+              <a
+                href={INSTAGRAM_PROFILE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-2 rounded-full bg-primary px-8 py-3.5 text-sm font-semibold text-black transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20"
+              >
+                <Instagram className="h-5 w-5" />
+                Voir sur Instagram
+              </a>
+            </div>
+          )
         ) : (
           <div className="grid gap-6 lg:grid-cols-3">
             {posts.map((post, i) => {
               const currentImage = getCurrentImage(post);
               const hasCarousel = post.children && post.children.length > 1;
               const isVideo = post.media_type === "VIDEO";
+              const tileKey = `tile-${post.id}-${carouselIndex[post.id] || 0}`;
+              const tileFailed = !!failedMedia[tileKey];
 
               return (
                 <div
                   key={post.id}
-                  onClick={() => openPost(post)}
+                  onClick={() =>
+                    tileFailed
+                      ? window.open(post.permalink, "_blank", "noopener,noreferrer")
+                      : openPost(post)
+                  }
                   className={`group cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-transparent text-left transition-all duration-700 hover:border-primary/50 hover:shadow-[0_0_30px_rgba(249,176,53,0.1)] ${
                     isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
                   }`}
                   style={{ transitionDelay: `${300 + i * 100}ms` }}
                 >
                   <div className="relative aspect-square overflow-hidden bg-zinc-900">
+                    {tileFailed ? (
+                      <MediaFallback permalink={post.permalink} />
+                    ) : (
+                      <>
                     <img
                       src={`/api/instagram/proxy-image?url=${encodeURIComponent(
                         isVideo 
@@ -148,10 +245,7 @@ export function Actualites() {
                       decoding="async"
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                       loading="lazy"
-                      onError={(e) => {
-                        console.error('Image failed to load:', currentImage.media_url);
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
+                      onError={() => markFailed(tileKey)}
                     />
                     
                     {/* Video overlay with play button */}
@@ -204,6 +298,8 @@ export function Actualites() {
                         </button>
                       </>
                     )}
+                      </>
+                    )}
                   </div>
                   <div className="p-4">
                     <p className="mb-2 line-clamp-2 text-sm text-white/70">{post.caption || "Publication Instagram"}</p>
@@ -250,15 +346,15 @@ export function Actualites() {
             <div className="relative aspect-square bg-zinc-900">
               {selectedPost.media_type === "VIDEO" && !playingVideo ? (
                 /* Video preview with play button */
+                failedMedia[`modal-thumb-${selectedPost.id}`] ? (
+                  <MediaFallback permalink={selectedPost.permalink} />
+                ) : (
                 <div className="relative h-full w-full">
                   <img
                     src={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.thumbnail_url || selectedPost.media_url)}`}
                     alt={selectedPost.caption}
                     className="h-full w-full object-cover"
-                    onError={(e) => {
-                      console.error('Thumbnail failed to load:', selectedPost.thumbnail_url);
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
+                    onError={() => markFailed(`modal-thumb-${selectedPost.id}`)}
                   />
                   <div 
                     className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer"
@@ -269,32 +365,36 @@ export function Actualites() {
                     </div>
                   </div>
                 </div>
+                )
               ) : selectedPost.media_type === "VIDEO" && playingVideo === selectedPost.id ? (
                 /* Video player */
+                failedMedia[`modal-video-${selectedPost.id}`] ? (
+                  <MediaFallback permalink={selectedPost.permalink} />
+                ) : (
                 <video
                   src={selectedPost.media_url}
                   poster={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.thumbnail_url || selectedPost.media_url)}`}
                   controls
                   autoPlay
                   className="h-full w-full object-cover"
-                  onError={(e) => {
-                    console.error('Video failed to load:', selectedPost.media_url);
-                  }}
+                  onError={() => markFailed(`modal-video-${selectedPost.id}`)}
                 />
+                )
               ) : selectedPost.children && selectedPost.children.length > 1 ? (
                 /* Carousel in modal */
                 <div className="relative h-full w-full">
+                  {failedMedia[`modal-carousel-${selectedPost.id}-${carouselIndex[selectedPost.id] || 0}`] ? (
+                    <MediaFallback permalink={selectedPost.permalink} />
+                  ) : (
                   <img
                     src={`/api/instagram/proxy-image?url=${encodeURIComponent(
                       selectedPost.children[carouselIndex[selectedPost.id] || 0]?.media_url || selectedPost.media_url
                     )}`}
                     alt={selectedPost.caption}
                     className="h-full w-full object-cover"
-                    onError={(e) => {
-                      console.error('Carousel image failed to load');
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
+                    onError={() => markFailed(`modal-carousel-${selectedPost.id}-${carouselIndex[selectedPost.id] || 0}`)}
                   />
+                  )}
                   {/* Modal carousel controls */}
                   <button
                     onClick={() => prevCarouselImage(selectedPost.id, selectedPost.children!.length)}
@@ -329,15 +429,16 @@ export function Actualites() {
                 </div>
               ) : (
                 /* Single image */
+                failedMedia[`modal-img-${selectedPost.id}`] ? (
+                  <MediaFallback permalink={selectedPost.permalink} />
+                ) : (
                 <img
                   src={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.media_url)}`}
                   alt={selectedPost.caption}
                   className="h-full w-full object-cover"
-                  onError={(e) => {
-                    console.error('Image failed to load:', selectedPost.media_url);
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
+                  onError={() => markFailed(`modal-img-${selectedPost.id}`)}
                 />
+                )
               )}
             </div>
             

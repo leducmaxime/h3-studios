@@ -63,7 +63,9 @@ export function getParisNow(): { hours: number; minutes: number; dateISO: string
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    hourCycle: "h23",
   }).format(now);
-  const [hours, minutes] = parisTime.split(":").map(Number);
+  const [rawHours, minutes] = parisTime.split(":").map(Number);
+  const hours = rawHours % 24;
   return { hours, minutes, dateISO: getParisDateISO(now) };
 }

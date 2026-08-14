@@ -136,12 +136,13 @@ import {
 import { refundCardPayment, refundPayments } from "@/lib/refunds";
 import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
 import {
   getParisDateISO,
   getParisNow,
   getISOWeekStartUTCNoon,
+  parseDbTimestamp,
 } from "@/lib/utils";
 import {
   getStoredReviews,
@@ -152,6 +153,7 @@ import {
   fetchInstagramFeedFromAPI,
   fetchInstagramFeedFromRSS,
   getCachedInstagramFeed,
+  getInstagramToken,
   syncInstagram,
 } from "@/lib/instagram";
 
@@ -248,6 +250,10 @@ function validateAdminSettingValue(key: string, rawValue: string): { ok: true; v
       return parseNumberSetting({ label: "TVA", min: 0, max: 30 });
     case "billing.payment_terms_days":
       return parseIntSetting({ label: "Conditions de paiement", min: 0, max: 120 });
+    case "booking.min_advance_hours":
+      return parseIntSetting({ label: "Délai minimum de réservation", min: 0, max: 72 });
+    case "booking.max_advance_days":
+      return parseIntSetting({ label: "Délai maximum de réservation", min: 1, max: 365 });
     case "promo_codes.enabled":
       return parseBooleanSetting({ label: "Activation des codes promo" });
     case "maintenance.enabled":
@@ -273,6 +279,7 @@ const SUPER_ADMIN_ROUTE_PREFIXES = [
   "/api/admin/admin-users",
   "/api/admin/opening-hours",
   "/api/admin/public-holidays",
+  "/api/admin/instagram",
   "/admin/studios",
   "/admin/equipements",
   "/admin/pricing",
@@ -814,16 +821,8 @@ const app = defineApp([
       let minAdvanceCutoffTime: string | null = null;
       let todayFullyBlocked = false;
       if (date === paris.dateISO) {
-        minAdvanceHours = parseInt(await getSetting(env.DB, "booking.min_advance_hours") || "2", 10);
-        const cutoffMinutes = (paris.hours * 60 + paris.minutes) + minAdvanceHours * 60;
-        if (cutoffMinutes >= 24 * 60) {
-          // now + délai crosses midnight → no bookable start time left today
-          todayFullyBlocked = true;
-        } else {
-          const cutoffH = Math.floor(cutoffMinutes / 60);
-          const cutoffM = cutoffMinutes % 60;
-          minAdvanceCutoffTime = `${String(cutoffH).padStart(2, "0")}:${String(cutoffM).padStart(2, "0")}`;
-        }
+        minAdvanceHours = parseMinAdvanceHours(await getSetting(env.DB, "booking.min_advance_hours"));
+        ({ cutoffTime: minAdvanceCutoffTime, fullyBlocked: todayFullyBlocked } = computeMinAdvance(paris, minAdvanceHours));
       }
 
       return jsonSuccess({ slots: result, minAdvanceHours, minAdvanceCutoffTime, todayFullyBlocked });
@@ -899,6 +898,16 @@ const app = defineApp([
         createAccount?: boolean;
         accountPassword?: string;
       };
+
+      // Syntactic validation must precede identity resolution and all DB writes.
+      const validStudios = ["la-scene", "le-podium"];
+      const validGroupTypes = ["solo", "duo", "group"];
+      if (!validStudios.includes(body.studioId)) return jsonError("Studio invalide", 400);
+      if (!validGroupTypes.includes(body.groupType)) return jsonError("Type de groupe invalide", 400);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) return jsonError("Format de date invalide", 400);
+      if (!/^\d{2}:\d{2}$/.test(body.startTime) || !/^\d{2}:\d{2}$/.test(body.endTime)) return jsonError("Format d'heure invalide", 400);
+      // "00:00" = minuit/fin de journée, toujours après n'importe quelle heure
+      if (body.endTime !== "00:00" && body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
 
       type AccountStatus = "authenticated" | "created" | "activation-email-sent" | "guest";
       // ── Identity resolution (Phase 5A: optional auth) ─────────────────────
@@ -1069,10 +1078,9 @@ const app = defineApp([
 
       const paris = getParisNow();
       if (body.date === paris.dateISO) {
-        const minAdvanceHours = parseInt(await getSetting(env.DB, "booking.min_advance_hours") || "2", 10);
-        const cutoffMinutes = (paris.hours * 60 + paris.minutes) + minAdvanceHours * 60;
-        const [startH, startM] = body.startTime.split(":").map(Number);
-        if (startH * 60 + startM < cutoffMinutes) {
+        const minAdvanceHours = parseMinAdvanceHours(await getSetting(env.DB, "booking.min_advance_hours"));
+        const { cutoffTime, fullyBlocked } = computeMinAdvance(paris, minAdvanceHours);
+        if (isMinAdvanceViolation(body.startTime, cutoffTime, fullyBlocked)) {
           return jsonError(`Les réservations doivent être faites au moins ${minAdvanceHours}h à l'avance`, 400);
         }
       }
@@ -1084,16 +1092,6 @@ const app = defineApp([
       if (diffDays > maxAdvanceDays) {
         return jsonError(`Les réservations ne peuvent pas dépasser ${maxAdvanceDays} jours à l'avance`, 400);
       }
-
-      // Validation enum
-      const validStudios = ["la-scene", "le-podium"];
-      const validGroupTypes = ["solo", "duo", "group"];
-      if (!validStudios.includes(body.studioId)) return jsonError("Studio invalide", 400);
-      if (!validGroupTypes.includes(body.groupType)) return jsonError("Type de groupe invalide", 400);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) return jsonError("Format de date invalide", 400);
-      if (!/^\d{2}:\d{2}$/.test(body.startTime) || !/^\d{2}:\d{2}$/.test(body.endTime)) return jsonError("Format d'heure invalide", 400);
-      // "00:00" = minuit/fin de journée, toujours après n'importe quelle heure
-      if (body.endTime !== "00:00" && body.startTime >= body.endTime) return jsonError("L'heure de fin doit être après l'heure de début", 400);
 
       // Load DB-driven opening hours and validate that the booking falls
       // within studio hours (prevents bookings outside opening hours).
@@ -1769,6 +1767,7 @@ const app = defineApp([
 
   // ─── Admin Bookings API ──────────────────────────────────────────────────────
 
+  // Min-advance enforcement is intentionally omitted: admins may book at any time.
   route("/api/admin/bookings", async ({ request }) => {
     if (request.method === "GET") {
       try {
@@ -4466,7 +4465,7 @@ const app = defineApp([
       }
 
       // 3. Cache is stale or missing — fetch fresh data and update cache
-      const token = env.INSTAGRAM_ACCESS_TOKEN;
+      const token = await getInstagramToken(env.DB, env.INSTAGRAM_ACCESS_TOKEN);
       let freshPosts: Awaited<ReturnType<typeof fetchInstagramFeedFromAPI>> | null = null;
 
       try {
@@ -4474,13 +4473,16 @@ const app = defineApp([
           ? await fetchInstagramFeedFromAPI(token)
           : await fetchInstagramFeedFromRSS();
 
-        // Save to cache
-        await env.DB.prepare(
-          "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
-        ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
-          data: freshPosts,
-          last_updated: new Date().toISOString()
-        })).run();
+        if (freshPosts.length > 0) {
+          await env.DB.prepare(
+            "INSERT OR REPLACE INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
+          ).bind("instagram-feed", "instagram_feed_cache", JSON.stringify({
+            data: freshPosts,
+            last_updated: new Date().toISOString()
+          })).run();
+        } else {
+          console.warn("Instagram feed fetch returned zero posts; keeping existing cache");
+        }
       } catch (fetchError) {
         console.error("Instagram fetch failed, falling back to cache:", fetchError);
       }
@@ -4516,27 +4518,64 @@ const app = defineApp([
         return jsonError("URL parameter required", 400);
       }
 
-      const imageResponse = await fetch(imageUrl, {
+      const isAllowedImageUrl = (candidate: URL): boolean => {
+        const hostname = candidate.hostname.toLowerCase();
+        return candidate.protocol === "https:"
+          && (hostname === "cdninstagram.com"
+            || hostname.endsWith(".cdninstagram.com")
+            || hostname === "fbcdn.net"
+            || hostname.endsWith(".fbcdn.net"));
+      };
+
+      let parsedImageUrl: URL;
+      try {
+        parsedImageUrl = new URL(imageUrl);
+      } catch {
+        return jsonError("Invalid image URL", 400);
+      }
+
+      if (!isAllowedImageUrl(parsedImageUrl)) {
+        console.error("Rejected Instagram proxy image host:", parsedImageUrl.hostname);
+        return new Response(null, { status: 403 });
+      }
+
+      const fetchImage = (target: URL) => fetch(target, {
+        redirect: "manual",
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
       });
+      let imageResponse = await fetchImage(parsedImageUrl);
+
+      if (imageResponse.status >= 300 && imageResponse.status < 400) {
+        const location = imageResponse.headers.get("Location");
+        if (!location) return new Response(null, { status: 502 });
+
+        let redirectUrl: URL;
+        try {
+          redirectUrl = new URL(location, parsedImageUrl);
+        } catch {
+          return new Response(null, { status: 502 });
+        }
+        if (!isAllowedImageUrl(redirectUrl)) return new Response(null, { status: 502 });
+
+        imageResponse = await fetchImage(redirectUrl);
+      }
 
       if (!imageResponse.ok) {
-        return jsonError("Failed to fetch image", 502);
+        return new Response(null, { status: 502 });
       }
 
       const blob = await imageResponse.blob();
       return new Response(blob, {
         headers: {
           "Content-Type": imageResponse.headers.get("Content-Type") || "image/jpeg",
-          "Cache-Control": "public, max-age=3600",
-          "Access-Control-Allow-Origin": "*"
+          "Cache-Control": "public, max-age=3600"
         }
       });
     } catch (error) {
       console.error("GET /api/instagram/proxy-image error:", error);
-      return jsonError(error instanceof Error ? error.message : "Failed to proxy image", 500);
+      return new Response(null, { status: 502 });
     }
   }),
 
@@ -4544,7 +4583,7 @@ const app = defineApp([
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
 
     try {
-      const token = env.INSTAGRAM_ACCESS_TOKEN;
+      const token = await getInstagramToken(env.DB, env.INSTAGRAM_ACCESS_TOKEN);
       const result = await syncInstagram(env.DB, token);
       if (!result.success) return jsonError(result.error || "Sync failed", 500);
 
@@ -4561,17 +4600,85 @@ const app = defineApp([
 
     try {
       const { token } = await request.json() as { token: string };
-      if (!token) return jsonError("Token requis", 400);
+      const normalizedToken = token?.trim();
+      if (!normalizedToken) return jsonError("Token requis", 400);
 
-      await setSetting(env.DB, "instagram_access_token", token);
+      const validationResponse = await fetch(
+        `https://graph.instagram.com/me?fields=id,username&access_token=${encodeURIComponent(normalizedToken)}`
+      );
+      if (!validationResponse.ok) {
+        const validationBody = await validationResponse.text();
+        let message = "Token Instagram invalide";
+        try {
+          const parsed = JSON.parse(validationBody) as { error?: { message?: string } };
+          message = parsed.error?.message || message;
+        } catch {
+          // Keep a safe generic message when Graph does not return JSON.
+        }
+        return jsonError(message, 400);
+      }
+
+      await setSetting(env.DB, "instagram_access_token", normalizedToken);
       await addAuditLog(env.DB, "settings", "instagram", "update_token", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
-      const result = await syncInstagram(env.DB, token);
+      const result = await syncInstagram(env.DB, normalizedToken);
 
       return jsonSuccess({ success: true, sync: result });
     } catch (error) {
       console.error("POST /api/admin/instagram/token error:", error);
       return jsonError(error instanceof Error ? error.message : "Update failed", 500);
+    }
+  }),
+
+  route("/api/admin/instagram/status", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const token = await getInstagramToken(env.DB, env.INSTAGRAM_ACCESS_TOKEN);
+      const cache = await env.DB
+        .prepare("SELECT value, updated_at FROM settings WHERE key = ?")
+        .bind("instagram_feed_cache")
+        .first<{ value: string; updated_at: string }>();
+      let postCount = 0;
+      if (cache?.value) {
+        try {
+          postCount = (JSON.parse(cache.value) as { data?: unknown[] }).data?.length || 0;
+        } catch {
+          postCount = 0;
+        }
+      }
+
+      let tokenValid: boolean | null = null;
+      let tokenError: string | null = null;
+      if (token) {
+        const response = await fetch(
+          `https://graph.instagram.com/me?fields=id,username&access_token=${encodeURIComponent(token)}`
+        );
+        tokenValid = response.ok;
+        if (!response.ok) {
+          try {
+            const body = await response.json() as { error?: { message?: string } };
+            tokenError = body.error?.message || "Token Instagram invalide";
+          } catch {
+            tokenError = "Token Instagram invalide";
+          }
+        }
+      }
+
+      const parsedTimestamp = parseDbTimestamp(cache?.updated_at);
+      const lastSyncedAt = parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime())
+        ? parsedTimestamp.toISOString()
+        : null;
+      return jsonSuccess({
+        lastSyncedAt,
+        postCount,
+        tokenConfigured: Boolean(token),
+        tokenValid,
+        tokenError,
+      });
+    } catch (error) {
+      console.error("GET /api/admin/instagram/status error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to get Instagram status", 500);
     }
   }),
 
@@ -5213,12 +5320,28 @@ async function handleScheduled(controller: ScheduledController) {
     }
   }
 
-  const igToken = (env as any).INSTAGRAM_ACCESS_TOKEN;
+  const igToken = await getInstagramToken(env.DB as D1Database, (env as any).INSTAGRAM_ACCESS_TOKEN);
   const igResult = await syncInstagram(env.DB as D1Database, igToken);
   if (igResult.success) {
     console.log(`[Cron] Instagram synced: ${igResult.count} posts`);
   } else {
     console.error(`[Cron] Instagram sync failed: ${igResult.error}`);
+    try {
+      const errorBody = igResult.error?.match(/\{[\s\S]*\}$/)?.[0];
+      const parsed = errorBody ? JSON.parse(errorBody) as {
+        error?: {
+          code?: number;
+          error_subcode?: number;
+          type?: string;
+          message?: string;
+          is_transient?: boolean;
+          fbtrace_id?: string;
+        };
+      } : null;
+      console.error("[Cron] Instagram Graph API error details:", parsed?.error || { message: igResult.error });
+    } catch {
+      console.error("[Cron] Instagram Graph API error details:", { message: igResult.error });
+    }
   }
 }
 

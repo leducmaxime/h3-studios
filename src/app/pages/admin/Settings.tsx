@@ -59,6 +59,27 @@ interface CurrentUser {
   role: "super-admin" | "operator";
 }
 
+interface InstagramStatus {
+  lastSyncedAt: string | null;
+  postCount: number;
+  tokenConfigured: boolean;
+  tokenValid: boolean | null;
+  tokenError: string | null;
+}
+
+function formatSyncDate(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Paris",
+  });
+}
+
 function parseSettingsMap(settings: SettingValue[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const s of settings) {
@@ -727,6 +748,22 @@ function InstagramTab({ settings, onUpdate }: {
   const [token, setToken] = useState(settings["instagram_access_token"] || "");
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [status, setStatus] = useState<InstagramStatus | null>(null);
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/instagram/status");
+      if (!res.ok) return; // endpoint not deployed yet — degrade quietly
+      const json = (await res.json()) as { success: boolean; data?: InstagramStatus };
+      if (json.success && json.data) setStatus(json.data);
+    } catch {
+      // status unavailable — leave the card in its previous state
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshStatus();
+  }, [refreshStatus]);
 
   useEffect(() => {
     setToken(settings["instagram_access_token"] || "");
@@ -744,6 +781,7 @@ function InstagramTab({ settings, onUpdate }: {
       if (json.success) {
         onUpdate("instagram_access_token", token);
         toast.success("Token Instagram mis à jour et flux synchronisé");
+        refreshStatus();
       } else {
         toast.error(json.error || "Erreur lors de la sauvegarde");
       }
@@ -761,6 +799,7 @@ function InstagramTab({ settings, onUpdate }: {
       const json = await res.json() as { success: boolean; count?: number; error?: string };
       if (json.success) {
         toast.success(`${json.count} publications synchronisées`);
+        refreshStatus();
       } else {
         toast.error(json.error || "Échec de la synchronisation");
       }
@@ -788,13 +827,39 @@ function InstagramTab({ settings, onUpdate }: {
             variant="outline"
             size="sm"
             onClick={handleSync}
-            disabled={syncing || !settings["instagram_access_token"]}
+            disabled={syncing || (status ? !status.tokenConfigured : !settings["instagram_access_token"])}
             className="gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
             Synchroniser
           </Button>
         </div>
+
+        {status && (
+          <div className="mb-6 space-y-2.5 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs text-zinc-500">Dernière synchronisation réussie</span>
+              <span className="text-xs font-medium text-zinc-200">
+                {status.lastSyncedAt ? formatSyncDate(status.lastSyncedAt) : "Jamais synchronisé"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs text-zinc-500">Publications en cache</span>
+              <span className="text-xs font-medium text-zinc-200">{status.postCount}</span>
+            </div>
+            {status.tokenValid !== null && (
+              <div className="flex items-center gap-2 border-t border-zinc-800 pt-2.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${status.tokenValid ? "bg-emerald-400" : "bg-red-400"}`} />
+                <span className={`text-xs font-medium ${status.tokenValid ? "text-emerald-400" : "text-red-400"}`}>
+                  {status.tokenValid ? "Token valide" : "Token invalide ou expiré"}
+                </span>
+              </div>
+            )}
+            {status.tokenError && (
+              <p className="text-[11px] leading-relaxed text-zinc-500">{status.tokenError}</p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-4">
           <div className="space-y-2">
