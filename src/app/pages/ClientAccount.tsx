@@ -6,20 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, User } from "lucide-react";
 import { getParisDateISO } from "@/lib/utils";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, type DisplayPaymentStatus } from "@/lib/booking-totals";
-
-interface ClientUser {
-  id: string;
-  email: string | null;
-  name: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  band_name: string | null;
-  address_line1: string | null;
-  address_line2: string | null;
-  postal_code: string | null;
-  city: string | null;
-}
+import { logout, useClientAuth } from "@/lib/client-auth-store";
 
 interface BookingRow {
   id: string;
@@ -82,34 +69,30 @@ function getDayName(dateStr: string): string {
 }
 
 export function ClientAccount() {
-  const [user, setUser] = useState<ClientUser | null>(null);
+  const { user, status } = useClientAuth();
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/client/me").then((r) => r.ok ? r.json() : null),
-      fetch("/api/client/bookings").then((r) => r.ok ? r.json() : []),
-    ]).then(([userData, bookingsData]) => {
-      const me = userData as { data: ClientUser } | null;
+    if (status === "loading") return;
+    if (!user) {
+      window.location.href = "/mon-compte/connexion";
+      return;
+    }
+    fetch("/api/client/bookings").then((r) => r.ok ? r.json() : []).then((bookingsData) => {
       const bk = bookingsData as { data: BookingRow[] } | BookingRow[];
-      if (!me?.data) {
-        window.location.href = "/mon-compte/connexion";
-        return;
-      }
-      setUser(me.data);
       setBookings(Array.isArray((bk as { data: BookingRow[] }).data) ? (bk as { data: BookingRow[] }).data : Array.isArray(bk) ? bk : []);
       setLoading(false);
     }).catch(() => {
       window.location.href = "/mon-compte/connexion";
     });
-  }, []);
+  }, [status, user?.id]);
 
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
-      await fetch("/api/client/logout", { method: "POST" });
+      await logout();
       window.location.href = "/mon-compte/connexion";
     } catch {
       setLoggingOut(false);

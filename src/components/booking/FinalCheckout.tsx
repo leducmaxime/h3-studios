@@ -179,11 +179,11 @@ export function FinalCheckout({ cart, total, onNewBooking, onBack, onProceedToPa
               <span>-{formatPrice(promoDiscount)}</span>
             </div>
           )}
-          <div className="flex items-center justify-between">
-            <span className="text-lg">
-              {showPaymentButton ? "Total" : (isPaid ? "Total payé" : "Total à régler sur place (CB ou espèces)")}
+          <div className="flex items-center justify-between gap-3">
+            <span className="min-w-0 text-lg">
+              {showPaymentButton ? "Total" : (isPaid ? "Total payé" : <>Total à régler sur place <span className="whitespace-nowrap">(CB ou espèces)</span></>)}
             </span>
-            <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
+            <span className="shrink-0 text-2xl font-bold text-primary">{formatPrice(total)}</span>
           </div>
         </div>
       </div>

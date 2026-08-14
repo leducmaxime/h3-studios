@@ -7,12 +7,16 @@ import { formatPrice, type CompletedBooking, STUDIOS, formatDate, sortBookingsBy
 interface StripeRedirectProps {
   cart: CompletedBooking[];
   total: number;
+  subtotal: number;
+  promoCode?: string | null;
+  promoDiscount: number;
+  displayPrices: Record<string, number>;
   userName: string;
   userEmail: string;
   onBack: () => void;
 }
 
-export function StripeRedirect({ cart, total, userName, userEmail, onBack }: StripeRedirectProps) {
+export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount, displayPrices, userName, userEmail, onBack }: StripeRedirectProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -160,14 +164,28 @@ export function StripeRedirect({ cart, total, userName, userEmail, onBack }: Str
                       {formatDate(booking.date, "short")} - {booking.startTime}-{booking.endTime}
                     </p>
                   </div>
-                  <span className="font-medium">{formatPrice(booking.price)}</span>
+                  <span className="font-medium">{formatPrice(displayPrices[booking.id] ?? booking.price)}</span>
                 </div>
               ))}
             </div>
 
-            <div className="mt-4 flex justify-between border-t border-white/10 pt-4">
-              <span className="font-semibold">Total</span>
-              <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
+            <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
+              {promoDiscount > 0 && (
+                <>
+                  <div className="flex items-center justify-between text-sm text-white/70">
+                    <span>Sous-total</span>
+                    <span>{formatPrice(subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-green-400">
+                    <span>Réduction ({promoCode})</span>
+                    <span>-{formatPrice(promoDiscount)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between">
+                <span className="font-semibold">Total</span>
+                <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
+              </div>
             </div>
 
             <p className="mt-4 text-xs text-white/40">

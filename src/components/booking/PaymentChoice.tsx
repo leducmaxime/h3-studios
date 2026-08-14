@@ -8,11 +8,14 @@ export type { PaymentMethod };
 interface PaymentChoiceProps {
   cart: CompletedBooking[];
   total: number;
+  subtotal: number;
+  promoCode?: string;
+  promoDiscount: number;
   onSelectMethod: (method: PaymentMethod) => void;
   onBack: () => void;
 }
 
-export function PaymentChoice({ cart, total, onSelectMethod, onBack }: PaymentChoiceProps) {
+export function PaymentChoice({ cart, total, subtotal, promoCode, promoDiscount, onSelectMethod, onBack }: PaymentChoiceProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="text-center">
@@ -21,6 +24,23 @@ export function PaymentChoice({ cart, total, onSelectMethod, onBack }: PaymentCh
           {cart.length} réservation{cart.length > 1 ? "s" : ""} • Total : {formatPrice(total)}
         </p>
       </div>
+
+      {promoDiscount > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm text-white/70">
+            <span>Sous-total</span>
+            <span>{formatPrice(subtotal)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm text-green-400">
+            <span>Réduction ({promoCode})</span>
+            <span>-{formatPrice(promoDiscount)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-lg font-semibold">Total</span>
+            <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-3 lg:gap-4 lg:grid-cols-2">
         <button

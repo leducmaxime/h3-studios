@@ -1,25 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Lock, Phone, Music, MapPin, Building2, Hash, Home, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
-
-interface ClientUser {
-  id: string;
-  email: string | null;
-  name: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  band_name: string | null;
-  address_line1: string | null;
-  address_line2: string | null;
-  postal_code: string | null;
-  city: string | null;
-}
+import { refresh, useClientAuth } from "@/lib/client-auth-store";
 
 function RequiredAsterisk() {
   return <span className="text-primary ml-0.5" aria-hidden="true">*</span>;
@@ -36,7 +23,7 @@ function FieldLabel({ htmlFor, icon: Icon, children, required }: { htmlFor: stri
 }
 
 export function ClientProfile() {
-  const [user, setUser] = useState<ClientUser | null>(null);
+  const { user, status } = useClientAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -51,32 +38,27 @@ export function ClientProfile() {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const hasPrefilledRef = useRef(false);
 
   useEffect(() => {
-    fetch("/api/client/me")
-      .then((r) => r.json() as Promise<{ success: boolean; data: ClientUser }>)
-      .then((data) => {
-        if (!data?.data) {
-          window.location.href = "/mon-compte/connexion";
-          return;
-        }
-        const u = data.data;
-        setUser(u);
-        setFirstName(u.first_name || "");
-        setLastName(u.last_name || "");
-        setEmail(u.email || "");
-        setPhone(u.phone || "");
-        setBandName(u.band_name || "");
-        setAddressLine1(u.address_line1 || "");
-        setAddressLine2(u.address_line2 || "");
-        setPostalCode(u.postal_code || "");
-        setCity(u.city || "");
-        setLoading(false);
-      })
-      .catch(() => {
-        window.location.href = "/mon-compte/connexion";
-      });
-  }, []);
+    if (status === "loading") return;
+    if (!user) {
+      window.location.href = "/mon-compte/connexion";
+      return;
+    }
+    if (hasPrefilledRef.current) return;
+    hasPrefilledRef.current = true;
+    setFirstName(user.first_name || "");
+    setLastName(user.last_name || "");
+    setEmail(user.email || "");
+    setPhone(user.phone || "");
+    setBandName(user.band_name || "");
+    setAddressLine1(user.address_line1 || "");
+    setAddressLine2(user.address_line2 || "");
+    setPostalCode(user.postal_code || "");
+    setCity(user.city || "");
+    setLoading(false);
+  }, [status, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +98,7 @@ export function ClientProfile() {
       }
 
       setSuccess("Profil mis à jour avec succès");
+      await refresh();
       setSaving(false);
     } catch {
       setError("Erreur de connexion au serveur");

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Header } from "@/components/Header/Header";
 import { Footer } from "@/components/Footer";
 import { SplashScreen } from "@/components/common/SplashScreen";
+import { ClientAuthProvider } from "@/lib/client-auth-store";
 
 interface MainLayoutProps {
   children?: React.ReactNode;
@@ -56,13 +57,15 @@ export function MainLayout({ children }: MainLayoutProps) {
   useClearBookingOnNavigate();
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <SplashScreen />
-      <Header />
-      <main className="container flex grow flex-col">
-        {children}
-      </main>
-      <Footer />
-    </div>
+    <ClientAuthProvider>
+      <div className="flex min-h-screen flex-col">
+        <SplashScreen />
+        <Header />
+        <main className="container flex grow flex-col">
+          {children}
+        </main>
+        <Footer />
+      </div>
+    </ClientAuthProvider>
   );
 }

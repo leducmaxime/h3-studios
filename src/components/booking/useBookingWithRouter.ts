@@ -6,6 +6,7 @@ import type { PricingData } from "@/lib/pricing";
 import { calculatePrice } from "@/lib/pricing";
 import { usePricing } from "./usePricing";
 import { useEquipment } from "./useEquipment";
+import { getClientAuthState, login as authLogin, logout as authLogout, refresh as refreshClientAuth, useClientAuth } from "@/lib/client-auth-store";
 import {
   accountFieldsDrifted,
   accountFieldValues,
@@ -383,23 +384,12 @@ export function useBookingWithRouter(urlStep?: string) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing } = usePricing();
   const { equipment: availableEquipment } = useEquipment();
-  const [clientUser, setClientUser] = useState<ClientProfile | null>(null);
-  const [clientUserLoading, setClientUserLoading] = useState(true);
+  const auth = useClientAuth();
+  const clientUser = auth.user;
+  const clientUserLoading = auth.status === "loading";
   const [equipmentAvailability, setEquipmentAvailability] = useState<EquipmentAvailabilityMap>({});
   const [equipmentClampMessage, setEquipmentClampMessage] = useState<string | null>(null);
-  // Refs mirroring session/profile knowledge so the focus listener (registered
-  // once) always reads fresh values without stale closures.
-  const clientUserRef = useRef<ClientProfile | null>(null);
-  const lastProfileCheckAtRef = useRef(0);
   const hasAppliedInitialPrefillRef = useRef(false);
-  useEffect(() => {
-    clientUserRef.current = clientUser;
-  }, [clientUser]);
-  const isHydratedRef = useRef(false);
-  useEffect(() => {
-    isHydratedRef.current = isHydrated;
-  }, [isHydrated]);
-
   // The read-only account summary renders account values while the gate reads
   // state. Any path that clears state while a profile is known must re-sync;
   // this guard covers paths nobody remembered to update.
@@ -417,6 +407,15 @@ export function useBookingWithRouter(urlStep?: string) {
     if (!accountFieldsDrifted(fields, clientUser)) return;
     setState((s) => ({ ...s, ...applyProfilePrefill(s, clientUser, { initial: false }) }));
   }, [clientUser, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity]);
+
+  const previousLogoutCountRef = useRef(auth.logoutCount);
+  useEffect(() => {
+    if (auth.logoutCount > previousLogoutCountRef.current) {
+      clearUserPreferences();
+      setState((s) => ({ ...s, ...LOGOUT_CLEARED_FIELDS }));
+    }
+    previousLogoutCountRef.current = auth.logoutCount;
+  }, [auth.logoutCount]);
 
   const mergedSlotsByStudio = useMemo(
     () => {
@@ -528,29 +527,13 @@ export function useBookingWithRouter(urlStep?: string) {
   // Resolves with the profile (or null) and never rejects.
   // -------------------------------------------------------------------------
   const prefillFromClientProfile = useCallback((): Promise<ClientProfile | null> => {
-    return fetch("/api/client/me", { credentials: "include" })
-      .then((res) => {
-        if (!res.ok) {
-          console.warn("[Booking] /api/client/me returned", res.status);
-          if (res.status === 401 || res.status === 403) {
-            setClientUser(null);
-            clientUserRef.current = null;
-          }
-          return null;
-        }
-        return res.json() as Promise<{ data?: ClientProfile }>;
-      })
-      .then((json) => {
-        if (json?.data) {
-          const user = json.data;
-          setClientUser(user);
-          clientUserRef.current = user;
+    return refreshClientAuth().then((user) => {
+        if (user) {
           const initial = !hasAppliedInitialPrefillRef.current;
           setState((s) => ({ ...s, ...applyProfilePrefill(s, user, { initial }) }));
           hasAppliedInitialPrefillRef.current = true;
           return user;
         }
-        console.warn("[Booking] /api/client/me: no user data");
         return null;
       })
       .catch((err) => {
@@ -558,24 +541,6 @@ export function useBookingWithRouter(urlStep?: string) {
         return null;
       });
   }, []);
-
-  // -------------------------------------------------------------------------
-  // Focus re-fetch — closes the stale-tab/session timing gap. A booking tab
-  // that mounted before a session existed retries /api/client/me when it
-  // regains focus (the session may have been created in another tab). No
-  // polling; never overwrites non-empty booking fields.
-  // -------------------------------------------------------------------------
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handleFocus = () => {
-      if (!isHydratedRef.current) return; // let the initial hydration pass finish first
-      if (Date.now() - lastProfileCheckAtRef.current < 30_000) return;
-      lastProfileCheckAtRef.current = Date.now();
-      prefillFromClientProfile();
-    };
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [prefillFromClientProfile]);
 
   // -------------------------------------------------------------------------
   // Hydration effect
@@ -660,10 +625,7 @@ export function useBookingWithRouter(urlStep?: string) {
       }
     }
 
-    setClientUserLoading(true);
     prefillFromClientProfile().finally(() => {
-      lastProfileCheckAtRef.current = Date.now();
-      setClientUserLoading(false);
       setIsHydrated(true);
     });
   }, [isHydrated, urlStep, prefillFromClientProfile]);
@@ -827,7 +789,7 @@ export function useBookingWithRouter(urlStep?: string) {
           (prefs as Record<string, unknown>)[key] = fields[key as keyof typeof fields];
         }
       }
-      if (Object.keys(prefs).length > 0 && !clientUserRef.current) {
+      if (Object.keys(prefs).length > 0 && !getClientAuthState().user) {
         saveUserPreferences(prefs);
       }
     },
@@ -1160,7 +1122,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const resetBooking = useCallback(() => {
     clearBookingState();
-    const user = clientUserRef.current;
+    const user = getClientAuthState().user;
     setState(
       user
         ? { ...initialState, ...applyProfilePrefill(initialState, user, { initial: true }) }
@@ -1171,28 +1133,10 @@ export function useBookingWithRouter(urlStep?: string) {
   /** Login a client user in the booking flow. On success, prefill form fields from the account. */
   const clientLogin = useCallback(async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
     try {
-      const res = await fetch("/api/client/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-        credentials: "include",
-      });
-      const json = await res.json() as {
-        success: boolean;
-        data?: ClientProfile;
-        error?: string;
-      };
-      if (!json.success) {
-        return { ok: false, error: json.error || "Erreur de connexion" };
-      }
-      // The login response only carries a subset of the profile — re-fetch
-      // /api/client/me for the full record so address/band also prefill.
-      const meRes = await fetch("/api/client/me", { credentials: "include" });
-      const meJson = (await meRes.json()) as { data?: ClientProfile };
-      const user = meJson?.data ?? null;
+      const result = await authLogin(email, password);
+      if (!result.ok) return result;
+      const user = await refreshClientAuth();
       if (!user) return { ok: false, error: "Connexion établie mais profil indisponible, réessayez" };
-      setClientUser(user);
-      clientUserRef.current = user;
       setState((s) => ({ ...s, ...applyProfilePrefill(s, user, { initial: false }) }));
       return { ok: true };
     } catch (err) {
@@ -1208,23 +1152,7 @@ export function useBookingWithRouter(urlStep?: string) {
    * Le panier et les créneaux (données non personnelles) sont conservés.
    */
   const clientLogout = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
-    try {
-      const res = await fetch("/api/client/logout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      if (!res.ok) {
-        return { ok: false, error: "La déconnexion a échoué, veuillez réessayer" };
-      }
-      clearUserPreferences();
-      setClientUser(null);
-      clientUserRef.current = null;
-      setState((s) => ({ ...s, ...LOGOUT_CLEARED_FIELDS }));
-      return { ok: true };
-    } catch {
-      return { ok: false, error: "Erreur réseau lors de la déconnexion" };
-    }
+    return authLogout();
   }, []);
 
   const goBack = useCallback(() => {

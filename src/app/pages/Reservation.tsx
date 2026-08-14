@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 
 import { ScrollUp } from "@/components/common/ScrollUp";
 import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter";
@@ -119,19 +119,16 @@ export function Reservation({ step }: ReservationProps) {
     document.getElementById("root")?.scrollTo({ top: 0, behavior: "smooth" });
   }, [state.step]);
 
-  // Refs for auto-scroll within unified booking step
-  const timeSlotRef = useRef<HTMLDivElement>(null);
-
-  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  // Auto-scroll when date is selected (time slots appear)
   useEffect(() => {
-    if (state.step === "creneau" && state.selectedDate && !state.startTime) {
-      scrollToRef(timeSlotRef);
+    if (
+      state.step === "paiement" &&
+      state.paymentMethod === "card" &&
+      state.confirmedNetTotal !== null &&
+      state.confirmedNetTotal <= 0
+    ) {
+      processPayment();
     }
-  }, [state.step, state.selectedDate, state.startTime]);
+  }, [state.step, state.paymentMethod, state.confirmedNetTotal, processPayment]);
 
   useEffect(() => {
     if (state.duplicateError) {
@@ -164,6 +161,13 @@ export function Reservation({ step }: ReservationProps) {
     ).total;
     return timePrice + (booking.equipmentPrice || 0);
   }, [pricingData]);
+
+  const liveNet = Math.max(0, cartTotal - state.promoDiscount);
+  const confirmedNet = state.confirmedNetTotal ?? liveNet;
+  const displayPrices = useMemo(
+    () => Object.fromEntries(state.cart.map(b => [b.id, recomputeCartItemPrice(b)])),
+    [state.cart, recomputeCartItemPrice],
+  );
 
   // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau)
   const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "groupe" || state.step === "creneau");
@@ -515,7 +519,7 @@ export function Reservation({ step }: ReservationProps) {
 
                 {/* Time slot picker — appears after date selection */}
                 {state.selectedDate && (
-                  <div ref={timeSlotRef}>
+                  <div>
                     <TimeSlotPicker
                       date={state.selectedDate}
                       slotsByStudio={slotsByStudio}
@@ -662,7 +666,7 @@ export function Reservation({ step }: ReservationProps) {
                           <div className="flex items-center justify-between">
                             <span className="text-lg font-semibold">Total</span>
                             <span className="text-2xl font-bold text-primary">
-                              {formatPrice(Math.max(0, cartTotal - state.promoDiscount))}
+                              {formatPrice(liveNet)}
                             </span>
                           </div>
                         </div>
@@ -729,7 +733,10 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === "paiement" && !state.paymentMethod && (
               <PaymentChoice
                 cart={state.cart}
-                total={Math.max(0, cartTotal - state.promoDiscount)}
+                total={liveNet}
+                subtotal={cartTotal}
+                promoCode={state.appliedPromo?.code}
+                promoDiscount={state.promoDiscount}
                 onSelectMethod={selectPaymentMethod}
                 onBack={goBack}
               />
@@ -737,7 +744,11 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === "paiement" && state.paymentMethod === "card" && (
               <StripeRedirect
                 cart={state.cart}
-                total={Math.max(0, cartTotal - state.promoDiscount)}
+                total={confirmedNet}
+                subtotal={confirmedNet + state.confirmedPromoDiscount}
+                promoCode={state.confirmedPromoCode}
+                promoDiscount={state.confirmedPromoDiscount}
+                displayPrices={displayPrices}
                 userName={state.userName}
                 userEmail={state.userEmail}
                 onBack={goBack}
@@ -746,7 +757,10 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === "paiement" && state.paymentMethod === "cash" && (
               <PaymentChoice
                 cart={state.cart}
-                total={Math.max(0, cartTotal - state.promoDiscount)}
+                total={liveNet}
+                subtotal={cartTotal}
+                promoCode={state.appliedPromo?.code}
+                promoDiscount={state.promoDiscount}
                 onSelectMethod={selectPaymentMethod}
                 onBack={goBack}
               />
@@ -756,11 +770,11 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === "termine" && (
               <FinalCheckout
                 cart={state.cart}
-                total={state.confirmedNetTotal ?? Math.max(0, cartTotal - state.promoDiscount)}
+                total={confirmedNet}
                 onNewBooking={resetBooking}
                 onBack={goBack}
                 accountStatus={state.accountStatus}
-                displayPrices={Object.fromEntries(state.cart.map(b => [b.id, recomputeCartItemPrice(b)]))}
+                displayPrices={displayPrices}
                 promoCode={state.confirmedPromoCode}
                 promoDiscount={state.confirmedPromoDiscount}
               />

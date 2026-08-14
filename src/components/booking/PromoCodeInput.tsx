@@ -49,6 +49,13 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
     }
   };
 
+  const hasCode = code.trim().length > 0;
+  const applyButtonClass = isValidating
+    ? "cursor-wait border-white/20 text-white/50"
+    : hasCode
+      ? "border-primary/60 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary"
+      : "cursor-not-allowed border-white/20 text-white/70 opacity-40";
+
   if (appliedPromo) {
     return (
       <div className="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2">
@@ -95,8 +102,8 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
         <button
           type="button"
           onClick={handleApply}
-          disabled={!code.trim() || isValidating}
-          className="rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary disabled:opacity-40 disabled:hover:border-white/20 disabled:hover:bg-transparent disabled:hover:text-white/70"
+          disabled={!hasCode || isValidating}
+          className={`flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${applyButtonClass}`}
         >
           {isValidating ? (
             <Loader2 className="h-4 w-4 animate-spin" />

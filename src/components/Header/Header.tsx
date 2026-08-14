@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { navigate } from "rwsdk/client";
 import { Facebook, Instagram, User, LogOut, UserCircle, CalendarDays, Phone } from "lucide-react";
+import { logout, useClientAuth } from "@/lib/client-auth-store";
 
 const menuData = [
   { id: 1, title: "Réservation", path: "/reservation" },
@@ -46,7 +47,7 @@ export function Header() {
   const [sticky, setSticky] = useState(false);
   const [spin, setSpin] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user } = useClientAuth();
   const currentPath = usePathname();
   const navRef = useRef<HTMLElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -73,15 +74,6 @@ export function Header() {
     return () => document.removeEventListener("click", handleClickAway);
   }, []);
 
-  useEffect(() => {
-    fetch("/api/client/me")
-      .then((res) => res.json() as Promise<{ data?: unknown }>)
-      .then((data) => {
-        setIsLoggedIn(!!data?.data);
-      })
-      .catch(() => setIsLoggedIn(false));
-  }, []);
-
   const onLogoClick = () => {
     setSpin(true);
     setTimeout(() => setSpin(false), 1000);
@@ -89,10 +81,8 @@ export function Header() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/client/logout", { method: "POST" });
-      setIsLoggedIn(false);
+      await logout();
       setProfileOpen(false);
-      window.location.reload();
     } catch {
       setProfileOpen(false);
     }
@@ -192,7 +182,7 @@ export function Header() {
 
               {profileOpen && (
                 <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-white/20 bg-black py-2 shadow-xl">
-                  {isLoggedIn ? (
+                  {user ? (
                     <>
                       <button
                         onClick={() => {

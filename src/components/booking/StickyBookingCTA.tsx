@@ -46,46 +46,30 @@ export function StickyBookingCTA({
       </style>
 
       <div className="border-t border-white/10 bg-black/90 px-4 py-3 backdrop-blur-lg">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-col">
-            {priceLoading ? (
-              <>
-                <span className="text-xs text-white/60">Total</span>
-                <span className="mt-1 block h-6 w-20 animate-pulse rounded bg-white/10" />
-              </>
-            ) : equipmentPrice > 0 ? (
-              <>
-                <span className="text-xs text-white/60">
-                  Studio {formatPrice(studioPrice)} + Options {formatPrice(equipmentPrice)}
-                </span>
-                <span className="text-xl font-bold text-primary">
-                  {formatPrice(total)}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-xs text-white/60">Total</span>
-                <span className="text-xl font-bold text-primary">
-                  {formatPrice(total)}
-                </span>
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={onConfirm}
-            disabled={disabled}
-            className={`
-              shrink-0 rounded-lg px-6 py-3 font-semibold transition-all
-              ${disabled
-                ? "cursor-not-allowed bg-white/15 text-white/50"
-                : "bg-primary text-black hover:bg-primary/90 active:scale-[0.98]"
-              }
-            `}
-          >
-            {priceLoading ? buttonText : `${buttonText} – ${formatPrice(total)}`}
-          </button>
-        </div>
+        <button
+          onClick={onConfirm}
+          disabled={disabled}
+          className={`
+            w-full rounded-lg px-6 py-3 font-semibold transition-all
+            ${disabled
+              ? "cursor-not-allowed bg-white/15 text-white/50"
+              : "bg-primary text-black hover:bg-primary/90 active:scale-[0.98]"
+            }
+          `}
+        >
+          {priceLoading ? (
+            <span className="inline-flex items-center justify-center gap-1.5">
+              {buttonText}
+              <span className="inline-flex gap-0.5" aria-hidden="true">
+                <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:0ms]" />
+                <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:150ms]" />
+                <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:300ms]" />
+              </span>
+            </span>
+          ) : (
+            `${buttonText} – ${formatPrice(total)}`
+          )}
+        </button>
       </div>
     </div>
   );
