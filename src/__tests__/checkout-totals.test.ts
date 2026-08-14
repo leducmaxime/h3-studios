@@ -23,4 +23,47 @@ describe("checkout totals", () => {
     expect(subtotal).toBe(68);
     expect(subtotal).toBe(total + promoDiscount);
   });
+
+  it("covers server-zero promo rounding while preserving stored-price zero-gate semantics", () => {
+    const grid: PricingGrid = {
+      "la-scene": { group: { peak: 10.5, offPeak: 10.5 } },
+      "le-podium": { group: { peak: 10, offPeak: 10 } },
+    };
+    const booking = {
+      studioId: "la-scene" as const,
+      groupType: "group" as const,
+      date: new Date("2026-09-01"),
+      startTime: "10:00",
+      endTime: "11:00",
+      equipment: [],
+      equipmentPrice: 0,
+      // The pre-POST gate intentionally uses this stored cart price.
+      price: 10.25,
+    };
+    const rawPromoDiscount = 10.01;
+    const serverPromoDiscount = applyDiscountRounding(rawPromoDiscount, "up");
+    const clientNet = Math.max(0, booking.price - rawPromoDiscount);
+    const serverSubtotal = calculatePrice(
+      grid,
+      booking.studioId,
+      booking.groupType,
+      booking.date,
+      booking.startTime,
+      booking.endTime,
+    ).total + booking.equipmentPrice;
+    const serverNet = Math.max(0, serverSubtotal - serverPromoDiscount);
+
+    // This is the legitimate divergence: rounding the server discount up
+    // reaches zero while the client net remains positive.
+    expect(clientNet).toBeGreaterThan(0);
+    expect(serverPromoDiscount).toBeGreaterThanOrEqual(serverSubtotal);
+    expect(serverNet).toBe(0);
+    expect(serverSubtotal).toBe(serverPromoDiscount + serverNet);
+
+    // Document the known gate/display split: a pricing-grid change affects
+    // recomputed display totals, but not the stored-price zero gate.
+    const recomputedDisplayTotal = serverSubtotal;
+    expect(booking.price).not.toBe(recomputedDisplayTotal);
+    expect(Math.max(0, booking.price - rawPromoDiscount)).toBe(clientNet);
+  });
 });

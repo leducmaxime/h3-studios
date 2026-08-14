@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 
-import { ScrollUp } from "@/components/common/ScrollUp";
 import {
   Table,
   TableBody,
@@ -21,7 +20,6 @@ export function Tarifs() {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
-      <ScrollUp />
       <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <h1 className="font-blanka text-4xl lg:text-6xl">
           TARIFS

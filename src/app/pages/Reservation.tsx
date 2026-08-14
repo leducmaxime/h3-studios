@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 
-import { ScrollUp } from "@/components/common/ScrollUp";
 import { useBookingWithRouter } from "@/components/booking/useBookingWithRouter";
 import { WeekCalendar } from "@/components/booking/WeekCalendar";
 import { TimeSlotPicker } from "@/components/booking/TimeSlotPicker";
@@ -113,11 +112,6 @@ export function Reservation({ step }: ReservationProps) {
       .then((json) => { if (json.success) setPeakStartHour(json.data.peakStartHour); })
       .catch(() => {});
   }, []);
-
-  // Scroll to top on every step change (scroll container is #root, not document)
-  useEffect(() => {
-    document.getElementById("root")?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [state.step]);
 
   useEffect(() => {
     if (
@@ -410,7 +404,6 @@ export function Reservation({ step }: ReservationProps) {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
-      <ScrollUp />
       <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <h1 className="font-blanka text-4xl lg:text-6xl">
           RESERVATION
@@ -772,7 +765,6 @@ export function Reservation({ step }: ReservationProps) {
                 cart={state.cart}
                 total={confirmedNet}
                 onNewBooking={resetBooking}
-                onBack={goBack}
                 accountStatus={state.accountStatus}
                 displayPrices={displayPrices}
                 promoCode={state.confirmedPromoCode}

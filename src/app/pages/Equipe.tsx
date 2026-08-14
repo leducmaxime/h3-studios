@@ -1,6 +1,5 @@
 "use client";
 
-import { ScrollUp } from "@/components/common/ScrollUp";
 import { Music, Mic, Drum } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -51,7 +50,6 @@ export function Equipe() {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
-      <ScrollUp />
 
       <div className="relative w-full px-2 lg:px-4">
         <div className="mx-auto max-w-6xl sm:max-w-[640px] lg:max-w-6xl">

@@ -1,46 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Header } from "@/components/Header/Header";
 import { Footer } from "@/components/Footer";
 import { SplashScreen } from "@/components/common/SplashScreen";
 import { ClientAuthProvider } from "@/lib/client-auth-store";
+import { subscribe } from "@/lib/navigation-events";
 
 interface MainLayoutProps {
   children?: React.ReactNode;
 }
 
 function useClearBookingOnNavigate() {
-  const [pathname, setPathname] = useState("");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setPathname(window.location.pathname);
-
-    const handleNavigate = () => {
-      setPathname(window.location.pathname);
-    };
-
-    window.addEventListener("popstate", handleNavigate);
-
-    const originalPushState = history.pushState;
-    history.pushState = function (...args) {
-      originalPushState.apply(this, args);
-      handleNavigate();
-    };
-
-    const originalReplaceState = history.replaceState;
-    history.replaceState = function (...args) {
-      originalReplaceState.apply(this, args);
-      handleNavigate();
-    };
-
-    return () => {
-      window.removeEventListener("popstate", handleNavigate);
-      history.pushState = originalPushState;
-      history.replaceState = originalReplaceState;
-    };
-  }, []);
+  const pathname = useSyncExternalStore(
+    subscribe,
+    () => window.location.pathname,
+    () => ""
+  );
 
   useEffect(() => {
     if (!pathname) return;

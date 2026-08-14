@@ -1,6 +1,5 @@
 "use client";
 
-import { ScrollUp } from "@/components/common/ScrollUp";
 import { ImageCarousel } from "@/components/common/ImageCarousel";
 import { STUDIOS } from "@/lib/booking";
 import { Wifi, TrainFront, MapPin, ArrowRight, Calendar, Clock, Wrench } from "lucide-react";
@@ -34,7 +33,6 @@ export function LesStudios() {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
-      <ScrollUp />
 
       <div className="relative w-full px-2 lg:px-4">
         <div className="mx-auto max-w-6xl">

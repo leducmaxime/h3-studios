@@ -16,6 +16,8 @@
  * shared logic has to live somewhere neutral — here.
  */
 
+import type { ClientUser } from "./client-user";
+
 // ---------------------------------------------------------------------------
 // Field identity
 // ---------------------------------------------------------------------------
@@ -147,17 +149,8 @@ const BOOKING_FIELD_REQUIRED_HINTS: Record<Exclude<BookingFieldKey, "bandName">,
  * Structural shape of a client account as far as the booking flow cares.
  * Matches both `ClientProfile` (client) and `ClientUser` (server session).
  */
-export interface BookingAccountProfile {
-  email: string | null;
-  name: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  band_name: string | null;
-  address_line1: string | null;
-  postal_code: string | null;
-  city: string | null;
-}
+export type BookingAccountProfile = Pick<ClientUser,
+  "email" | "name" | "first_name" | "last_name" | "phone" | "band_name" | "address_line1" | "postal_code" | "city">;
 
 /**
  * Display name from trimmed `first_name` + `last_name`, falling back to the

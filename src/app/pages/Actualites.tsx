@@ -1,6 +1,5 @@
 "use client";
 
-import { ScrollUp } from "@/components/common/ScrollUp";
 import { Instagram, ExternalLink, Calendar, X, Play, ChevronLeft, ChevronRight, Images } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 
@@ -87,7 +86,6 @@ export function Actualites() {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
-      <ScrollUp />
 
       <div className="w-full max-w-6xl sm:max-w-[640px] lg:max-w-6xl px-2 lg:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>

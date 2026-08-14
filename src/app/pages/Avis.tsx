@@ -1,6 +1,5 @@
 "use client";
 
-import { ScrollUp } from "@/components/common/ScrollUp";
 import { Star } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -115,7 +114,6 @@ export function Avis() {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
-      <ScrollUp />
       <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <h1 className="font-blanka text-4xl lg:text-6xl">AVIS CLIENTS</h1>
         <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />

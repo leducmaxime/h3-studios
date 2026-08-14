@@ -1,23 +1,12 @@
 import { hashPassword, verifyPassword } from "./auth";
+import type { ClientUser } from "./client-user";
 
 export { hashPassword, verifyPassword };
 
-export interface ClientUser {
-  id: string;
-  email: string | null;
-  name: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  band_name: string | null;
-  address_line1: string | null;
-  address_line2: string | null;
-  postal_code: string | null;
-  city: string | null;
-}
+export type { ClientUser };
 
 const CLIENT_SESSION_COOKIE = "h3_client_session";
-const SESSION_DURATION_HOURS = 2;
+const SESSION_DURATION_HOURS = 24 * 30;
 
 function generateToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));

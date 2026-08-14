@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { navigate } from "rwsdk/client";
 import { Facebook, Instagram, User, LogOut, UserCircle, CalendarDays, Phone } from "lucide-react";
 import { logout, useClientAuth } from "@/lib/client-auth-store";
+import { subscribe } from "@/lib/navigation-events";
 
 const menuData = [
   { id: 1, title: "Réservation", path: "/reservation" },
@@ -16,27 +17,7 @@ const menuData = [
 
 function usePathname() {
   return useSyncExternalStore(
-    (callback) => {
-      window.addEventListener("popstate", callback);
-      
-      const originalPushState = history.pushState.bind(history);
-      const originalReplaceState = history.replaceState.bind(history);
-      
-      history.pushState = (...args) => {
-        originalPushState(...args);
-        callback();
-      };
-      history.replaceState = (...args) => {
-        originalReplaceState(...args);
-        callback();
-      };
-      
-      return () => {
-        window.removeEventListener("popstate", callback);
-        history.pushState = originalPushState;
-        history.replaceState = originalReplaceState;
-      };
-    },
+    subscribe,
     () => window.location.pathname,
     () => "/"
   );

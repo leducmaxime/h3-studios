@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { formatDateISO } from "@/lib/utils";
 import type { PricingData } from "@/lib/pricing";
+import type { ClientUser } from "@/lib/client-user";
 import { calculatePrice } from "@/lib/pricing";
 import { usePricing } from "./usePricing";
 import { useEquipment } from "./useEquipment";
@@ -112,19 +113,7 @@ interface ExtendedBookingState extends BookingState {
 // ClientUser onto empty booking fields. Shared by the hydration fetch, the
 // inline login success path and the focus re-fetch.
 // ---------------------------------------------------------------------------
-export interface ClientProfile {
-  id: string;
-  email: string | null;
-  name: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  band_name: string | null;
-  address_line1: string | null;
-  address_line2: string | null;
-  postal_code: string | null;
-  city: string | null;
-}
+export type ClientProfile = ClientUser;
 
 type PrefillFields = Pick<
   ExtendedBookingState,
@@ -167,17 +156,9 @@ export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile, 
  */
 
 // ---------------------------------------------------------------------------
-// Storage – versioned key v2 (slugs), discard old numeric state
+// Storage – versioned key v2 (slugs)
 // ---------------------------------------------------------------------------
 const BOOKING_STORAGE_KEY = "h3-studios-booking-state-v2";
-const OLD_BOOKING_STORAGE_KEY = "h3-studios-booking-state";
-
-function discardOldStorage(): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.removeItem(OLD_BOOKING_STORAGE_KEY);
-  } catch { /* ignore */ }
-}
 
 // ---------------------------------------------------------------------------
 // URL ↔ slug helpers (identity mapping — each slug is its own URL)
@@ -394,6 +375,7 @@ export function useBookingWithRouter(urlStep?: string) {
   // state. Any path that clears state while a profile is known must re-sync;
   // this guard covers paths nobody remembered to update.
   useEffect(() => {
+    if (state.step === "termine") return;
     if (!clientUser) return;
     const fields: BookingUserFields = {
       userName: state.userName,
@@ -406,7 +388,7 @@ export function useBookingWithRouter(urlStep?: string) {
     };
     if (!accountFieldsDrifted(fields, clientUser)) return;
     setState((s) => ({ ...s, ...applyProfilePrefill(s, clientUser, { initial: false }) }));
-  }, [clientUser, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity]);
+  }, [clientUser, state.step, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity]);
 
   const previousLogoutCountRef = useRef(auth.logoutCount);
   useEffect(() => {
@@ -547,9 +529,6 @@ export function useBookingWithRouter(urlStep?: string) {
   // -------------------------------------------------------------------------
   useEffect(() => {
     if (isHydrated) return;
-
-    // Discard old numeric-format storage — do NOT migrate
-    discardOldStorage();
 
     const rawSavedState = loadBookingState();
     const prefs = loadUserPreferences();

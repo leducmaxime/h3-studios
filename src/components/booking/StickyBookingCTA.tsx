@@ -49,6 +49,7 @@ export function StickyBookingCTA({
         <button
           onClick={onConfirm}
           disabled={disabled}
+          aria-busy={priceLoading}
           className={`
             w-full rounded-lg px-6 py-3 font-semibold transition-all
             ${disabled
@@ -58,12 +59,11 @@ export function StickyBookingCTA({
           `}
         >
           {priceLoading ? (
-            <span className="inline-flex items-center justify-center gap-1.5">
+            <span className="inline-flex items-center justify-center">
               {buttonText}
-              <span className="inline-flex gap-0.5" aria-hidden="true">
-                <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:0ms]" />
-                <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:150ms]" />
-                <span className="h-1 w-1 animate-pulse rounded-full bg-current [animation-delay:300ms]" />
+              <span aria-hidden="true" className="ml-1.5 inline-flex items-center gap-1.5">
+                <span>–</span>
+                <span className="inline-block h-4 w-14 rounded bg-current motion-safe:animate-pulse" />
               </span>
             </span>
           ) : (

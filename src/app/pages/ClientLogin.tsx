@@ -8,12 +8,6 @@ import { Label } from "@/components/ui/label";
 
 type Tab = "login" | "register";
 
-function getRedirectUrl(): string {
-  if (typeof window === "undefined") return "/mon-compte";
-  const params = new URLSearchParams(window.location.search);
-  return params.get("redirect") || "/mon-compte";
-}
-
 export function ClientLogin() {
   const [tab, setTab] = useState<Tab>("login");
   const [email, setEmail] = useState("");
@@ -52,7 +46,7 @@ export function ClientLogin() {
         return;
       }
 
-      window.location.href = getRedirectUrl();
+      window.location.href = "/mon-compte";
     } catch {
       setError("Erreur de connexion au serveur");
       setLoading(false);
@@ -98,7 +92,7 @@ export function ClientLogin() {
         return;
       }
 
-      window.location.href = getRedirectUrl();
+      window.location.href = "/mon-compte";
     } catch {
       setError("Erreur de connexion au serveur");
       setLoading(false);

@@ -3,6 +3,7 @@
 import { AlertTriangle, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, BOOKING_FIELD_LABELS, computeAccountFieldStatus, isValidBookingFieldValue, REQUIRED_BOOKING_FIELDS, type BookingFieldIssue, type BookingFieldKey } from "@/lib/booking-fields";
+import type { ClientUser } from "@/lib/client-user";
 
 /**
  * Fields of the booking state this form reads/writes.
@@ -25,18 +26,7 @@ export interface BookingFormFields {
 }
 
 /** Client account shape returned by the hook (contract — see useBookingWithRouter). */
-export interface BookingClientUser {
-  id: string;
-  email: string | null;
-  name: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  band_name: string | null;
-  address_line1: string | null;
-  postal_code: string | null;
-  city: string | null;
-}
+export type BookingClientUser = ClientUser;
 
 interface BookingFormProps {
   userName: string;

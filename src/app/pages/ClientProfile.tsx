@@ -98,7 +98,7 @@ export function ClientProfile() {
       }
 
       setSuccess("Profil mis à jour avec succès");
-      await refresh();
+      await refresh({ force: true });
       setSaving(false);
     } catch {
       setError("Erreur de connexion au serveur");

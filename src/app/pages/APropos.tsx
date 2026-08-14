@@ -1,6 +1,5 @@
 "use client";
 
-import { ScrollUp } from "@/components/common/ScrollUp";
 import { Mail, Phone, MapPin, Train, Car, Music, GraduationCap, Calendar, Send, User, AtSign, MessageSquare, ChevronDown } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -241,7 +240,6 @@ export function APropos() {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
-      <ScrollUp />
 
       <div className="w-full max-w-5xl sm:max-w-[640px] lg:max-w-5xl px-2 lg:px-4">
         <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>

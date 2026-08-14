@@ -1,6 +1,5 @@
 "use client";
 
-import { ScrollUp } from "@/components/common/ScrollUp";
 import { ArrowRight, Music, Radio, Calendar, Star, Wifi, TrainFront, MapPin, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -31,8 +30,6 @@ export function Home() {
 
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
-      <ScrollUp />
-
       <div className="w-full max-w-6xl px-4">
         <h1 className="sr-only">H3 Studios - Studios de Répétition à Sucy-en-Brie</h1>
         <div className="flex min-h-[calc(100dvh-6rem)] flex-col items-center justify-center lg:min-h-[calc(100dvh-8rem)]">

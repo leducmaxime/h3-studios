@@ -1,30 +1,21 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { clearUserPreferences } from "@/lib/user-prefs";
 
-export interface ClientUser {
-  id: string;
-  email: string | null;
-  name: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  band_name: string | null;
-  address_line1: string | null;
-  address_line2: string | null;
-  postal_code: string | null;
-  city: string | null;
-}
+import type { ClientUser } from "./client-user";
+export type { ClientUser };
 export type ClientAuthState = { status: "loading" | "ready"; user: ClientUser | null; logoutCount: number };
 const loadingState: ClientAuthState = { status: "loading", user: null, logoutCount: 0 };
 const readyGuestState: ClientAuthState = { status: "ready", user: null, logoutCount: 0 };
 let state = loadingState;
 let pendingRefresh: Promise<ClientUser | null> | null = null;
 let authGeneration = 0;
+let refreshSeq = 0;
 const listeners = new Set<() => void>();
 
 function setState(next: ClientAuthState) {
-  if (state.status === next.status && state.user === next.user) return;
+  if (state.status === next.status && state.user === next.user && state.logoutCount === next.logoutCount) return;
   state = next;
   listeners.forEach((listener) => listener());
 }
@@ -33,9 +24,10 @@ export function getClientAuthState() { return state; }
 export function useClientAuth(): ClientAuthState {
   return useSyncExternalStore(subscribe, getClientAuthState, () => loadingState);
 }
-export async function refresh(): Promise<ClientUser | null> {
-  if (pendingRefresh) return pendingRefresh;
+export async function refresh(options?: { force?: boolean }): Promise<ClientUser | null> {
+  if (pendingRefresh && !options?.force) return pendingRefresh;
   const generation = authGeneration;
+  const seq = ++refreshSeq;
   const request = fetch("/api/client/me")
     .then(async (response) => {
       if (response.status === 401 || response.status === 403) return null;
@@ -43,7 +35,7 @@ export async function refresh(): Promise<ClientUser | null> {
       const data = (await response.json()) as { data?: ClientUser };
       return data.data ?? null;
     }).catch(() => state.status === "loading" ? null : state.user).then((user) => {
-      if (generation !== authGeneration) return state.user;
+      if (generation !== authGeneration || seq !== refreshSeq) return state.user;
       setState(user ? { status: "ready", user, logoutCount: state.logoutCount } : { ...readyGuestState, logoutCount: state.logoutCount });
       return user;
     }).finally(() => { if (pendingRefresh === request) pendingRefresh = null; });
@@ -67,6 +59,7 @@ export async function logout(): Promise<{ ok: boolean; error?: string }> {
     if (!response.ok) return { ok: false, error: "Erreur lors de la déconnexion" };
     authGeneration++;
     pendingRefresh = null;
+    clearUserPreferences();
     setState({ status: "ready", user: null, logoutCount: state.logoutCount + 1 });
     return { ok: true };
   } catch { return { ok: false, error: "Erreur de connexion au serveur" }; }

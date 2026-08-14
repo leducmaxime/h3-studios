@@ -26,21 +26,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { subscribe } from "@/lib/navigation-events";
 
 function usePathname() {
   return useSyncExternalStore(
-    (callback) => {
-      window.addEventListener("popstate", callback);
-      const originalPushState = history.pushState.bind(history);
-      const originalReplaceState = history.replaceState.bind(history);
-      history.pushState = (...args) => { originalPushState(...args); callback(); };
-      history.replaceState = (...args) => { originalReplaceState(...args); callback(); };
-      return () => {
-        window.removeEventListener("popstate", callback);
-        history.pushState = originalPushState;
-        history.replaceState = originalReplaceState;
-      };
-    },
+    subscribe,
     () => window.location.pathname,
     () => "/admin"
   );
