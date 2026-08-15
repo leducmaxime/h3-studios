@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Lock, Phone, Music, MapPin, Building2, Hash, Home, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
 import { refresh, useClientAuth } from "@/lib/client-auth-store";
+import { getVisibleBookingFields, isValidRna, isValidSiret } from "@/lib/booking-fields";
+import type { ClientType } from "@/lib/booking-fields";
 
 function RequiredAsterisk() {
   return <span className="text-primary ml-0.5" aria-hidden="true">*</span>;
@@ -33,6 +35,11 @@ export function ClientProfile() {
   const [postalCode, setPostalCode] = useState("");
   const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
+  const [clientType, setClientType] = useState<ClientType>("particulier");
+  const [legalName, setLegalName] = useState("");
+  const [siret, setSiret] = useState("");
+  const [rna, setRna] = useState("");
+  const [instagramAccounts, setInstagramAccounts] = useState("");
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
@@ -57,6 +64,11 @@ export function ClientProfile() {
     setAddressLine2(user.address_line2 || "");
     setPostalCode(user.postal_code || "");
     setCity(user.city || "");
+    setClientType((user.client_type === "association" || user.client_type === "entreprise") ? user.client_type : "particulier");
+    setLegalName(user.legal_name || "");
+    setSiret(user.siret || "");
+    setRna(user.rna || "");
+    setInstagramAccounts(user.instagram_accounts || "");
     setLoading(false);
   }, [status, user]);
 
@@ -68,7 +80,8 @@ export function ClientProfile() {
 
     try {
       const name = `${firstName} ${lastName}`.trim();
-      const payload: Record<string, string | undefined> = {
+      const visibleFields = getVisibleBookingFields(clientType);
+      const payload: Record<string, string | null | undefined> = {
         first_name: firstName || undefined,
         last_name: lastName || undefined,
         name,
@@ -79,6 +92,11 @@ export function ClientProfile() {
         address_line2: addressLine2 || undefined,
         postal_code: postalCode || undefined,
         city: city || undefined,
+        client_type: clientType,
+        legal_name: visibleFields.includes("legalName") ? legalName || null : null,
+        siret: visibleFields.includes("siret") ? siret || null : null,
+        rna: visibleFields.includes("rna") ? rna || null : null,
+        instagram_accounts: visibleFields.includes("instagramAccounts") ? instagramAccounts || null : null,
       };
       if (password.length > 0) {
         payload.password = password;
@@ -163,6 +181,49 @@ export function ClientProfile() {
                     className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-client-type" icon={Building2} required>Type de client</FieldLabel>
+                <select
+                  id="profile-client-type"
+                  value={clientType}
+                  onChange={(e) => setClientType(e.target.value as ClientType)}
+                  disabled={saving}
+                  className="w-full rounded-md bg-white/10 border border-white/15 text-white h-11 px-3 focus:border-primary focus:outline-none"
+                >
+                  <option value="particulier" className="bg-zinc-900">Particulier</option>
+                  <option value="association" className="bg-zinc-900">Association</option>
+                  <option value="entreprise" className="bg-zinc-900">Entreprise</option>
+                </select>
+              </div>
+
+              {clientType !== "particulier" && (
+                <div className="space-y-5 rounded-xl border border-white/10 p-4">
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="profile-legal-name" icon={Building2} required>Raison sociale</FieldLabel>
+                    <Input id="profile-legal-name" value={legalName} onChange={(e) => setLegalName(e.target.value)} disabled={saving} placeholder={clientType === "association" ? "Nom de votre association" : "Nom de votre entreprise"} className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11" />
+                  </div>
+                  {(clientType === "entreprise" || clientType === "association") && (
+                    <div className="space-y-2">
+                      <FieldLabel htmlFor="profile-siret" icon={Hash} required={clientType === "entreprise"}>SIRET</FieldLabel>
+                      <Input id="profile-siret" value={siret} onChange={(e) => setSiret(e.target.value)} disabled={saving} placeholder="732 829 320 00074" className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11" />
+                      {siret && !isValidSiret(siret) && <p className="text-xs text-amber-400">Le SIRET doit comporter 14 chiffres valides.</p>}
+                    </div>
+                  )}
+                  {clientType === "association" && (
+                    <div className="space-y-2">
+                      <FieldLabel htmlFor="profile-rna" icon={Hash}>Numéro RNA</FieldLabel>
+                      <Input id="profile-rna" value={rna} onChange={(e) => setRna(e.target.value)} disabled={saving} placeholder="W123456789" className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11" />
+                      {rna && !isValidRna(rna) && <p className="text-xs text-amber-400">Le numéro RNA doit être au format W123456789.</p>}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-instagram" icon={Music}>Compte(s) Instagram</FieldLabel>
+                <Input id="profile-instagram" value={instagramAccounts} onChange={(e) => setInstagramAccounts(e.target.value)} disabled={saving} placeholder="@moncompte" className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11" />
               </div>
 
               <div className="space-y-2">

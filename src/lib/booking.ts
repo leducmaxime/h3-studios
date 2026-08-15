@@ -1,4 +1,5 @@
 import { formatDateISO, getParisDateISO } from "./utils";
+import type { ClientType } from "./booking-fields";
 export { clearUserPreferences, loadUserPreferences, saveUserPreferences, type UserPreferences } from "./user-prefs";
 
 export type StudioId = "la-scene" | "le-podium";
@@ -247,6 +248,11 @@ export interface BookingState {
   userEmail: string;
   userPhone: string;
   bandName: string;
+  clientType: ClientType;
+  legalName: string;
+  siret: string;
+  rna: string;
+  instagramAccounts: string;
   billingAddress: string;
   billingPostalCode: string;
   billingCity: string;

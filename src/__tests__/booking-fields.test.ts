@@ -1,15 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
   BOOKING_FIELD_KEYS,
+  CLIENT_TYPES,
+  CLIENT_TYPE_RULES,
+  bookingFieldLabel,
+  bookingFieldPlaceholder,
   computeAccountFieldStatus,
   getBookingFieldIssues,
   resolveBookingIdentity,
+  resolveClientType,
+  getRequiredBookingFields,
+  getVisibleBookingFields,
+  isValidRna,
+  isValidSiret,
+  normalizeRna,
+  normalizeSiret,
+  pruneToClientType,
   validateBookingUserFields,
   type BookingAccountProfile,
   type BookingUserFields,
 } from "@/lib/booking-fields";
 
 const validFields: BookingUserFields = {
+  legalName: "", siret: "", rna: "", instagramAccounts: "",
   userName: "Jean Dupont",
   userEmail: "jean.dupont@example.fr",
   userPhone: "0612345678",
@@ -20,6 +33,7 @@ const validFields: BookingUserFields = {
 };
 
 const validAccount: BookingAccountProfile = {
+  client_type: null, legal_name: "Association test", siret: "73282932000074", rna: "W751234567", instagram_accounts: "@oiseaux",
   email: "compte@example.fr",
   name: "Jean Dupont",
   first_name: "Jean",
@@ -33,9 +47,9 @@ const validAccount: BookingAccountProfile = {
 
 describe("booking confirmation gate", () => {
   it("accepts a complete set and ignores empty optional bandName", () => {
-    expect(getBookingFieldIssues(validFields)).toEqual([]);
-    expect(getBookingFieldIssues(validFields).length === 0).toBe(true);
-    expect(getBookingFieldIssues({ ...validFields, bandName: "" })).toEqual([]);
+    expect(getBookingFieldIssues(validFields, "particulier")).toEqual([]);
+    expect(getBookingFieldIssues(validFields, "particulier").length === 0).toBe(true);
+    expect(getBookingFieldIssues({ ...validFields, bandName: "" }, "particulier")).toEqual([]);
   });
 
   it("reports missing address fields in contract order", () => {
@@ -44,7 +58,7 @@ describe("booking confirmation gate", () => {
       billingAddress: "",
       billingPostalCode: "",
       billingCity: "",
-    });
+    }, "particulier");
     expect(issues.map((issue) => issue.key)).toEqual([
       "billingAddress",
       "billingPostalCode",
@@ -58,6 +72,7 @@ describe("booking confirmation gate", () => {
 
   it("states each missing reason as grammatical French, not label concatenation", () => {
     const issues = getBookingFieldIssues({
+      legalName: "", siret: "", rna: "", instagramAccounts: "",
       userName: "",
       userEmail: "",
       userPhone: "",
@@ -65,7 +80,7 @@ describe("booking confirmation gate", () => {
       billingAddress: "",
       billingPostalCode: "",
       billingCity: "",
-    });
+    }, "particulier");
     expect(issues.map((issue) => issue.reason)).toEqual([
       "Le prénom et le nom sont obligatoires",
       "L'email est obligatoire",
@@ -80,12 +95,66 @@ describe("booking confirmation gate", () => {
   });
 
   it("reports malformed present values as invalid", () => {
-    const issues = getBookingFieldIssues({ ...validFields, userPhone: "06" });
+    const issues = getBookingFieldIssues({ ...validFields, userPhone: "06" }, "particulier");
     expect(issues).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "userPhone", status: "invalid" }),
     ]));
     expect(issues.some((issue) => issue.status === "missing")).toBe(false);
-    expect(getBookingFieldIssues({ ...validFields, userPhone: "06" }).length === 0).toBe(false);
+    expect(getBookingFieldIssues({ ...validFields, userPhone: "06" }, "particulier").length === 0).toBe(false);
+  });
+});
+
+describe("client type contract and offline identifiers", () => {
+  it("keeps rule subsets and type keys aligned", () => {
+    expect(Object.keys(CLIENT_TYPE_RULES).sort()).toEqual([...CLIENT_TYPES].sort());
+    for (const type of CLIENT_TYPES) {
+      expect(getRequiredBookingFields(type).every((key) => getVisibleBookingFields(type).includes(key))).toBe(true);
+      expect(getVisibleBookingFields(type).every((key) => BOOKING_FIELD_KEYS.includes(key))).toBe(true);
+    }
+  });
+  it("keeps the particulier contract unchanged", () => {
+    expect(getRequiredBookingFields("particulier")).toEqual(["userName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"]);
+    expect(getBookingFieldIssues(validFields, "particulier")).toEqual([]);
+  });
+  it("applies entreprise and association requirements", () => {
+    const entreprise = { ...validFields, legalName: "ACME", siret: "" };
+    expect(getBookingFieldIssues({ ...entreprise, legalName: "" }, "entreprise").map((i) => i.key)).toContain("legalName");
+    expect(getBookingFieldIssues(entreprise, "entreprise").map((i) => i.key)).toContain("siret");
+    expect(getBookingFieldIssues({ ...entreprise, siret: "73282932000075" }, "entreprise").some((i) => i.status === "invalid")).toBe(true);
+    expect(getBookingFieldIssues({ ...entreprise, siret: "73282932000074" }, "entreprise")).toEqual([]);
+    expect(getBookingFieldIssues({ ...validFields, legalName: "Club" }, "association")).toEqual([]);
+    expect(getBookingFieldIssues({ ...validFields, legalName: "Club", rna: "X751234567" }, "association").some((i) => i.status === "invalid")).toBe(true);
+  });
+  it("ignores and prunes invisible SIRET", () => {
+    const fields = { ...validFields, siret: "garbage" };
+    expect(getBookingFieldIssues(fields, "particulier")).toEqual([]);
+    expect(pruneToClientType(fields, "particulier").siret).toBe("");
+  });
+  it("validates SIRET and La Poste exemption", () => {
+    expect(isValidSiret("73282932000074")).toBe(true);
+    expect(isValidSiret("73282932000075")).toBe(false);
+    expect(isValidSiret("1234567890123")).toBe(false);
+    expect(isValidSiret("123456789012345")).toBe(false);
+    expect(isValidSiret("ABCDEFGHIJKLMN")).toBe(false);
+    expect(isValidSiret("35600000000001")).toBe(true); // digit sum 15
+    expect(isValidSiret("35600000000002")).toBe(false); // digit sum 16
+    expect(normalizeSiret("732 829 320 000 74")).toBe("73282932000074");
+  });
+  it("validates and normalises RNA", () => {
+    expect(isValidRna("W751234567")).toBe(true);
+    expect(normalizeRna("w75 123 4567")).toBe("W751234567");
+    expect(isValidRna("w75 123 4567")).toBe(true);
+    expect(isValidRna("X751234567")).toBe(false);
+    expect(isValidRna("W75123456")).toBe(false);
+    expect(isValidRna("W7512345678")).toBe(false);
+  });
+  it("uses dynamic French labels", () => {
+    expect(bookingFieldLabel("billingAddress", "particulier")).toBe("Adresse de facturation");
+    expect(bookingFieldLabel("billingAddress", "association")).toBe("Adresse de l'association");
+    expect(bookingFieldLabel("billingAddress", "entreprise")).toBe("Adresse de l'entreprise");
+    expect(bookingFieldLabel("legalName", "entreprise")).toBe("Nom de l'entreprise");
+    expect(bookingFieldPlaceholder("legalName", "association")).toBe("Nom de votre association");
+    expect(bookingFieldPlaceholder("legalName", "entreprise")).toBe("Nom de votre entreprise");
   });
 });
 
@@ -110,7 +179,7 @@ describe("resolveBookingIdentity", () => {
       addressLine1: " 8 rue de Lyon ",
       postalCode: " 69001 ",
       city: " Lyon ",
-    }, null)).toEqual({
+    }, null, "particulier")).toEqual({
       name: "Jeanne Martin",
       email: "jeanne@exemple.fr",
       phone: "0612345678",
@@ -118,12 +187,17 @@ describe("resolveBookingIdentity", () => {
       addressLine1: "8 rue de Lyon",
       postalCode: "69001",
       city: "Lyon",
+      clientType: "particulier",
+      legalName: "",
+      siret: "",
+      rna: "",
+      instagramAccounts: "",
     });
   });
 
   it("uses the account display name, including the NULL first/last fallback", () => {
     const account = { ...validAccount, name: "Ancien nom", first_name: null, last_name: null };
-    expect(resolveBookingIdentity({ name: "", email: "client@example.fr" }, account).name).toBe("Ancien nom");
+    expect(resolveBookingIdentity({ name: "", email: "client@example.fr" }, account, "particulier").name).toBe("Ancien nom");
   });
 
   it.each([
@@ -131,11 +205,11 @@ describe("resolveBookingIdentity", () => {
     ["not-an-email", "client@example.fr"],
     ["compte@example.fr", "compte@example.fr"],
   ])("resolves account email %s with valid posted fallback", (email, expected) => {
-    expect(resolveBookingIdentity({ email: " client@example.fr " }, { ...validAccount, email }).email).toBe(expected);
+    expect(resolveBookingIdentity({ email: " client@example.fr " }, { ...validAccount, email }, "particulier").email).toBe(expected);
   });
 
   it("falls back to account contact fields when the posted values are empty", () => {
-    expect(resolveBookingIdentity({ email: "client@example.fr", phone: "", addressLine1: "", postalCode: "", city: "" }, validAccount)).toMatchObject({
+    expect(resolveBookingIdentity({ email: "client@example.fr", phone: "", addressLine1: "", postalCode: "", city: "" }, validAccount, "particulier")).toMatchObject({
       phone: "0611223344",
       addressLine1: "12 rue de Paris",
       postalCode: "75001",
@@ -144,9 +218,46 @@ describe("resolveBookingIdentity", () => {
   });
 });
 
+describe("client type resolution and server validation", () => {
+  const resolvedBase = {
+    clientType: "particulier" as const,
+    legalName: "",
+    siret: "",
+    rna: "",
+    instagramAccounts: "",
+    name: validFields.userName,
+    email: validFields.userEmail,
+    phone: validFields.userPhone,
+    bandName: validFields.bandName,
+    addressLine1: validFields.billingAddress,
+    postalCode: validFields.billingPostalCode,
+    city: validFields.billingCity,
+  };
+  it("resolves body intent before the session profile", () => {
+    expect(resolveClientType("entreprise", { ...validAccount, client_type: "particulier" })).toBe("entreprise");
+    expect(resolveClientType("particulier", { ...validAccount, client_type: "entreprise" })).toBe("particulier");
+    expect(resolveClientType(undefined, { ...validAccount, client_type: "entreprise" })).toBe("entreprise");
+    expect(resolveClientType(undefined, null)).toBe("particulier");
+    expect(resolveClientType("Entreprise", null)).toBe(null);
+    expect(resolveClientType("sarl", null)).toBe(null);
+    expect(resolveClientType("", { ...validAccount, client_type: "entreprise" })).toBe("entreprise");
+  });
+  it("prunes session legal identity after merging a particulier booking", () => {
+    const resolved = resolveBookingIdentity({}, { ...validAccount, legal_name: "Legacy SAS", siret: "73282932000074" }, "particulier");
+    expect(resolved.legalName).toBe("");
+    expect(resolved.siret).toBe("");
+  });
+  it("applies server SIRET strictness only to entreprise", () => {
+    expect(validateBookingUserFields({ ...resolvedBase, clientType: "entreprise", legalName: "ACME", siret: "" })).toMatchObject({ ok: false, fields: ["siret"] });
+    expect(validateBookingUserFields({ ...resolvedBase, clientType: "entreprise", legalName: "ACME", siret: "73282932000075" })).toMatchObject({ ok: false, fields: ["siret"] });
+    expect(validateBookingUserFields({ ...resolvedBase, clientType: "association", legalName: "Club", rna: "bad" })).toEqual({ ok: true });
+  });
+});
+
 describe("validateBookingUserFields", () => {
   it("reports missing city with an error and fields", () => {
     const result = validateBookingUserFields({
+      clientType: "particulier", legalName: "", siret: "", rna: "", instagramAccounts: "",
       name: validFields.userName,
       email: validFields.userEmail,
       phone: validFields.userPhone,
@@ -164,6 +275,7 @@ describe("validateBookingUserFields", () => {
 
   it("accepts a complete resolved user", () => {
     expect(validateBookingUserFields({
+      clientType: "particulier", legalName: "", siret: "", rna: "", instagramAccounts: "",
       name: validFields.userName,
       email: validFields.userEmail,
       phone: validFields.userPhone,
@@ -176,6 +288,7 @@ describe("validateBookingUserFields", () => {
 
   it("reports malformed email with the email field", () => {
     const result = validateBookingUserFields({
+      clientType: "particulier", legalName: "", siret: "", rna: "", instagramAccounts: "",
       name: validFields.userName,
       email: "bad-email",
       phone: validFields.userPhone,

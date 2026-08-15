@@ -2,6 +2,7 @@ import { type DbBooking, type DbUser, type DbPayment } from "./db-types";
 import { STUDIOS, formatPrice, type StudioId, resolveEquipmentDisplay } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
+import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function escapeCSV(value: string | number | null | undefined): string {
@@ -47,6 +48,11 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
   const headers = [
     "Référence",
     "Client",
+    "Type de client",
+    "Raison sociale",
+    "SIRET",
+    "RNA",
+    "Instagram",
     "Email",
     "Studio",
     "Date",
@@ -61,6 +67,7 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
   ];
 
   const rows = bookings.map((booking) => {
+    const clientIdentity = resolveBookingClientIdentity(booking, undefined);
     const studioName = STUDIOS[booking.studio_id as StudioId]?.name || booking.studio_id;
     
     // Calculate duration in hours
@@ -93,6 +100,11 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
     return [
       escapeCSV(booking.booking_ref),
       escapeCSV(booking.user_name || "—"),
+      escapeCSV(clientIdentity.resolved ? clientIdentity.clientTypeLabel : "—"),
+      escapeCSV(clientIdentity.legalName || "—"),
+      escapeCSV(clientIdentity.siret || "—"),
+      escapeCSV(clientIdentity.rna || "—"),
+      escapeCSV(clientIdentity.instagramAccounts || "—"),
       escapeCSV(booking.user_email || "—"),
       escapeCSV(studioName),
       escapeCSV(formatDateForCSV(booking.date)),
@@ -117,6 +129,11 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
 export function exportUsersCSV(users: DbUser[]): void {
   const headers = [
     "Nom",
+    "Type de client",
+    "Raison sociale",
+    "SIRET",
+    "RNA",
+    "Instagram",
     "Email",
     "Téléphone",
     "Groupe",
@@ -126,8 +143,14 @@ export function exportUsersCSV(users: DbUser[]): void {
   ];
 
   const rows = users.map((user) => {
+    const clientIdentity = resolveUserClientIdentity(user);
     return [
       escapeCSV(user.name),
+      escapeCSV(clientIdentity.clientTypeLabel),
+      escapeCSV(clientIdentity.legalName || "—"),
+      escapeCSV(clientIdentity.siret || "—"),
+      escapeCSV(clientIdentity.rna || "—"),
+      escapeCSV(clientIdentity.instagramAccounts || "—"),
       escapeCSV(user.email || "—"),
       escapeCSV(user.phone || "—"),
       escapeCSV(user.band_name || "—"),
@@ -216,7 +239,14 @@ export async function generateInvoicePDF(
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   let y = 20;
+  const ensureSpace = (needed: number) => {
+    if (y + needed > pageHeight - 20) {
+      doc.addPage();
+      y = 20;
+    }
+  };
 
   // Header - H3 Studios
   doc.setFontSize(20);
@@ -253,6 +283,8 @@ export async function generateInvoicePDF(
   y += 10;
 
   // Client info
+  ensureSpace(120);
+  const clientIdentity = resolveBookingClientIdentity(booking, user);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.text("Client:", 20, y);
@@ -266,6 +298,32 @@ export async function generateInvoicePDF(
   if (user.phone) {
     doc.text(user.phone, 45, y);
     y += 6;
+  }
+  if (clientIdentity.isBusiness) {
+    doc.text(`Type de client: ${clientIdentity.clientTypeLabel}`, 45, y);
+    y += 6;
+    if (clientIdentity.legalName) {
+      doc.text(`Raison sociale: ${clientIdentity.legalName}`, 45, y);
+      y += 6;
+    }
+    if (clientIdentity.siret) {
+      doc.text(`SIRET: ${formatSiret(clientIdentity.siret)}`, 45, y);
+      y += 6;
+    }
+    if (clientIdentity.rna) {
+      doc.text(`RNA: ${clientIdentity.rna}`, 45, y);
+      y += 6;
+    }
+    if (user.address_line1) {
+      doc.text("Adresse:", 20, y);
+      doc.text(user.address_line1, 45, y);
+      y += 6;
+      const locality = [user.postal_code, user.city].filter(Boolean).join(" ");
+      if (locality) {
+        doc.text(locality, 45, y);
+        y += 6;
+      }
+    }
   }
   if (booking.band_name) {
     doc.text(`Groupe: ${booking.band_name}`, 45, y);
@@ -313,6 +371,7 @@ export async function generateInvoicePDF(
       const equipmentList = equipmentDisplay.lines;
       const exact = equipmentDisplay.showLinePrices;
       if (equipmentList.length > 0) {
+        ensureSpace(equipmentList.length * 5 + 14);
         y += 4;
         doc.text("Équipements:", 25, y);
         y += 6;
@@ -334,6 +393,7 @@ export async function generateInvoicePDF(
   y += 10;
 
   // Pricing summary
+  ensureSpace(80);
   const basePrice = booking.base_price || 0;
   const netTotal = getBookingAmountDue(booking);
 
@@ -378,11 +438,12 @@ export async function generateInvoicePDF(
   y += 20;
 
   // Footer
+  ensureSpace(30);
   doc.setFontSize(9);
   doc.setTextColor(120);
   doc.text("Merci de votre confiance !", pageWidth / 2, y, { align: "center" });
   y += 5;
-  doc.text("H3 Studios - SIRET: XXX XXX XXX XXXXX", pageWidth / 2, y, { align: "center" });
+  doc.text("H3 Studios - SIRET: 944 221 753 00014", pageWidth / 2, y, { align: "center" });
 
   // Download
   doc.save(`h3-facture-${booking.booking_ref}.pdf`);

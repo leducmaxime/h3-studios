@@ -15,6 +15,9 @@ import {
   Download,
   ChevronUp,
   ChevronDown,
+  Building2,
+  FileText,
+  Instagram,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,7 +26,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateISO } from "@/lib/utils";
+import { formatSiret, resolveUserClientIdentity } from "@/lib/client-identity";
+import { getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
 import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
@@ -141,6 +147,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     postal_code: "",
     city: "",
     country: "",
+    client_type: "particulier" as ClientType,
+    legal_name: "",
+    siret: "",
+    rna: "",
+    instagram_accounts: "",
   });
 
   // Filters (like /admin/bookings)
@@ -172,6 +183,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           postal_code: json.data.postal_code || "",
           city: json.data.city || "",
           country: json.data.country || "",
+          client_type: isClientType(json.data.client_type) ? json.data.client_type : "particulier",
+          legal_name: json.data.legal_name || "",
+          siret: json.data.siret || "",
+          rna: json.data.rna || "",
+          instagram_accounts: json.data.instagram_accounts || "",
         });
       }
     } catch (error) {
@@ -240,6 +256,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     setSaving(true);
 
     try {
+      const visibleFields = getVisibleBookingFields(editForm.client_type);
       const res = await fetch(`/api/admin/users/${user.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -254,6 +271,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           postal_code: editForm.postal_code.trim() || null,
           city: editForm.city.trim() || null,
           country: editForm.country.trim() || null,
+          client_type: editForm.client_type,
+          legal_name: visibleFields.includes("legalName") ? editForm.legal_name.trim() || null : null,
+          siret: visibleFields.includes("siret") ? editForm.siret.trim() || null : null,
+          rna: visibleFields.includes("rna") ? editForm.rna.trim() || null : null,
+          instagram_accounts: visibleFields.includes("instagramAccounts") ? editForm.instagram_accounts.trim() || null : null,
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
@@ -446,6 +468,37 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
 
                 {editing ? (
                   <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="grid gap-2 lg:col-span-2">
+                      <Label htmlFor="edit-client-type">Type de client</Label>
+                      <Select value={editForm.client_type} onValueChange={(value) => setEditForm({ ...editForm, client_type: value as ClientType })}>
+                        <SelectTrigger id="edit-client-type"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="particulier">Particulier</SelectItem>
+                          <SelectItem value="association">Association</SelectItem>
+                          <SelectItem value="entreprise">Entreprise</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {editForm.client_type !== "particulier" && (
+                      <>
+                        <div className="grid gap-2 lg:col-span-2">
+                          <Label htmlFor="edit-legal-name">Raison sociale / nom de l&apos;association</Label>
+                          <Input id="edit-legal-name" value={editForm.legal_name} onChange={(e) => setEditForm({ ...editForm, legal_name: e.target.value })} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="edit-siret">SIRET</Label>
+                          <Input id="edit-siret" value={editForm.siret} onChange={(e) => setEditForm({ ...editForm, siret: e.target.value })} />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="edit-rna">RNA</Label>
+                          <Input id="edit-rna" value={editForm.rna} onChange={(e) => setEditForm({ ...editForm, rna: e.target.value })} />
+                        </div>
+                      </>
+                    )}
+                    <div className="grid gap-2 lg:col-span-2">
+                      <Label htmlFor="edit-instagram">Compte(s) Instagram</Label>
+                      <Input id="edit-instagram" value={editForm.instagram_accounts} onChange={(e) => setEditForm({ ...editForm, instagram_accounts: e.target.value })} />
+                    </div>
                     <div className="grid gap-2">
                       <Label htmlFor="edit-name">Nom</Label>
                       <Input
@@ -523,6 +576,20 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   </div>
                 ) : (
                   <div className="space-y-6">
+                    {(() => {
+                      const clientIdentity = resolveUserClientIdentity(user);
+                      return (
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div className="flex items-center gap-3"><Building2 className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">Type de client</p><p>{clientIdentity.clientTypeLabel}</p></div></div>
+                          {clientIdentity.isBusiness && <>
+                            <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">Raison sociale / association</p><p>{clientIdentity.legalName || "—"}</p></div></div>
+                            <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">SIRET</p><p>{clientIdentity.siret ? formatSiret(clientIdentity.siret) : "—"}</p></div></div>
+                            <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">RNA</p><p>{clientIdentity.rna || "—"}</p></div></div>
+                          </>}
+                          <div className="flex items-center gap-3"><Instagram className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">Compte(s) Instagram</p><p>{clientIdentity.instagramAccounts || "—"}</p></div></div>
+                        </div>
+                      );
+                    })()}
                     <div className="grid gap-4 lg:grid-cols-2">
                       <div className="flex items-center gap-3">
                         <Mail className="h-5 w-5 text-zinc-400" />

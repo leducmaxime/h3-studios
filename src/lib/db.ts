@@ -170,10 +170,10 @@ export async function createBooking(
   // INSERT atomique avec garde anti-conflit (TOCTOU fix)
   // Si un conflit existe déjà pour ce studio/date/start_time, l'INSERT échoue silencieusement
   const result = await db.prepare(`
-    INSERT INTO bookings (id, booking_ref, user_id, band_name, studio_id, date, start_time, end_time,
+    INSERT INTO bookings (id, booking_ref, user_id, band_name, client_type, legal_name, siret, rna, instagram_accounts, studio_id, date, start_time, end_time,
       group_type, status, base_price, equipment_price, total_price, equipment,
       payment_method, payment_status, notes, round_mode, promo_code, promo_discount, promo_type, created_at, updated_at, cancelled_at, cancel_reason)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE NOT EXISTS (
       SELECT 1 FROM bookings
       WHERE studio_id = ? AND date = ? AND status != 'cancelled'
@@ -181,7 +181,7 @@ export async function createBooking(
         AND CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END > ?
     )
   `).bind(
-    id, data.booking_ref, data.user_id, data.band_name, data.studio_id, data.date,
+    id, data.booking_ref, data.user_id, data.band_name, data.client_type, data.legal_name, data.siret, data.rna, data.instagram_accounts, data.studio_id, data.date,
     data.start_time, data.end_time, data.group_type, data.status,
     data.base_price, data.equipment_price, data.total_price,
     data.equipment, data.payment_method, data.payment_status,
@@ -399,6 +399,11 @@ export async function getUsers(
         u.last_name,
         u.phone,
         u.band_name,
+        u.client_type,
+        u.legal_name,
+        u.siret,
+        u.rna,
+        u.instagram_accounts,
         u.notes,
         u.address_line1,
         u.address_line2,
@@ -444,6 +449,11 @@ export async function getUserById(
         u.last_name,
         u.phone,
         u.band_name,
+        u.client_type,
+        u.legal_name,
+        u.siret,
+        u.rna,
+        u.instagram_accounts,
         u.notes,
         u.address_line1,
         u.address_line2,
@@ -498,6 +508,11 @@ export async function findOrCreateUserByEmail(
   email: string,
   profile: {
     name: string;
+    client_type?: string;
+    legal_name?: string;
+    siret?: string;
+    rna?: string;
+    instagram_accounts?: string;
     phone?: string;
     band_name?: string;
     address_line1?: string;
@@ -510,14 +525,19 @@ export async function findOrCreateUserByEmail(
   const normalizedEmail = email.trim().toLowerCase();
 
   const result = await db.prepare(`
-    INSERT OR IGNORE INTO users (id, email, name, phone, band_name, address_line1, postal_code, city, is_blocked, total_bookings, total_spent, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
+    INSERT OR IGNORE INTO users (id, email, name, phone, band_name, client_type, legal_name, siret, rna, instagram_accounts, address_line1, postal_code, city, is_blocked, total_bookings, total_spent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
   `).bind(
     id,
     normalizedEmail,
     profile.name,
     profile.phone ?? null,
     profile.band_name ?? null,
+    profile.client_type ?? "particulier",
+    profile.legal_name ?? null,
+    profile.siret ?? null,
+    profile.rna ?? null,
+    profile.instagram_accounts ?? null,
     profile.address_line1 ?? null,
     profile.postal_code ?? null,
     profile.city ?? null,
@@ -595,7 +615,7 @@ export async function createUser(
 export async function updateUser(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbUser, "email" | "name" | "first_name" | "last_name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country" | "password_hash">>,
+  data: Partial<Pick<DbUser, "email" | "name" | "first_name" | "last_name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country" | "password_hash" | "client_type" | "legal_name" | "siret" | "rna" | "instagram_accounts">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];

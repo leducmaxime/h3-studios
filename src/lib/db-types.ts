@@ -57,6 +57,11 @@ export interface DbUser {
   last_name: string | null;
   phone: string | null;
   band_name: string | null;
+  client_type: string;
+  legal_name: string | null;
+  siret: string | null;
+  rna: string | null;
+  instagram_accounts: string | null;
   notes: string | null;
   address_line1: string | null;
   address_line2: string | null;
@@ -83,6 +88,11 @@ export interface DbBooking {
   booking_ref: string;
   user_id: string;
   band_name: string | null;
+  client_type: string | null;
+  legal_name: string | null;
+  siret: string | null;
+  rna: string | null;
+  instagram_accounts: string | null;
   studio_id: string;
   date: string;
   start_time: string;

@@ -1,4 +1,5 @@
 import { type BookingEquipmentLine, STUDIOS, formatPrice, resolveEquipmentDisplay } from "@/lib/booking";
+import { CLIENT_TYPE_RULES, isClientType } from "@/lib/booking-fields";
 
 export interface BookingSlot {
   bookingRef: string;
@@ -30,6 +31,8 @@ export interface BookingConfirmationData {
   userName: string;
   userEmail: string;
   userPhone: string;
+  clientType?: string;
+  legalName?: string;
   promoCode?: string | null;
   promoDiscount?: number;
   promoType?: string | null;
@@ -149,6 +152,10 @@ export function buildEmailHtml(data: BookingConfirmationData): string {
   const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
   const promoLabel = data.promoType === "percentage" ? `${data.promoValue ?? data.promoDiscount}%` : `${formatPrice(data.promoDiscount || 0)}`;
   const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, data.equipmentPrice, data.equipmentNames);
+  const clientTypeLabel = isClientType(data.clientType) ? CLIENT_TYPE_RULES[data.clientType].label : data.clientType;
+  const clientIdentitySection = data.clientType
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;background-color:#111111;"><tr><td style="padding:4px 0;"><span style="color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type de client</span><br><span style="color:#ffffff;font-size:13px;">${clientTypeLabel}</span>${data.clientType !== "particulier" && data.legalName ? `<br><span style="color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Raison sociale</span><br><span style="color:#ffffff;font-size:13px;">${data.legalName}</span>` : ""}</td></tr></table>`
+    : "";
 
   const isMultiSlot = data.allSlots && data.allSlots.length > 1;
   const multiSlotTotal = isMultiSlot ? data.allSlots!.reduce((sum, s) => sum + s.totalPrice, 0) : 0;
@@ -382,6 +389,8 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                 ? `<div style="margin-bottom:20px;">${detailsGrid}</div>`
                 : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">${detailsGrid}</table>`
               }
+
+              ${clientIdentitySection}
 
               <!-- Equipment -->
               ${equipmentSection}

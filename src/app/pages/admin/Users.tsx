@@ -38,6 +38,7 @@ import {
 import { formatPrice } from "@/lib/booking";
 import { type DbUser } from "@/lib/db-types";
 import { exportUsersCSV } from "@/lib/export";
+import { resolveUserClientIdentity } from "@/lib/client-identity";
 
 interface UsersApiResponse {
   data: DbUser[];
@@ -474,7 +475,7 @@ export function AdminUsers() {
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Client</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Contact</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Groupe</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-zinc-400">Type / Groupe</th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400">Réservations</th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400">Total dépensé</th>
                 <th className="w-10 px-4 py-3"></th>
@@ -523,7 +524,21 @@ export function AdminUsers() {
                       <p>{user.email || "—"}</p>
                       <p className="text-zinc-400">{user.phone || "—"}</p>
                     </td>
-                    <td className="px-4 py-3 text-sm">{user.band_name || "—"}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {(() => {
+                        const clientIdentity = resolveUserClientIdentity(user);
+                        return (
+                          <div className="space-y-1">
+                            {clientIdentity.isBusiness ? (
+                              <Badge variant="secondary" className="text-[10px]">{clientIdentity.clientTypeLabel}</Badge>
+                            ) : (
+                              <p className="text-xs text-zinc-500">{clientIdentity.clientTypeLabel}</p>
+                            )}
+                            <p>{user.band_name || "—"}</p>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-right text-sm">{user.total_bookings}</td>
                     <td className="px-4 py-3 text-right font-medium text-primary">
                       {formatPrice(user.total_spent)}

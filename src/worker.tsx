@@ -1,6 +1,6 @@
 import { render, route, layout } from "rwsdk/router";
 import { getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
-import { isValidEmail, resolveBookingIdentity, validateBookingUserFields, type BookingUserBody } from "@/lib/booking-fields";
+import { DEFAULT_CLIENT_TYPE, isClientType, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
@@ -871,6 +871,11 @@ const app = defineApp([
         bookingRef: string;
         userId?: string;
         user: {
+          clientType?: string | null;
+          legalName?: string | null;
+          siret?: string | null;
+          rna?: string | null;
+          instagramAccounts?: string | null;
           name: string;
           email: string;
           phone: string;
@@ -923,7 +928,9 @@ const app = defineApp([
         sessionUser = await validateClientSession(env.DB, sessionToken);
       }
 
-      const resolved = resolveBookingIdentity(body.user as BookingUserBody, sessionUser);
+      const clientType = resolveClientType(body.user?.clientType, sessionUser);
+      if (!clientType) return jsonResponse({ success: false, error: "Type de client invalide.", code: "invalid-client-type" }, 400);
+      const resolved = resolveBookingIdentity(body.user as BookingUserBody, sessionUser, clientType);
       const validation = validateBookingUserFields(resolved);
       if (!validation.ok) {
         return jsonResponse(
@@ -953,6 +960,11 @@ const app = defineApp([
           address_line1: body.user?.addressLine1?.trim() || "",
           postal_code: body.user?.postalCode?.trim() || "",
           city: body.user?.city?.trim() || "",
+          client_type: resolved.clientType,
+          legal_name: resolved.legalName,
+          siret: resolved.siret,
+          rna: resolved.rna,
+          instagram_accounts: resolved.instagramAccounts,
         };
         const current = {
           phone: sessionUser.phone?.trim() || "",
@@ -960,7 +972,13 @@ const app = defineApp([
           address_line1: sessionUser.address_line1?.trim() || "",
           postal_code: sessionUser.postal_code?.trim() || "",
           city: sessionUser.city?.trim() || "",
+          client_type: sessionUser.client_type?.trim() || "",
+          legal_name: sessionUser.legal_name?.trim() || "",
+          siret: sessionUser.siret?.trim() || "",
+          rna: sessionUser.rna?.trim() || "",
+          instagram_accounts: sessionUser.instagram_accounts?.trim() || "",
         };
+        // D12: the v && v !== current filter prevents pruned empties clearing legal identity.
         const updates: Parameters<typeof updateUser>[2] = Object.fromEntries(
           Object.entries(posted).filter(([k, v]) => v && v !== current[k as keyof typeof current]),
         );
@@ -974,6 +992,11 @@ const app = defineApp([
           address_line1: addressLine1 || undefined,
           postal_code: postalCode || undefined,
           city: city || undefined,
+          client_type: clientType,
+          legal_name: resolved.legalName || undefined,
+          siret: resolved.siret || undefined,
+          rna: resolved.rna || undefined,
+          instagram_accounts: resolved.instagramAccounts || undefined,
         });
 
         userId = guestUser.id;
@@ -1290,6 +1313,11 @@ const app = defineApp([
         booking_ref: body.bookingRef,
         user_id: userId,
         band_name: bookingBandName,
+        client_type: resolved.clientType,
+        legal_name: resolved.legalName || null,
+        siret: resolved.siret || null,
+        rna: resolved.rna || null,
+        instagram_accounts: resolved.instagramAccounts || null,
         studio_id: body.studioId,
         date: body.date,
         start_time: body.startTime,
@@ -1376,6 +1404,10 @@ const app = defineApp([
             userName: name,
             userEmail: email,
             userPhone: phone,
+            // Confirmation echoes the identity as booked (D8): a wrong client
+            // type is far cheaper to spot here than on the invoice.
+            clientType: resolved.clientType,
+            legalName: resolved.legalName,
             promoCode: body.promoCode,
             promoDiscount: cartPromoDiscountTotal,
             promoType: promoType,
@@ -1904,8 +1936,22 @@ const app = defineApp([
           return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
         }
 
-        const user = await env.DB.prepare("SELECT band_name FROM users WHERE id = ?").bind(body.user_id).first<{ band_name: string | null }>();
+        const user = await env.DB.prepare("SELECT band_name, client_type, legal_name, siret, rna, instagram_accounts FROM users WHERE id = ?").bind(body.user_id).first<{ band_name: string | null; client_type: string | null; legal_name: string | null; siret: string | null; rna: string | null; instagram_accounts: string | null }>();
         const bookingBandName = user?.band_name ?? null;
+        const adminClientType = isClientType(user?.client_type) ? user.client_type : DEFAULT_CLIENT_TYPE;
+        const adminIdentity = pruneToClientType({
+          legalName: user?.legal_name ?? "",
+          siret: user?.siret ?? "",
+          rna: user?.rna ?? "",
+          userName: "",
+          userEmail: "",
+          userPhone: "",
+          bandName: bookingBandName ?? "",
+          instagramAccounts: user?.instagram_accounts ?? "",
+          billingAddress: "",
+          billingPostalCode: "",
+          billingCity: "",
+        } satisfies BookingUserFields, adminClientType);
 
         // Server-authoritative quote, identical to the public booking flow
         // (computeBookingQuote). Removes the previous hard-coded 18:00 peak
@@ -1971,6 +2017,11 @@ const app = defineApp([
           booking_ref: body.booking_ref,
           user_id: body.user_id,
           band_name: bookingBandName,
+          client_type: adminClientType,
+          legal_name: adminIdentity.legalName || null,
+          siret: adminIdentity.siret || null,
+          rna: adminIdentity.rna || null,
+          instagram_accounts: adminIdentity.instagramAccounts || null,
           studio_id: body.studio_id,
           date: body.date,
           start_time: body.start_time,
@@ -2782,7 +2833,7 @@ const app = defineApp([
 
         // Whitelist runtime — empêche la modification de password_hash, total_bookings, total_spent, etc.
         const ALLOWED_USER_FIELDS = ["name", "first_name", "last_name", "email", "phone", "band_name",
-          "notes", "address_line1", "address_line2", "postal_code", "city", "country", "is_blocked"] as const;
+          "notes", "address_line1", "address_line2", "postal_code", "city", "country", "is_blocked", "client_type", "legal_name", "siret", "rna", "instagram_accounts"] as const;
         const body = Object.fromEntries(
           Object.entries(rawBody).filter(([k]) => (ALLOWED_USER_FIELDS as readonly string[]).includes(k))
         ) as {
@@ -2799,11 +2850,19 @@ const app = defineApp([
           city?: string;
           country?: string;
           is_blocked?: number;
+          client_type?: string;
+          legal_name?: string;
+          siret?: string;
+          rna?: string;
+          instagram_accounts?: string;
         };
 
         if (body.email) {
           body.email = body.email.trim().toLowerCase();
         }
+        if (body.client_type !== undefined && !isClientType(body.client_type)) return jsonError("Type de client invalide", 400);
+        if (body.siret !== undefined && isValidSiret(body.siret)) body.siret = normalizeSiret(body.siret);
+        if (body.rna !== undefined && isValidRna(body.rna)) body.rna = normalizeRna(body.rna);
 
         const result = await updateUser(env.DB, id, body);
         if (!result.success) {
@@ -5083,9 +5142,14 @@ const app = defineApp([
         address_line2?: string;
         postal_code?: string;
         city?: string;
+        client_type?: string;
+        legal_name?: string;
+        siret?: string;
+        rna?: string;
+        instagram_accounts?: string;
       };
 
-      const allowedFields: Partial<Pick<typeof body, "first_name" | "last_name" | "name" | "phone" | "band_name" | "address_line1" | "address_line2" | "postal_code" | "city">> = {};
+      const allowedFields: Partial<Pick<typeof body, "first_name" | "last_name" | "name" | "phone" | "band_name" | "address_line1" | "address_line2" | "postal_code" | "city" | "client_type" | "legal_name" | "siret" | "rna" | "instagram_accounts">> = {};
       if (body.first_name !== undefined) allowedFields.first_name = body.first_name;
       if (body.last_name !== undefined) allowedFields.last_name = body.last_name;
       if (body.name !== undefined) allowedFields.name = body.name;
@@ -5095,6 +5159,14 @@ const app = defineApp([
       if (body.address_line2 !== undefined) allowedFields.address_line2 = body.address_line2;
       if (body.postal_code !== undefined) allowedFields.postal_code = body.postal_code;
       if (body.city !== undefined) allowedFields.city = body.city;
+      if (body.client_type !== undefined) {
+        if (!isClientType(body.client_type)) return jsonError("Type de client invalide", 400);
+        (allowedFields as Record<string, unknown>).client_type = body.client_type;
+      }
+      if (body.legal_name !== undefined) (allowedFields as Record<string, unknown>).legal_name = body.legal_name;
+      if (body.siret !== undefined) (allowedFields as Record<string, unknown>).siret = isValidSiret(body.siret) ? normalizeSiret(body.siret) : body.siret;
+      if (body.rna !== undefined) (allowedFields as Record<string, unknown>).rna = isValidRna(body.rna) ? normalizeRna(body.rna) : body.rna;
+      if (body.instagram_accounts !== undefined) (allowedFields as Record<string, unknown>).instagram_accounts = body.instagram_accounts;
 
       const normalizedEmail = body.email?.trim().toLowerCase();
       const currentEmail = user.email?.trim().toLowerCase();
@@ -5134,6 +5206,11 @@ const app = defineApp([
         address_line2: updated!.address_line2,
         postal_code: updated!.postal_code,
         city: updated!.city,
+        client_type: updated!.client_type,
+        legal_name: updated!.legal_name,
+        siret: updated!.siret,
+        rna: updated!.rna,
+        instagram_accounts: updated!.instagram_accounts,
       });
     } catch (error) {
       if (error instanceof Response) return error;

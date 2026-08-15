@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyProfilePrefill, type ClientProfile } from "@/components/booking/useBookingWithRouter";
-import { accountFieldsDrifted, computeAccountFieldStatus, deriveDisplayName, getBookingFieldIssues } from "@/lib/booking-fields";
+import { accountFieldsDrifted, computeAccountFieldStatus, deriveDisplayName, getBookingFieldIssues, type BookingUserFields } from "@/lib/booking-fields";
 
 const baseUser: ClientProfile = {
   id: "u1",
@@ -14,9 +14,18 @@ const baseUser: ClientProfile = {
   address_line2: null,
   postal_code: "75001",
   city: "Paris",
+  client_type: null,
+  legal_name: null,
+  siret: null,
+  rna: null,
+  instagram_accounts: null,
 };
 
 const emptyBookingFields = {
+  legalName: "",
+  siret: "",
+  rna: "",
+  instagramAccounts: "",
   userName: "",
   userEmail: "",
   userPhone: "",
@@ -112,6 +121,10 @@ describe("applyProfilePrefill", () => {
 
   it("filled account values win while a differing invalid state value is kept", () => {
     const typed = {
+      legalName: "",
+      siret: "",
+      rna: "",
+      instagramAccounts: "",
       userName: "Typed Name",
       userEmail: "typed@example.fr",
       userPhone: "0600000000",
@@ -133,6 +146,10 @@ describe("applyProfilePrefill", () => {
   it("overwrites stale state for every filled account field", () => {
     const account = { ...baseUser, phone: "0612345678" };
     const stale = {
+      legalName: "",
+      siret: "",
+      rna: "",
+      instagramAccounts: "",
       userName: "Ancien nom",
       userEmail: "ancien@example.fr",
       userPhone: "0600000000",
@@ -154,6 +171,10 @@ describe("applyProfilePrefill", () => {
 
   it("keeps state values for fields missing or invalid on the account", () => {
     const partial = {
+      legalName: "",
+      siret: "",
+      rna: "",
+      instagramAccounts: "",
       userName: "Alice",
       userEmail: "",
       userPhone: "",
@@ -215,8 +236,8 @@ describe("applyProfilePrefill", () => {
       postal_code: null,
       city: null,
     };
-    const merged = { ...emptyFields, ...applyProfilePrefill(emptyFields, account, { initial: false }) };
-    expect(getBookingFieldIssues(merged).map((issue) => issue.key)).toEqual([
+    const merged: BookingUserFields = { ...emptyFields, ...applyProfilePrefill(emptyFields, account, { initial: false }) };
+    expect(getBookingFieldIssues(merged, "particulier").map((issue) => issue.key)).toEqual([
       "userPhone",
       "billingAddress",
       "billingPostalCode",
@@ -264,7 +285,7 @@ describe("accountFieldsDrifted", () => {
 describe("reset prefill composition", () => {
   it("opens the gate after applying a complete account to empty state", () => {
     const completeAccount = { ...baseUser, phone: "0612345678" };
-    const merged = { ...emptyBookingFields, ...applyProfilePrefill(emptyBookingFields, completeAccount, { initial: true }) };
-    expect(getBookingFieldIssues(merged)).toEqual([]);
+    const merged: BookingUserFields = { ...emptyBookingFields, ...applyProfilePrefill(emptyBookingFields, completeAccount, { initial: true }) };
+    expect(getBookingFieldIssues(merged, "particulier")).toEqual([]);
   });
 });

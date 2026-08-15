@@ -8,6 +8,11 @@ describe("clientLogout state clearing (booking coordinates)", () => {
       "userEmail",
       "userPhone",
       "bandName",
+      "clientType",
+      "legalName",
+      "siret",
+      "rna",
+      "instagramAccounts",
       "billingAddress",
       "billingPostalCode",
       "billingCity",
@@ -22,6 +27,7 @@ describe("clientLogout state clearing (booking coordinates)", () => {
   });
 
   it("resets cleared fields to empty values (never stale profile data)", () => {
+    expect(LOGOUT_CLEARED_FIELDS.clientType).toBe("particulier");
     expect(LOGOUT_CLEARED_FIELDS.userEmail).toBe("");
     expect(LOGOUT_CLEARED_FIELDS.userName).toBe("");
     expect(LOGOUT_CLEARED_FIELDS.billingAddress).toBe("");

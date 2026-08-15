@@ -549,6 +549,11 @@ export function Reservation({ step }: ReservationProps) {
                   userEmail={state.userEmail}
                   userPhone={state.userPhone}
                   bandName={state.bandName}
+                  clientType={state.clientType}
+                  legalName={state.legalName}
+                  siret={state.siret}
+                  rna={state.rna}
+                  instagramAccounts={state.instagramAccounts}
                   billingAddress={state.billingAddress}
                   billingPostalCode={state.billingPostalCode}
                   billingCity={state.billingCity}

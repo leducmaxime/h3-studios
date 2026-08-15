@@ -42,7 +42,7 @@ export async function validateClientSession(db: D1Database, token: string): Prom
   const row = await db
     .prepare(
       `SELECT s.user_id, s.expires_at, u.id, u.email, u.name, u.first_name, u.last_name, u.phone, u.band_name,
-              u.address_line1, u.address_line2, u.postal_code, u.city, u.is_blocked
+              u.address_line1, u.address_line2, u.postal_code, u.city, u.client_type, u.legal_name, u.siret, u.rna, u.instagram_accounts, u.is_blocked
        FROM sessions s
        JOIN users u ON s.user_id = u.id
        WHERE s.token = ?`,
@@ -62,6 +62,11 @@ export async function validateClientSession(db: D1Database, token: string): Prom
       address_line2: string | null;
       postal_code: string | null;
       city: string | null;
+      client_type: string | null;
+      legal_name: string | null;
+      siret: string | null;
+      rna: string | null;
+      instagram_accounts: string | null;
       is_blocked: number;
     }>();
 
@@ -90,6 +95,11 @@ export async function validateClientSession(db: D1Database, token: string): Prom
     address_line2: row.address_line2,
     postal_code: row.postal_code,
     city: row.city,
+    client_type: row.client_type,
+    legal_name: row.legal_name,
+    siret: row.siret,
+    rna: row.rna,
+    instagram_accounts: row.instagram_accounts,
   };
 }
 

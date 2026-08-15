@@ -49,6 +49,7 @@ import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPric
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput, getDisplayPaymentStatus, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
+import { formatSiret, resolveBookingClientIdentity } from "@/lib/client-identity";
 import {
   CancelBookingDialog,
   RefundPaymentDialog,
@@ -1054,6 +1055,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
             <div className="p-6">
               {user ? (
                 <div className="space-y-6">
+                  {(() => {
+                    const clientIdentity = resolveBookingClientIdentity(booking, user);
+                    return (
+                      <>
                   <div className="flex items-start gap-4">
                     <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <User className="h-6 w-6 text-primary" />
@@ -1065,6 +1070,32 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   </div>
 
                   <div className="space-y-3 text-sm">
+                    <div>
+                      <p className="text-zinc-500 text-xs mb-1">Type de client</p>
+                      <p className="text-zinc-200">{clientIdentity.clientTypeLabel}</p>
+                    </div>
+                    {clientIdentity.isBusiness && (
+                      <>
+                        <div>
+                          <p className="text-zinc-500 text-xs mb-1">Raison sociale / nom de l&apos;association</p>
+                          <p className="text-zinc-200">{clientIdentity.legalName || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-xs mb-1">SIRET</p>
+                          <p className="text-zinc-200">{clientIdentity.siret ? formatSiret(clientIdentity.siret) : "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-xs mb-1">RNA</p>
+                          <p className="text-zinc-200">{clientIdentity.rna || "—"}</p>
+                        </div>
+                      </>
+                    )}
+                    {clientIdentity.instagramAccounts && (
+                      <div>
+                        <p className="text-zinc-500 text-xs mb-1">Compte(s) Instagram</p>
+                        <p className="text-zinc-200">{clientIdentity.instagramAccounts}</p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-zinc-500 text-xs mb-1">Email</p>
                       <p className="text-zinc-200">{user.email || "—"}</p>
@@ -1102,6 +1133,9 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     Voir le profil
                     <ChevronLeft className="h-4 w-4 ml-1 rotate-180" />
                   </a>
+                      </>
+                    );
+                  })()}
                 </div>
               ) : (
                 <p className="text-zinc-400 text-center py-4">Client inconnu</p>

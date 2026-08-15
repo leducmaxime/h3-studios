@@ -14,6 +14,9 @@ import {
   BOOKING_FIELD_KEYS,
   computeAccountFieldStatus,
   getBookingFieldIssues,
+  DEFAULT_CLIENT_TYPE,
+  isClientType,
+  type ClientType,
   type BookingFieldIssue,
   type BookingUserFields,
 } from "@/lib/booking-fields";
@@ -118,6 +121,7 @@ export type ClientProfile = ClientUser;
 type PrefillFields = Pick<
   ExtendedBookingState,
   "userName" | "userEmail" | "userPhone" | "bandName" | "billingAddress" | "billingPostalCode" | "billingCity"
+  | "legalName" | "siret" | "rna" | "instagramAccounts"
 >;
 
 /**
@@ -246,6 +250,7 @@ function deserializeState(serialized: SerializedBookingState): ExtendedBookingSt
     ...initialState,
     ...safe,
     step: (BOOKING_STEPS as readonly string[]).includes(serialized.step) ? serialized.step : ("groupe" as BookingStep),
+    clientType: isClientType(serialized.clientType) ? serialized.clientType : DEFAULT_CLIENT_TYPE,
     selectedDate: serialized.selectedDate ? new Date(serialized.selectedDate) : null,
     cart: serialized.cart.map((booking) => ({
       ...booking,
@@ -299,6 +304,11 @@ const initialState: ExtendedBookingState = {
   userEmail: "",
   userPhone: "",
   bandName: "",
+  clientType: DEFAULT_CLIENT_TYPE,
+  legalName: "",
+  siret: "",
+  rna: "",
+  instagramAccounts: "",
   billingAddress: "",
   billingPostalCode: "",
   billingCity: "",
@@ -330,6 +340,11 @@ export const LOGOUT_CLEARED_FIELDS = {
   userEmail: "",
   userPhone: "",
   bandName: "",
+  clientType: DEFAULT_CLIENT_TYPE,
+  legalName: "",
+  siret: "",
+  rna: "",
+  instagramAccounts: "",
   billingAddress: "",
   billingPostalCode: "",
   billingCity: "",
@@ -374,6 +389,8 @@ export function useBookingWithRouter(urlStep?: string) {
   // The read-only account summary renders account values while the gate reads
   // state. Any path that clears state while a profile is known must re-sync;
   // this guard covers paths nobody remembered to update.
+  // clientType is intentionally excluded: drift correction must never undo a
+  // per-booking choice after the user selects it.
   useEffect(() => {
     if (state.step === "termine") return;
     if (!clientUser) return;
@@ -382,13 +399,17 @@ export function useBookingWithRouter(urlStep?: string) {
       userEmail: state.userEmail,
       userPhone: state.userPhone,
       bandName: state.bandName,
+      legalName: state.legalName,
+      siret: state.siret,
+      rna: state.rna,
+      instagramAccounts: state.instagramAccounts,
       billingAddress: state.billingAddress,
       billingPostalCode: state.billingPostalCode,
       billingCity: state.billingCity,
     };
     if (!accountFieldsDrifted(fields, clientUser)) return;
     setState((s) => ({ ...s, ...applyProfilePrefill(s, clientUser, { initial: false }) }));
-  }, [clientUser, state.step, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity]);
+  }, [clientUser, state.step, state.userName, state.userEmail, state.userPhone, state.bandName, state.legalName, state.siret, state.rna, state.instagramAccounts, state.billingAddress, state.billingPostalCode, state.billingCity]);
 
   const previousLogoutCountRef = useRef(auth.logoutCount);
   useEffect(() => {
@@ -512,7 +533,7 @@ export function useBookingWithRouter(urlStep?: string) {
     return refreshClientAuth().then((user) => {
         if (user) {
           const initial = !hasAppliedInitialPrefillRef.current;
-          setState((s) => ({ ...s, ...applyProfilePrefill(s, user, { initial }) }));
+          setState((s) => ({ ...s, ...(initial ? { clientType: isClientType(user.client_type) ? user.client_type : DEFAULT_CLIENT_TYPE } : {}), ...applyProfilePrefill(s, user, { initial }) }));
           hasAppliedInitialPrefillRef.current = true;
           return user;
         }
@@ -557,6 +578,8 @@ export function useBookingWithRouter(urlStep?: string) {
         restoredState.userEmail = prefs.userEmail || restoredState.userEmail;
         restoredState.userPhone = prefs.userPhone || restoredState.userPhone;
         restoredState.bandName = prefs.bandName || restoredState.bandName;
+        restoredState.legalName = prefs.legalName || restoredState.legalName;
+        restoredState.siret = prefs.siret || restoredState.siret;
       }
 
       // Apply guards
@@ -588,6 +611,9 @@ export function useBookingWithRouter(urlStep?: string) {
               userEmail: prefs.userEmail || "",
               userPhone: prefs.userPhone || "",
               bandName: prefs.bandName || "",
+              clientType: isClientType(prefs.clientType) ? prefs.clientType : DEFAULT_CLIENT_TYPE,
+              legalName: prefs.legalName || "",
+              siret: prefs.siret || "",
             }
           : {}),
       }));
@@ -761,7 +787,7 @@ export function useBookingWithRouter(urlStep?: string) {
     (fields: Partial<ExtendedBookingState>) => {
       setState((s) => ({ ...s, ...fields }));
       // Save user preferences for relevant fields
-      const prefsFields: (keyof import("@/lib/booking").UserPreferences)[] = ["userName", "userEmail", "userPhone", "bandName"];
+      const prefsFields: (keyof import("@/lib/booking").UserPreferences)[] = ["userName", "userEmail", "userPhone", "bandName", "clientType", "legalName", "siret"];
       const prefs: Partial<import("@/lib/booking").UserPreferences> = {};
       for (const key of prefsFields) {
         if (key in fields) {
@@ -949,6 +975,11 @@ export function useBookingWithRouter(urlStep?: string) {
             email: userEmail,
             phone: state.userPhone,
             bandName: state.bandName,
+            clientType: state.clientType,
+            legalName: state.legalName,
+            siret: state.siret,
+            rna: state.rna,
+            instagramAccounts: state.instagramAccounts,
             addressLine1: state.billingAddress,
             postalCode: state.billingPostalCode,
             city: state.billingCity,
@@ -1042,7 +1073,9 @@ export function useBookingWithRouter(urlStep?: string) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, isSubmitting, clientUser, state.createAccount, state.accountPassword, prefillFromClientProfile]);
+  // Hand-maintained mirror of the state fields read by the POST body below;
+  // omitting one fails silently by reusing a stale submit callback.
+  }, [state.cart, state.promoDiscount, state.userName, state.userEmail, state.userPhone, state.bandName, state.clientType, state.legalName, state.siret, state.rna, state.instagramAccounts, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, isSubmitting, clientUser, state.createAccount, state.accountPassword, prefillFromClientProfile]);
 
   /** From coordonnées: proceed to payment choice or skip if free */
   const goToPaymentFromCoordonnees = useCallback(async () => {
@@ -1104,7 +1137,7 @@ export function useBookingWithRouter(urlStep?: string) {
     const user = getClientAuthState().user;
     setState(
       user
-        ? { ...initialState, ...applyProfilePrefill(initialState, user, { initial: true }) }
+        ? { ...initialState, clientType: isClientType(user.client_type) ? user.client_type : DEFAULT_CLIENT_TYPE, ...applyProfilePrefill(initialState, user, { initial: true }) }
         : initialState,
     );
   }, []);
@@ -1116,7 +1149,7 @@ export function useBookingWithRouter(urlStep?: string) {
       if (!result.ok) return result;
       const user = await refreshClientAuth();
       if (!user) return { ok: false, error: "Connexion établie mais profil indisponible, réessayez" };
-      setState((s) => ({ ...s, ...applyProfilePrefill(s, user, { initial: false }) }));
+      setState((s) => ({ ...s, clientType: isClientType(user.client_type) ? user.client_type : DEFAULT_CLIENT_TYPE, ...applyProfilePrefill(s, user, { initial: false }) }));
       return { ok: true };
     } catch (err) {
       return { ok: false, error: "Erreur réseau" };
@@ -1221,17 +1254,21 @@ export function useBookingWithRouter(urlStep?: string) {
 
   const canProceedToStudio = state.startTime !== null && state.endTime !== null;
   const bookingUserFields = useMemo<BookingUserFields>(() => ({
+    legalName: state.legalName,
+    siret: state.siret,
+    rna: state.rna,
     userName: state.userName,
     userEmail: state.userEmail,
     userPhone: state.userPhone,
     bandName: state.bandName,
+    instagramAccounts: state.instagramAccounts,
     billingAddress: state.billingAddress,
     billingPostalCode: state.billingPostalCode,
     billingCity: state.billingCity,
-  }), [state.userName, state.userEmail, state.userPhone, state.bandName, state.billingAddress, state.billingPostalCode, state.billingCity]);
+  }), [state.userName, state.userEmail, state.userPhone, state.bandName, state.legalName, state.siret, state.rna, state.instagramAccounts, state.billingAddress, state.billingPostalCode, state.billingCity]);
   const bookingFieldIssues: BookingFieldIssue[] = useMemo(
-    () => getBookingFieldIssues(bookingUserFields),
-    [bookingUserFields],
+    () => getBookingFieldIssues(bookingUserFields, state.clientType),
+    [bookingUserFields, state.clientType],
   );
   const canConfirmBooking = bookingFieldIssues.length === 0;
 

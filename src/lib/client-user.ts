@@ -21,4 +21,11 @@ export interface ClientUser {
   address_line2: string | null;
   postal_code: string | null;
   city: string | null;
+  // Runtime SELECT at src/lib/client-auth.ts:44-45 is extended in phase 2;
+  // otherwise logged-in sessions read undefined and fall back to particulier.
+  client_type: string | null;
+  legal_name: string | null;
+  siret: string | null;
+  rna: string | null;
+  instagram_accounts: string | null;
 }

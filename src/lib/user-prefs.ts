@@ -1,4 +1,5 @@
 "use client";
+import type { ClientType } from "./booking-fields";
 
 const STORAGE_KEY = "h3-studios-user-prefs";
 
@@ -7,6 +8,9 @@ export interface UserPreferences {
   userEmail: string;
   userPhone: string;
   bandName: string;
+  clientType: ClientType;
+  legalName: string;
+  siret: string;
   lastVisit: string;
 }
 

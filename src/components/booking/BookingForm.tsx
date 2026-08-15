@@ -2,8 +2,9 @@
 
 import { AlertTriangle, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
-import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, BOOKING_FIELD_LABELS, computeAccountFieldStatus, isValidBookingFieldValue, REQUIRED_BOOKING_FIELDS, type BookingFieldIssue, type BookingFieldKey } from "@/lib/booking-fields";
+import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, bookingFieldLabel, bookingFieldPlaceholder, computeAccountFieldStatus, getRequiredBookingFields, getVisibleBookingFields, isValidBookingFieldValue, type BookingFieldIssue, type BookingFieldKey, type ClientType } from "@/lib/booking-fields";
 import type { ClientUser } from "@/lib/client-user";
+import { ClientTypeToggle } from "./ClientTypeToggle";
 
 /**
  * Fields of the booking state this form reads/writes.
@@ -12,6 +13,11 @@ import type { ClientUser } from "@/lib/client-user";
  * Partial<BookingFormFields> payload is always assignable.
  */
 export interface BookingFormFields {
+  clientType: ClientType;
+  legalName: string;
+  siret: string;
+  rna: string;
+  instagramAccounts: string;
   userName: string;
   userEmail: string;
   userPhone: string;
@@ -29,6 +35,11 @@ export interface BookingFormFields {
 export type BookingClientUser = ClientUser;
 
 interface BookingFormProps {
+  clientType: ClientType;
+  legalName: string;
+  siret: string;
+  rna: string;
+  instagramAccounts: string;
   userName: string;
   userEmail: string;
   userPhone: string;
@@ -62,22 +73,35 @@ interface BookingFormProps {
 
 interface BookingFieldDef {
   key: BookingFieldKey;
-  optional?: boolean;
   placeholder: string;
   type?: string;
   inputMode?: "numeric";
   maxLength?: number;
   digitsOnly?: boolean;
   autoComplete?: string;
+  /** Optional help text rendered under the input (verbatim copy, never truncated). */
+  helpText?: string;
 }
 
+const ADDRESS_FIELD_KEYS = ["billingAddress", "billingPostalCode", "billingCity"] as const satisfies readonly BookingFieldKey[];
+
+// Whether a field is required is NOT stored here: it depends on the selected
+// client type (e.g. siret is required for entreprise, optional for
+// association) and is derived from getRequiredBookingFields(clientType).
+
+const INSTAGRAM_HELP_TEXT = "Renseignez le ou les @Instagram de votre groupe, de vos artistes ou de vos membres si vous souhaitez être identifié lorsque nous partageons des photos ou vidéos de votre session en studio. Nous adorons mettre en avant les projets de nos clients et leur offrir de la visibilité sur nos réseaux.";
+
 const BOOKING_FIELD_DEFS: Record<BookingFieldKey, BookingFieldDef> = {
+  legalName: { key: "legalName", placeholder: "Raison sociale" },
+  siret: { key: "siret", placeholder: "73282932000074", inputMode: "numeric", digitsOnly: true },
+  rna: { key: "rna", placeholder: "W751234567" },
   userName: { key: "userName", placeholder: "Jean Dupont", autoComplete: "name" },
   userEmail: { key: "userEmail", placeholder: "jean@exemple.fr", type: "email", autoComplete: "email" },
-  userPhone: { key: "userPhone", placeholder: "0612345678", type: "tel", inputMode: "numeric", maxLength: 10, digitsOnly: true, autoComplete: "tel" },
-  bandName: { key: "bandName", optional: true, placeholder: "Les Rockers", autoComplete: "organization" },
+  userPhone: { key: "userPhone", placeholder: "0612345678", type: "tel", inputMode: "numeric", digitsOnly: true, autoComplete: "tel" },
+  bandName: { key: "bandName", placeholder: "Les Rockers", autoComplete: "organization" },
+  instagramAccounts: { key: "instagramAccounts", placeholder: "@votrecompte", helpText: INSTAGRAM_HELP_TEXT },
   billingAddress: { key: "billingAddress", placeholder: "12 Rue de la Musique", autoComplete: "street-address" },
-  billingPostalCode: { key: "billingPostalCode", placeholder: "94370", inputMode: "numeric", maxLength: 5, digitsOnly: true, autoComplete: "postal-code" },
+  billingPostalCode: { key: "billingPostalCode", placeholder: "94370", inputMode: "numeric", digitsOnly: true, autoComplete: "postal-code" },
   billingCity: { key: "billingCity", placeholder: "Sucy-en-Brie", autoComplete: "address-level2" },
 };
 
@@ -362,10 +386,15 @@ function AccountCreationCard({ createAccount, accountPassword, accountPasswordCo
 }
 
 export function BookingForm({
+  clientType,
   userName,
   userEmail,
   userPhone,
   bandName,
+  legalName,
+  siret,
+  rna,
+  instagramAccounts,
   billingAddress,
   billingPostalCode,
   billingCity,
@@ -388,6 +417,10 @@ export function BookingForm({
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [continueLoading, setContinueLoading] = useState(false);
   const [prefillLoginEmail, setPrefillLoginEmail] = useState("");
+
+  useEffect(() => {
+    if (submitError) document.getElementById("booking-submit-error")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [submitError]);
 
   const validateAccountCreation = (): boolean => {
     const errors: Record<string, string> = {};
@@ -478,12 +511,14 @@ export function BookingForm({
   // validation always reads state, not the DOM.
   const accountValues = useMemo(() => accountFieldValues(clientUser), [clientUser]);
   const accountFieldStatus = useMemo(() => computeAccountFieldStatus(clientUser), [clientUser]);
-  const bookingValues: Record<BookingFieldKey, string> = { userName, userEmail, userPhone, bandName, billingAddress, billingPostalCode, billingCity };
+  const bookingValues: Record<BookingFieldKey, string> = { legalName, siret, rna, userName, userEmail, userPhone, bandName, instagramAccounts, billingAddress, billingPostalCode, billingCity };
+  const visibleFields = getVisibleBookingFields(clientType);
+  const requiredFields = getRequiredBookingFields(clientType);
   const filledAccountFieldDefinitions: BookingFieldDef[] = clientUser
-    ? Object.values(BOOKING_FIELD_DEFS).filter((field) => accountFieldStatus[field.key] === "filled")
+    ? visibleFields.filter((key) => accountFieldStatus[key] === "filled").map(fieldDef)
     : [];
   const editableAccountFieldDefinitions: BookingFieldDef[] = clientUser
-    ? Object.values(BOOKING_FIELD_DEFS).filter((field) => accountFieldStatus[field.key] !== "filled")
+    ? visibleFields.filter((key) => accountFieldStatus[key] !== "filled").map(fieldDef)
     : [];
 
   /**
@@ -502,14 +537,15 @@ export function BookingForm({
     const currentValue = bookingValues[field.key];
     const currentValueUsable = currentValue.trim().length > 0 && isValidBookingFieldValue(field.key, currentValue);
     const showInvalidAccountHint = options?.invalidAccountValue === true && !error && !currentValueUsable;
+    const required = requiredFields.includes(field.key);
     return (
       <div key={field.key} className="flex flex-col gap-1.5">
         <label htmlFor={field.key} className="text-sm font-medium text-white/70">
-          {options?.label ?? BOOKING_FIELD_LABELS[field.key]}{" "}
-          {field.optional ? (
-            <span className="text-white/40">(optionnel)</span>
-          ) : (
+          {options?.label ?? bookingFieldLabel(field.key, clientType)}{" "}
+          {required ? (
             <span className="text-primary">*</span>
+          ) : (
+            <span className="text-white/40">(optionnel)</span>
           )}
         </label>
         <input
@@ -524,21 +560,27 @@ export function BookingForm({
               [field.key]: field.digitsOnly ? e.target.value.replace(/\D/g, "") : e.target.value,
             } as Partial<BookingFormFields>)
           }
-          placeholder={field.placeholder}
-          required={!field.optional}
+          placeholder={bookingFieldPlaceholder(field.key, clientType) ?? field.placeholder}
+          required={required}
           aria-invalid={error ? true : undefined}
+          aria-describedby={[field.helpText ? `${field.key}-help` : null, showInvalidAccountHint ? `${field.key}-invalid-account` : null, error ? `${field.key}-error` : null].filter(Boolean).join(" ") || undefined}
           className={`rounded-lg border bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary lg:px-4 lg:py-3 ${
             error ? "border-red-500" : showInvalidAccountHint ? "border-amber-400/50" : "border-white/20"
           }`}
         />
+        {field.helpText && (
+          <span id={`${field.key}-help`} className="text-xs leading-relaxed text-white/40">
+            {field.helpText}
+          </span>
+        )}
         {showInvalidAccountHint && (
-          <span className="text-xs text-amber-300/80">
+          <span id={`${field.key}-invalid-account`} className="text-xs text-amber-300/80">
             La valeur enregistrée sur votre compte n'a pas pu être reprise — saisissez-la à nouveau.
             {BOOKING_FIELD_FORMAT_HINTS[field.key] ? ` ${BOOKING_FIELD_FORMAT_HINTS[field.key]}.` : ""}
           </span>
         )}
         {error && (
-          <span className="text-xs text-red-400">{error}</span>
+          <span id={`${field.key}-error`} className="text-xs text-red-400">{error}</span>
         )}
       </div>
     );
@@ -555,7 +597,7 @@ export function BookingForm({
   );
 
   const hasInvalidAccountFields = editableAccountFieldDefinitions.some((field) => accountFieldStatus[field.key] === "invalid");
-  const hasRequiredEditableFields = editableAccountFieldDefinitions.some((field) => REQUIRED_BOOKING_FIELDS.includes(field.key));
+  const hasRequiredEditableFields = editableAccountFieldDefinitions.some((field) => requiredFields.includes(field.key));
   const headerCopy = hasInvalidAccountFields
     ? "Complétez ou corrigez ces informations pour cette réservation :"
     : hasRequiredEditableFields
@@ -575,9 +617,21 @@ export function BookingForm({
         <h3 className="text-base font-semibold lg:text-lg">Vos coordonnées</h3>
       </div>
 
+      {/* Type de client — first, above every input (D8): choosing Entreprise
+          or Association visibly reveals the extra required fields below. */}
+      <ClientTypeToggle value={clientType} onChange={(type) => {
+         if (type !== clientType) {
+           setValidationErrors((prev) => Object.fromEntries(
+             Object.entries(prev).filter(([key]) => key === "accountPassword" || key === "accountPasswordConfirm"),
+           ));
+         }
+         updateFields({ clientType: type });
+       }} />
+
       {/* Échec de l'envoi de la réservation — action réelle, affiché en évidence */}
       {submitError && (
         <div
+          id="booking-submit-error"
           role="alert"
           className="flex items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3"
         >
@@ -620,7 +674,7 @@ export function BookingForm({
                 {filledAccountFieldDefinitions.map((field) => (
                   <div key={field.key} className="min-w-0">
                     <dt className="text-xs font-medium uppercase tracking-wide text-white/40">
-                      {BOOKING_FIELD_LABELS[field.key]}
+                      {bookingFieldLabel(field.key, clientType)}
                     </dt>
                     <dd className="mt-0.5 break-words text-sm text-white/90 lg:text-base">
                       {accountValues[field.key]}
@@ -649,18 +703,21 @@ export function BookingForm({
         </div>
       ) : (
         <>
+          {/* Identité / structure : driven by the selected client type so a
+              guest can always reach legalName / siret / rna when the gate
+              demands them. */}
           <div className="grid gap-3 lg:gap-4 lg:grid-cols-2">
-            {(["userName", "userEmail", "userPhone", "bandName"] as BookingFieldKey[]).map((key) =>
-              renderFieldInput(fieldDef(key)),
-            )}
+            {visibleFields
+              .filter((key) => !ADDRESS_FIELD_KEYS.includes(key as (typeof ADDRESS_FIELD_KEYS)[number]))
+              .map((key) => renderFieldInput(fieldDef(key)))}
           </div>
 
           <div className="flex flex-col gap-3 lg:gap-4">
-            <h4 className="text-sm font-semibold text-white/80">Adresse de facturation</h4>
-            {renderFieldInput(fieldDef("billingAddress"), { label: "Nom et numéro de rue" })}
+            <h4 className="text-sm font-semibold text-white/80">{bookingFieldLabel("billingAddress", clientType)}</h4>
+            {renderFieldInput(fieldDef(ADDRESS_FIELD_KEYS[0]), { label: "Nom et numéro de rue" })}
             <div className="grid gap-3 lg:gap-4 lg:grid-cols-2">
-              {renderFieldInput(fieldDef("billingPostalCode"))}
-              {renderFieldInput(fieldDef("billingCity"))}
+              {renderFieldInput(fieldDef(ADDRESS_FIELD_KEYS[1]))}
+              {renderFieldInput(fieldDef(ADDRESS_FIELD_KEYS[2]))}
             </div>
           </div>
         </>
