@@ -708,11 +708,13 @@ export function AdminBookingNew() {
               <div className="flex flex-col gap-3">
                 {availableEquipment.map((eq) => {
                   const quantity = getQuantity(eq.id);
-                  let subtotal = 0;
-                   subtotal = quantity > 0 && eq.sessionPricing ? eq.sessionPricing[quantity - 1] || 0 : 0;
-                   const priceDisplay = formatSessionPriceDisplay(eq, quantity, subtotal);
+                  const subtotal =
+                    quantity > 0 && eq.pricingType === "session" && eq.sessionPricing
+                      ? eq.sessionPricing[quantity - 1] || 0
+                      : 0;
+                  const priceDisplay = formatSessionPriceDisplay(eq, quantity, subtotal);
 
-                   const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
+                  const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
 
                   return (
                     <div
