@@ -21,6 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { type DbEquipment } from "@/lib/db-types";
+import { formatSessionPricingPreview } from "@/lib/equipment-pricing";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,11 +43,6 @@ function parseSessionPricing(raw: string | null): number[] {
   } catch {
     return [];
   }
-}
-
-function formatSessionPrices(prices: number[]): string {
-  if (prices.length === 0) return "\u2014";
-  return prices.map((p, i) => `${i + 1}\u00D7 = ${p}\u20AC`).join(", ");
 }
 
 const INITIAL_EQUIPMENT_FORM: EquipmentForm = {
@@ -296,7 +292,7 @@ export function AdminStudios() {
                           {eq.pricing_type === "session" ? (
                             <div>
                               <Badge variant="secondary" className="mb-1">Par séance</Badge>
-                              <p className="text-xs text-zinc-400">{formatSessionPrices(sessionPrices)}</p>
+                              <p className="text-xs text-zinc-400">{formatSessionPricingPreview(sessionPrices, eq.max_per_session)}</p>
                             </div>
                           ) : (
                             <div>
@@ -422,6 +418,7 @@ export function AdminStudios() {
                 <p className="mt-1 text-xs text-zinc-500">
                   Position = quantité. Ex: "3, 5, 6" → 1× = 3€, 2× = 5€, 3× = 6€
                 </p>
+                <p className="mt-1 text-xs text-zinc-400">{formatSessionPricingPreview(eqForm.sessionPricing.split(",").map((s) => parseFloat(s.trim())).filter((n) => Number.isFinite(n)), eqForm.maxPerSession)}</p>
               </div>
             ) : (
               <div>

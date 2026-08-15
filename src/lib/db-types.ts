@@ -1,6 +1,30 @@
 // TypeScript types matching D1 database tables (migrations/0001_initial_schema.sql)
 // All dates stored as ISO TEXT in SQLite, booleans as INTEGER (0/1)
 
+export interface DashboardStats {
+  todayBookings: number;
+  todayRevenue: number;
+  weekBookings: number;
+  weekRevenue: number;
+  monthBookings: number;
+  monthRevenue: number;
+  pendingPayments: number;
+  pendingAmount: number;
+  occupancyToday: number;
+  rangeFrom: string;
+  rangeTo: string;
+  rangeDays: number;
+  rangeBookings: number;
+  rangeRevenue: number;
+  rangeDiscounts: number;
+  rangeBookedMinutes: number;
+  rangePendingPayments: number;
+  rangePendingAmount: number;
+  rangeEquipmentRevenue: number;
+  rangeMinPrice: number;
+  rangeMaxPrice: number;
+}
+
 // --- Admin Users ---
 
 export type AdminRole = "super-admin" | "operator";

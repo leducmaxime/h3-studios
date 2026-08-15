@@ -46,30 +46,7 @@ import { studioLabel, studioLabelShort } from "@/lib/labels";
 import { generateMonthlyReportPDF } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-interface DashboardStats {
-  todayBookings: number;
-  todayRevenue: number;
-  weekBookings: number;
-  weekRevenue: number;
-  monthBookings: number;
-  monthRevenue: number;
-  pendingPayments: number;
-  pendingAmount: number;
-  occupancyToday: number;
-
-  rangeFrom: string;
-  rangeTo: string;
-  rangeDays: number;
-  rangeBookings: number;
-  rangeRevenue: number;
-  rangeBookedMinutes: number;
-  rangePendingPayments: number;
-  rangePendingAmount: number;
-  rangeEquipmentRevenue: number;
-  rangeMinPrice: number;
-  rangeMaxPrice: number;
-}
+import type { DashboardStats } from "@/lib/db-types";
 
 interface RevenuePoint {
   date: string;
@@ -1435,7 +1412,7 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title={`Réservations (${rangeTitle})`}
           value={stats?.rangeBookings ?? 0}
@@ -1449,6 +1426,13 @@ export function AdminDashboard() {
           subValue={stats ? `dont ${formatPrice(stats.rangeEquipmentRevenue)} options (${stats.rangeRevenue > 0 ? Math.round((stats.rangeEquipmentRevenue / stats.rangeRevenue) * 100) : 0}%)` : ""}
           icon={Users}
           color="blue"
+        />
+        <StatCard
+          title="Remises accordées"
+          value={formatPrice(stats?.rangeDiscounts ?? 0)}
+          subValue="Déjà déduites du CA net"
+          icon={Euro}
+          color="red"
         />
         <StatCard
           title="Panier moyen"

@@ -97,8 +97,10 @@ describe("computeBookingQuote equipment lines", () => {
         pricePerHour: 2,
       }],
     }));
+    // `offeredUnits` est purement décoratif : la 4e unité est détectée comme
+    // offerte parce que son tarif cumulé est identique à celui de la 3e.
     expect(quote.equipmentLines).toEqual([
-      { id: "mic", name: "Micro supplémentaire", quantity: 4, lineTotal: 6 },
+      { id: "mic", name: "Micro supplémentaire", quantity: 4, lineTotal: 6, offeredUnits: [4] },
     ]);
     expect(quote.equipmentPrice).toBe(6);
     expect(equipmentLinesTotal(quote.equipmentLines)).toBe(quote.equipmentPrice);

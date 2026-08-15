@@ -26,7 +26,8 @@ beforeAll(() => {
       id TEXT PRIMARY KEY,
       booking_id TEXT,
       amount REAL,
-      status TEXT
+      status TEXT,
+      refunded_amount REAL DEFAULT 0
     );
   `);
 });
@@ -71,7 +72,7 @@ describe("reporting SQL — max_price per-row clamp (M1)", () => {
 describe("reporting SQL — monthly-report unpaid net due (M2)", () => {
   const NET_DUE_SQL = `
     WITH paid_by_booking AS (
-      SELECT booking_id, COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paid_amount
+      SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid','refunded','partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
       FROM payments GROUP BY booking_id
     )
     SELECT
@@ -113,5 +114,29 @@ describe("reporting SQL — monthly-report unpaid net due (M2)", () => {
     const rows2 = db.prepare(NET_DUE_SQL).all();
     expect(rows2).toHaveLength(1);
     expect((rows2[0] as { amount: number }).amount).toBe(13);
+  });
+});
+
+describe("reporting SQL — applied discounts per-row clamp (M3)", () => {
+  const DISCOUNTS_SQL =
+    "SELECT COALESCE(SUM(MIN(COALESCE(promo_discount, 0), MAX(total_price, 0))), 0) as discounts FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'";
+  const GROSS_SQL =
+    "SELECT COALESCE(SUM(MAX(total_price, 0)), 0) as gross FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'";
+  const NET_SQL =
+    "SELECT COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as net FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'";
+
+  it("clamps discounts to each price, excludes cancelled rows, and reconciles net revenue", () => {
+    db.exec("DELETE FROM bookings; DELETE FROM payments;");
+    insertBooking("a", 23, 20);
+    insertBooking("b", 5, 10); // discount exceeds price: only 5€ is applied
+    insertBooking("cancelled", 100, 50, { status: "cancelled" });
+
+    const params = ["2026-01-01", "2026-01-31"];
+    const discounts = (db.prepare(DISCOUNTS_SQL).get(...params) as { discounts: number }).discounts;
+    const gross = (db.prepare(GROSS_SQL).get(...params) as { gross: number }).gross;
+    const net = (db.prepare(NET_SQL).get(...params) as { net: number }).net;
+
+    expect(discounts).toBe(25);
+    expect(gross - discounts).toBe(net);
   });
 });

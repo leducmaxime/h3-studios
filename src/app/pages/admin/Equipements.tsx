@@ -46,6 +46,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_MATERIEL, type MaterielData, type MaterielIconKey, type MaterielItem, type MaterielListItem, type MaterielStudioKey } from "@/lib/materiel";
 import { type DbEquipment } from "@/lib/db-types";
+import { formatSessionPricingPreview } from "@/lib/equipment-pricing";
 
 interface EquipmentForm {
   equipmentId: string;
@@ -67,10 +68,6 @@ function parseSessionPricing(raw: string | null): number[] {
   }
 }
 
-function formatSessionPrices(prices: number[]): string {
-  if (prices.length === 0) return "—";
-  return prices.map((p, i) => `${i + 1}× = ${p}€`).join(", ");
-}
 
 const INITIAL_EQUIPMENT_FORM: EquipmentForm = {
   equipmentId: "",
@@ -513,7 +510,7 @@ function OptionsPayantesTab() {
                         {eq.pricing_type === "session" ? (
                           <div>
                             <Badge variant="secondary" className="mb-1">Par séance</Badge>
-                            <p className="text-xs text-zinc-400">{formatSessionPrices(sessionPrices)}</p>
+                            <p className="text-xs text-zinc-400">{formatSessionPricingPreview(sessionPrices, eq.max_per_session)}</p>
                           </div>
                         ) : (
                           <div>
@@ -585,6 +582,7 @@ function OptionsPayantesTab() {
                 <Label htmlFor="eqSessionPricing">Tarifs par séance (séparés par des virgules)</Label>
                 <Input id="eqSessionPricing" type="text" value={eqForm.sessionPricing} onChange={(e) => setEqForm({ ...eqForm, sessionPricing: e.target.value })} placeholder="ex: 3, 5, 6" className="border-zinc-700 bg-zinc-800" />
                 <p className="mt-1 text-xs text-zinc-500">Position = quantité. Ex: "3, 5, 6" → 1× = 3€, 2× = 5€, 3× = 6€</p>
+                <p className="mt-1 text-xs text-zinc-400">{formatSessionPricingPreview(eqForm.sessionPricing.split(",").map((s) => parseFloat(s.trim())).filter((n) => Number.isFinite(n)), eqForm.maxPerSession)}</p>
               </div>
             ) : (
               <div>

@@ -1,6 +1,7 @@
 import { formatDateISO, getParisDateISO } from "./utils";
 import type { ClientType } from "./booking-fields";
 import { STUDIO_LABELS } from "./labels";
+import { getOfferedUnits } from "./equipment-pricing";
 export { clearUserPreferences, loadUserPreferences, saveUserPreferences, type UserPreferences } from "./user-prefs";
 
 export type StudioId = "la-scene" | "le-podium";
@@ -47,6 +48,7 @@ export interface BookingEquipmentLine {
   quantity: number;
   name?: string;
   lineTotal?: number;
+  offeredUnits?: number[];
 }
 
 export function parseBookingEquipmentLines(raw: string | null | undefined | unknown): BookingEquipmentLine[] {
@@ -65,6 +67,9 @@ export function parseBookingEquipmentLines(raw: string | null | undefined | unkn
     if (typeof v.name === "string" && v.name.trim()) line.name = v.name;
     const total = v.lineTotal !== undefined ? v.lineTotal : v.price;
     if (typeof total === "number" && Number.isFinite(total)) line.lineTotal = total;
+    if (Array.isArray(v.offeredUnits) && v.offeredUnits.every((unit) => typeof unit === "number" && Number.isFinite(unit))) {
+      line.offeredUnits = v.offeredUnits;
+    }
     return [line];
   });
 }
@@ -1083,7 +1088,7 @@ export interface BookingQuote {
   durationHours: number;
   halfHours: number;
   slotBreakdown: Array<{ time: string; isPeak: boolean }>;
-  equipmentLines: Array<{ id: string; name: string; quantity: number; lineTotal: number }>;
+  equipmentLines: Array<{ id: string; name: string; quantity: number; lineTotal: number; offeredUnits?: number[] }>;
 }
 
 export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
@@ -1119,7 +1124,10 @@ export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
       if (eqData.pricingType === "session" && eqData.sessionPricing) {
         const lineTotal = eqData.sessionPricing[eq.quantity - 1] || 0;
         equipmentPrice += lineTotal;
-        equipmentLines.push({ id: eq.id, name: eqData.name || eq.id, quantity: eq.quantity, lineTotal });
+        // Champ d'affichage uniquement, omis quand aucune unité n'est offerte
+        // afin de ne pas alourdir le JSON persisté de chaque réservation.
+        const offeredUnits = getOfferedUnits(eqData.sessionPricing, eq.quantity);
+        equipmentLines.push({ id: eq.id, name: eqData.name || eq.id, quantity: eq.quantity, lineTotal, ...(offeredUnits.length ? { offeredUnits } : {}) });
       } else {
         const lineTotal = eqData.pricePerHour * eq.quantity * durationHours;
         equipmentPrice += lineTotal;

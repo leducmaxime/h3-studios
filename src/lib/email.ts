@@ -1,4 +1,5 @@
 import { type BookingEquipmentLine, formatPrice, resolveEquipmentDisplay } from "@/lib/booking";
+import { offeredUnitsSuffix } from "@/lib/equipment-pricing";
 import { CLIENT_TYPE_RULES, isClientType } from "@/lib/booking-fields";
 import { groupTypeLabel, paymentMethodLabel, studioLabel } from "@/lib/labels";
 
@@ -107,8 +108,8 @@ function buildEquipmentList(equipment: BookingEquipmentLine[]): string {
   return equipment
     .map((item) => {
       let label = `${item.name || item.id} ×${item.quantity}`;
-      if (item.id === "mic" && item.quantity === 4) {
-        label += " (4ème offert)";
+      if (item.offeredUnits?.length) {
+        label += ` (${offeredUnitsSuffix(item.offeredUnits)})`;
       }
       return label;
     })
@@ -124,10 +125,11 @@ function buildEquipmentBreakdown(equipment: BookingEquipmentLine[] | string | nu
   if (!display.showLinePrices) return `<tr><td style="padding:4px 0;color:#aaaaaa;font-size:13px;">Équipements</td><td align="right" style="padding:4px 0;color:#ffffff;font-size:13px;font-weight:500;">${formatPrice(display.subtotal)}</td></tr>`;
   return display.lines
     .map((item) => {
+      const equipmentItem = item as BookingEquipmentLine;
       const price = item.lineTotal;
       let label = `${item.name || item.id} ×${item.quantity}`;
-      if (item.id === "mic" && item.quantity === 4) {
-        label += " — 4ème offert";
+      if (equipmentItem.offeredUnits?.length) {
+        label += ` — ${offeredUnitsSuffix(equipmentItem.offeredUnits)}`;
       }
       return `<tr>
         <td style="padding:4px 0;color:#aaaaaa;font-size:13px;">${label}</td>

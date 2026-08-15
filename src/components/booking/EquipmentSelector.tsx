@@ -6,6 +6,7 @@ import {
   type EquipmentId,
   formatPrice,
 } from "@/lib/booking";
+import { isDegressiveSessionPricing, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
 
 interface ApiEquipment {
   id: string;
@@ -185,26 +186,10 @@ export function EquipmentSelector({
           let priceDisplay = "";
 
           if (eq.pricingType === "session" && eq.sessionPricing) {
-            if (eq.id === "mic") {
-              if (quantity === 0) {
-                priceDisplay = `dès ${eq.sessionPricing[0]}€/séance`;
-              } else if (quantity === 4) {
-                priceDisplay = `${subtotal}€/séance`;
-              } else {
-                priceDisplay = `${subtotal}€/séance (dégressif)`;
-              }
-            } else {
-              const unitPrice = eq.sessionPricing[0];
-              const isDegressive = eq.id === "cymbal";
-              priceDisplay = quantity === 0
-                ? `${unitPrice}€/séance${isDegressive ? " (dégressif)" : ""}`
-                : `${subtotal}€/séance${isDegressive && quantity > 0 ? " (dégressif)" : ""}`;
-            }
-          } else {
             priceDisplay = `+${eq.pricePerHour}€/h`;
           }
 
-          const isFourthMicFree = eq.id === "mic" && quantity === 4;
+          const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
 
           return (
             <div
@@ -218,10 +203,10 @@ export function EquipmentSelector({
                 <span className="text-xs text-white/50">
                   {priceDisplay}
                 </span>
-                {isFourthMicFree && (
+                {isSelectedUnitOffered && (
                   <span className="flex items-center gap-1 text-xs text-green-400">
                     <Gift className="h-3 w-3" />
-                    Cadeau ! Le 4ème micro est offert
+                    Cadeau ! La {ordinalFr(quantity, { feminine: true })} unité est offerte
                   </span>
                 )}
                 {reason && (

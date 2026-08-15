@@ -22,6 +22,7 @@ import {
   type DbPaymentRefund,
   type DbPaymentWithRefund,
   type CreateBooking,
+  type DashboardStats,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
@@ -1612,30 +1613,6 @@ export async function getAuditLogs(
 
 // ─── Dashboard Stats ─────────────────────────────────────────────────────────
 
-export interface DashboardStats {
-  todayBookings: number;
-  todayRevenue: number;
-  weekBookings: number;
-  weekRevenue: number;
-  monthBookings: number;
-  monthRevenue: number;
-  pendingPayments: number;
-  pendingAmount: number;
-  occupancyToday: number;
-
-  rangeFrom: string;
-  rangeTo: string;
-  rangeDays: number;
-  rangeBookings: number;
-  rangeRevenue: number;
-  rangeBookedMinutes: number;
-  rangePendingPayments: number;
-  rangePendingAmount: number;
-  rangeEquipmentRevenue: number;
-  rangeMinPrice: number;
-  rangeMaxPrice: number;
-}
-
 function parseDateISOToUTCNoon(dateISO: string): Date {
   const [y, m, d] = dateISO.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
@@ -1814,7 +1791,7 @@ export async function getDashboardStats(
     }
   }
 
-  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult, rangeEquipmentResult, rangeMinMaxResult] = await db.batch([
+  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult, rangeEquipmentResult, rangeMinMaxResult, rangeDiscountsResult] = await db.batch([
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as revenue FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
@@ -1896,6 +1873,9 @@ export async function getDashboardStats(
     db.prepare(
       "SELECT COALESCE(MIN(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as min_price, COALESCE(MAX(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as max_price FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(rangeFrom, rangeTo),
+    db.prepare(
+      "SELECT COALESCE(SUM(MIN(COALESCE(promo_discount, 0), MAX(total_price, 0))), 0) as discounts FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+    ).bind(rangeFrom, rangeTo),
   ]);
 
   type CountRevenue = { count: number; revenue: number };
@@ -1913,6 +1893,7 @@ export async function getDashboardStats(
   const rangePendingRow = (rangePendingResult.results as unknown as CountTotal[])[0] ?? { count: 0, total: 0 };
   const rangeEquipmentRow = (rangeEquipmentResult.results as unknown as Array<{ total: number }>)[0] ?? { total: 0 };
   const rangeMinMaxRow = (rangeMinMaxResult.results as unknown as Array<{ min_price: number; max_price: number }>)[0] ?? { min_price: 0, max_price: 0 };
+  const rangeDiscountsRow = (rangeDiscountsResult.results as unknown as Array<{ discounts: number }>)[0] ?? { discounts: 0 };
   const todaySlots = occupancyResult.results as unknown as TimeRange[];
 
   const rangeBookedMinutes = (() => {
@@ -1954,6 +1935,7 @@ export async function getDashboardStats(
     rangeDays,
     rangeBookings: rangeRow.count,
     rangeRevenue: rangeRow.revenue,
+    rangeDiscounts: rangeDiscountsRow.discounts,
     rangeBookedMinutes,
     rangePendingPayments: rangePendingRow.count,
     rangePendingAmount: rangePendingRow.total,

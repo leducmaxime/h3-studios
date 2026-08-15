@@ -28,6 +28,7 @@ import { STUDIOS, TIME_SLOTS, generateBookingRef, formatPrice, type StudioId, ty
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 import { parseAmountInput } from "@/lib/booking-totals";
 import { GROUP_TYPE_LABELS, groupTypeLabel } from "@/lib/labels";
+import { isDegressiveSessionPricing, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
 
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { type PromoCode } from "@/lib/booking";
@@ -713,7 +714,7 @@ export function AdminBookingNew() {
                   if (eq.pricingType === "session" && eq.sessionPricing) {
                     const unitPrice = eq.sessionPricing[0];
                     subtotal = quantity > 0 ? eq.sessionPricing[quantity - 1] || 0 : 0;
-                    const isDegressive = eq.id === "cymbal" || eq.id === "mic";
+                    const isDegressive = isDegressiveSessionPricing(eq.sessionPricing);
                     if (quantity === 0) {
                       priceDisplay = `${unitPrice}€/séance${isDegressive ? " (tarif dégressif)" : ""}`;
                     } else {
@@ -723,7 +724,7 @@ export function AdminBookingNew() {
                     priceDisplay = `+${eq.pricePerHour}€/h`;
                   }
 
-                  const isFourthMicFree = eq.id === "mic" && quantity === 4;
+                  const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
 
                   return (
                     <div
@@ -738,10 +739,10 @@ export function AdminBookingNew() {
                           {priceDisplay}
                         </span>
                         {equipmentAvailability[eq.id] && equipmentAvailability[eq.id].available < eq.maxPerSession && <span className="text-xs text-amber-400">{equipmentAvailability[eq.id].reserved} déjà réservée(s) — stock restant {equipmentAvailability[eq.id].available}. Vous pouvez forcer.</span>}
-                        {isFourthMicFree && (
+                        {isSelectedUnitOffered && (
                           <span className="flex items-center gap-1 text-xs text-green-400">
                             <Gift className="h-3 w-3" />
-                            Cadeau ! Le 4ème micro est offert
+                            Cadeau ! La {ordinalFr(quantity, { feminine: true })} unité est offerte
                           </span>
                         )}
                       </div>
