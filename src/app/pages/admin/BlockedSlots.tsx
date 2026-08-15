@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, ALL_TIME_SLOTS, type StudioId } from "@/lib/booking";
+import { STUDIO_LABELS, studioLabel } from "@/lib/labels";
 
 interface BlockedSlot {
   id: string;
@@ -282,7 +283,7 @@ export function AdminBlockedSlots() {
                   <td className={`px-4 py-3 text-sm ${rowText}`}>{formatDate(slot.date)}</td>
                   <td className={`px-4 py-3 text-sm ${rowText}`}>
                     <Badge variant="outline" className={tone === "muted" ? "border-white/10 text-zinc-500" : "border-white/15 text-zinc-200"}>
-                      {slot.studio_id ? STUDIOS[slot.studio_id].name : "Tous les studios"}
+                      {slot.studio_id ? studioLabel(slot.studio_id) : "Tous les studios"}
                     </Badge>
                   </td>
                   <td className={`px-4 py-3 text-sm ${subText}`}>{formatTimeLabel(slot)}</td>
@@ -359,8 +360,8 @@ export function AdminBlockedSlots() {
                     className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
                   >
                     <option value="all">Studio</option>
-                    <option value="la-scene">La Scène</option>
-                    <option value="le-podium">Le Podium</option>
+                    <option value="la-scene">{STUDIO_LABELS["la-scene"]}</option>
+                    <option value="le-podium">{STUDIO_LABELS["le-podium"]}</option>
                   </select>
                   <input
                     type="date"
@@ -473,8 +474,8 @@ export function AdminBlockedSlots() {
                 }
               >
                 <option value="">Tous les studios</option>
-                <option value="la-scene">La Scène</option>
-                <option value="le-podium">Le Podium</option>
+                <option value="la-scene">{STUDIO_LABELS["la-scene"]}</option>
+                <option value="le-podium">{STUDIO_LABELS["le-podium"]}</option>
               </select>
               <p className="text-xs text-zinc-500">
                 Laisser vide pour bloquer le créneau sur tous les studios
@@ -618,7 +619,7 @@ export function AdminBlockedSlots() {
           {selectedSlot && (
             <div className="rounded-lg border border-white/10 bg-white/15 p-4">
               <div className="mb-2 text-sm font-medium text-white">
-                {selectedSlot.studio_id ? STUDIOS[selectedSlot.studio_id].name : "Tous les studios"}
+                {selectedSlot.studio_id ? studioLabel(selectedSlot.studio_id) : "Tous les studios"}
               </div>
               <div className="text-sm text-zinc-400">{formatDate(selectedSlot.date)}</div>
               <div className="text-sm text-zinc-400">

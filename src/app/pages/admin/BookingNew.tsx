@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { STUDIOS, TIME_SLOTS, generateBookingRef, formatPrice, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 import { parseAmountInput } from "@/lib/booking-totals";
+import { GROUP_TYPE_LABELS, groupTypeLabel } from "@/lib/labels";
 
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { type PromoCode } from "@/lib/booking";
@@ -47,9 +48,9 @@ interface EquipmentSelection {
 }
 
 const GROUP_TYPES: { value: GroupType; label: string }[] = [
-  { value: "solo", label: "Solo" },
-  { value: "duo", label: "Duo" },
-  { value: "group", label: "Groupe" },
+  { value: "solo", label: GROUP_TYPE_LABELS.solo },
+  { value: "duo", label: GROUP_TYPE_LABELS.duo },
+  { value: "group", label: GROUP_TYPE_LABELS.group },
 ];
 
 
@@ -807,7 +808,7 @@ export function AdminBookingNew() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">Type</span>
-                <span>{GROUP_TYPES.find((g) => g.value === groupType)?.label ?? groupType}</span>
+                <span>{groupTypeLabel(groupType)}</span>
               </div>
               {selectedUser && (
                 <div className="flex justify-between text-sm">

@@ -1,5 +1,6 @@
 import { render, route, layout } from "rwsdk/router";
 import { getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
+import { paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { DEFAULT_CLIENT_TYPE, isClientType, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
@@ -4384,7 +4385,7 @@ const app = defineApp([
       })();
 
       const studioData = (studioResult.results as unknown as StudioRow[]).map(row => ({
-        studio: row.studio_id === "la-scene" ? "La Scène" : row.studio_id === "le-podium" ? "Le Podium" : row.studio_id,
+        studio: studioLabel(row.studio_id),
         count: row.count,
         revenue: row.revenue,
       }));
@@ -4404,16 +4405,9 @@ const app = defineApp([
         revenue: (merged.card?.revenue ?? 0) + onlineCard.revenue,
       };
 
-      const methodLabels: Record<string, string> = {
-        cash: "Espèces",
-        card: "CB",
-        transfer: "Virement",
-        check: "Chèque",
-      };
-
       const paymentMethods = ["cash", "card", "transfer", "check"] as const;
       const paymentData = paymentMethods.map((method) => ({
-        method: methodLabels[method],
+        method: paymentMethodLabelShort(method),
         count: merged[method]?.count ?? 0,
         revenue: merged[method]?.revenue ?? 0,
       }));

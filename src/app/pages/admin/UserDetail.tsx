@@ -30,19 +30,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatDateISO } from "@/lib/utils";
 import { formatSiret, resolveUserClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
-import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
-import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
+import { formatPrice, type StudioId } from "@/lib/booking";
+import { getBookingAmountDue, getDisplayPaymentStatusFromSummary } from "@/lib/booking-totals";
+import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, studioLabel } from "@/lib/labels";
 import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function getStudioName(studioId: string): string {
-  const studio = STUDIOS[studioId as keyof typeof STUDIOS];
-  return studio?.name ?? studioId;
 }
 
 function slotDurationHours(startTime: string, endTime: string): number {
@@ -53,13 +49,6 @@ function slotDurationHours(startTime: string, endTime: string): number {
   if (end <= start) end += 24 * 60;
   return (end - start) / 60;
 }
-
-const STATUS_LABELS: Record<string, string> = {
-  confirmed: "Confirmée",
-  cancelled: "Annulée",
-  completed: "Terminée",
-  "no-show": "Absent",
-};
 
 // ─── Studio Pie Chart ─────────────────────────────────────────────────────
 function StudioPieChart({ sceneCount, podiumCount }: { sceneCount: number; podiumCount: number }) {
@@ -861,8 +850,8 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             <span className="text-xs text-zinc-500">{formatDate(b.date)}</span>
                           </td>
                           <td className="px-4 py-3 text-sm">{b.start_time} - {b.end_time}</td>
-                          <td className="px-4 py-3 text-sm">{getStudioName(b.studio_id)}</td>
-                          <td className="px-4 py-3 text-sm capitalize">{b.group_type}</td>
+                          <td className="px-4 py-3 text-sm">{studioLabel(b.studio_id)}</td>
+                          <td className="px-4 py-3 text-sm">{groupTypeLabel(b.group_type)}</td>
                           <td className="px-4 py-3">
                             <Badge className={`text-xs ${
                               b.status === 'confirmed' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
@@ -870,7 +859,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                               b.status === 'cancelled' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
                               'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
                             }`}>
-                              {STATUS_LABELS[b.status] || b.status}
+                              {bookingStatusLabel(b.status)}
                             </Badge>
                           </td>
                           <td className="px-4 py-3">
@@ -885,7 +874,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                                 return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>;
                               }
                               if (payDisplay === "cancelled" || payDisplay === "paid-before-cancel" || payDisplay === "refunded") {
-                                return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">{PAYMENT_STATUS_LABELS[payDisplay]}</Badge>;
+                                return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">{displayPaymentStatusLabel(payDisplay)}</Badge>;
                               }
                               if (b.payment_status === "pay-on-site") {
                                 return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>;

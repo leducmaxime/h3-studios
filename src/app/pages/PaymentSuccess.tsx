@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle, Calendar, Clock, Home, Loader2, PackageCheck } from "lucide-react";
-import { STUDIOS, formatDate, formatDuration, formatPrice, type GroupType, type StudioId } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, type GroupType, type StudioId } from "@/lib/booking";
 import { useEquipment } from "@/components/booking/useEquipment";
+import { groupTypeLabel, studioLabel } from "@/lib/labels";
 
 interface PaymentSuccessProps {
   paymentId?: string;
@@ -36,12 +37,6 @@ interface FallbackData {
   email: string;
   total: number;
 }
-
-const GROUP_LABELS: Record<GroupType, string> = {
-  solo: "Solo / Prof particulier",
-  duo: "Duo",
-  group: "Groupe (3+)",
-};
 
 /** Defensive parse of the API's unknown[] equipment payload: keep only
     well-formed items with a positive quantity. */
@@ -187,7 +182,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="font-semibold">
-                            {STUDIOS[booking.studioId]?.name ?? booking.studioId}
+                            {studioLabel(booking.studioId)}
                           </h3>
                           <p className="text-xs text-primary">
                             Réf : <span className="font-mono font-medium">{booking.ref}</span>
@@ -201,7 +196,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                         {formatDate(new Date(booking.date), "long")} • {booking.startTime} - {booking.endTime} ({formatDuration(booking.startTime, booking.endTime)})
                       </p>
                       <p className="mt-1 text-xs text-white/40">
-                        {GROUP_LABELS[booking.groupType] ?? booking.groupType}
+                        {groupTypeLabel(booking.groupType, { long: true })}
                       </p>
                       {equipmentItems.length > 0 && (
                         <div className="mt-1.5 space-y-0.5">

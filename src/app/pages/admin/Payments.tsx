@@ -50,6 +50,7 @@ import { formatPrice } from "@/lib/booking";
 import { getBookingAmountDue, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
 import { exportPaymentsCSV } from "@/lib/export";
 import { RefundPaymentDialog } from "@/components/admin/refund";
+import { PAYMENT_RECORD_STATUS_LABELS, paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -165,10 +166,18 @@ const STATUS_CONFIG: Record<
   string,
   { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
 > = {
-  pending: { label: "En attente", variant: "outline" },
-  paid: { label: "Payé", variant: "default" },
-  refunded: { label: "Remboursé", variant: "destructive" },
-  "partial-refund": { label: "Remboursé partiel", variant: "secondary" },
+  pending: { label: PAYMENT_RECORD_STATUS_LABELS.pending, variant: "outline" },
+  paid: { label: PAYMENT_RECORD_STATUS_LABELS.paid, variant: "default" },
+  refunded: { label: PAYMENT_RECORD_STATUS_LABELS.refunded, variant: "destructive" },
+  "partial-refund": { label: PAYMENT_RECORD_STATUS_LABELS["partial-refund"], variant: "secondary" },
+};
+
+const PAYMENT_METHOD_ICONS: Record<string, typeof CreditCard> = {
+  card: CreditCard,
+  cash: Banknote,
+  transfer: Landmark,
+  check: FileText,
+  cheque: FileText,
 };
 
 // ─── Edit Payment Dialog ────────────────────────────────────────────────────────
@@ -1001,7 +1010,7 @@ export function AdminPayments() {
             <tbody className="divide-y divide-zinc-800">
               {payments.map((payment: ApiPayment) => {
                 const statusCfg = STATUS_CONFIG[payment.status] || {
-                  label: payment.status,
+                  label: paymentRecordStatusLabel(payment.status),
                   variant: "outline" as const,
                 };
 
@@ -1039,32 +1048,15 @@ export function AdminPayments() {
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant="outline" className="border-zinc-700 text-zinc-300">
-                        {payment.payment_type === "on-site" ? "Sur place" : "En ligne"}
+                        {paymentTypeLabel(payment.payment_type)}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
                       <span className="flex items-center gap-1.5 text-sm">
-                        {payment.method === "" ? (
-                          <>—</>
-                        ) : payment.method === "card" ? (
-                          <>
-                            <CreditCard className="h-4 w-4" /> CB
-                          </>
-                        ) : payment.method === "cash" ? (
-                          <>
-                            <Banknote className="h-4 w-4" /> Espèces
-                          </>
-                        ) : payment.method === "transfer" ? (
-                          <>
-                            <Landmark className="h-4 w-4" /> Virement
-                          </>
-                        ) : payment.method === "check" ? (
-                          <>
-                            <FileText className="h-4 w-4" /> Chèque
-                          </>
-                        ) : (
-                          <>—</>
-                        )}
+                        {payment.method === "" ? "—" : (() => {
+                          const Icon = PAYMENT_METHOD_ICONS[payment.method];
+                          return Icon ? <><Icon className="h-4 w-4" /> {paymentMethodLabelShort(payment.method)}</> : paymentMethodLabelShort(payment.method);
+                        })()}
                       </span>
                     </td>
                     <td className="px-4 py-3">

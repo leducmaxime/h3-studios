@@ -7,6 +7,7 @@ import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, U
 import { getParisDateISO } from "@/lib/utils";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, type DisplayPaymentStatus } from "@/lib/booking-totals";
 import { logout, useClientAuth } from "@/lib/client-auth-store";
+import { BOOKING_STATUS_LABELS, bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, studioLabel } from "@/lib/labels";
 
 interface BookingRow {
   id: string;
@@ -26,31 +27,20 @@ interface BookingRow {
   total_refunded?: number;
 }
 
-const STUDIO_LABELS: Record<string, string> = {
-  "la-scene": "La Scène",
-  "le-podium": "Le Podium",
-};
-
-const GROUP_LABELS: Record<string, string> = {
-  solo: "Solo",
-  duo: "Duo",
-  group: "Groupe",
-};
-
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon?: React.ElementType }> = {
-  confirmed: { label: "Confirmée", bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" },
-  cancelled: { label: "Annulée", bg: "bg-red-500/10", text: "text-red-400", border: "border-red-500/20" },
-  completed: { label: "Terminée", bg: "bg-blue-500/10", text: "text-blue-400", border: "border-blue-500/20" },
-  "no-show": { label: "Absent", bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
+  confirmed: { label: BOOKING_STATUS_LABELS.confirmed, bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" },
+  cancelled: { label: BOOKING_STATUS_LABELS.cancelled, bg: "bg-red-500/10", text: "text-red-400", border: "border-red-500/20" },
+  completed: { label: BOOKING_STATUS_LABELS.completed, bg: "bg-blue-500/10", text: "text-blue-400", border: "border-blue-500/20" },
+  "no-show": { label: BOOKING_STATUS_LABELS["no-show"], bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
 };
 
-const PAYMENT_CONFIG: Record<DisplayPaymentStatus, { label: string; bg: string; text: string; border: string }> = {
-  paid: { label: "Payé", bg: "bg-emerald-600/10", text: "text-emerald-400", border: "border-emerald-600/20" },
-  "pay-on-site": { label: "À payer sur place", bg: "bg-orange-600/10", text: "text-orange-400", border: "border-orange-600/20" },
-  pending: { label: "En attente", bg: "bg-amber-600/10", text: "text-amber-400", border: "border-amber-600/20" },
-  cancelled: { label: "Annulée", bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" },
-  "paid-before-cancel": { label: "Payée avant annulation", bg: "bg-blue-600/10", text: "text-blue-400", border: "border-blue-600/20" },
-  refunded: { label: "Remboursé", bg: "bg-blue-600/10", text: "text-blue-400", border: "border-blue-600/20" },
+const PAYMENT_TONES: Record<DisplayPaymentStatus, { bg: string; text: string; border: string }> = {
+  paid: { bg: "bg-emerald-600/10", text: "text-emerald-400", border: "border-emerald-600/20" },
+  "pay-on-site": { bg: "bg-orange-600/10", text: "text-orange-400", border: "border-orange-600/20" },
+  pending: { bg: "bg-amber-600/10", text: "text-amber-400", border: "border-amber-600/20" },
+  cancelled: { bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" },
+  "paid-before-cancel": { bg: "bg-blue-600/10", text: "text-blue-400", border: "border-blue-600/20" },
+  refunded: { bg: "bg-blue-600/10", text: "text-blue-400", border: "border-blue-600/20" },
 };
 
 function formatDateFR(dateStr: string): string {
@@ -226,16 +216,18 @@ function StatCard({ value, label, icon: Icon }: { value: string | number; label:
 }
 
 function BookingCard({ booking }: { booking: BookingRow }) {
-  const status = STATUS_CONFIG[booking.status] ?? { label: booking.status, bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
+  const status = STATUS_CONFIG[booking.status] ?? { label: bookingStatusLabel(booking.status), bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
   const displayPaymentStatus = getDisplayPaymentStatusFromSummary(
     booking.status,
     booking.payment_status,
     booking.total_collected ?? booking.total_paid ?? 0,
     booking.total_refunded ?? 0,
   );
-  const payment = PAYMENT_CONFIG[displayPaymentStatus] ?? { label: displayPaymentStatus, bg: "bg-zinc-500/10", text: "text-zinc-400", border: "border-zinc-500/20" };
-  const studio = STUDIO_LABELS[booking.studio_id] ?? booking.studio_id;
-  const group = GROUP_LABELS[booking.group_type] ?? booking.group_type;
+  const paymentTone = PAYMENT_TONES[displayPaymentStatus];
+  // L’espace client nomme explicitement le lieu de paiement pour ce statut.
+  const payment = { label: displayPaymentStatus === "pay-on-site" ? "À payer sur place" : displayPaymentStatusLabel(displayPaymentStatus), ...paymentTone };
+  const studio = studioLabel(booking.studio_id);
+  const group = groupTypeLabel(booking.group_type);
   const isPast = booking.date < getParisDateISO() || ["cancelled", "completed", "no-show"].includes(booking.status);
   // Une réservation annulée ne présente jamais de montant dû.
   const amount = booking.status === "cancelled"

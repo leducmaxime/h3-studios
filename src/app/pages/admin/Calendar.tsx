@@ -46,6 +46,7 @@ import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, parseBookingEquipme
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue } from "@/lib/booking-totals";
 import { useEquipment } from "@/components/booking/useEquipment";
+import { groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel, bookingStatusLabel } from "@/lib/labels";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -140,19 +141,6 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-blue-500/20 border-blue-500/50 text-blue-400",
   cancelled: "bg-red-500/20 border-red-500/50 text-red-400",
   "no-show": "bg-yellow-500/20 border-red-500/70 text-yellow-400",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  confirmed: "Confirmée",
-  completed: "Terminée",
-  cancelled: "Annulée",
-  "no-show": "Absent",
-};
-
-const GROUP_LABELS: Record<string, string> = {
-  solo: "Solo",
-  duo: "Duo",
-  group: "Groupe",
 };
 
 // Compute real occupancy rate from booked slots vs available slots per studio
@@ -674,7 +662,7 @@ export function AdminCalendar() {
                             href={`/admin/bookings/new?date=${dateStr}&studio=${studioId}&startTime=${hour}`}
                             className="absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 hover:bg-primary/5"
                             style={{ top: `${hourIdx * 60}px`, height: "60px", left: leftPos, width }}
-                            title={`Nouvelle réservation - ${studioId === "la-scene" ? "La Scène" : "Le Podium"} ${hour}`}
+                            title={`Nouvelle réservation - ${studioLabel(studioId)} ${hour}`}
                           >
                             <Plus className="h-4 w-4 text-primary/40" />
                           </a>
@@ -748,7 +736,7 @@ export function AdminCalendar() {
                                 }}
                               >
                                 <p className="truncate text-[11px] font-medium leading-tight">
-                                  {booking.start_time} · {GROUP_LABELS[booking.group_type]}
+                                  {booking.start_time} · {groupTypeLabel(booking.group_type)}
                                 </p>
                                 <p className="truncate text-[10px] leading-tight opacity-90">
                                   {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
@@ -791,7 +779,7 @@ export function AdminCalendar() {
                             style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
                           >
                             <p className="truncate text-[11px] font-medium leading-tight">
-                              {booking.start_time} · {GROUP_LABELS[booking.group_type]}
+                              {booking.start_time} · {groupTypeLabel(booking.group_type)}
                             </p>
                              <p className="truncate text-[10px] leading-tight opacity-90">
                                {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
@@ -932,7 +920,7 @@ export function AdminCalendar() {
                           href={`/admin/bookings/new?date=${dateStr}&studio=${studioId}&startTime=${hour}`}
                           className="absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 hover:bg-primary/5"
                           style={{ top: `${hourIdx * 60}px`, height: "60px", left: 0, width: "100%" }}
-                          title={`Nouvelle réservation - ${studioId === "la-scene" ? "La Scène" : "Le Podium"} ${hour}`}
+                          title={`Nouvelle réservation - ${studioLabel(studioId)} ${hour}`}
                         >
                           <Plus className="h-4 w-4 text-primary/40" />
                         </a>
@@ -992,7 +980,7 @@ export function AdminCalendar() {
                           }}
                         >
                           <p className="truncate text-[12px] font-medium leading-tight">
-                            {booking.start_time} · {GROUP_LABELS[booking.group_type]}
+                            {booking.start_time} · {groupTypeLabel(booking.group_type)}
                           </p>
                           <p className="truncate text-[11px] leading-tight opacity-90">
                             {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
@@ -1039,7 +1027,7 @@ export function AdminCalendar() {
                             }}
                           >
                             <p className="truncate text-[12px] font-medium leading-tight">
-                              {booking.start_time} · {GROUP_LABELS[booking.group_type]}
+                              {booking.start_time} · {groupTypeLabel(booking.group_type)}
                             </p>
                             <p className="truncate text-[11px] leading-tight opacity-90">
                               {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
@@ -1252,19 +1240,11 @@ export function AdminCalendar() {
   const renderBookingDialog = () => {
     if (!selectedBooking) return null;
     const b = selectedBooking;
-    const studioName = b.studio_id === "la-scene" ? "La Scène" : b.studio_id === "le-podium" ? "Le Podium" : b.studio_id;
+    const studioName = studioLabel(b.studio_id);
 
     const totalPaid = bookingPayments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
     const finalTotal = getBookingAmountDue({ ...b, promo_discount: b.promo_discount ?? 0 });
     const balance = finalTotal - totalPaid;
-
-    const methodLabels: Record<string, string> = {
-      card: "Carte bancaire",
-      cash: "Espèces",
-      check: "Chèque",
-      cheque: "Chèque",
-      transfer: "Virement",
-    };
 
     return (
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
@@ -1274,7 +1254,7 @@ export function AdminCalendar() {
               <CalendarDays className="h-6 w-6 shrink-0 text-primary" />
               <span className="truncate">{b.band_name || b.user_name || b.booking_ref}</span>
               <Badge className={`${STATUS_COLORS[b.status] || ""} shrink-0 border px-3 py-1 text-xs uppercase tracking-wider`}>
-                {STATUS_LABELS[b.status] || b.status}
+                {bookingStatusLabel(b.status)}
               </Badge>
             </DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -1311,7 +1291,7 @@ export function AdminCalendar() {
                   <Users className="h-4 w-4 shrink-0 text-primary" />
                   <div>
                     <p className="text-[10px] uppercase text-zinc-500 font-bold">Type</p>
-                    <p className="text-sm font-medium">{GROUP_LABELS[b.group_type] || b.group_type}</p>
+                    <p className="text-sm font-medium">{groupTypeLabel(b.group_type)}</p>
                   </div>
                 </div>
 
@@ -1390,12 +1370,12 @@ export function AdminCalendar() {
                       <div className="flex items-center gap-2">
                         {p.status === "paid" ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Clock className="h-3 w-3 text-amber-500" />}
                         <div>
-                          <p className="font-medium text-zinc-200">{formatPrice(p.amount)} · {methodLabels[p.method] || p.method}</p>
+                          <p className="font-medium text-zinc-200">{formatPrice(p.amount)} · {paymentMethodLabel(p.method)}</p>
                           <p className="text-[10px] text-zinc-500">{formatDbTimestamp(p.created_at, { day: "numeric", month: "short" })}</p>
                         </div>
                       </div>
                       <Badge variant="secondary" className="text-[9px] h-4">
-                        {p.status === "paid" ? "Payé" : "Attente"}
+                        {paymentRecordStatusLabel(p.status)}
                       </Badge>
                     </div>
                   ))

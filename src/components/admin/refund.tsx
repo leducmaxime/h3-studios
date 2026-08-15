@@ -25,6 +25,7 @@ import { formatPrice } from "@/lib/booking";
 import { parseAmountInput } from "@/lib/booking-totals";
 import type { DbPayment } from "@/lib/db-types";
 import type { RefundFailureCode, RefundOutcome } from "@/lib/refunds";
+import { paymentMethodLabel } from "@/lib/labels";
 
 // ─── Types & helpers ─────────────────────────────────────────────────────────
 
@@ -35,15 +36,7 @@ export type PaymentRefundInfo = DbPayment & {
   refund_pending_cents?: number;
 };
 
-export const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  card: "Carte bancaire",
-  cash: "Espèces",
-  transfer: "Virement",
-  check: "Chèque",
-  cheque: "Chèque",
-};
-
-export const REFUND_FAILURE_CODE_LABELS: Record<string, string> = {
+export const REFUND_FAILURE_CODE_LABELS: Record<RefundFailureCode, string> = {
   payment_not_found: "Paiement introuvable",
   not_card: "Paiement hors carte",
   not_collected: "Paiement non encaissé",
@@ -58,7 +51,7 @@ export const REFUND_FAILURE_CODE_LABELS: Record<string, string> = {
   already_applied: "Déjà enregistré",
 };
 
-export const STRIPE_REFUND_STATUS_LABELS: Record<string, string> = {
+export const STRIPE_REFUND_STATUS_LABELS: Record<"pending" | "requires_action" | "succeeded" | "failed" | "canceled", string> = {
   pending: "en cours de traitement",
   requires_action: "action requise (coordonnées bancaires)",
   succeeded: "effectué",
@@ -478,7 +471,7 @@ export function CancelBookingDialog({
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-sm font-medium">
-                                {PAYMENT_METHOD_LABELS[p.method] ?? p.method} ·{" "}
+                                {paymentMethodLabel(p.method)} ·{" "}
                                 {formatPrice(p.amount)}
                               </p>
                               <p className="text-xs text-zinc-500">
@@ -522,7 +515,7 @@ export function CancelBookingDialog({
                           className="rounded-lg border border-zinc-800/60 bg-zinc-800/10 p-3"
                         >
                           <p className="text-sm text-zinc-400">
-                            {PAYMENT_METHOD_LABELS[p.method] ?? p.method} ·{" "}
+                            {paymentMethodLabel(p.method)} ·{" "}
                             {formatPrice(p.amount)}
                           </p>
                           <p className="mt-0.5 text-xs text-zinc-500">
@@ -693,7 +686,7 @@ export function RefundPaymentDialog({
           <DialogDescription>
             {payment && (
               <>
-                {PAYMENT_METHOD_LABELS[payment.method] ?? payment.method} ·{" "}
+                {paymentMethodLabel(payment.method)} ·{" "}
                 {formatPrice(payment.amount)}
                 {payment.refunded_amount > 0 && (
                   <> · déjà remboursé : {formatPrice(payment.refunded_amount)}</>

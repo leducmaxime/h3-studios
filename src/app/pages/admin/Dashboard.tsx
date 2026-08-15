@@ -40,8 +40,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { STUDIOS, SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
+import { SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
 import { getBookingAmountDue } from "@/lib/booking-totals";
+import { studioLabel, studioLabelShort } from "@/lib/labels";
 import { generateMonthlyReportPDF } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -316,7 +317,7 @@ function ActivityCalendarDay({
       ) : (
         <div className="space-y-2">
           {items.map((b) => {
-            const studio = b.studio_id === "la-scene" ? "La Scène" : b.studio_id === "le-podium" ? "Le Podium" : b.studio_id;
+            const studio = studioLabel(b.studio_id);
     const displayName = b.band_name || b.user_name || "Client inconnu";
             return (
               <a
@@ -413,7 +414,7 @@ function ActivityCalendarWeek({
                   </div>
                   <div className="space-y-1">
                     {items.map((b) => {
-                      const studio = b.studio_id === "la-scene" ? "Scène" : b.studio_id === "le-podium" ? "Podium" : b.studio_id;
+                      const studio = studioLabelShort(b.studio_id);
     const displayName = b.band_name || b.user_name || "";
                       return (
                         <a
@@ -635,7 +636,7 @@ function ActivityCalendarMonth({
 
               <div className="space-y-1">
                 {shown.map((b) => {
-                  const studio = b.studio_id === "la-scene" ? "Scène" : b.studio_id === "le-podium" ? "Podium" : b.studio_id;
+                  const studio = studioLabelShort(b.studio_id);
                   const displayName = b.band_name || b.user_name || "";
                   return (
                     <a
@@ -1479,7 +1480,7 @@ export function AdminDashboard() {
               <a key={b.id} href={`/admin/bookings/${b.id}`} className="flex items-center justify-between rounded-xl bg-zinc-800/50 px-4 py-3 hover:bg-zinc-800 transition-colors">
                 <div>
                   <p className="font-medium text-sm">{b.band_name || b.user_name || "—"}</p>
-                  <p className="text-xs text-zinc-400">{b.start_time} – {b.end_time} · {b.studio_id === "la-scene" ? "La Scène" : "Le Podium"}</p>
+                  <p className="text-xs text-zinc-400">{b.start_time} – {b.end_time} · {studioLabel(b.studio_id)}</p>
                 </div>
                 <span className={`text-xs font-medium px-2 py-1 rounded-full ${b.payment_status === "paid" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>
                   {b.payment_status === "paid" ? "Payé" : b.remaining > 0 ? `À encaisser ${formatPrice(b.remaining)}` : "À encaisser"}
@@ -1514,7 +1515,7 @@ export function AdminDashboard() {
                       )}
                     </p>
                     <p className="text-xs text-zinc-500">
-                      {booking.start_time} – {booking.end_time} · {STUDIOS[booking.studio_id as keyof typeof STUDIOS]?.name || booking.studio_id}
+                      {booking.start_time} – {booking.end_time} · {studioLabel(booking.studio_id)}
                     </p>
                   </div>
                 </div>

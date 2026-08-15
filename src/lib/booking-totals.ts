@@ -116,15 +116,6 @@ export type DisplayPaymentStatus =
   | "paid-before-cancel"
   | "refunded";
 
-export const PAYMENT_STATUS_LABELS: Record<DisplayPaymentStatus, string> = {
-  paid: "Payé",
-  pending: "En attente",
-  "pay-on-site": "Reste à payer",
-  cancelled: "Annulée",
-  "paid-before-cancel": "Payée avant annulation",
-  refunded: "Remboursé",
-};
-
 /** Somme des paiements réellement encaissés (status 'paid'). */
 export function getTotalCurrentlyPaid(payments: Pick<DbPayment, "amount" | "status">[]): number {
   return payments

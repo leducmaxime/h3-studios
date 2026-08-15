@@ -26,6 +26,7 @@ import {
   REFUND_FAILURE_CODE_LABELS,
   STRIPE_REFUND_STATUS_LABELS,
 } from "@/components/admin/refund";
+import { adminRoleLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, bookingPaymentStatusLabel, studioLabel } from "@/lib/labels";
 import {
   Dialog,
   DialogContent,
@@ -159,44 +160,6 @@ function formatJsonPretty(data: unknown): string {
 // The audit payloads are internal keys/values; this layer turns them into
 // plain French an administrator can read without technical knowledge.
 
-const STUDIO_LABELS: Record<string, string> = {
-  "la-scene": "La Scène",
-  "le-podium": "Le Podium",
-};
-
-const GROUP_TYPE_LABELS: Record<string, string> = {
-  solo: "Solo",
-  duo: "Duo",
-  group: "Groupe",
-};
-
-const BOOKING_STATUS_LABELS: Record<string, string> = {
-  confirmed: "Confirmée",
-  cancelled: "Annulée",
-  completed: "Terminée",
-  "no-show": "Absence (no-show)",
-  pending: "En attente",
-};
-
-const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  paid: "Payé",
-  pending: "En attente",
-  "pay-on-site": "Paiement sur place",
-  refunded: "Remboursé",
-};
-
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  card: "Carte bancaire",
-  cash: "Espèces",
-  transfer: "Virement",
-  check: "Chèque",
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  "super-admin": "Super administrateur",
-  operator: "Opérateur",
-};
-
 const SETTING_KEY_LABELS: Record<string, string> = {
   maintenance_mode: "Mode maintenance",
   "materiel.v1": "Liste de matériel",
@@ -273,18 +236,18 @@ function formatFieldValue(key: string, value: unknown): string {
   const str = String(value);
   switch (key) {
     case "studio_id":
-      return STUDIO_LABELS[str] ?? str;
+      return studioLabel(str);
     case "group_type":
-      return GROUP_TYPE_LABELS[str] ?? str;
+      return groupTypeLabel(str);
     case "status":
-      return BOOKING_STATUS_LABELS[str] ?? str;
+      return bookingStatusLabel(str);
     case "payment_status":
-      return PAYMENT_STATUS_LABELS[str] ?? str;
+      return bookingPaymentStatusLabel(str);
     case "method":
     case "previousMethod":
-      return PAYMENT_METHOD_LABELS[str] ?? str;
+      return paymentMethodLabel(str);
     case "role":
-      return ROLE_LABELS[str] ?? str;
+      return adminRoleLabel(str);
     case "type":
       return str === "percentage" ? "Pourcentage" : str === "fixed" ? "Montant fixe" : str;
     case "date":
@@ -389,7 +352,7 @@ function summarizeLog(log: ApiAuditLog): string[] {
   const compact = (lines: (string | number | null | undefined | false)[]): string[] =>
     lines.filter((l): l is string => typeof l === "string" && l.length > 0);
 
-  const studio = str("studio_id") ? (STUDIO_LABELS[str("studio_id")!] ?? str("studio_id")!) : undefined;
+  const studio = str("studio_id") ? studioLabel(str("studio_id")) : undefined;
   const day = str("date") ? formatDay(str("date")!) : undefined;
   const session =
     day && str("start_time")
@@ -417,7 +380,7 @@ function summarizeLog(log: ApiAuditLog): string[] {
     case "booking:mark-paid":
       return compact([
         money(obj.amount) && `Montant encaissé : ${money(obj.amount)}`,
-        str("method") && `Moyen de paiement : ${PAYMENT_METHOD_LABELS[str("method")!] ?? str("method")}`,
+        str("method") && `Moyen de paiement : ${paymentMethodLabel(str("method"))}`,
       ]);
     case "booking:bulk-delete":
       return [`${num("bookingsDeleted") ?? "?"} réservation(s) orpheline(s) supprimée(s).`];
@@ -426,7 +389,7 @@ function summarizeLog(log: ApiAuditLog): string[] {
     case "payment:create":
       return compact([
         money(obj.amount) && `Montant : ${money(obj.amount)}`,
-        str("method") && `Moyen de paiement : ${PAYMENT_METHOD_LABELS[str("method")!] ?? str("method")}`,
+        str("method") && `Moyen de paiement : ${paymentMethodLabel(str("method"))}`,
       ]);
     case "payment:mark-paid":
       return ["Paiement marqué comme payé."];
@@ -435,19 +398,19 @@ function summarizeLog(log: ApiAuditLog): string[] {
         money(obj.amount) && `Montant remboursé : ${money(obj.amount)}`,
         money(obj.total) && `Total remboursé à ce jour : ${money(obj.total)}`,
         str("stripe_refund_status") &&
-          `Statut Stripe : ${STRIPE_REFUND_STATUS_LABELS[str("stripe_refund_status")!] ?? str("stripe_refund_status")}`,
+          `Statut Stripe : ${STRIPE_REFUND_STATUS_LABELS[str("stripe_refund_status")! as keyof typeof STRIPE_REFUND_STATUS_LABELS] ?? str("stripe_refund_status")}`,
         str("reason") && `Motif : ${str("reason")}`,
       ]);
     case "payment:refund-failed":
       return compact([
         str("message"),
-        str("code") && `Cause : ${REFUND_FAILURE_CODE_LABELS[str("code")!] ?? str("code")}`,
+        str("code") && `Cause : ${REFUND_FAILURE_CODE_LABELS[str("code")! as keyof typeof REFUND_FAILURE_CODE_LABELS] ?? str("code")}`,
       ]);
     case "payment:refund-stripe-accepted":
       return compact([
         money(obj.amount) && `Montant : ${money(obj.amount)}`,
         str("stripe_refund_status") &&
-          `Stripe a accepté le remboursement (statut : ${STRIPE_REFUND_STATUS_LABELS[str("stripe_refund_status")!] ?? str("stripe_refund_status")}).`,
+          `Stripe a accepté le remboursement (statut : ${STRIPE_REFUND_STATUS_LABELS[str("stripe_refund_status")! as keyof typeof STRIPE_REFUND_STATUS_LABELS] ?? str("stripe_refund_status")}).`,
         str("stripe_refund_id") && `Référence Stripe : ${str("stripe_refund_id")}`,
       ]);
     case "payment:refund-reconciled": {
@@ -465,7 +428,7 @@ function summarizeLog(log: ApiAuditLog): string[] {
         money(obj.previousAmount) && money(obj.amount) &&
           `Montant : ${money(obj.previousAmount)} → ${money(obj.amount)}`,
         str("previousMethod") && str("method") &&
-          `Moyen de paiement : ${PAYMENT_METHOD_LABELS[str("previousMethod")!] ?? str("previousMethod")} → ${PAYMENT_METHOD_LABELS[str("method")!] ?? str("method")}`,
+          `Moyen de paiement : ${paymentMethodLabel(str("previousMethod"))} → ${paymentMethodLabel(str("method"))}`,
       ]);
     case "payment:delete":
       return compact([money(obj.amount) && `Paiement de ${money(obj.amount)} supprimé.`]);
@@ -554,10 +517,10 @@ function summarizeLog(log: ApiAuditLog): string[] {
       return compact([
         str("name") && `Nom : ${str("name")}`,
         str("email") && `E-mail : ${str("email")}`,
-        str("role") && `Rôle : ${ROLE_LABELS[str("role")!] ?? str("role")}`,
+        str("role") && `Rôle : ${adminRoleLabel(str("role"))}`,
       ]);
     case "admin_user:role_update":
-      return compact([str("role") && `Nouveau rôle : ${ROLE_LABELS[str("role")!] ?? str("role")}`]);
+      return compact([str("role") && `Nouveau rôle : ${adminRoleLabel(str("role"))}`]);
     case "admin_user:delete":
       return ["Compte administrateur supprimé."];
     case "admin_user:activate":

@@ -1,5 +1,6 @@
 import { formatDateISO, getParisDateISO } from "./utils";
 import type { ClientType } from "./booking-fields";
+import { STUDIO_LABELS } from "./labels";
 export { clearUserPreferences, loadUserPreferences, saveUserPreferences, type UserPreferences } from "./user-prefs";
 
 export type StudioId = "la-scene" | "le-podium";
@@ -265,7 +266,7 @@ export interface BookingState {
 export const STUDIOS: Record<StudioId, Studio> = {
   "la-scene": {
     id: "la-scene",
-    name: "La Scène",
+    name: STUDIO_LABELS["la-scene"],
     size: "42m²",
     description: "Avec une hauteur de 3,50m et une superficie de 42m², notre studio propose une scène intimiste avec sa rampe d'éclairage. Convenant à tous styles musicaux, ce lieu chaleureux et fonctionnel saura répondre à vos besoins.",
     features: ["Scène", "Éclairage", "Écran géant", "Vidéoprojecteur"],
@@ -280,7 +281,7 @@ export const STUDIOS: Record<StudioId, Studio> = {
   },
   "le-podium": {
     id: "le-podium",
-    name: "Le Podium",
+    name: STUDIO_LABELS["le-podium"],
     size: "35m²",
     description: "Conçu pour la répétition, cet espace de 35m² offre un cadre simple et fonctionnel, idéal pour vos sessions musicales, en groupe ou en solo. Cette salle est également adapté aux enseignants souhaitant donner des cours à un ou plusieurs élèves.",
     features: ["Compact", "Fonctionnel", "Cours"],

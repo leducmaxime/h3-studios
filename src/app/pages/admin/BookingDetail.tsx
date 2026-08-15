@@ -48,7 +48,8 @@ import {
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput, getDisplayPaymentStatus, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
+import { getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput, getDisplayPaymentStatus } from "@/lib/booking-totals";
+import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel } from "@/lib/labels";
 import { formatSiret, resolveBookingClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields } from "@/lib/booking-fields";
 import {
@@ -86,13 +87,6 @@ const STATUS_CLASSES: Record<BookingStatus, string> = {
   completed: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   cancelled: "bg-red-500/15 text-red-400 border-red-500/30",
   "no-show": "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-};
-
-const STATUS_LABELS: Record<BookingStatus, string> = {
-  confirmed: "Confirmé",
-  completed: "Terminé",
-  cancelled: "Annulé",
-  "no-show": "Absent",
 };
 
 /**
@@ -563,14 +557,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const isCancelled = booking.status === "cancelled";
   const displayPaymentStatus = getDisplayPaymentStatus(booking, payments);
 
-  const methodLabels: Record<string, string> = {
-    card: "Carte bancaire",
-    cash: "Espèces",
-    check: "Chèque",
-    cheque: "Chèque",
-    transfer: "Virement",
-  };
-
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
@@ -588,7 +574,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           </div>
         </div>
         <Badge className={`${STATUS_CLASSES[booking.status]} px-4 py-1.5 text-sm font-medium`}>
-          {STATUS_LABELS[booking.status]}
+          {bookingStatusLabel(booking.status)}
         </Badge>
       </div>
 
@@ -609,7 +595,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               <div className="grid grid-cols-3 gap-6 mb-8">
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Studio</p>
-                  <p className="text-lg font-semibold">{studio?.name || booking.studio_id}</p>
+                  <p className="text-lg font-semibold">{studioLabel(booking.studio_id)}</p>
                   {studio && <p className="text-sm text-zinc-400">{studio.size}</p>}
                 </div>
                 <div className="space-y-1">
@@ -619,7 +605,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Type</p>
-                  <p className="text-lg font-semibold">{booking.group_type === "solo" ? "Solo" : booking.group_type === "duo" ? "Duo" : "Groupe"}</p>
+                  <p className="text-lg font-semibold">{groupTypeLabel(booking.group_type)}</p>
                 </div>
               </div>
 
@@ -772,7 +758,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               </h2>
               {isCancelled ? (
                 <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">
-                  {PAYMENT_STATUS_LABELS[displayPaymentStatus]}
+                  {displayPaymentStatusLabel(displayPaymentStatus)}
                 </Badge>
               ) : balance <= 0 ? (
                 <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
@@ -912,7 +898,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <div>
                             <p className="font-semibold">{formatPrice(p.amount)}</p>
                             <p className="text-xs text-zinc-500">
-                              {methodLabels[p.method] || p.method} · {formatDbTimestamp(p.created_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                              {paymentMethodLabel(p.method)} · {formatDbTimestamp(p.created_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                               {p.refunded_amount > 0 && ` · -${formatPrice(p.refunded_amount)} remboursés`}
                             </p>
                             {(() => {
@@ -928,7 +914,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : p.status === "refunded" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : p.status === "partial-refund" ? "bg-blue-500/10 text-blue-300 border-blue-500/20" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
-                            {p.status === "paid" ? "Payé" : p.status === "refunded" ? "Remboursé" : p.status === "partial-refund" ? "Remboursé partiel" : "En attente"}
+                            {paymentRecordStatusLabel(p.status)}
                           </Badge>
                           {(p.status === "paid" || p.status === "partial-refund") &&
                             (isStripeRefundable(p) || (p.method !== "card" && refundableCap(p) > 0.004)) && (
@@ -1368,7 +1354,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
             <DialogTitle>Supprimer le paiement</DialogTitle>
             <DialogDescription>
               {deletePaymentTarget && (
-                <>Êtes-vous sûr de vouloir supprimer le paiement de <span className="font-semibold text-foreground">{formatPrice(deletePaymentTarget.amount)}</span> ({methodLabels[deletePaymentTarget.method] || deletePaymentTarget.method}) ? Cette action est irréversible.</>
+                <>Êtes-vous sûr de vouloir supprimer le paiement de <span className="font-semibold text-foreground">{formatPrice(deletePaymentTarget.amount)}</span> ({paymentMethodLabel(deletePaymentTarget.method)}) ? Cette action est irréversible.</>
               )}
             </DialogDescription>
           </DialogHeader>

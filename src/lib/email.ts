@@ -1,5 +1,6 @@
-import { type BookingEquipmentLine, STUDIOS, formatPrice, resolveEquipmentDisplay } from "@/lib/booking";
+import { type BookingEquipmentLine, formatPrice, resolveEquipmentDisplay } from "@/lib/booking";
 import { CLIENT_TYPE_RULES, isClientType } from "@/lib/booking-fields";
+import { groupTypeLabel, paymentMethodLabel, studioLabel } from "@/lib/labels";
 
 export interface BookingSlot {
   bookingRef: string;
@@ -68,12 +69,7 @@ function formatTimeRange(startTime: string, endTime: string): string {
 }
 
 function getGroupTypeLabel(groupType: string): string {
-  const labels: Record<string, string> = {
-    solo: "Solo / Prof particulier",
-    duo: "Duo",
-    group: "Groupe (3+)",
-  };
-  return labels[groupType] || groupType;
+  return groupTypeLabel(groupType, { long: true });
 }
 
 function getPaymentMethodLabel(method: string, status: string, totalPrice = 0): string {
@@ -89,11 +85,11 @@ function getPaymentMethodLabel(method: string, status: string, totalPrice = 0): 
   if (method === "cash" || status === "pay-on-site") {
     return "Paiement sur place (espèces ou CB)";
   }
-  return method;
+  return paymentMethodLabel(method);
 }
 
 function getStudioName(studioId: string): string {
-  return STUDIOS[studioId as keyof typeof STUDIOS]?.name || studioId;
+  return studioLabel(studioId);
 }
 
 function calculateDurationHours(startTime: string, endTime: string): number {

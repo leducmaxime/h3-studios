@@ -1,8 +1,9 @@
 import { type DbBooking, type DbUser, type DbPayment } from "./db-types";
-import { STUDIOS, formatPrice, type StudioId, resolveEquipmentDisplay } from "./booking";
+import { formatPrice, resolveEquipmentDisplay } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
+import { bookingPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function escapeCSV(value: string | number | null | undefined): string {
@@ -68,7 +69,7 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
 
   const rows = bookings.map((booking) => {
     const clientIdentity = resolveBookingClientIdentity(booking, undefined);
-    const studioName = STUDIOS[booking.studio_id as StudioId]?.name || booking.studio_id;
+    const studioName = studioLabel(booking.studio_id);
     
     // Calculate duration in hours
     const startParts = booking.start_time.split(":");
@@ -76,26 +77,6 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
     const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
     const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
     const durationHours = ((endMinutes - startMinutes) / 60).toFixed(1);
-
-    // Status labels
-    const statusLabels: Record<string, string> = {
-      confirmed: "Confirmé",
-      completed: "Terminé",
-      cancelled: "Annulé",
-      "no-show": "Absent",
-    };
-
-    const groupTypeLabels: Record<string, string> = {
-      solo: "Solo",
-      duo: "Duo",
-      group: "Groupe",
-    };
-
-    const paymentLabels: Record<string, string> = {
-      pending: "En attente",
-      paid: "Payé",
-      "pay-on-site": "Sur place",
-    };
 
     return [
       escapeCSV(booking.booking_ref),
@@ -111,11 +92,11 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
       escapeCSV(booking.start_time),
       escapeCSV(booking.end_time),
       escapeCSV(durationHours),
-      escapeCSV(groupTypeLabels[booking.group_type] || booking.group_type),
-      escapeCSV(statusLabels[booking.status] || booking.status),
+      escapeCSV(groupTypeLabel(booking.group_type)),
+      escapeCSV(bookingStatusLabel(booking.status)),
       escapeCSV(formatPriceForCSV(getBookingAmountDue(booking))),
       escapeCSV(formatPriceForCSV(Number(booking.promo_discount) || 0)),
-      escapeCSV(paymentLabels[booking.payment_status || ""] || booking.payment_status || "—"),
+      escapeCSV(bookingPaymentStatusLabel(booking.payment_status)),
     ].join(",");
   });
 
@@ -188,33 +169,13 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
   ];
 
   const rows = payments.map((payment) => {
-    const methodLabels: Record<string, string> = {
-      card: "CB",
-      cash: "Espèces",
-      transfer: "Virement",
-      check: "Chèque",
-      cheque: "Chèque",
-    };
-
-    const paymentTypeLabels: Record<string, string> = {
-      "on-site": "Sur place",
-      online: "En ligne",
-    };
-
-    const statusLabels: Record<string, string> = {
-      pending: "En attente",
-      paid: "Payé",
-      refunded: "Remboursé",
-      "partial-refund": "Partiel",
-    };
-
     return [
       escapeCSV(payment.booking_ref || "—"),
       escapeCSV(payment.user_name || "—"),
       escapeCSV(payment.user_band_name || "—"),
-      escapeCSV(payment.payment_type ? (paymentTypeLabels[payment.payment_type] || payment.payment_type) : "—"),
-      escapeCSV(methodLabels[payment.method] || payment.method),
-      escapeCSV(statusLabels[payment.status] || payment.status),
+      escapeCSV(payment.payment_type ? paymentTypeLabel(payment.payment_type) : "—"),
+      escapeCSV(paymentMethodLabel(payment.method)),
+      escapeCSV(paymentRecordStatusLabel(payment.status)),
       escapeCSV(formatPriceForCSV(payment.amount)),
       escapeCSV(formatPriceForCSV(payment.refunded_amount)),
       escapeCSV(payment.paid_at ? formatDateForCSV(payment.paid_at) : "—"),
@@ -336,7 +297,7 @@ export async function generateInvoicePDF(
   y += 10;
 
   // Booking details
-  const studioName = STUDIOS[booking.studio_id as StudioId]?.name || booking.studio_id;
+  const studioName = studioLabel(booking.studio_id);
   const startParts = booking.start_time.split(":");
   const endParts = booking.end_time.split(":");
   const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
@@ -354,7 +315,7 @@ export async function generateInvoicePDF(
     ["Date:", new Date(booking.date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })],
     ["Horaire:", `${booking.start_time} - ${booking.end_time}`],
     ["Durée:", `${durationHours} heure${durationHours > 1 ? "s" : ""}`],
-    ["Type:", booking.group_type.charAt(0).toUpperCase() + booking.group_type.slice(1)],
+    ["Type:", groupTypeLabel(booking.group_type)],
   ];
 
   details.forEach(([label, value]) => {
@@ -429,12 +390,17 @@ export async function generateInvoicePDF(
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   
-  const paymentMethodLabel = booking.payment_method === "card" ? "Carte bancaire" : "Espèces";
-  const paymentStatusLabel = payment?.status === "paid" ? "Payé" : payment?.status === "pending" ? "En attente" : booking.payment_status === "paid" ? "Payé" : "En attente";
+  // Une facture ne doit jamais afficher « — » pour le moyen de paiement.
+  const paymentMethodDisplay = booking.payment_method
+    ? paymentMethodLabel(booking.payment_method)
+    : payment
+      ? paymentMethodLabel(payment.method)
+      : "Espèces";
+  const paymentStatusDisplay = payment ? paymentRecordStatusLabel(payment.status) : "En attente";
 
-  doc.text(`Méthode de paiement: ${paymentMethodLabel}`, 20, y);
+  doc.text(`Méthode de paiement: ${paymentMethodDisplay}`, 20, y);
   y += 5;
-  doc.text(`Statut: ${paymentStatusLabel}`, 20, y);
+  doc.text(`Statut: ${paymentStatusDisplay}`, 20, y);
   y += 20;
 
   // Footer
@@ -537,7 +503,7 @@ export async function generateMonthlyReportPDF(
   doc.setFontSize(11);
 
   stats.studioStats.forEach((studio) => {
-    const studioName = STUDIOS[studio.studio_id as StudioId]?.name || studio.studio_id;
+    const studioName = studioLabel(studio.studio_id);
     doc.text(`${studioName}:`, 25, y);
     doc.text(`${studio.count} réservation${studio.count > 1 ? "s" : ""}, ${studio.revenue.toFixed(2)} €`, 80, y);
     y += 7;
@@ -558,17 +524,9 @@ export async function generateMonthlyReportPDF(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
 
-  const methodLabels: Record<string, string> = {
-    cash: "Esp\u00E8ces",
-    card: "CB",
-    transfer: "Virement",
-    check: "Ch\u00E8que",
-    cheque: "Ch\u00E8que",
-  };
-
   if (stats.paymentMethods.length > 0) {
     stats.paymentMethods.forEach((pm) => {
-      const label = methodLabels[pm.method] || pm.method;
+      const label = paymentMethodLabelShort(pm.method);
       doc.text(`${label}:`, 25, y);
       doc.text(`${pm.count} paiement${pm.count > 1 ? "s" : ""}, ${pm.revenue.toFixed(2)} \u20AC`, 80, y);
       y += 7;

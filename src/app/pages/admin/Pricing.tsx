@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/select";
 import { STUDIOS, type StudioId } from "@/lib/booking";
 import { type DbPricing, type DbPromoCode } from "@/lib/db-types";
+import { groupTypeLabel } from "@/lib/labels";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -75,12 +76,6 @@ const EMPTY_FORM: PromoFormData = {
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-const GROUP_LABELS: Record<string, string> = {
-  solo: "Solo",
-  duo: "Duo",
-  group: "Groupe",
-};
 
 const GROUP_ORDER = ["solo", "duo", "group"];
 
@@ -671,7 +666,7 @@ function PricingTab() {
                       className="border-b border-zinc-800/50 transition-colors hover:bg-zinc-800/30"
                     >
                       <td className="px-6 py-4">
-                        <Badge variant="secondary">{GROUP_LABELS[groupType]}</Badge>
+                        <Badge variant="secondary">{groupTypeLabel(groupType)}</Badge>
                       </td>
 
                       <td className="px-6 py-4">
