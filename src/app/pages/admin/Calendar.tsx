@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -524,6 +524,82 @@ export function AdminCalendar() {
   const goToToday = () => {
     const now = new Date();
     setCurrentDate(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  };
+
+  // ─── Swipe navigation (touch only, no dependency) ──────────────────────
+  // A horizontal swipe on the calendar surface navigates by the active
+  // view's granularity via goToPrev/goToNext. Rules:
+  // - Only fires past a deliberate threshold with a clear horizontal bias,
+  //   so taps on bookings/links and vertical scrolling are untouched.
+  // - Gated on the inner scroller's edges: a horizontal drag that can still
+  //   scroll the week view natively is left to the browser.
+  // - No preventDefault (React 19 registers passive touch handlers); the
+  //   rubber-band transform below is pure visual feedback.
+
+  const calendarSurfaceRef = useRef<HTMLDivElement>(null);
+  const swipeRef = useRef<{ startX: number; startY: number; dx: number; live: boolean; horizontal: boolean } | null>(null);
+
+  const SWIPE_THRESHOLD = 50;
+  const SWIPE_MAX_OFFSET = 48;
+
+  const getCalendarScroller = () =>
+    calendarSurfaceRef.current?.querySelector<HTMLElement>(".overflow-x-auto") ?? null;
+
+  const swipeDirectionAllowed = (dx: number): boolean => {
+    const scroller = getCalendarScroller();
+    if (!scroller) return true;
+    if (dx > 0) return scroller.scrollLeft <= 0;
+    return scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 1;
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // iOS Safari fires mouseenter on tap but never the root onMouseLeave on
+    // touch — clear the tooltip so a swipe started on a booking can't strand it.
+    setTooltip(null);
+    const t = e.touches[0];
+    swipeRef.current = { startX: t.clientX, startY: t.clientY, dx: 0, live: true, horizontal: false };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const s = swipeRef.current;
+    const surface = calendarSurfaceRef.current;
+    if (!s || !s.live || !surface) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.startX;
+    const dy = t.clientY - s.startY;
+    if (!s.horizontal) {
+      if (Math.abs(dx) < 10) return;
+      if (Math.abs(dx) <= 1.5 * Math.abs(dy)) {
+        s.live = false; // mostly vertical: hand the gesture to page scroll
+        return;
+      }
+      s.horizontal = true;
+    }
+    s.dx = dx;
+    if (swipeDirectionAllowed(dx)) {
+      const offset = Math.max(-SWIPE_MAX_OFFSET, Math.min(SWIPE_MAX_OFFSET, dx * 0.35));
+      surface.style.transform = offset === 0 ? "" : `translateX(${offset}px)`;
+    } else {
+      surface.style.transform = "";
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    const surface = calendarSurfaceRef.current;
+    if (!s || !s.horizontal) return;
+    if (surface && surface.style.transform) {
+      surface.style.transition = "transform 180ms ease-out";
+      surface.style.transform = "";
+      window.setTimeout(() => {
+        surface.style.transition = "";
+      }, 200);
+    }
+    if (Math.abs(s.dx) >= SWIPE_THRESHOLD && swipeDirectionAllowed(s.dx)) {
+      if (s.dx > 0) goToPrev();
+      else goToNext();
+    }
   };
 
   // ─── View subtitle ─────────────────────────────────────────────────────
@@ -1433,7 +1509,7 @@ export function AdminCalendar() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 border-zinc-700 bg-transparent text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
+                  className="h-9 border-zinc-700 bg-transparent text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
                   onClick={() => {
                     setCalRescheduleDate(b.date);
                     setCalRescheduleStart(b.start_time);
@@ -1496,30 +1572,44 @@ export function AdminCalendar() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Calendrier</h1>
-          <p className="text-zinc-400">{subtitle}</p>
+          <p className="hidden text-zinc-400 lg:block">{subtitle}</p>
         </div>
         <button
           type="button"
           onClick={goToToday}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-sm transition-colors hover:bg-zinc-800"
+          className="self-start rounded-lg border border-zinc-700 px-3 py-2 text-sm transition-colors hover:bg-zinc-800"
         >
           Aujourd&apos;hui
         </button>
       </div>
 
-      {/* Navigation + Tabs */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={goToPrev} className="rounded-lg p-2 transition-colors hover:bg-zinc-800">
+      {/* Navigation + Tabs — pinned under the admin top bar (h-16) on mobile
+          so the date, prev/next and view switch stay visible while scanning.
+          Full-bleed via -mx-4 to offset main's padding. */}
+      <div className="sticky top-16 z-20 -mx-4 flex items-center gap-1 border-b border-zinc-800 bg-zinc-950/90 px-3 py-2 backdrop-blur lg:static lg:mx-0 lg:justify-between lg:gap-3 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+        <div className="flex items-center gap-1 lg:gap-2">
+          <button
+            type="button"
+            onClick={goToPrev}
+            aria-label="Précédent"
+            className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-zinc-800"
+          >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <button type="button" onClick={goToNext} className="rounded-lg p-2 transition-colors hover:bg-zinc-800">
+          <button
+            type="button"
+            onClick={goToNext}
+            aria-label="Suivant"
+            className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-zinc-800"
+          >
             <ChevronRight className="h-5 w-5" />
           </button>
           {loading && (
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           )}
         </div>
+
+        <p className="min-w-0 flex-1 truncate text-center text-sm text-zinc-400 lg:hidden">{subtitle}</p>
 
         <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
           <TabsList>
@@ -1539,7 +1629,13 @@ export function AdminCalendar() {
       </div>
 
       {/* Calendar content */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900">
+      <div
+        ref={calendarSurfaceRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="rounded-xl border border-zinc-800 bg-zinc-900"
+      >
         {view === "day" && renderDayView()}
         {view === "week" && renderWeekView()}
         {view === "month" && renderMonthView()}

@@ -11,7 +11,11 @@ const buttonVariants = cva(
         destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
         outline: "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
         secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+        // Ghost hovers onto the yellow --accent background. The text color is
+        // marked important so per-button hover:text-* classes (amber/red/white)
+        // can't override it into light-on-yellow illegibility: hover is always
+        // near-black text (--accent-foreground) on the yellow accent.
+        ghost: "hover:bg-accent hover:text-accent-foreground!",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

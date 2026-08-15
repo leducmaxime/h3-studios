@@ -776,23 +776,26 @@ function StatCard({
   icon: Icon,
   trend,
   color = "primary",
+  className = "",
 }: {
   title: string;
   value: string | number;
   subValue?: string;
   icon: React.ElementType;
   trend?: string;
-  color?: "primary" | "green" | "red" | "blue";
+  color?: "primary" | "green" | "red" | "blue" | "zinc";
+  className?: string;
 }) {
   const colorClasses = {
     primary: "bg-primary/10 text-primary",
     green: "bg-green-500/10 text-green-500",
     red: "bg-red-500/10 text-red-500",
     blue: "bg-blue-500/10 text-blue-500",
+    zinc: "bg-zinc-500/10 text-zinc-400",
   };
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+    <div className={`h-full rounded-xl border border-zinc-800 bg-zinc-900 p-4 ${className}`}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-zinc-400">{title}</p>
@@ -1412,13 +1415,14 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
         <StatCard
           title={`Réservations (${rangeTitle})`}
           value={stats?.rangeBookings ?? 0}
           subValue={stats ? `${rangeSubtitle} · ${formatSlotsToDuration(rangeBookedSlots)}` : rangeSubtitle}
           icon={Calendar}
           color="primary"
+          className="lg:col-span-2"
         />
         <StatCard
           title="CA réservé (total)"
@@ -1426,13 +1430,15 @@ export function AdminDashboard() {
           subValue={stats ? `dont ${formatPrice(stats.rangeEquipmentRevenue)} options (${stats.rangeRevenue > 0 ? Math.round((stats.rangeEquipmentRevenue / stats.rangeRevenue) * 100) : 0}%)` : ""}
           icon={Users}
           color="blue"
+          className="lg:col-span-2"
         />
         <StatCard
           title="Remises accordées"
           value={formatPrice(stats?.rangeDiscounts ?? 0)}
           subValue="Déjà déduites du CA réservé"
           icon={Euro}
-          color="red"
+          color="zinc"
+          className="lg:col-span-2"
         />
         <StatCard
           title="Panier moyen"
@@ -1440,8 +1446,9 @@ export function AdminDashboard() {
           subValue={stats ? `de ${formatPrice(stats.rangeMinPrice)} à ${formatPrice(stats.rangeMaxPrice)}` : ""}
           icon={ShoppingCart}
           color="green"
+          className="lg:col-span-3"
         />
-        <a href="/admin/payments?paymentType=on-site&status=pending" className="block">
+        <a href="/admin/payments?paymentType=on-site&status=pending" className="block sm:col-span-2 lg:col-span-3">
           <StatCard
             title="Sur place à encaisser"
             value={stats?.rangePendingPayments ?? 0}
@@ -1543,6 +1550,7 @@ export function AdminDashboard() {
                       stroke={CHART_COLORS.zinc400}
                       tick={{ fontSize: 11 }}
                       axisLine={{ stroke: CHART_COLORS.zinc700 }}
+                      minTickGap={24}
                     />
                     <YAxis
                       stroke={CHART_COLORS.zinc400}
@@ -1578,6 +1586,7 @@ export function AdminDashboard() {
                       tick={{ fontSize: 11 }}
                       axisLine={{ stroke: CHART_COLORS.zinc700 }}
                       tickFormatter={(v: string) => (/^\d{4}-\d{2}/.test(v) ? formatShortDate(v) : v)}
+                      minTickGap={24}
                     />
                     <YAxis
                       stroke={CHART_COLORS.zinc400}
@@ -1616,47 +1625,48 @@ export function AdminDashboard() {
                 });
 
                 return (
-                  <div className="h-[280px]">
-                    <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-center">
-                      <div className="h-[220px] w-full lg:h-full lg:w-1/2">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={studioData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={55}
-                              outerRadius={95}
-                              paddingAngle={3}
-                              dataKey="count"
-                              nameKey="studio"
-                              labelLine={false}
-                              label={renderPiePercentLabel}
-                            >
-                              {studioData.map((s, i) => (
-                                <Cell key={s.studio} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<PieTooltip />} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
+                  <div className="flex flex-col gap-4 lg:h-[280px] lg:flex-row lg:items-center">
+                    {/* Radii are percentages of the container, so the donut
+                        always fits its box instead of demanding a fixed
+                        190px that the mobile column layout can't provide. */}
+                    <div className="h-[190px] w-full lg:h-full lg:w-1/2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={studioData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius="58%"
+                            outerRadius="85%"
+                            paddingAngle={3}
+                            dataKey="count"
+                            nameKey="studio"
+                            labelLine={false}
+                            label={renderPiePercentLabel}
+                          >
+                            {studioData.map((s, i) => (
+                              <Cell key={s.studio} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<PieTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
 
-                      <div className="w-full lg:w-1/2">
-                        <div className="space-y-2">
-                          {labels.map((l, i) => (
-                            <div key={l.studio} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="h-2.5 w-2.5 rounded-full"
-                                  style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
-                                />
-                                <span className="text-sm text-zinc-300">{l.studio}</span>
-                              </div>
-                              <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
+                    <div className="w-full lg:w-1/2">
+                      <div className="space-y-2">
+                        {labels.map((l, i) => (
+                          <div key={l.studio} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                              />
+                              <span className="text-sm text-zinc-300">{l.studio}</span>
                             </div>
-                          ))}
-                        </div>
+                            <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -1665,60 +1675,58 @@ export function AdminDashboard() {
             </ChartCard>
 
             <ChartCard title="Méthodes de paiement">
-              <div className="h-[280px]">
-                {(() => {
-                  const totalCount = paymentData.reduce((acc, p) => acc + p.count, 0);
-                  const labels = paymentData.map((p) => {
-                    const pct = totalCount > 0 ? Math.round((p.count / totalCount) * 100) : 0;
-                    return { method: p.method, count: p.count, pct };
-                  });
+              {(() => {
+                const totalCount = paymentData.reduce((acc, p) => acc + p.count, 0);
+                const labels = paymentData.map((p) => {
+                  const pct = totalCount > 0 ? Math.round((p.count / totalCount) * 100) : 0;
+                  return { method: p.method, count: p.count, pct };
+                });
 
-                  return (
-                    <div className="flex h-full flex-col gap-4 lg:flex-row lg:items-center">
-                      <div className="h-[220px] w-full lg:h-full lg:w-1/2">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={paymentData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={55}
-                              outerRadius={95}
-                              paddingAngle={3}
-                              dataKey="count"
-                              nameKey="method"
-                              labelLine={false}
-                              label={renderPiePercentLabel}
-                            >
-                              {paymentData.map((p, i) => (
-                                <Cell key={p.method} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<PaymentPieTooltip total={totalCount} />} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
+                return (
+                  <div className="flex flex-col gap-4 lg:h-[280px] lg:flex-row lg:items-center">
+                    <div className="h-[190px] w-full lg:h-full lg:w-1/2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={paymentData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius="58%"
+                            outerRadius="85%"
+                            paddingAngle={3}
+                            dataKey="count"
+                            nameKey="method"
+                            labelLine={false}
+                            label={renderPiePercentLabel}
+                          >
+                            {paymentData.map((p, i) => (
+                              <Cell key={p.method} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<PaymentPieTooltip total={totalCount} />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
 
-                      <div className="w-full lg:w-1/2">
-                        <div className="space-y-2">
-                          {labels.map((l, i) => (
-                            <div key={l.method} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="h-2.5 w-2.5 rounded-full"
-                                  style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
-                                />
-                                <span className="text-sm text-zinc-300">{l.method}</span>
-                              </div>
-                              <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
+                    <div className="w-full lg:w-1/2">
+                      <div className="space-y-2">
+                        {labels.map((l, i) => (
+                          <div key={l.method} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                              />
+                              <span className="text-sm text-zinc-300">{l.method}</span>
                             </div>
-                          ))}
-                        </div>
+                            <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  );
-                })()}
-              </div>
+                  </div>
+                );
+              })()}
             </ChartCard>
           </div>
       </div>

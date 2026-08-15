@@ -104,9 +104,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       >
         <div className="flex h-16 items-center justify-between border-b border-zinc-800 px-4">
           <a href="/admin" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary font-blanka text-sm text-black">
-              H3
-            </div>
+            <img
+              src="/images/logo.webp"
+              alt="H3 Studios - Administration"
+              width={32}
+              height={32}
+              decoding="async"
+              className="h-8 w-8 shrink-0"
+            />
             {!sidebarCollapsed && <span className="font-blanka text-lg">ADMIN</span>}
           </a>
           <button
@@ -173,7 +178,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           sidebarCollapsed ? "lg:pl-16" : "lg:pl-56"
         }`}
       >
-        <header className="flex h-16 items-center gap-4 border-b border-zinc-800 bg-zinc-900/50 px-4 backdrop-blur lg:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-zinc-800 bg-zinc-900/90 px-4 backdrop-blur-md lg:px-6">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -216,7 +221,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           )}
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        {/* No overflow here: the body is the scroller, which keeps the sticky
+            header anchored to the viewport and lets sticky bars inside admin
+            pages (e.g. calendar controls) stick below it. */}
+        <main className="flex-1 p-4 lg:p-6">
           {children}
         </main>
       </div>
