@@ -223,7 +223,7 @@ const FIELD_LABELS: Record<string, string> = {
   phone: "Téléphone",
   band_name: "Groupe",
   client_type: "Type de client",
-  legal_name: "Raison sociale / association",
+  legal_name: "Raison sociale",
   siret: "SIRET",
   rna: "RNA",
   instagram_accounts: "Comptes Instagram",

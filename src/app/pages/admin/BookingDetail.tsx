@@ -50,6 +50,7 @@ import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from 
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput, getDisplayPaymentStatus, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
 import { formatSiret, resolveBookingClientIdentity } from "@/lib/client-identity";
+import { bookingFieldLabel, getVisibleBookingFields } from "@/lib/booking-fields";
 import {
   CancelBookingDialog,
   RefundPaymentDialog,
@@ -1057,6 +1058,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 <div className="space-y-6">
                   {(() => {
                     const clientIdentity = resolveBookingClientIdentity(booking, user);
+                    // Same rule table the tunnel uses, so admin never shows a
+                    // field the customer was never offered (e.g. RNA on an
+                    // entreprise) and can't disagree with the invoice.
+                    const clientVisibleFields = getVisibleBookingFields(clientIdentity.clientType);
                     return (
                       <>
                   <div className="flex items-start gap-4">
@@ -1074,20 +1079,24 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       <p className="text-zinc-500 text-xs mb-1">Type de client</p>
                       <p className="text-zinc-200">{clientIdentity.clientTypeLabel}</p>
                     </div>
-                    {clientIdentity.isBusiness && (
-                      <>
-                        <div>
-                          <p className="text-zinc-500 text-xs mb-1">Raison sociale / nom de l&apos;association</p>
-                          <p className="text-zinc-200">{clientIdentity.legalName || "—"}</p>
+                     {clientIdentity.isBusiness && (
+                       <>
+                         <div>
+                           <p className="text-zinc-500 text-xs mb-1">{bookingFieldLabel("legalName", clientIdentity.clientType)}</p>
+                           <p className="text-zinc-200">{clientIdentity.legalName || "—"}</p>
+                         </div>
+                         {clientVisibleFields.includes("siret") && (
+                         <div>
+                           <p className="text-zinc-500 text-xs mb-1">SIRET</p>
+                           <p className="text-zinc-200">{clientIdentity.siret ? formatSiret(clientIdentity.siret) : "—"}</p>
+                         </div>
+                         )}
+                         {clientVisibleFields.includes("rna") && (
+                         <div>
+                           <p className="text-zinc-500 text-xs mb-1">RNA</p>
+                           <p className="text-zinc-200">{clientIdentity.rna || "—"}</p>
                         </div>
-                        <div>
-                          <p className="text-zinc-500 text-xs mb-1">SIRET</p>
-                          <p className="text-zinc-200">{clientIdentity.siret ? formatSiret(clientIdentity.siret) : "—"}</p>
-                        </div>
-                        <div>
-                          <p className="text-zinc-500 text-xs mb-1">RNA</p>
-                          <p className="text-zinc-200">{clientIdentity.rna || "—"}</p>
-                        </div>
+                         )}
                       </>
                     )}
                     {clientIdentity.instagramAccounts && (

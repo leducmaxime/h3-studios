@@ -29,7 +29,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateISO } from "@/lib/utils";
 import { formatSiret, resolveUserClientIdentity } from "@/lib/client-identity";
-import { getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
+import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
 import { STUDIOS, formatPrice, type StudioId } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, PAYMENT_STATUS_LABELS } from "@/lib/booking-totals";
 import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
@@ -482,17 +482,21 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     {editForm.client_type !== "particulier" && (
                       <>
                         <div className="grid gap-2 lg:col-span-2">
-                          <Label htmlFor="edit-legal-name">Raison sociale / nom de l&apos;association</Label>
+                          <Label htmlFor="edit-legal-name">{bookingFieldLabel("legalName", editForm.client_type)}</Label>
                           <Input id="edit-legal-name" value={editForm.legal_name} onChange={(e) => setEditForm({ ...editForm, legal_name: e.target.value })} />
                         </div>
+                        {getVisibleBookingFields(editForm.client_type).includes("siret") && (
                         <div className="grid gap-2">
                           <Label htmlFor="edit-siret">SIRET</Label>
                           <Input id="edit-siret" value={editForm.siret} onChange={(e) => setEditForm({ ...editForm, siret: e.target.value })} />
                         </div>
+                        )}
+                        {getVisibleBookingFields(editForm.client_type).includes("rna") && (
                         <div className="grid gap-2">
                           <Label htmlFor="edit-rna">RNA</Label>
                           <Input id="edit-rna" value={editForm.rna} onChange={(e) => setEditForm({ ...editForm, rna: e.target.value })} />
                         </div>
+                        )}
                       </>
                     )}
                     <div className="grid gap-2 lg:col-span-2">
@@ -582,9 +586,9 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         <div className="grid gap-4 lg:grid-cols-2">
                           <div className="flex items-center gap-3"><Building2 className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">Type de client</p><p>{clientIdentity.clientTypeLabel}</p></div></div>
                           {clientIdentity.isBusiness && <>
-                            <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">Raison sociale / association</p><p>{clientIdentity.legalName || "—"}</p></div></div>
-                            <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">SIRET</p><p>{clientIdentity.siret ? formatSiret(clientIdentity.siret) : "—"}</p></div></div>
-                            <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">RNA</p><p>{clientIdentity.rna || "—"}</p></div></div>
+                            <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">{bookingFieldLabel("legalName", clientIdentity.clientType)}</p><p>{clientIdentity.legalName || "—"}</p></div></div>
+                            {getVisibleBookingFields(clientIdentity.clientType).includes("siret") && <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">SIRET</p><p>{clientIdentity.siret ? formatSiret(clientIdentity.siret) : "—"}</p></div></div>}
+                            {getVisibleBookingFields(clientIdentity.clientType).includes("rna") && <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">RNA</p><p>{clientIdentity.rna || "—"}</p></div></div>}
                           </>}
                           <div className="flex items-center gap-3"><Instagram className="h-5 w-5 text-zinc-400" /><div><p className="text-xs text-zinc-500">Compte(s) Instagram</p><p>{clientIdentity.instagramAccounts || "—"}</p></div></div>
                         </div>

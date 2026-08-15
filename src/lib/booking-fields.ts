@@ -172,8 +172,15 @@ export function isValidPostalCode(value: string): boolean {
   return value.replace(/\D/g, "").length === 5;
 }
 
-export function normalizeSiret(value: string): string { return value.replace(/\D/g, ""); }
-export function isValidSiret(value: string): boolean {
+/**
+ * Null-tolerant on purpose: these run on untrusted JSON bodies in the worker
+ * (`PUT /api/admin/users/:id`, `PUT /api/client/profile`), where clearing a
+ * field legitimately posts `null`. A `string`-only signature is not enforceable
+ * at that boundary, and the strict version threw a TypeError — a 500 on the
+ * perfectly ordinary act of erasing a mistyped SIRET.
+ */
+export function normalizeSiret(value: string | null | undefined): string { return (value ?? "").replace(/\D/g, ""); }
+export function isValidSiret(value: string | null | undefined): boolean {
   const normalized = normalizeSiret(value);
   if (!/^\d{14}$/.test(normalized)) return false;
   if (normalized.startsWith("356000000")) {
@@ -188,8 +195,9 @@ export function isValidSiret(value: string): boolean {
   }
   return total % 10 === 0;
 }
-export function normalizeRna(value: string): string { return value.toUpperCase().replace(/[^0-9A-Z]/g, ""); }
-export function isValidRna(value: string): boolean {
+/** Null-tolerant for the same reason as `normalizeSiret` above. */
+export function normalizeRna(value: string | null | undefined): string { return (value ?? "").toUpperCase().replace(/[^0-9A-Z]/g, ""); }
+export function isValidRna(value: string | null | undefined): boolean {
   // Overseas and legacy RNA numbers contain letters; digits-only would reject real associations for no gain.
   return /^W[0-9A-Z]{9}$/.test(normalizeRna(value));
 }

@@ -301,3 +301,22 @@ describe("validateBookingUserFields", () => {
     if (!result.ok) expect(result.error).toBeTruthy();
   });
 });
+
+/**
+ * These validators run on untrusted JSON bodies in the worker, where clearing a
+ * field legitimately posts `null`. A `string`-only implementation threw a
+ * TypeError there — a 500 on the ordinary act of erasing a mistyped SIRET from
+ * either editing surface. Caught on staging, not by a test, hence this one.
+ */
+describe("SIRET/RNA validators tolerate cleared values", () => {
+  for (const empty of [null, undefined, ""] as const) {
+    it(`treats ${JSON.stringify(empty)} as invalid without throwing`, () => {
+      expect(() => isValidSiret(empty)).not.toThrow();
+      expect(() => isValidRna(empty)).not.toThrow();
+      expect(isValidSiret(empty)).toBe(false);
+      expect(isValidRna(empty)).toBe(false);
+      expect(normalizeSiret(empty)).toBe("");
+      expect(normalizeRna(empty)).toBe("");
+    });
+  }
+});
