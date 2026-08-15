@@ -217,15 +217,13 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
           />
         </noscript>
         
-        {/* `overflow-x-clip` et non `hidden` : `overflow-x: hidden` force
-            `overflow-y: auto`, ce qui fait de ce conteneur le scrollport de
-            toute l'application. Les éléments `sticky` situés à l'intérieur
-            s'ancrent alors sur un scrollport qui ne défile jamais et ne collent
-            jamais (barre d'admin, contrôles du calendrier). `clip` bloque le
-            débordement horizontal à l'identique sans créer de scrollport. */}
+        {/* Le blocage du débordement horizontal est défini dans globals.css
+            (`#root`), qui conserve `hidden` en repli pour Safari ≤ 15 tout en
+            utilisant `clip` ailleurs — indispensable pour que les éléments
+            `sticky` de l'admin s'ancrent bien sur le document. */}
         <div
           id="root"
-          className="flex min-h-screen w-screen flex-col overflow-x-clip text-white"
+          className="flex min-h-screen w-screen flex-col text-white"
         >
           {children}
         </div>

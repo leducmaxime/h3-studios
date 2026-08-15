@@ -89,6 +89,18 @@
     min-height: 100%;
   }
 
+  /* `overflow-x: hidden` force `overflow-y: auto`, ce qui ferait de #root le
+     scrollport de toute l'application : les éléments `sticky` qu'il contient
+     s'ancreraient alors sur un conteneur qui ne défile jamais et ne colleraient
+     jamais (barre d'admin, contrôles du calendrier). `clip` bloque le
+     débordement horizontal à l'identique sans créer de scrollport.
+     Les deux déclarations sont conservées : Safari ≤ 15 ignore `clip` et
+     retombe sur `hidden`, soit le comportement historique. */
+  #root {
+    overflow-x: hidden;
+    overflow-x: clip;
+  }
+
   .font-blanka {
     font-family: var(--font-blanka);
   }

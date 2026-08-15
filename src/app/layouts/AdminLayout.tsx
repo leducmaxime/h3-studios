@@ -106,7 +106,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <a href="/admin" className="flex items-center gap-2">
             <img
               src="/images/logo.webp"
-              alt="H3 Studios - Administration"
+              alt="H3 Studios - Tableau de bord"
               width={32}
               height={32}
               decoding="async"

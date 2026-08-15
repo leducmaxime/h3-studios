@@ -556,6 +556,12 @@ export function AdminCalendar() {
     // iOS Safari fires mouseenter on tap but never the root onMouseLeave on
     // touch — clear the tooltip so a swipe started on a booking can't strand it.
     setTooltip(null);
+    // Un pincement à deux doigts déplace aussi le premier point de contact :
+    // sans ce garde-fou, un zoom pourrait déclencher une navigation.
+    if (e.touches.length !== 1) {
+      swipeRef.current = null;
+      return;
+    }
     const t = e.touches[0];
     swipeRef.current = { startX: t.clientX, startY: t.clientY, dx: 0, live: true, horizontal: false };
   };
@@ -564,6 +570,11 @@ export function AdminCalendar() {
     const s = swipeRef.current;
     const surface = calendarSurfaceRef.current;
     if (!s || !s.live || !surface) return;
+    if (e.touches.length !== 1) {
+      s.live = false;
+      surface.style.transform = "";
+      return;
+    }
     const t = e.touches[0];
     const dx = t.clientX - s.startX;
     const dy = t.clientY - s.startY;
@@ -584,10 +595,13 @@ export function AdminCalendar() {
     }
   };
 
+  // Sert aussi de gestionnaire de `touchcancel` : sans cela, un geste interrompu
+  // par le système (retour arrière iOS, alerte) laisserait la surface décalée.
   const handleTouchEnd = () => {
     const s = swipeRef.current;
     swipeRef.current = null;
     const surface = calendarSurfaceRef.current;
+    if (surface && !s?.horizontal) surface.style.transform = "";
     if (!s || !s.horizontal) return;
     if (surface && surface.style.transform) {
       surface.style.transition = "transform 180ms ease-out";
@@ -1591,7 +1605,7 @@ export function AdminCalendar() {
           <button
             type="button"
             onClick={goToPrev}
-            aria-label="Précédent"
+            aria-label={view === "day" ? "Jour précédent" : view === "week" ? "Semaine précédente" : "Mois précédent"}
             className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-zinc-800"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -1599,7 +1613,7 @@ export function AdminCalendar() {
           <button
             type="button"
             onClick={goToNext}
-            aria-label="Suivant"
+            aria-label={view === "day" ? "Jour suivant" : view === "week" ? "Semaine suivante" : "Mois suivant"}
             className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-zinc-800"
           >
             <ChevronRight className="h-5 w-5" />
@@ -1634,6 +1648,7 @@ export function AdminCalendar() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         className="rounded-xl border border-zinc-800 bg-zinc-900"
       >
         {view === "day" && renderDayView()}

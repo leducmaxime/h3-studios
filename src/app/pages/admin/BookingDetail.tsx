@@ -921,7 +921,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2 text-xs text-amber-400 hover:text-amber-300"
+                              className="h-7 px-2 text-xs text-amber-400"
                               onClick={() => {
                                 setRefundTarget(p);
                                 setRefundOpen(true);
@@ -947,7 +947,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 px-2 text-xs text-zinc-400 hover:text-white"
+                            className="h-7 px-2 text-xs text-zinc-400"
                             onClick={() => {
                               setEditPayment(p);
                               setEditPaymentAmount(p.amount.toFixed(2).replace(".", ","));
@@ -961,7 +961,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 px-2 text-xs text-red-400 hover:text-red-300"
+                            className="h-7 px-2 text-xs text-red-400"
                             onClick={() => {
                               setDeletePaymentTarget(p);
                               setDeletePaymentOpen(true);
