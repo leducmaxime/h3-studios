@@ -139,6 +139,7 @@ import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeni
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
+import { getOfferedUnits } from "@/lib/equipment-pricing";
 import {
   getParisDateISO,
   getParisNow,
@@ -2265,7 +2266,10 @@ const app = defineApp([
             const lineTotal = item.pricing_type === "session"
               ? (sessionPricing?.[line.quantity - 1] || 0)
               : (Number(item.price_per_hour) || 0) * line.quantity * hours;
-            return [{ id: item.equipment_id, name: item.name, quantity: line.quantity, lineTotal }];
+            const offeredUnits = item.pricing_type === "session"
+              ? getOfferedUnits(sessionPricing, line.quantity)
+              : [];
+            return [{ id: item.equipment_id, name: item.name, quantity: line.quantity, lineTotal, ...(offeredUnits.length ? { offeredUnits } : {}) }];
           });
           body.equipment = JSON.stringify(lines);
           body.equipment_price = lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);

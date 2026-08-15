@@ -6,7 +6,7 @@ import {
   type EquipmentId,
   formatPrice,
 } from "@/lib/booking";
-import { isDegressiveSessionPricing, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
+import { formatSessionPriceDisplay, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
 
 interface ApiEquipment {
   id: string;
@@ -183,11 +183,7 @@ export function EquipmentSelector({
             availabilityInfo && availabilityInfo.available < eq.maxPerSession
               ? getAvailabilityReason(availabilityInfo)
               : null;
-          let priceDisplay = "";
-
-          if (eq.pricingType === "session" && eq.sessionPricing) {
-            priceDisplay = `+${eq.pricePerHour}€/h`;
-          }
+          const priceDisplay = formatSessionPriceDisplay(eq, quantity, subtotal);
 
           const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
 

@@ -125,11 +125,10 @@ function buildEquipmentBreakdown(equipment: BookingEquipmentLine[] | string | nu
   if (!display.showLinePrices) return `<tr><td style="padding:4px 0;color:#aaaaaa;font-size:13px;">Équipements</td><td align="right" style="padding:4px 0;color:#ffffff;font-size:13px;font-weight:500;">${formatPrice(display.subtotal)}</td></tr>`;
   return display.lines
     .map((item) => {
-      const equipmentItem = item as BookingEquipmentLine;
       const price = item.lineTotal;
       let label = `${item.name || item.id} ×${item.quantity}`;
-      if (equipmentItem.offeredUnits?.length) {
-        label += ` — ${offeredUnitsSuffix(equipmentItem.offeredUnits)}`;
+      if (item.offeredUnits?.length) {
+        label += ` — ${offeredUnitsSuffix(item.offeredUnits)}`;
       }
       return `<tr>
         <td style="padding:4px 0;color:#aaaaaa;font-size:13px;">${label}</td>

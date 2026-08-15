@@ -28,7 +28,7 @@ import { STUDIOS, TIME_SLOTS, generateBookingRef, formatPrice, type StudioId, ty
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 import { parseAmountInput } from "@/lib/booking-totals";
 import { GROUP_TYPE_LABELS, groupTypeLabel } from "@/lib/labels";
-import { isDegressiveSessionPricing, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
+import { formatSessionPriceDisplay, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
 
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { type PromoCode } from "@/lib/booking";
@@ -708,23 +708,11 @@ export function AdminBookingNew() {
               <div className="flex flex-col gap-3">
                 {availableEquipment.map((eq) => {
                   const quantity = getQuantity(eq.id);
-                  let priceDisplay = "";
                   let subtotal = 0;
-                  
-                  if (eq.pricingType === "session" && eq.sessionPricing) {
-                    const unitPrice = eq.sessionPricing[0];
-                    subtotal = quantity > 0 ? eq.sessionPricing[quantity - 1] || 0 : 0;
-                    const isDegressive = isDegressiveSessionPricing(eq.sessionPricing);
-                    if (quantity === 0) {
-                      priceDisplay = `${unitPrice}€/séance${isDegressive ? " (tarif dégressif)" : ""}`;
-                    } else {
-                      priceDisplay = `${subtotal}€/séance${isDegressive ? " (tarif dégressif)" : ""}`;
-                    }
-                  } else {
-                    priceDisplay = `+${eq.pricePerHour}€/h`;
-                  }
+                   subtotal = quantity > 0 && eq.sessionPricing ? eq.sessionPricing[quantity - 1] || 0 : 0;
+                   const priceDisplay = formatSessionPriceDisplay(eq, quantity, subtotal);
 
-                  const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
+                   const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
 
                   return (
                     <div

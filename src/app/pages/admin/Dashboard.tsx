@@ -1430,7 +1430,7 @@ export function AdminDashboard() {
         <StatCard
           title="Remises accordées"
           value={formatPrice(stats?.rangeDiscounts ?? 0)}
-          subValue="Déjà déduites du CA net"
+          subValue="Déjà déduites du CA réservé"
           icon={Euro}
           color="red"
         />

@@ -22,9 +22,9 @@ export function isDegressiveSessionPricing(prices: number[] | null | undefined):
 }
 
 /** Formate un aperçu des tarifs par quantité, avec les unités offertes. */
-export function formatSessionPricingPreview(prices: number[] | null | undefined, maxPerSession?: number): string {
+export function formatSessionPricingPreview(prices: number[] | null | undefined, maxPerSession?: number, showAllPrices = false): string {
   if (!prices?.length) return "—";
-  const max = maxPerSession ?? prices.length;
+  const max = showAllPrices ? Math.max(prices.length, maxPerSession ?? 0) : (maxPerSession ?? prices.length);
   return Array.from({ length: Math.max(0, max) }, (_, i) => i + 1)
     .map((q) => `${q}× = ${priceAtQuantity(prices, q)}€${isQuantityOffered(prices, q) ? ` (${offeredUnitsSuffix([q])})` : ""}`)
     .join(", ");
@@ -38,8 +38,26 @@ export function ordinalFr(n: number, opts?: { feminine?: boolean }): string {
 
 /** Formate le suffixe signalant une ou plusieurs unités offertes. */
 export function offeredUnitsSuffix(units: number[]): string {
-  const ordinals = units.map((n) => ordinalFr(n));
+  const ordinals = units.map((n) => ordinalFr(n, { feminine: true }));
   if (ordinals.length === 0) return "";
-  if (ordinals.length === 1) return `${ordinals[0]} offert`;
-  return `${ordinals.slice(0, -1).join(", ")} et ${ordinals[ordinals.length - 1]} offerts`;
+  if (ordinals.length === 1) return `${ordinals[0]} unité offerte`;
+  return `${ordinals.slice(0, -1).join(", ")} et ${ordinals[ordinals.length - 1]} unités offertes`;
+}
+
+/** Analyse la saisie administrateur des tarifs par séance. */
+export function parseSessionPricingInput(raw: string): number[] {
+  return raw.split(",").map((s) => parseFloat(s.trim())).filter((n) => !isNaN(n));
+}
+
+/** Formate le prix affiché d'une option selon son type de tarification. */
+export function formatSessionPriceDisplay(
+  eq: { pricingType: string; sessionPricing: number[] | null; pricePerHour: number },
+  quantity: number,
+  subtotal: number,
+): string {
+  if (eq.pricingType === "session" && eq.sessionPricing?.length) {
+    const isDegressive = isDegressiveSessionPricing(eq.sessionPricing);
+    return `${quantity === 0 ? eq.sessionPricing[0] : subtotal}€/séance${isDegressive ? " (dégressif)" : ""}`;
+  }
+  return `+${eq.pricePerHour}€/h`;
 }

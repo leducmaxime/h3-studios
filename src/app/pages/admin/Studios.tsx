@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { type DbEquipment } from "@/lib/db-types";
-import { formatSessionPricingPreview } from "@/lib/equipment-pricing";
+import { formatSessionPricingPreview, parseSessionPricingInput } from "@/lib/equipment-pricing";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -135,10 +135,7 @@ export function AdminStudios() {
       return;
     }
 
-    const sessionPrices = eqForm.sessionPricing
-      .split(",")
-      .map((s) => parseFloat(s.trim()))
-      .filter((n) => !isNaN(n));
+    const sessionPrices = parseSessionPricingInput(eqForm.sessionPricing);
 
     if (eqForm.pricingType === "session" && sessionPrices.length === 0) {
       toast.error("Veuillez renseigner au moins un tarif par séance");
@@ -418,7 +415,7 @@ export function AdminStudios() {
                 <p className="mt-1 text-xs text-zinc-500">
                   Position = quantité. Ex: "3, 5, 6" → 1× = 3€, 2× = 5€, 3× = 6€
                 </p>
-                <p className="mt-1 text-xs text-zinc-400">{formatSessionPricingPreview(eqForm.sessionPricing.split(",").map((s) => parseFloat(s.trim())).filter((n) => Number.isFinite(n)), eqForm.maxPerSession)}</p>
+                <p className="mt-1 text-xs text-zinc-400">{formatSessionPricingPreview(parseSessionPricingInput(eqForm.sessionPricing), eqForm.maxPerSession, true)}</p>
               </div>
             ) : (
               <div>

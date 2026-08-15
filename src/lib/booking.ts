@@ -67,7 +67,7 @@ export function parseBookingEquipmentLines(raw: string | null | undefined | unkn
     if (typeof v.name === "string" && v.name.trim()) line.name = v.name;
     const total = v.lineTotal !== undefined ? v.lineTotal : v.price;
     if (typeof total === "number" && Number.isFinite(total)) line.lineTotal = total;
-    if (Array.isArray(v.offeredUnits) && v.offeredUnits.every((unit) => typeof unit === "number" && Number.isFinite(unit))) {
+    if (Array.isArray(v.offeredUnits) && v.offeredUnits.every((unit) => typeof unit === "number" && Number.isInteger(unit) && unit > 0)) {
       line.offeredUnits = v.offeredUnits;
     }
     return [line];
@@ -158,7 +158,7 @@ export function equipmentLinesTotal(lines: BookingEquipmentLine[]): number | nul
 
 export type EquipmentNameLookup = (id: string) => string | undefined;
 export function resolveEquipmentDisplay(raw: string | null | undefined | unknown, equipmentPrice: number, nameFor?: EquipmentNameLookup): {
-  lines: Array<{ id: string; quantity: number; name: string; lineTotal?: number }>;
+  lines: Array<{ id: string; quantity: number; name: string; lineTotal?: number; offeredUnits?: number[] }>;
   showLinePrices: boolean;
   subtotal: number;
 } {

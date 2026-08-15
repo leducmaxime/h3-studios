@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatSessionPricingPreview,
+  formatSessionPriceDisplay,
   getOfferedUnits,
   isDegressiveSessionPricing,
   isQuantityOffered,
@@ -26,8 +27,21 @@ describe("equipment pricing offers", () => {
   });
 
   it("formate les aperçus exactement", () => {
-    expect(formatSessionPricingPreview([3, 5, 6, 6], 4)).toBe("1× = 3€, 2× = 5€, 3× = 6€, 4× = 6€ (4e offert)");
-    expect(offeredUnitsSuffix([4, 5])).toBe("4e et 5e offerts");
+    expect(formatSessionPricingPreview([3, 5, 6, 6], 4)).toBe("1× = 3€, 2× = 5€, 3× = 6€, 4× = 6€ (4e unité offerte)");
+    expect(offeredUnitsSuffix([4, 5])).toBe("4e et 5e unités offertes");
     expect(ordinalFr(1)).toBe("1er");
+  });
+
+  it("formate les lignes de prix publiques et administratives", () => {
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: [3], pricePerHour: 0 }, 0, 0)).toBe("3€/séance");
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: [3], pricePerHour: 0 }, 1, 3)).toBe("3€/séance");
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: [3, 5, 6, 6], pricePerHour: 2 }, 0, 0)).toBe("3€/séance (dégressif)");
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: [3, 5, 6, 6], pricePerHour: 2 }, 4, 6)).toBe("6€/séance (dégressif)");
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: [3, 6, 9], pricePerHour: 0 }, 0, 0)).toBe("3€/séance");
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: [3, 6, 9], pricePerHour: 0 }, 3, 9)).toBe("9€/séance");
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: [3, 6], pricePerHour: 0 }, 0, 0)).toBe("3€/séance");
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: [3, 6], pricePerHour: 0 }, 2, 6)).toBe("6€/séance");
+    expect(formatSessionPriceDisplay({ pricingType: "hourly", sessionPricing: [3], pricePerHour: 2 }, 1, 3)).toBe("+2€/h");
+    expect(formatSessionPriceDisplay({ pricingType: "session", sessionPricing: null, pricePerHour: 2 }, 1, 0)).toBe("+2€/h");
   });
 });
