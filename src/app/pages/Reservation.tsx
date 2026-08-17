@@ -633,6 +633,14 @@ export function Reservation({ step }: ReservationProps) {
                           )}
                         </div>
                       );})}
+
+                      <button
+                        onClick={addAnotherBooking}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-3 text-sm transition-colors hover:border-white/40 hover:bg-white/10"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Ajouter une autre réservation
+                      </button>
                     </div>
 
                     {/* Code promo (gauche) + Total (droite) sur desktop, empilés sur mobile.
@@ -671,21 +679,12 @@ export function Reservation({ step }: ReservationProps) {
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-3">
-                        <button
-                          onClick={() => goToCoordonnees()}
-                          className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
-                        >
-                          Valider le panier
-                      </button>
-                      <button
-                        onClick={addAnotherBooking}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 py-3 text-sm transition-colors hover:bg-white/15"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Ajouter une autre réservation
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => goToCoordonnees()}
+                      className="w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-colors hover:bg-primary/90"
+                    >
+                      Valider le panier
+                    </button>
                   </>
               </div>
             )}
