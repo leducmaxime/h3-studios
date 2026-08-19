@@ -201,7 +201,7 @@ export async function createBooking(
 export async function updateBooking(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "promo_discount" | "promo_code" | "promo_type">>,
+  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "keep_balance_due" | "promo_discount" | "promo_code" | "promo_type">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];

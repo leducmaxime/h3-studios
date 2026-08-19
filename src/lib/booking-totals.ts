@@ -103,10 +103,25 @@ export function getDisplayStatus(booking: Pick<DbBooking, "status" | "date" | "e
 }
 
 // ─── Statut d'affichage du paiement ───────────────────────────────────────────
-// Dérivé du statut DB + du grand livre (payments) — aucune migration, aucun
-// nouveau champ persisté. Convention : une réservation annulée ne présente
-// jamais de montant dû ; "Remboursé" n'apparaît qu'après un remboursement
-// intégral réellement enregistré.
+// Dérivé du statut DB + du grand livre (payments) + keep_balance_due.
+// Par défaut une réservation annulée ne présente pas de montant dû.
+// Exception : keep_balance_due = 1 (« Sans remboursement › Paiement dû »).
+// "Remboursé" n'apparaît qu'après un remboursement intégral réellement enregistré.
+
+/** INTEGER 0/1 (D1) ou booléen — vrai si l'annulation conserve le solde dû. */
+export function isKeepBalanceDue(
+  booking: { keep_balance_due?: number | boolean | null },
+): boolean {
+  return booking.keep_balance_due === 1 || booking.keep_balance_due === true;
+}
+
+/** Encaissement autorisé : résa active, ou annulée avec solde volontairement conservé. */
+export function bookingAllowsCollection(
+  booking: { status?: string | null; keep_balance_due?: number | boolean | null },
+): boolean {
+  if (booking.status !== "cancelled") return true;
+  return isKeepBalanceDue(booking);
+}
 
 export type DisplayPaymentStatus =
   | "paid"
@@ -143,19 +158,41 @@ export function getTotalRefunded(payments: Pick<DbPayment, "status" | "refunded_
     .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
 }
 
+export type DisplayPaymentStatusOptions = {
+  keepBalanceDue?: boolean;
+  remaining?: number;
+};
+
 /**
  * Statut de paiement pour l'affichage, à partir du grand livre complet.
- * Les réservations annulées ne présentent jamais de montant dû.
+ * Une annulation avec keep_balance_due conserve le solde (pay-on-site / paid).
  */
 export function getDisplayPaymentStatus(
-  booking: Pick<DbBooking, "status" | "payment_status">,
+  booking: Pick<DbBooking, "status" | "payment_status"> &
+    Partial<Pick<DbBooking, "keep_balance_due" | "base_price" | "equipment_price" | "total_price" | "promo_discount">>,
   payments: Pick<DbPayment, "amount" | "status" | "refunded_amount">[],
 ): DisplayPaymentStatus {
+  const hasTotals =
+    booking.total_price != null || booking.base_price != null || booking.promo_discount != null;
   return getDisplayPaymentStatusFromSummary(
     booking.status,
     booking.payment_status,
     getTotalCollected(payments),
     getTotalRefunded(payments),
+    {
+      keepBalanceDue: isKeepBalanceDue(booking),
+      remaining: hasTotals
+        ? getBookingBalance(
+            {
+              base_price: booking.base_price ?? 0,
+              equipment_price: booking.equipment_price ?? 0,
+              total_price: booking.total_price ?? 0,
+              promo_discount: booking.promo_discount ?? 0,
+            },
+            payments,
+          )
+        : 0,
+    },
   );
 }
 
@@ -170,8 +207,13 @@ export function getDisplayPaymentStatusFromSummary(
   paymentStatus: string | null | undefined,
   totalCollected: number,
   totalRefunded: number,
+  options?: DisplayPaymentStatusOptions,
 ): DisplayPaymentStatus {
   if (bookingStatus === "cancelled") {
+    if (options?.keepBalanceDue) {
+      if ((options.remaining ?? 0) > 0.005) return "pay-on-site";
+      if (totalCollected > 0) return "paid";
+    }
     if (totalCollected > 0) {
       // Grand livre factuel : remboursé uniquement après remboursement intégral enregistré.
       return totalRefunded >= totalCollected - 0.005 ? "refunded" : "paid-before-cancel";

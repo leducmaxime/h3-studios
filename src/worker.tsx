@@ -1,5 +1,5 @@
 import { render, route, layout } from "rwsdk/router";
-import { getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
 import { paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { DEFAULT_CLIENT_TYPE, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
@@ -49,7 +49,7 @@ import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
 import { createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent, type StripeCheckoutSession } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
-import { sendBookingConfirmationEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
+import { sendBookingCancellationEmail, sendBookingConfirmationEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
 import {
   type AdminRole,
   verifyPassword,
@@ -2362,6 +2362,7 @@ const app = defineApp([
       const body = await request.json() as {
         reason?: string;
         refundMode?: "none" | "refund";
+        keepBalanceDue?: boolean;
         refunds?: { paymentId: string; amount: number }[];
       };
       if (body.refundMode !== "none" && body.refundMode !== "refund") {
@@ -2375,11 +2376,22 @@ const app = defineApp([
       const booking = await getBookingById(env.DB, params.id);
       if (!booking) return jsonError("Réservation introuvable", 404);
 
+      const existingPayments = await getPaymentsByBookingId(env.DB, params.id);
+      const remaining = getBookingBalance(booking, existingPayments);
+      let keepBalanceDue = 0;
+      if (body.refundMode === "none" && remaining > 0.005) {
+        if (body.keepBalanceDue !== true && body.keepBalanceDue !== false) {
+          return jsonError("Précisez si le solde reste dû : keepBalanceDue true ou false", 400);
+        }
+        keepBalanceDue = body.keepBalanceDue ? 1 : 0;
+      }
+
       if (booking.status !== "cancelled") {
         const result = await updateBooking(env.DB, params.id, {
           status: "cancelled",
           cancelled_at: new Date().toISOString().replace("T", " ").slice(0, 19),
           cancel_reason: body.reason || "Annulée par l'admin",
+          keep_balance_due: keepBalanceDue,
         });
 
         if (!result.success) return jsonError(result.error || "Cancel failed", 400);
@@ -2393,7 +2405,28 @@ const app = defineApp([
 
         await addAuditLog(env.DB, "booking", params.id, "cancel", {
           reason: body.reason || "Annulée par l'admin",
+          keepBalanceDue: keepBalanceDue === 1,
         }, request.headers.get("X-Admin-User-Id") || "admin");
+
+        const client = await getUserById(env.DB, booking.user_id);
+        if (client?.email && env.RESEND_API_KEY) {
+          waitUntil(
+            sendBookingCancellationEmail(env.RESEND_API_KEY, {
+              bookingRef: booking.booking_ref,
+              studioId: booking.studio_id,
+              date: booking.date,
+              startTime: booking.start_time,
+              endTime: booking.end_time,
+              userName: client.name || "",
+              userEmail: client.email,
+              keepBalanceDue: keepBalanceDue === 1,
+              remaining: keepBalanceDue === 1 ? remaining : 0,
+              reason: body.reason,
+            }).catch((error) => {
+              console.error("PUT /api/admin/bookings/:id/cancel email error:", error);
+            }),
+          );
+        }
       }
 
       const updated = await getBookingById(env.DB, params.id);
@@ -2496,7 +2529,7 @@ const app = defineApp([
       }
       const booking = await getBookingById(env.DB, params.id);
       if (!booking) return jsonError("Réservation introuvable", 404);
-      if (booking.status === "cancelled") return jsonError("Impossible de payer une réservation annulée", 400);
+      if (!bookingAllowsCollection(booking)) return jsonError("Impossible de payer une réservation annulée", 400);
 
       // Recompute remaining server-side
       const payments = await getPaymentsByBookingId(env.DB, params.id);
@@ -2547,7 +2580,7 @@ const app = defineApp([
         if (!booking) {
           return jsonError("Réservation introuvable", 404);
         }
-        if (booking.status === "cancelled") {
+        if (!bookingAllowsCollection(booking)) {
           return jsonError("Impossible d'ajouter un paiement à une réservation annulée", 400);
         }
 
@@ -4935,7 +4968,7 @@ const app = defineApp([
 
       // Grand livre par réservation (une seule requête agrégée) pour permettre
       // à la fiche client de présenter correctement les annulations
-      // (Annulée / Payée avant annulation / Remboursé) sans montant dû.
+      // (Annulée / Payée avant annulation / Remboursé / Reste à payer si dû).
       const bookingIds = bookings.data.map((b) => b.id);
       let paymentTotals = new Map<string, { totalPaid: number; totalCollected: number; totalRefunded: number }>();
       if (bookingIds.length > 0) {
@@ -4956,7 +4989,7 @@ const app = defineApp([
       const parisNow = getParisNow();
       const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
       const bookingsWithStatus = bookings.data.map((booking) => {
-        let b: (typeof booking) & { total_paid?: number; total_collected?: number; total_refunded?: number } = booking;
+        let b: (typeof booking) & { total_paid?: number; total_collected?: number; total_refunded?: number; remaining?: number } = booking;
         if (booking.status === "confirmed") {
           const isPast =
             booking.date < parisNow.dateISO ||
@@ -4966,11 +4999,13 @@ const app = defineApp([
           }
         }
         const totals = paymentTotals.get(b.id);
+        const totalPaid = totals?.totalPaid ?? 0;
         return {
           ...b,
-          total_paid: totals?.totalPaid ?? 0,
+          total_paid: totalPaid,
           total_collected: totals?.totalCollected ?? 0,
           total_refunded: totals?.totalRefunded ?? 0,
+          remaining: Math.max(0, getBookingAmountDue(b) - totalPaid),
         };
       });
 
