@@ -556,6 +556,14 @@ export function resolveBookingIdentity(
   });
 }
 
+export const CGV_NOT_ACCEPTED_ERROR = "Veuillez accepter les conditions générales de vente.";
+export const CGV_NOT_ACCEPTED_CODE = "cgv-not-accepted";
+
+/** Public POST /api/bookings requires an explicit `acceptedCgv: true`. */
+export function isAcceptedCgv(value: unknown): value is true {
+  return value === true;
+}
+
 export type BookingUserValidation =
   | { ok: true }
   | { ok: false; error: string; fields: BookingFieldKey[] };

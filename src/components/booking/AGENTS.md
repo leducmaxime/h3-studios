@@ -106,6 +106,7 @@ interface ExtendedBookingState {
 - **Opening hours**: `setOpeningHours(data.openingHours)` called when pricing loads — falls back to `STUDIO_HOURS` defaults
 - **Cart total recomputed** from grid each render (line items use `recomputeCartItemPrice`)
 - **Promo codes**: validated server-side via `POST /api/promo-codes/validate` (`src/lib/db.ts` `validatePromoCode` + `applyDiscountRounding`). The public tunnel displays the returned `discount` and does not recompute rounding.
+- **CGV**: public checkout requires an explicit checkbox on the `paiement` step (`acceptedCgv`). A 0 € cart still goes through `paiement` (confirm CTA) instead of submitting from `coordonnees`. `POST /api/bookings` rejects without `acceptedCgv: true`. Admin booking creation is unchanged.
 - **Equipment stock**: physical pool shared by both studios. Public ceiling is `min(maxPerSession, available)`. `no-show` releases stock (only `confirmed` + `completed` hold). Public `POST /api/bookings` rejects over-stock.
 
 ## MIN-ADVANCE RULES

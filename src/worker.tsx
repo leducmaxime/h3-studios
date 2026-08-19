@@ -1,7 +1,7 @@
 import { render, route, layout } from "rwsdk/router";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
 import { paymentMethodLabelShort, studioLabel } from "@/lib/labels";
-import { DEFAULT_CLIENT_TYPE, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
+import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
@@ -910,9 +910,13 @@ const app = defineApp([
         isLastInCart?: boolean;
         createAccount?: boolean;
         accountPassword?: string;
+        acceptedCgv?: boolean;
       };
 
       // Syntactic validation must precede identity resolution and all DB writes.
+      if (!isAcceptedCgv(body.acceptedCgv)) {
+        return jsonResponse({ success: false, error: CGV_NOT_ACCEPTED_ERROR, code: CGV_NOT_ACCEPTED_CODE }, 400);
+      }
       const validStudios = ["la-scene", "le-podium"];
       const validGroupTypes = ["solo", "duo", "group"];
       if (!validStudios.includes(body.studioId)) return jsonError("Studio invalide", 400);
