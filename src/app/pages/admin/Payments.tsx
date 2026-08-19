@@ -58,7 +58,7 @@ interface ApiPayment {
   id: string;
   booking_id: string;
   amount: number;
-  method: "" | "card" | "cash" | "transfer" | "check";
+  method: "card" | "cash" | "transfer" | "check";
   payment_type: "on-site" | "online";
   status: "pending" | "paid" | "refunded" | "partial-refund";
   refunded_amount: number;
@@ -341,8 +341,7 @@ function PaymentActions({
   onEdit: (payment: ApiPayment) => void;
   onDelete: (payment: ApiPayment) => void;
 }) {
-  const isSynthetic = payment.id.startsWith("on-site:") && payment.method === "";
-  const canPay = payment.status === "pending" && !isSynthetic;
+  const canPay = payment.status === "pending";
   // Le plafond vient de refundable_amount pour la carte (solde encore
   // remboursable chez Stripe), du grand livre pour les autres méthodes.
   // Une ligne partiellement remboursée reste remboursable. Une carte sans
@@ -351,12 +350,11 @@ function PaymentActions({
     ? (payment.refundable_amount ?? 0)
     : payment.amount - payment.refunded_amount;
   const canRefund =
-    !isSynthetic &&
     (payment.status === "paid" || payment.status === "partial-refund") &&
     refundCap > 0.004 &&
     (payment.method !== "card" || !!payment.stripe_event_id?.startsWith("cs_"));
-  const canEdit = payment.payment_type === "on-site" && !isSynthetic;
-  const canDelete = payment.payment_type === "on-site" && !isSynthetic;
+  const canEdit = payment.payment_type === "on-site";
+  const canDelete = payment.payment_type === "on-site";
   const canAddPayment = !!payment.booking_id;
 
   if (!canPay && !canRefund && !canAddPayment && !canEdit && !canDelete) return null;
@@ -1053,7 +1051,7 @@ export function AdminPayments() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="flex items-center gap-1.5 text-sm">
-                        {payment.method === "" ? "—" : (() => {
+                        {(() => {
                           const Icon = PAYMENT_METHOD_ICONS[payment.method];
                           return Icon ? <><Icon className="h-4 w-4" /> {paymentMethodLabelShort(payment.method)}</> : paymentMethodLabelShort(payment.method);
                         })()}
@@ -1082,25 +1080,14 @@ export function AdminPayments() {
                           : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      {payment.payment_type === "on-site" && payment.status === "pending" && payment.method === "" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-zinc-700"
-                          onClick={() => openCollectDialog(payment.booking_id)}
-                        >
-                          Encaisser
-                        </Button>
-                      ) : (
-                        <PaymentActions
-                          payment={payment}
-                          onMarkPaid={handleMarkPaid}
-                          onRefund={openRefundDialog}
-                          onAddPayment={openCollectDialog}
-                          onEdit={openEditDialog}
-                          onDelete={openDeleteDialog}
-                        />
-                      )}
+                      <PaymentActions
+                        payment={payment}
+                        onMarkPaid={handleMarkPaid}
+                        onRefund={openRefundDialog}
+                        onAddPayment={openCollectDialog}
+                        onEdit={openEditDialog}
+                        onDelete={openDeleteDialog}
+                      />
                     </td>
                   </tr>
                 );

@@ -124,7 +124,11 @@ export function AdminBookings() {
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining">("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining">(() => {
+    if (typeof window === "undefined") return "all";
+    const p = new URLSearchParams(window.location.search).get("payment");
+    return p === "paid" || p === "remaining" ? p : "all";
+  });
   const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
   const [page, setPage] = useState(1);

@@ -104,17 +104,6 @@ interface CalendarBooking {
   promo_discount?: number;
 }
 
-interface PendingPayment {
-  id: string;
-  booking_id?: string;
-  amount: number;
-  user_name: string | null;
-  booking_date: string | null;
-  start_time: string | null;
-  studio_id: string | null;
-  kind?: "on-site" | "card";
-}
-
 interface NowBooking {
   id: string;
   booking_ref: string;
@@ -897,7 +886,6 @@ export function AdminDashboard() {
   const [occupancyData, setOccupancyData] = useState<OccupancyPoint[]>([]);
   const [studioData, setStudioData] = useState<StudioPoint[]>([]);
   const [paymentData, setPaymentData] = useState<PaymentPoint[]>([]);
-  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [activityCalendarBookings, setActivityCalendarBookings] = useState<CalendarBooking[]>([]);
   const [activityCalendarLoading, setActivityCalendarLoading] = useState(false);
   const [activityCalendarMonth, setActivityCalendarMonth] = useState(() => {
@@ -1091,14 +1079,12 @@ export function AdminDashboard() {
           occupancy: OccupancyPoint[];
           studios: StudioPoint[];
           payments: PaymentPoint[];
-          pendingPayments: PendingPayment[];
         };
       };
       if (chartsJson.success && chartsJson.data) {
         setOccupancyData(chartsJson.data.occupancy);
         setStudioData(chartsJson.data.studios);
         setPaymentData(chartsJson.data.payments);
-        setPendingPayments(chartsJson.data.pendingPayments);
       }
     } catch (err) {
       console.error("Failed to fetch chart data:", err);
@@ -1448,7 +1434,7 @@ export function AdminDashboard() {
           color="green"
           className="lg:col-span-3"
         />
-        <a href="/admin/payments?paymentType=on-site&status=pending" className="block sm:col-span-2 lg:col-span-3">
+        <a href="/admin/bookings?payment=remaining" className="block sm:col-span-2 lg:col-span-3">
           <StatCard
             title="Sur place à encaisser"
             value={stats?.rangePendingPayments ?? 0}
