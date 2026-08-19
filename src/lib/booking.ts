@@ -176,7 +176,8 @@ export interface CompletedBooking {
   endTime: string;
   studioId: StudioId;
   groupType: GroupType;
-  userName: string;
+  firstName: string;
+  lastName: string;
   userEmail: string;
   userPhone: string;
   bandName: string;
@@ -250,11 +251,12 @@ export interface BookingState {
   endTime: string | null;
   studioId: StudioId | null;
   groupType: GroupType | null;
-  userName: string;
+  firstName: string;
+  lastName: string;
   userEmail: string;
   userPhone: string;
   bandName: string;
-  clientType: ClientType;
+  clientType: ClientType | null;
   legalName: string;
   siret: string;
   rna: string;

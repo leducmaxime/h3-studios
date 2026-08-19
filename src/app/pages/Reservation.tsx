@@ -545,7 +545,8 @@ export function Reservation({ step }: ReservationProps) {
             {/* Step coordonnees: Coordonnées (after cart, before payment) */}
             {state.step === "coordonnees" && (
                 <BookingForm
-                  userName={state.userName}
+                  firstName={state.firstName}
+                  lastName={state.lastName}
                   userEmail={state.userEmail}
                   userPhone={state.userPhone}
                   bandName={state.bandName}
@@ -746,7 +747,7 @@ export function Reservation({ step }: ReservationProps) {
                 promoCode={state.confirmedPromoCode}
                 promoDiscount={state.confirmedPromoDiscount}
                 displayPrices={displayPrices}
-                userName={state.userName}
+                userName={`${state.firstName} ${state.lastName}`.trim()}
                 userEmail={state.userEmail}
                 onBack={goBack}
               />

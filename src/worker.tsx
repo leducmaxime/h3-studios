@@ -1,7 +1,7 @@
 import { render, route, layout } from "rwsdk/router";
 import { getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
 import { paymentMethodLabelShort, studioLabel } from "@/lib/labels";
-import { DEFAULT_CLIENT_TYPE, isClientType, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
+import { DEFAULT_CLIENT_TYPE, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
@@ -941,7 +941,7 @@ const app = defineApp([
         );
       }
 
-      const name = resolved.name;
+      const name = resolvedDisplayName(resolved);
       const email = resolved.email;
       const phone = resolved.phone;
       const bandNameRaw = resolved.bandName;
@@ -1945,7 +1945,8 @@ const app = defineApp([
           legalName: user?.legal_name ?? "",
           siret: user?.siret ?? "",
           rna: user?.rna ?? "",
-          userName: "",
+          firstName: "",
+          lastName: "",
           userEmail: "",
           userPhone: "",
           bandName: bookingBandName ?? "",

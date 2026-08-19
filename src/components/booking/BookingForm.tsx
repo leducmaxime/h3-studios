@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
+import { AlertTriangle, ArrowUp, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, bookingFieldLabel, bookingFieldPlaceholder, computeAccountFieldStatus, getRequiredBookingFields, getVisibleBookingFields, isValidBookingFieldValue, type BookingFieldIssue, type BookingFieldKey, type ClientType } from "@/lib/booking-fields";
 import type { ClientUser } from "@/lib/client-user";
@@ -13,12 +13,13 @@ import { ClientTypeToggle } from "./ClientTypeToggle";
  * Partial<BookingFormFields> payload is always assignable.
  */
 export interface BookingFormFields {
-  clientType: ClientType;
+  clientType: ClientType | null;
   legalName: string;
   siret: string;
   rna: string;
   instagramAccounts: string;
-  userName: string;
+  firstName: string;
+  lastName: string;
   userEmail: string;
   userPhone: string;
   bandName: string;
@@ -35,12 +36,13 @@ export interface BookingFormFields {
 export type BookingClientUser = ClientUser;
 
 interface BookingFormProps {
-  clientType: ClientType;
+  clientType: ClientType | null;
   legalName: string;
   siret: string;
   rna: string;
   instagramAccounts: string;
-  userName: string;
+  firstName: string;
+  lastName: string;
   userEmail: string;
   userPhone: string;
   bandName: string;
@@ -85,6 +87,18 @@ interface BookingFieldDef {
 
 const ADDRESS_FIELD_KEYS = ["billingAddress", "billingPostalCode", "billingCity"] as const satisfies readonly BookingFieldKey[];
 
+// Guest field groups — the visible fields of a type are partitioned so the
+// layout never depends on how many legal-identity fields a type adds:
+//   - legal identity (legalName/siret/rna) gets its own row(s),
+//   - firstName/lastName always share a row as one name unit,
+//   - email/phone pair up,
+//   - band name + Instagram take the full width so the Instagram help text
+//     stays readable without squeezing a neighbour.
+const LEGAL_IDENTITY_FIELD_KEYS = ["legalName", "siret", "rna"] as const satisfies readonly BookingFieldKey[];
+const NAME_FIELD_KEYS = ["firstName", "lastName"] as const satisfies readonly BookingFieldKey[];
+const CONTACT_FIELD_KEYS = ["userEmail", "userPhone"] as const satisfies readonly BookingFieldKey[];
+const GROUP_FIELD_KEYS = ["bandName", "instagramAccounts"] as const satisfies readonly BookingFieldKey[];
+
 // Whether a field is required is NOT stored here: it depends on the selected
 // client type (e.g. siret is required for entreprise, optional for
 // association) and is derived from getRequiredBookingFields(clientType).
@@ -95,7 +109,8 @@ const BOOKING_FIELD_DEFS: Record<BookingFieldKey, BookingFieldDef> = {
   legalName: { key: "legalName", placeholder: "Raison sociale" },
   siret: { key: "siret", placeholder: "73282932000074", inputMode: "numeric", digitsOnly: true },
   rna: { key: "rna", placeholder: "W751234567" },
-  userName: { key: "userName", placeholder: "Jean Dupont", autoComplete: "name" },
+  firstName: { key: "firstName", placeholder: "Jean", autoComplete: "given-name" },
+  lastName: { key: "lastName", placeholder: "Dupont", autoComplete: "family-name" },
   userEmail: { key: "userEmail", placeholder: "jean@exemple.fr", type: "email", autoComplete: "email" },
   userPhone: { key: "userPhone", placeholder: "0612345678", type: "tel", inputMode: "numeric", digitsOnly: true, autoComplete: "tel" },
   bandName: { key: "bandName", placeholder: "Les Rockers", autoComplete: "organization" },
@@ -387,7 +402,8 @@ function AccountCreationCard({ createAccount, accountPassword, accountPasswordCo
 
 export function BookingForm({
   clientType,
-  userName,
+  firstName,
+  lastName,
   userEmail,
   userPhone,
   bandName,
@@ -511,9 +527,18 @@ export function BookingForm({
   // validation always reads state, not the DOM.
   const accountValues = useMemo(() => accountFieldValues(clientUser), [clientUser]);
   const accountFieldStatus = useMemo(() => computeAccountFieldStatus(clientUser), [clientUser]);
-  const bookingValues: Record<BookingFieldKey, string> = { legalName, siret, rna, userName, userEmail, userPhone, bandName, instagramAccounts, billingAddress, billingPostalCode, billingCity };
+  const bookingValues: Record<BookingFieldKey, string> = { legalName, siret, rna, firstName, lastName, userEmail, userPhone, bandName, instagramAccounts, billingAddress, billingPostalCode, billingCity };
   const visibleFields = getVisibleBookingFields(clientType);
   const requiredFields = getRequiredBookingFields(clientType);
+  const guestFieldGroup = (keys: readonly BookingFieldKey[]): BookingFieldDef[] =>
+    visibleFields.filter((key) => keys.includes(key)).map(fieldDef);
+  const legalIdentityFieldDefs = guestFieldGroup(LEGAL_IDENTITY_FIELD_KEYS);
+  const nameFieldDefs = guestFieldGroup(NAME_FIELD_KEYS);
+  const contactFieldDefs = guestFieldGroup(CONTACT_FIELD_KEYS);
+  const groupFieldDefs = guestFieldGroup(GROUP_FIELD_KEYS);
+  // The one issue that blocks an unchosen client type — feeds the guidance
+  // panel and the Continue button's aria-describedby.
+  const clientTypeIssue = bookingFieldIssues.find((issue) => issue.key === "clientType");
   const filledAccountFieldDefinitions: BookingFieldDef[] = clientUser
     ? visibleFields.filter((key) => accountFieldStatus[key] === "filled").map(fieldDef)
     : [];
@@ -617,17 +642,6 @@ export function BookingForm({
         <h3 className="text-base font-semibold lg:text-lg">Vos coordonnées</h3>
       </div>
 
-      {/* Type de client — first, above every input (D8): choosing Entreprise
-          or Association visibly reveals the extra required fields below. */}
-      <ClientTypeToggle value={clientType} onChange={(type) => {
-         if (type !== clientType) {
-           setValidationErrors((prev) => Object.fromEntries(
-             Object.entries(prev).filter(([key]) => key === "accountPassword" || key === "accountPasswordConfirm"),
-           ));
-         }
-         updateFields({ clientType: type });
-       }} />
-
       {/* Échec de l'envoi de la réservation — action réelle, affiché en évidence */}
       {submitError && (
         <div
@@ -659,7 +673,34 @@ export function BookingForm({
 
       <div className="border-t border-white/10" aria-hidden="true" />
 
-      {clientUser ? (
+      {/* Type de client — opens the form proper, below the login row: every
+          field under it depends on this choice, and picking Entreprise or
+          Association visibly reveals the extra required fields. */}
+      <ClientTypeToggle value={clientType} onChange={(type) => {
+         if (type !== clientType) {
+           setValidationErrors((prev) => Object.fromEntries(
+             Object.entries(prev).filter(([key]) => key === "accountPassword" || key === "accountPasswordConfirm"),
+           ));
+         }
+         updateFields({ clientType: type });
+        }} />
+
+      {clientType === null ? (
+        /* Rien à remplir tant que le type n'est pas choisi — invitation,
+           pas une erreur : c'est l'état normal d'arrivée pour un invité. */
+        <div
+          id="client-type-guidance"
+          className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-6 text-center lg:px-6 lg:py-8"
+        >
+          <ArrowUp className="h-4 w-4 text-primary" aria-hidden="true" />
+          <p className="text-sm font-medium text-white/80">
+            {clientTypeIssue?.reason ?? "Choisissez votre type de client"}
+          </p>
+          <p className="max-w-md text-xs leading-relaxed text-white/50 lg:text-sm">
+            Les champs à remplir dépendent de votre situation. Ils s'afficheront ici dès que vous aurez choisi.
+          </p>
+        </div>
+      ) : clientUser ? (
         <div className="flex flex-col gap-4 lg:gap-5">
           {filledAccountFieldDefinitions.length > 0 && (
             <section
@@ -705,11 +746,25 @@ export function BookingForm({
         <>
           {/* Identité / structure : driven by the selected client type so a
               guest can always reach legalName / siret / rna when the gate
-              demands them. */}
-          <div className="grid gap-3 lg:gap-4 lg:grid-cols-2">
-            {visibleFields
-              .filter((key) => !ADDRESS_FIELD_KEYS.includes(key as (typeof ADDRESS_FIELD_KEYS)[number]))
-              .map((key) => renderFieldInput(fieldDef(key)))}
+              demands them. Grouped rows keep Prénom + Nom together as one
+              name unit, whatever the type adds before them. */}
+          <div className="flex flex-col gap-3 lg:gap-4">
+            {legalIdentityFieldDefs.length > 0 && (
+              <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
+                {legalIdentityFieldDefs.map((field) => renderFieldInput(field))}
+              </div>
+            )}
+            <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
+              {nameFieldDefs.map((field) => renderFieldInput(field))}
+            </div>
+            {contactFieldDefs.length > 0 && (
+              <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
+                {contactFieldDefs.map((field) => renderFieldInput(field))}
+              </div>
+            )}
+            {/* Nom du groupe + Instagram : pleine largeur — l'explication
+                Instagram reste lisible sous le champ sans tasser la grille. */}
+            {groupFieldDefs.map((field) => renderFieldInput(field))}
           </div>
 
           <div className="flex flex-col gap-3 lg:gap-4">
@@ -723,29 +778,33 @@ export function BookingForm({
         </>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="additionalInfo" className="text-sm font-medium text-white/70">
-          Informations supplémentaires
-        </label>
-        <textarea
-          id="additionalInfo"
-          value={additionalInfo}
-          onChange={(e) => updateFields({ additionalInfo: e.target.value })}
-          placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
-          rows={3}
-          className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-y lg:px-4 lg:py-3"
-        />
-      </div>
+      {clientType !== null && (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="additionalInfo" className="text-sm font-medium text-white/70">
+              Informations supplémentaires
+            </label>
+            <textarea
+              id="additionalInfo"
+              value={additionalInfo}
+              onChange={(e) => updateFields({ additionalInfo: e.target.value })}
+              placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
+              rows={3}
+              className="rounded-lg border border-white/20 bg-white/15 px-3 py-2.5 text-base text-white placeholder:text-white/30 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-y lg:px-4 lg:py-3"
+            />
+          </div>
 
-      {/* Création de compte optionnelle — invités seulement */}
-      {!clientUserLoading && !clientUser && (
-        <AccountCreationCard
-          createAccount={createAccount}
-          accountPassword={accountPassword}
-          accountPasswordConfirm={accountPasswordConfirm}
-          validationErrors={validationErrors}
-          onUpdateField={updateFields}
-        />
+          {/* Création de compte optionnelle — invités seulement */}
+          {!clientUserLoading && !clientUser && (
+            <AccountCreationCard
+              createAccount={createAccount}
+              accountPassword={accountPassword}
+              accountPasswordConfirm={accountPasswordConfirm}
+              validationErrors={validationErrors}
+              onUpdateField={updateFields}
+            />
+          )}
+        </>
       )}
 
       <button
@@ -753,6 +812,7 @@ export function BookingForm({
         onClick={handleContinue}
         disabled={continueLoading}
         aria-disabled={!canContinue}
+        aria-describedby={!canContinue && clientType === null ? "client-type-guidance" : undefined}
         className={`
           w-full rounded-lg py-3.5 text-base font-semibold transition-all lg:py-4 lg:text-lg
           ${canContinue && !continueLoading

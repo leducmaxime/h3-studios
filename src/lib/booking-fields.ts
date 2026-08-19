@@ -26,7 +26,8 @@ export type BookingFieldKey =
   | "legalName"
   | "siret"
   | "rna"
-  | "userName"
+  | "firstName"
+  | "lastName"
   | "userEmail"
   | "userPhone"
   | "bandName"
@@ -40,7 +41,8 @@ export const BOOKING_FIELD_KEYS: readonly BookingFieldKey[] = [
   "legalName",
   "siret",
   "rna",
-  "userName",
+  "firstName",
+  "lastName",
   "userEmail",
   "userPhone",
   "bandName",
@@ -67,7 +69,8 @@ export const BOOKING_FIELD_LABELS: Record<BookingFieldKey, string> = {
   legalName: "Raison sociale",
   siret: "SIRET",
   rna: "Numéro RNA",
-  userName: "Prénom et nom",
+  firstName: "Prénom",
+  lastName: "Nom",
   userEmail: "Email",
   userPhone: "Téléphone",
   bandName: "Nom du groupe",
@@ -79,11 +82,12 @@ export const BOOKING_FIELD_LABELS: Record<BookingFieldKey, string> = {
 
 export type BookingUserFields = Record<BookingFieldKey, string>;
 
-const EMPTY_BOOKING_USER_FIELDS: BookingUserFields = {
+export const EMPTY_BOOKING_USER_FIELDS: BookingUserFields = {
   legalName: "",
   siret: "",
   rna: "",
-  userName: "",
+  firstName: "",
+  lastName: "",
   userEmail: "",
   userPhone: "",
   bandName: "",
@@ -105,49 +109,50 @@ interface ClientTypeRule {
 export const CLIENT_TYPE_RULES: Record<ClientType, ClientTypeRule> = {
   particulier: {
     label: "Particulier",
-    fields: ["userName", "userEmail", "userPhone", "bandName", "instagramAccounts", "billingAddress", "billingPostalCode", "billingCity"],
-    required: ["userName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"],
+    fields: ["firstName", "lastName", "userEmail", "userPhone", "bandName", "instagramAccounts", "billingAddress", "billingPostalCode", "billingCity"],
+    required: ["firstName", "lastName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"],
     labelOverrides: {}, placeholderOverrides: {}, requiredHintOverrides: {},
   },
   association: {
     label: "Association",
-    fields: ["legalName", "rna", "siret", "userName", "userEmail", "userPhone", "bandName", "instagramAccounts", "billingAddress", "billingPostalCode", "billingCity"],
-    required: ["legalName", "userName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"],
+    fields: ["legalName", "rna", "siret", "firstName", "lastName", "userEmail", "userPhone", "bandName", "instagramAccounts", "billingAddress", "billingPostalCode", "billingCity"],
+    required: ["legalName", "firstName", "lastName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"],
     labelOverrides: { legalName: "Nom de l'association", billingAddress: "Adresse de l'association" },
     placeholderOverrides: { legalName: "Nom de votre association" },
     requiredHintOverrides: { legalName: "Le nom de l'association est obligatoire" },
   },
   entreprise: {
     label: "Entreprise",
-    fields: ["legalName", "siret", "userName", "userEmail", "userPhone", "bandName", "instagramAccounts", "billingAddress", "billingPostalCode", "billingCity"],
-    required: ["legalName", "siret", "userName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"],
+    fields: ["legalName", "siret", "firstName", "lastName", "userEmail", "userPhone", "bandName", "instagramAccounts", "billingAddress", "billingPostalCode", "billingCity"],
+    required: ["legalName", "siret", "firstName", "lastName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"],
     labelOverrides: { legalName: "Nom de l'entreprise", billingAddress: "Adresse de l'entreprise" },
     placeholderOverrides: { legalName: "Nom de votre entreprise" },
     requiredHintOverrides: { legalName: "Le nom de l'entreprise est obligatoire" },
   },
 };
-export function getVisibleBookingFields(t: ClientType): readonly BookingFieldKey[] { return CLIENT_TYPE_RULES[t].fields; }
-export function getRequiredBookingFields(t: ClientType): readonly BookingFieldKey[] { return CLIENT_TYPE_RULES[t].required; }
-export function bookingFieldLabel(key: BookingFieldKey, t: ClientType): string { return CLIENT_TYPE_RULES[t].labelOverrides[key] ?? BOOKING_FIELD_LABELS[key]; }
-export function bookingFieldPlaceholder(key: BookingFieldKey, t: ClientType): string | undefined {
-  return CLIENT_TYPE_RULES[t].placeholderOverrides[key];
+export function getVisibleBookingFields(t: ClientType | null): readonly BookingFieldKey[] { return t ? CLIENT_TYPE_RULES[t].fields : []; }
+export function getRequiredBookingFields(t: ClientType | null): readonly BookingFieldKey[] { return t ? CLIENT_TYPE_RULES[t].required : []; }
+export function bookingFieldLabel(key: BookingFieldKey, t: ClientType | null): string { return (t ? CLIENT_TYPE_RULES[t].labelOverrides[key] : undefined) ?? BOOKING_FIELD_LABELS[key]; }
+export function bookingFieldPlaceholder(key: BookingFieldKey, t: ClientType | null): string | undefined {
+  return t ? CLIENT_TYPE_RULES[t].placeholderOverrides[key] : undefined;
 }
 
 /** Why a required value is missing, in French, for direct display. */
 const BOOKING_FIELD_REQUIRED_HINTS: Partial<Record<BookingFieldKey, string>> = {
   legalName: "La raison sociale est obligatoire",
   siret: "Le SIRET est obligatoire",
-  userName: "Le prénom et le nom sont obligatoires",
+  firstName: "Le prénom est obligatoire",
+  lastName: "Le nom est obligatoire",
   userEmail: "L'email est obligatoire",
   userPhone: "Le numéro de téléphone est obligatoire",
   billingAddress: "L'adresse de facturation est obligatoire",
   billingPostalCode: "Le code postal est obligatoire",
   billingCity: "La ville est obligatoire",
 };
-export function bookingFieldRequiredHint(key: BookingFieldKey, t: ClientType): string { return CLIENT_TYPE_RULES[t].requiredHintOverrides[key] ?? BOOKING_FIELD_REQUIRED_HINTS[key] ?? `${bookingFieldLabel(key, t)} est obligatoire`; }
+export function bookingFieldRequiredHint(key: BookingFieldKey, t: ClientType | null): string { return (t ? CLIENT_TYPE_RULES[t].requiredHintOverrides[key] : undefined) ?? BOOKING_FIELD_REQUIRED_HINTS[key] ?? `${bookingFieldLabel(key, t)} est obligatoire`; }
 
 /** Blank fields outside the selected type: one normalisation point prevents stale profile data crossing types. */
-export function pruneToClientType(fields: BookingUserFields, t: ClientType): BookingUserFields {
+export function pruneToClientType(fields: BookingUserFields, t: ClientType | null): BookingUserFields {
   const visible = getVisibleBookingFields(t);
   return Object.fromEntries(BOOKING_FIELD_KEYS.map((key) => [key, visible.includes(key) ? fields[key] : ""])) as BookingUserFields;
 }
@@ -263,6 +268,13 @@ export function deriveDisplayName(
   return user.name?.trim() ?? "";
 }
 
+export function splitDisplayName(name: string): { firstName: string; lastName: string } {
+  const normalized = name.trim();
+  if (!normalized) return { firstName: "", lastName: "" };
+  const match = normalized.match(/^(\S+)(?:\s+(.+))?$/);
+  return { firstName: match?.[1] ?? "", lastName: match?.[2] ?? "" };
+}
+
 /**
  * The booking-field view of an account. This is the authoritative source for
  * what the account "knows" — never mix it with booking state, or a value the
@@ -274,7 +286,11 @@ export function accountFieldValues(user: BookingAccountProfile | null): BookingU
     legalName: user.legal_name?.trim() ?? "",
     siret: user.siret?.trim() ?? "",
     rna: user.rna?.trim() ?? "",
-    userName: deriveDisplayName(user),
+    ...(() => {
+      const firstName = user.first_name?.trim() ?? "";
+      const lastName = user.last_name?.trim() ?? "";
+      return firstName || lastName ? { firstName, lastName } : splitDisplayName(user.name ?? "");
+    })(),
     userEmail: user.email?.trim() ?? "",
     userPhone: user.phone?.trim() ?? "",
     bandName: user.band_name?.trim() ?? "",
@@ -338,7 +354,7 @@ export function accountFieldsDrifted(
 // ---------------------------------------------------------------------------
 
 export interface BookingFieldIssue {
-  key: BookingFieldKey;
+  key: BookingFieldKey | "clientType";
   label: string;
   status: "missing" | "invalid";
   /** Ready-to-display French reason. */
@@ -350,7 +366,8 @@ export interface BookingFieldIssue {
  * both the disabled state and the message that names the offending fields —
  * one source, so the button and the explanation can never disagree.
  */
-export function getBookingFieldIssues(fields: BookingUserFields, clientType: ClientType): BookingFieldIssue[] {
+export function getBookingFieldIssues(fields: BookingUserFields, clientType: ClientType | null): BookingFieldIssue[] {
+  if (!clientType) return [{ key: "clientType", label: "Type de client", status: "missing", reason: "Choisissez votre type de client" }];
   const issues: BookingFieldIssue[] = [];
   const visibleFields = getVisibleBookingFields(clientType);
   const requiredFields = getRequiredBookingFields(clientType);
@@ -397,6 +414,8 @@ export interface BookingUserBody {
   siret?: string | null;
   rna?: string | null;
   instagramAccounts?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   name?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -412,7 +431,8 @@ export interface ResolvedBookingUser {
   siret: string;
   rna: string;
   instagramAccounts: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
   bandName: string;
@@ -421,11 +441,16 @@ export interface ResolvedBookingUser {
   city: string;
 }
 
+export function resolvedDisplayName(resolved: Pick<ResolvedBookingUser, "firstName" | "lastName">): string {
+  return `${resolved.firstName} ${resolved.lastName}`.trim();
+}
+
 const RESOLVED_KEY_BY_FIELD: Record<BookingFieldKey, keyof ResolvedBookingUser> = {
   legalName: "legalName",
   siret: "siret",
   rna: "rna",
-  userName: "name",
+  firstName: "firstName",
+  lastName: "lastName",
   userEmail: "email",
   userPhone: "phone",
   bandName: "bandName",
@@ -493,7 +518,8 @@ export function resolveBookingIdentity(
       siret: normalizeIfValid(trim(posted.siret), isValidSiret, normalizeSiret),
       rna: normalizeIfValid(trim(posted.rna), isValidRna, normalizeRna),
       instagramAccounts: trim(posted.instagramAccounts),
-      name: trim(posted.name),
+      firstName: trim(posted.firstName) || splitDisplayName(posted.name ?? "").firstName,
+      lastName: trim(posted.lastName) || splitDisplayName(posted.name ?? "").lastName,
       email: trim(posted.email).toLowerCase(),
       phone: trim(posted.phone),
       bandName: trim(posted.bandName),
@@ -511,7 +537,8 @@ export function resolveBookingIdentity(
     instagramAccounts: trim(posted.instagramAccounts) || account.instagramAccounts,
     // Session identity wins for the name: `users.name` is NOT NULL, so it is
     // always at least as good as a body value that may carry stale state.
-    name: account.userName || trim(posted.name),
+    firstName: account.firstName || trim(posted.firstName) || splitDisplayName(posted.name ?? "").firstName,
+    lastName: account.lastName || trim(posted.lastName) || splitDisplayName(posted.name ?? "").lastName,
     // Session email wins only when the account holds a *usable* one. A NULL or
     // malformed account email is the case where the body may supply a
     // replacement — otherwise the form would offer a correction that this

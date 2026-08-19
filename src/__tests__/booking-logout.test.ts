@@ -4,7 +4,7 @@ import { LOGOUT_CLEARED_FIELDS } from "@/components/booking/useBookingWithRouter
 describe("clientLogout state clearing (booking coordinates)", () => {
   it("clears personal/prefill fields and account-creation state", () => {
     const personalKeys = [
-      "userName",
+      "firstName",
       "userEmail",
       "userPhone",
       "bandName",
@@ -27,9 +27,9 @@ describe("clientLogout state clearing (booking coordinates)", () => {
   });
 
   it("resets cleared fields to empty values (never stale profile data)", () => {
-    expect(LOGOUT_CLEARED_FIELDS.clientType).toBe("particulier");
+    expect(LOGOUT_CLEARED_FIELDS.clientType).toBe(null);
     expect(LOGOUT_CLEARED_FIELDS.userEmail).toBe("");
-    expect(LOGOUT_CLEARED_FIELDS.userName).toBe("");
+    expect(LOGOUT_CLEARED_FIELDS.firstName).toBe("");
     expect(LOGOUT_CLEARED_FIELDS.billingAddress).toBe("");
     expect(LOGOUT_CLEARED_FIELDS.createAccount).toBe(false);
     expect(LOGOUT_CLEARED_FIELDS.accountStatus).toBeNull();

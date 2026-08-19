@@ -21,7 +21,7 @@ const OPTIONS: { type: ClientType; sublabel: string; icon: ComponentType<{ class
 ];
 
 interface ClientTypeToggleProps {
-  value: ClientType;
+  value: ClientType | null;
   onChange: (type: ClientType) => void;
 }
 
@@ -59,6 +59,7 @@ export function ClientTypeToggle({ value, onChange }: ClientTypeToggleProps) {
         Vous réservez en tant que <span className="text-primary" aria-hidden="true">*</span>
       </span>
       <div
+        id="clientType"
         role="radiogroup"
         aria-labelledby="client-type-label"
         aria-required="true"
@@ -72,7 +73,7 @@ export function ClientTypeToggle({ value, onChange }: ClientTypeToggleProps) {
               type="button"
               role="radio"
               aria-checked={selected}
-              tabIndex={selected ? 0 : -1}
+              tabIndex={selected || (value === null && index === 0) ? 0 : -1}
               ref={(el) => {
                 buttonRefs.current[index] = el;
               }}
@@ -83,7 +84,7 @@ export function ClientTypeToggle({ value, onChange }: ClientTypeToggleProps) {
                 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black
                 ${selected
                   ? "bg-primary text-black ring-2 ring-primary ring-offset-1 lg:ring-offset-2 ring-offset-black"
-                  : "bg-white/15 hover:bg-white/20"
+                  : "bg-white/10 ring-1 ring-inset ring-white/15 hover:bg-white/15 hover:ring-white/30"
                 }
               `}
             >

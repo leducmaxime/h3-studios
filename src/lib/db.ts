@@ -509,6 +509,8 @@ export async function findOrCreateUserByEmail(
   email: string,
   profile: {
     name: string;
+    first_name?: string;
+    last_name?: string;
     client_type?: string;
     legal_name?: string;
     siret?: string;
@@ -526,12 +528,14 @@ export async function findOrCreateUserByEmail(
   const normalizedEmail = email.trim().toLowerCase();
 
   const result = await db.prepare(`
-    INSERT OR IGNORE INTO users (id, email, name, phone, band_name, client_type, legal_name, siret, rna, instagram_accounts, address_line1, postal_code, city, is_blocked, total_bookings, total_spent, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
+    INSERT OR IGNORE INTO users (id, email, name, first_name, last_name, phone, band_name, client_type, legal_name, siret, rna, instagram_accounts, address_line1, postal_code, city, is_blocked, total_bookings, total_spent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
   `).bind(
     id,
     normalizedEmail,
     profile.name,
+    profile.first_name ?? null,
+    profile.last_name ?? null,
     profile.phone ?? null,
     profile.band_name ?? null,
     profile.client_type ?? "particulier",
