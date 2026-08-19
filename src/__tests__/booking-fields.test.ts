@@ -3,10 +3,13 @@ import {
   BOOKING_FIELD_KEYS,
   CLIENT_TYPES,
   CLIENT_TYPE_RULES,
+  CGV_NOT_ACCEPTED_CODE,
+  CGV_NOT_ACCEPTED_ERROR,
   bookingFieldLabel,
   bookingFieldPlaceholder,
   computeAccountFieldStatus,
   getBookingFieldIssues,
+  isAcceptedCgv,
   resolveBookingIdentity,
   resolveClientType,
   getRequiredBookingFields,
@@ -316,6 +319,22 @@ describe("validateBookingUserFields", () => {
  * TypeError there — a 500 on the ordinary act of erasing a mistyped SIRET from
  * either editing surface. Caught on staging, not by a test, hence this one.
  */
+describe("public booking CGV acceptance", () => {
+  it("accepts only the boolean true", () => {
+    expect(isAcceptedCgv(true)).toBe(true);
+    expect(isAcceptedCgv(false)).toBe(false);
+    expect(isAcceptedCgv(undefined)).toBe(false);
+    expect(isAcceptedCgv(null)).toBe(false);
+    expect(isAcceptedCgv("true")).toBe(false);
+    expect(isAcceptedCgv(1)).toBe(false);
+  });
+
+  it("exposes the public API rejection copy and code", () => {
+    expect(CGV_NOT_ACCEPTED_ERROR).toBe("Veuillez accepter les conditions générales de vente.");
+    expect(CGV_NOT_ACCEPTED_CODE).toBe("cgv-not-accepted");
+  });
+});
+
 describe("SIRET/RNA validators tolerate cleared values", () => {
   for (const empty of [null, undefined, ""] as const) {
     it(`treats ${JSON.stringify(empty)} as invalid without throwing`, () => {

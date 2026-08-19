@@ -110,6 +110,7 @@ interface ExtendedBookingState extends BookingState {
   confirmedPromoCode: string | null;
   confirmedPromoDiscount: number;
   confirmedNetTotal: number | null;
+  acceptedCgv: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +260,7 @@ function deserializeState(serialized: SerializedBookingState): ExtendedBookingSt
       ...booking,
       date: new Date(booking.date),
     })),
+    acceptedCgv: serialized.acceptedCgv === true,
   };
 }
 
@@ -332,6 +334,7 @@ const initialState: ExtendedBookingState = {
   confirmedPromoCode: null,
   confirmedPromoDiscount: 0,
   confirmedNetTotal: null,
+  acceptedCgv: false,
 };
 
 /**
@@ -953,6 +956,10 @@ export function useBookingWithRouter(urlStep?: string) {
   // -------------------------------------------------------------------------
   const submitCart = useCallback(async (paymentMethod: PaymentMethod | null) => {
     if (isSubmitting) return;
+    if (!state.acceptedCgv) {
+      setSubmitError("Veuillez accepter les conditions générales de vente.");
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -1011,6 +1018,7 @@ export function useBookingWithRouter(urlStep?: string) {
           notes: state.additionalInfo,
           cartBookingRefs: allCartRefs,
           isLastInCart: i === state.cart.length - 1,
+          acceptedCgv: true,
         };
 
         // Account creation on first booking request only (i === 0)
@@ -1085,22 +1093,12 @@ export function useBookingWithRouter(urlStep?: string) {
     }
   // Hand-maintained mirror of the state fields read by the POST body below;
   // omitting one fails silently by reusing a stale submit callback.
-  }, [state.cart, state.promoDiscount, state.firstName, state.userEmail, state.userPhone, state.bandName, state.clientType, state.legalName, state.siret, state.rna, state.instagramAccounts, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, isSubmitting, clientUser, state.createAccount, state.accountPassword, prefillFromClientProfile]);
+  }, [state.cart, state.promoDiscount, state.firstName, state.userEmail, state.userPhone, state.bandName, state.clientType, state.legalName, state.siret, state.rna, state.instagramAccounts, state.billingAddress, state.billingPostalCode, state.billingCity, state.additionalInfo, state.acceptedCgv, isSubmitting, clientUser, state.createAccount, state.accountPassword, prefillFromClientProfile]);
 
-  /** From coordonnées: proceed to payment choice or skip if free */
-  const goToPaymentFromCoordonnees = useCallback(async () => {
-    const currentCart = state.cart;
-    const cartTotal = currentCart.reduce((sum, b) => sum + b.price, 0);
-    const totalPromoDiscount = state.promoDiscount || 0;
-    const finalTotal = Math.max(0, cartTotal - totalPromoDiscount);
-
-    if (finalTotal === 0) {
-      // 100% discount → skip payment, submit with cash treatment
-      await submitCart(null);
-    } else {
-      setState((s) => ({ ...s, step: "paiement" }));
-    }
-  }, [state.cart, state.promoDiscount, submitCart]);
+  /** From coordonnées: always go to paiement so CGV can be accepted (including 0 €). */
+  const goToPaymentFromCoordonnees = useCallback(() => {
+    setState((s) => ({ ...s, step: "paiement" }));
+  }, []);
 
   /** Cancel current new booking and go back to cart */
   const goToCart = useCallback(() => {
@@ -1122,6 +1120,15 @@ export function useBookingWithRouter(urlStep?: string) {
   const selectPaymentMethod = useCallback(async (method: PaymentMethod) => {
     await submitCart(method);
   }, [submitCart]);
+
+  /** 0 € cart: same POST path as cash, after CGV acceptance. */
+  const confirmFreeBooking = useCallback(async () => {
+    await submitCart(null);
+  }, [submitCart]);
+
+  const setAcceptedCgv = useCallback((accepted: boolean) => {
+    setState((s) => ({ ...s, acceptedCgv: accepted }));
+  }, []);
 
   /** Stripe callback: mark cart as paid, go to termine */
   const processPayment = useCallback(() => {
@@ -1337,6 +1344,9 @@ export function useBookingWithRouter(urlStep?: string) {
     resetBooking,
     goBack,
     selectPaymentMethod,
+    confirmFreeBooking,
+    setAcceptedCgv,
+    isSubmitting,
     processPayment,
     clientLogin,
     clientLogout,
