@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { STUDIOS, generateBookingRef, formatPrice, slotDurationSlots, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 import { parseAmountInput } from "@/lib/booking-totals";
+import { formatTaxBreakdown } from "@/lib/tax";
 import { GROUP_TYPE_LABELS, groupTypeLabel } from "@/lib/labels";
 import { formatSessionPriceDisplay, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
 
@@ -786,8 +787,15 @@ export function AdminBookingNew() {
                 );
               })()}
               <div className="border-t border-zinc-800 pt-3">
+                {typeof estimatedPrice === "number" && (() => {
+                  const tax = formatTaxBreakdown(estimatedPrice);
+                  return <div className="mb-2 space-y-1 text-xs text-zinc-500">
+                    <div className="flex justify-between"><span>Total HT</span><span>{tax.ht}</span></div>
+                    <div className="flex justify-between"><span>TVA 20%</span><span>{tax.vat}</span></div>
+                  </div>;
+                })()}
                 <div className="flex items-center justify-between text-lg font-semibold">
-                  <span>Total</span>
+                  <span>Total TTC</span>
                   <span className="text-primary">
                     {pricingLoading ? "..." : estimatedPrice !== null ? formatPrice(estimatedPrice) : "—"}
                   </span>

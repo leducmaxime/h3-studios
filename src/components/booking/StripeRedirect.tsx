@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CreditCard, Lock, ShieldCheck, ChevronLeft, Loader2, ExternalLink } from "lucide-react";
 import { formatPrice, type CompletedBooking, STUDIOS, formatDate, sortBookingsByStart } from "@/lib/booking";
+import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 
 interface StripeRedirectProps {
   cart: CompletedBooking[];
@@ -182,8 +183,9 @@ export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount
                   </div>
                 </>
               )}
+              <TaxBreakdown ttc={total} />
               <div className="flex justify-between">
-                <span className="font-semibold">Total</span>
+                <span className="font-semibold">Total TTC</span>
                 <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
               </div>
             </div>

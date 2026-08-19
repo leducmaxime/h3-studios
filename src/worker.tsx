@@ -1565,7 +1565,7 @@ const app = defineApp([
         return jsonSuccess({ valid: false, error: result.error });
       }
       const p = result.promo;
-      const description = p.type === "percentage" ? `${p.value}% de réduction` : `${p.value}€ de réduction`;
+      const description = p.type === "percentage" ? `${p.value}% de réduction` : `${p.value}€ TTC de réduction`;
       // Utiliser la réduction arrondie si disponible
       const discount = result.roundedDiscount ?? (p.type === "percentage"
         ? body.total * p.value / 100

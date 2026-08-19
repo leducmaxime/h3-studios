@@ -1,3 +1,5 @@
+import { formatEuro } from "./tax";
+
 /** Retourne le tarif cumulé correspondant à une quantité. */
 export function priceAtQuantity(prices: number[] | null | undefined, q: number): number {
   return q <= 0 ? 0 : (prices?.[q - 1] ?? 0);
@@ -26,7 +28,7 @@ export function formatSessionPricingPreview(prices: number[] | null | undefined,
   if (!prices?.length) return "—";
   const max = showAllPrices ? Math.max(prices.length, maxPerSession ?? 0) : (maxPerSession ?? prices.length);
   return Array.from({ length: Math.max(0, max) }, (_, i) => i + 1)
-    .map((q) => `${q}× = ${priceAtQuantity(prices, q)}€${isQuantityOffered(prices, q) ? ` (${offeredUnitsSuffix([q])})` : ""}`)
+    .map((q) => `${q}× = ${formatEuro(priceAtQuantity(prices, q))} TTC${isQuantityOffered(prices, q) ? ` (${offeredUnitsSuffix([q])})` : ""}`)
     .join(", ");
 }
 
@@ -57,7 +59,7 @@ export function formatSessionPriceDisplay(
 ): string {
   if (eq.pricingType === "session" && eq.sessionPricing?.length) {
     const isDegressive = isDegressiveSessionPricing(eq.sessionPricing);
-    return `${quantity === 0 ? eq.sessionPricing[0] : subtotal}€/séance${isDegressive ? " (dégressif)" : ""}`;
+    return `${formatEuro(quantity === 0 ? eq.sessionPricing[0] : subtotal)} TTC/séance${isDegressive ? " (dégressif)" : ""}`;
   }
-  return `+${eq.pricePerHour}€/h`;
+  return `+${formatEuro(eq.pricePerHour)} TTC/h`;
 }

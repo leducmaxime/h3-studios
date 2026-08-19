@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/select";
 import { formatPrice } from "@/lib/booking";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
+import { formatTaxBreakdown } from "@/lib/tax";
 import { exportPaymentsCSV } from "@/lib/export";
 import { RefundPaymentDialog } from "@/components/admin/refund";
 import { PAYMENT_RECORD_STATUS_LABELS, paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
@@ -227,7 +228,7 @@ function EditPaymentDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="edit-amount">Montant (€)</Label>
+            <Label htmlFor="edit-amount">Montant (€ TTC)</Label>
             <Input
               id="edit-amount"
               type="number"
@@ -1175,6 +1176,14 @@ export function AdminPayments() {
                 <>
                   {collectContext.userName || collectContext.bookingRef} · Reste à payer :{" "}
                   <span className="font-semibold text-foreground">{formatPrice(collectTotals.remainingStart)}</span>
+                  {(() => {
+                    const tax = formatTaxBreakdown(collectTotals.remainingStart);
+                    return (
+                      <span className="ml-2 text-xs text-zinc-500">
+                        (HT {tax.ht} · TVA 20% {tax.vat})
+                      </span>
+                    );
+                  })()}
                   {collectContext.promoCode && (
                     <span className="ml-2 text-xs text-primary">
                       Promo: {collectContext.promoCode}
@@ -1226,7 +1235,7 @@ export function AdminPayments() {
             {collectEntries.map((entry, idx) => (
               <div key={entry.id} className="grid grid-cols-12 gap-2">
                 <div className="col-span-5">
-                  <Label className="text-xs text-zinc-400">Montant (EUR)</Label>
+                  <Label className="text-xs text-zinc-400">Montant (€ TTC)</Label>
                   <Input
                     value={entry.amount}
                     onChange={(e) => {

@@ -80,7 +80,7 @@ const EMPTY_FORM: PromoFormData = {
 const GROUP_ORDER = ["solo", "duo", "group"];
 
 function formatPriceLocal(cents: number): string {
-  return `${cents}€`;
+  return `${cents}€ TTC`;
 }
 
 function transformPricing(rows: DbPricing[]): PricingRow[] {
@@ -94,7 +94,7 @@ function transformPricing(rows: DbPricing[]): PricingRow[] {
 }
 
 function formatPromoValue(promo: DbPromoCode): string {
-  return promo.type === "percentage" ? `${promo.value}%` : `${promo.value}€`;
+  return promo.type === "percentage" ? `${promo.value}%` : `${promo.value}€ TTC`;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -873,7 +873,7 @@ function PromoCodeDialog({
 
           {/* Min total */}
           <div className="space-y-2">
-            <Label htmlFor="promo-min">Montant minimum d&apos;achat (€)</Label>
+            <Label htmlFor="promo-min">Montant minimum d&apos;achat (€ TTC)</Label>
             <Input
               id="promo-min"
               type="number"

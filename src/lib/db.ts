@@ -1350,7 +1350,7 @@ export async function validatePromoCode(
   // Usage limit
   if (promo.max_usage !== null && promo.usage_count >= promo.max_usage) return { valid: false, error: "Code promo épuisé" };
   // Minimum amount
-  if (promo.min_total > 0 && total < promo.min_total) return { valid: false, error: `Montant minimum de ${promo.min_total}€ requis` };
+  if (promo.min_total > 0 && total < promo.min_total) return { valid: false, error: `Montant minimum de ${promo.min_total}€ TTC requis` };
   
   // Calculer la réduction
   let discount = promo.value;

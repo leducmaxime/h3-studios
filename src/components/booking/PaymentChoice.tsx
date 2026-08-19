@@ -2,6 +2,7 @@
 
 import { CreditCard, Banknote } from "lucide-react";
 import { formatPrice, type CompletedBooking, type PaymentMethod } from "@/lib/booking";
+import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 
 export type { PaymentMethod };
 
@@ -47,22 +48,25 @@ export function PaymentChoice({
         </p>
       </div>
 
-      {promoDiscount > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm text-white/70">
-            <span>Sous-total</span>
-            <span>{formatPrice(subtotal)}</span>
-          </div>
-          <div className="flex items-center justify-between text-sm text-green-400">
-            <span>Réduction ({promoCode})</span>
-            <span>-{formatPrice(promoDiscount)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-lg font-semibold">Total</span>
-            <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
-          </div>
+      <div className="space-y-2">
+        {promoDiscount > 0 && (
+          <>
+            <div className="flex items-center justify-between text-sm text-white/70">
+              <span>Sous-total</span>
+              <span>{formatPrice(subtotal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm text-green-400">
+              <span>Réduction ({promoCode})</span>
+              <span>-{formatPrice(promoDiscount)}</span>
+            </div>
+          </>
+        )}
+        <TaxBreakdown ttc={total} />
+        <div className="flex items-center justify-between">
+          <span className="text-lg font-semibold">Total TTC</span>
+          <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
         </div>
-      )}
+      </div>
 
       <div className="rounded-xl border border-primary/30 bg-white/5 p-4 lg:p-5">
         <label htmlFor="acceptCgv" className="flex cursor-pointer items-start gap-3">

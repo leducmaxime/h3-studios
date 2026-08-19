@@ -512,7 +512,7 @@ function OptionsPayantesTab() {
                         ) : (
                           <div>
                             <Badge variant="outline" className="mb-1">Horaire</Badge>
-                            <p className="text-xs text-zinc-400">{eq.price_per_hour}€/h</p>
+                            <p className="text-xs text-zinc-400">{eq.price_per_hour}€ TTC/h</p>
                           </div>
                         )}
                       </td>
@@ -583,7 +583,7 @@ function OptionsPayantesTab() {
               </div>
             ) : (
               <div>
-                <Label htmlFor="eqPriceHour">Prix par heure (€)</Label>
+                <Label htmlFor="eqPriceHour">Prix par heure (€ TTC)</Label>
                 <Input id="eqPriceHour" type="number" min={0} step={0.5} value={eqForm.pricePerHour} onChange={(e) => setEqForm({ ...eqForm, pricePerHour: parseFloat(e.target.value) || 0 })} className="border-zinc-700 bg-zinc-800" />
               </div>
             )}

@@ -807,7 +807,7 @@ export function RefundPaymentDialog({
 
             <div className="space-y-2">
               <Label htmlFor="refund-payment-amount">
-                Montant à rembourser (€)
+                Montant à rembourser (€ TTC)
               </Label>
               <Input
                 id="refund-payment-amount"

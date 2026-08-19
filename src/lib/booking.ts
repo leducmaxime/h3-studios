@@ -214,7 +214,7 @@ export interface PromoCode {
 }
 const PROMO_CODES: PromoCode[] = [
   { code: "BIENVENUE", type: "percentage", value: 10, description: "10% de réduction" },
-  { code: "H3AMIS", type: "fixed", value: 5, description: "5€ de réduction", minTotal: 15 },
+  { code: "H3AMIS", type: "fixed", value: 5, description: "5€ TTC de réduction", minTotal: 15 },
   { code: "ROCK2026", type: "percentage", value: 15, description: "15% de réduction" },
 ];
 
@@ -223,7 +223,7 @@ export function validatePromoCode(code: string, total: number): { valid: boolean
   const promo = PROMO_CODES.find((p) => p.code === normalized);
   if (!promo) return { valid: false, error: "Code promo invalide" };
   if (promo.minTotal && total < promo.minTotal) {
-    return { valid: false, error: `Montant minimum de ${promo.minTotal}€ requis` };
+    return { valid: false, error: `Montant minimum de ${promo.minTotal}€ TTC requis` };
   }
   return { valid: true, promo };
 }
@@ -758,9 +758,7 @@ export function formatDate(date: Date, format: "short" | "long" = "long"): strin
   return date.toLocaleDateString("fr-FR", options);
 }
 
-export function formatPrice(amount: number): string {
-  return amount % 1 === 0 ? `${amount}€` : `${amount.toFixed(2).replace(".", ",")}€`;
-}
+export { formatPrice } from "./tax";
 
 export function generateBookingRef(): string {
   const datePart = getParisDateISO().replace(/-/g, "");

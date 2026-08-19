@@ -46,6 +46,7 @@ import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
 import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, parseBookingEquipmentLines, type StudioId, type GroupType } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, isKeepBalanceDue } from "@/lib/booking-totals";
+import { formatTaxBreakdown } from "@/lib/tax";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel, bookingStatusLabel } from "@/lib/labels";
 
@@ -1367,7 +1368,7 @@ export function AdminCalendar() {
               <div className="flex items-center gap-3 rounded-lg bg-zinc-800 p-3">
                 <CreditCard className="h-4 w-4 shrink-0 text-primary" />
                 <div>
-                  <p className="text-[10px] uppercase text-zinc-500 font-bold">Total à payer</p>
+                  <p className="text-[10px] uppercase text-zinc-500 font-bold">Total à payer TTC</p>
                   <div className="flex items-baseline gap-2">
                     <p className="text-sm font-bold text-primary">{formatPrice(finalTotal)}</p>
                     {(b.promo_discount || 0) > 0 && (
@@ -1377,6 +1378,13 @@ export function AdminCalendar() {
                       <p className="text-[10px] text-emerald-500 font-medium">(Déjà payé: {formatPrice(totalPaid)})</p>
                     )}
                   </div>
+                  {(() => {
+                    const tax = formatTaxBreakdown(finalTotal);
+                    return <div className="mt-1 space-y-0.5 text-[10px] text-zinc-500">
+                      <div className="flex justify-between"><span>Total HT</span><span>{tax.ht}</span></div>
+                      <div className="flex justify-between"><span>TVA 20%</span><span>{tax.vat}</span></div>
+                    </div>;
+                  })()}
                 </div>
               </div>
 
@@ -1445,7 +1453,7 @@ export function AdminCalendar() {
                   <p className="text-[10px] font-bold uppercase text-zinc-500">Ajouter un paiement</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label htmlFor="amount" className="text-[9px] text-zinc-500 uppercase">Montant (€)</Label>
+                      <Label htmlFor="amount" className="text-[9px] text-zinc-500 uppercase">Montant (€ TTC)</Label>
                       <Input
                         id="amount"
                         type="number"

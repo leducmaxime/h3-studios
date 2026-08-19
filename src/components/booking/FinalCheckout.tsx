@@ -13,6 +13,7 @@ import {
   type CompletedBooking,
 } from "@/lib/booking";
 import { useEquipment } from "./useEquipment";
+import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 
 interface FinalCheckoutProps {
   cart: CompletedBooking[];
@@ -174,9 +175,10 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
               <span>-{formatPrice(promoDiscount)}</span>
             </div>
           )}
+          <TaxBreakdown ttc={total} />
           <div className="flex items-center justify-between gap-3">
             <span className="min-w-0 text-lg">
-              {isPaid ? "Total payé" : <>Total à régler sur place <span className="whitespace-nowrap">(CB ou espèces)</span></>}
+              {isPaid ? "Total TTC payé" : <>Total TTC à régler sur place <span className="whitespace-nowrap">(CB ou espèces)</span></>}
             </span>
             <span className="shrink-0 text-2xl font-bold text-primary">{formatPrice(total)}</span>
           </div>

@@ -57,8 +57,8 @@ export function Tarifs() {
                       </span>
                       Avant 18h
                     </TableCell>
-                    <TableCell className="text-center">18€/Heure</TableCell>
-                    <TableCell className="text-center">15€/Heure</TableCell>
+                    <TableCell className="text-center">18€ TTC/Heure</TableCell>
+                    <TableCell className="text-center">15€ TTC/Heure</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>
@@ -70,8 +70,8 @@ export function Tarifs() {
                       <span className="whitespace-nowrap">Week-end /</span>{" "}
                       <span className="whitespace-nowrap">Jours fériés</span>
                     </TableCell>
-                    <TableCell className="text-center">22€/Heure</TableCell>
-                    <TableCell className="text-center">18€/Heure</TableCell>
+                    <TableCell className="text-center">22€ TTC/Heure</TableCell>
+                    <TableCell className="text-center">18€ TTC/Heure</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="hidden font-bold lg:table-cell">Duo</TableCell>
@@ -83,7 +83,7 @@ export function Tarifs() {
                       Tarif unique
                     </TableCell>
                     <TableCell colSpan={2} className="text-center">
-                      12€/Heure
+                      12€ TTC/Heure
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -98,11 +98,14 @@ export function Tarifs() {
                       Tarif unique
                     </TableCell>
                     <TableCell colSpan={2} className="text-center">
-                      6€/Heure
+                      6€ TTC/Heure
                     </TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
+              <p className="text-sm text-white/60">
+                Tous les tarifs sont indiqués TTC. TVA 20%.
+              </p>
             </div>
             <span className="text-primary">Abonnement possible sur demande</span>
 
@@ -120,9 +123,9 @@ export function Tarifs() {
                       </div>
                     </TableCell>
                     <TableCell className="flex flex-col gap-2">
-                      <span>50€/Heure</span>
-                      <span>170€/Demi-Journée</span>
-                      <span>320€/Journée</span>
+                      <span>50€ TTC/Heure</span>
+                      <span>170€ TTC/Demi-Journée</span>
+                      <span>320€ TTC/Journée</span>
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -131,14 +134,14 @@ export function Tarifs() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-2">
-                        <span>Cymbale crash : 1€/Heure</span>
+                        <span>Cymbale crash : 1€ TTC/Heure</span>
                         <span>
-                          Micro supplémentaire (5ème ou +) : 1€/Heure{" "}
-                          <span className="text-xs">(plafonné à 3€/séance)</span>
+                          Micro supplémentaire (5ème ou +) : 1€ TTC/Heure{" "}
+                          <span className="text-xs">(plafonné à 3€ TTC/séance)</span>
                         </span>
                         <span>
-                          Instruments : 2€/Heure{" "}
-                          <span className="text-xs">(plafonné à 5€/séance)</span>
+                          Instruments : 2€ TTC/Heure{" "}
+                          <span className="text-xs">(plafonné à 5€ TTC/séance)</span>
                         </span>
                       </div>
                     </TableCell>

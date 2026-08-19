@@ -58,7 +58,7 @@ export function ConditionsVente() {
           <section>
             <h2 className="mb-3 text-xl font-semibold text-primary">Tarifs et paiement</h2>
             <p className="text-sm leading-relaxed">
-              Les tarifs sont indiqués en euros TTC sur la page{" "}
+              Les tarifs sont indiqués en euros TTC (TVA 20 %) sur la page{" "}
               <a href="/tarifs" className="text-primary hover:underline">
                 Tarifs
               </a>
