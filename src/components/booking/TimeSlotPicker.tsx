@@ -11,6 +11,8 @@ import {
   canBeStartTime,
   canBeEndTime,
   isPeakTime,
+  isOverrideRangeValid,
+  isSlotOutsideOpeningHours,
   type GroupType,
   type StudioId,
 } from "@/lib/booking";
@@ -40,6 +42,7 @@ interface TimeSlotPickerProps {
   refetchPricing?: () => void;
   /** When true, every slot of the day renders as unavailable. */
   todayFullyBlocked?: boolean;
+  allowOverride?: boolean;
 }
 
 const STUDIO_LABELS: Record<StudioId, string> = {
@@ -79,6 +82,7 @@ export function TimeSlotPicker({
   pricingError = null,
   refetchPricing,
   todayFullyBlocked = false,
+  allowOverride = false,
 }: TimeSlotPickerProps) {
   const [selectedStart, setSelectedStart] = useState<string | null>(startTime);
   const [selectedEnd, setSelectedEnd] = useState<string | null>(endTime);
@@ -112,10 +116,10 @@ export function TimeSlotPicker({
   const studioSlots = useMemo(() => {
     const result: Record<StudioId, string[]> = { "la-scene": [], "le-podium": [] };
     for (const studioId of ["la-scene", "le-podium"] as StudioId[]) {
-      result[studioId] = getStudioTimeSlots(studioId, date);
+      result[studioId] = allowOverride ? ALL_TIME_SLOTS : getStudioTimeSlots(studioId, date);
     }
     return result;
-  }, [date, pricingGrid]);
+  }, [date, pricingGrid, allowOverride]);
 
   // Exact DB rates for a studio + the current group type, straight from the
   // grid. null = grid not loaded yet (the legend renders skeletons).
@@ -136,6 +140,7 @@ export function TimeSlotPicker({
 
   const checkSlotBooked = useCallback(
     (time: string, studioId: StudioId): boolean => {
+      if (allowOverride) return slotsByStudio[studioId]?.find((s) => s.time === time)?.available === false;
       if (todayFullyBlocked) return true;
       const slots = slotsByStudio[studioId];
       if (!slots) return true;
@@ -143,7 +148,7 @@ export function TimeSlotPicker({
       if (!slot) return true;
       return !slot.available;
     },
-    [slotsByStudio, todayFullyBlocked]
+    [slotsByStudio, todayFullyBlocked, allowOverride]
   );
 
   const isStartOfOccupiedBlock = useCallback(
@@ -225,6 +230,13 @@ export function TimeSlotPicker({
   }, [onClear]);
 
   const tryConfirmRange = useCallback((start: string, end: string, studioId: StudioId): boolean => {
+    if (allowOverride) {
+      if (!isOverrideRangeValid(start, end)) return false;
+      setSelectedStart(start);
+      setSelectedEnd(end);
+      onSelectRange(start, end, studioId);
+      return true;
+    }
     if (!studioSlots[studioId]) {
       onClear();
       return false;
@@ -260,11 +272,39 @@ export function TimeSlotPicker({
     setSelectedEnd(end);
     onSelectRange(start, end, studioId);
     return true;
-  }, [studioSlots, checkSlotBooked, onSelectRange, onClear]);
+  }, [allowOverride, studioSlots, checkSlotBooked, onSelectRange, onClear]);
 
   const handleSlotClick = useCallback(
     (slot: string, studioId: StudioId) => {
       const switchingStudio = activeStudio !== null && studioId !== activeStudio;
+
+      if (allowOverride) {
+        if (selectionMode === "end" && !switchingStudio) {
+          if (slot === selectedStart) {
+            handleClear();
+          } else if (isOverrideRangeValid(selectedStart!, slot)) {
+            tryConfirmRange(selectedStart!, slot, studioId);
+          } else if (slot !== "00:00" && ALL_TIME_SLOTS.indexOf(slot) < ALL_TIME_SLOTS.indexOf(selectedStart!)) {
+            setSelectedStart(slot);
+            setSelectedEnd(null);
+          } else {
+            handleClear();
+          }
+          return;
+        }
+        if (selectionMode === "done") {
+          skipPropSyncRef.current = true;
+          onClear();
+        }
+        if (slot === "00:00") {
+          handleClear();
+          return;
+        }
+        setSelectedStart(slot);
+        setSelectedEnd(null);
+        setActiveStudio(studioId);
+        return;
+      }
 
       // End mode on the studio holding the start: the click either completes
       // the range or deselects — there is no dead click.
@@ -301,7 +341,7 @@ export function TimeSlotPicker({
       setSelectedEnd(null);
       setActiveStudio(studioId);
     },
-    [selectionMode, selectedStart, activeStudio, studioSlots, checkSlotBooked, tryConfirmRange, handleClear, onClear]
+    [allowOverride, selectionMode, selectedStart, activeStudio, studioSlots, checkSlotBooked, tryConfirmRange, handleClear, onClear]
   );
 
   const handleSlotMouseEnter = useCallback(
@@ -459,6 +499,39 @@ export function TimeSlotPicker({
     [checkSlotBooked, isStartOfOccupiedBlock, studioHasPeakPricing, date, selectedStart, selectedEnd, activeStudio, selectionMode, hoveredSlot, studioSlots, slotRuns]
   );
 
+  const getOverrideSlotStyle = useCallback(
+    (slot: string, studioId: StudioId): SlotPresentation => {
+      const isBooked = checkSlotBooked(slot, studioId);
+      const isOutside = isSlotOutsideOpeningHours(studioId, date, slot);
+      const isSameStudio = activeStudio === studioId;
+      const isSelectedStart = selectedStart === slot && isSameStudio;
+      const isSelectedEnd = selectedEnd === slot && isSameStudio;
+      const isPeak = studioHasPeakPricing(studioId) && isPeakTime(date, slot);
+      const visibleSlots = studioSlots[studioId];
+      const slotIdx = visibleSlots.indexOf(slot);
+      const ok = (className: string, hint: string | null = null): SlotPresentation => ({ className, hint });
+
+      if (isSelectedStart || isSelectedEnd) {
+        return ok(isPeak ? "bg-primary/50 border-amber-400 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer" : "bg-primary/40 border-primary/60 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer");
+      }
+      if (selectionMode === "done" && isSameStudio && selectedStart && selectedEnd) {
+        const startIdx = visibleSlots.indexOf(selectedStart);
+        let endIdx = visibleSlots.indexOf(selectedEnd);
+        if (selectedEnd === "00:00") endIdx = visibleSlots.length;
+        if (slotIdx > startIdx && slotIdx < endIdx) return ok(isPeak ? "bg-primary/25 border-amber-400/50 cursor-pointer" : "bg-primary/20 border-primary/30 cursor-pointer");
+      }
+      if (selectionMode === "end" && isSameStudio && selectedStart && slotIdx > visibleSlots.indexOf(selectedStart) && isOverrideRangeValid(selectedStart, slot)) {
+        const hoveredIdx = hoveredSlot?.studioId === studioId ? visibleSlots.indexOf(hoveredSlot.slot) : -1;
+        if (hoveredIdx > visibleSlots.indexOf(selectedStart) && slotIdx < hoveredIdx) return ok("bg-primary/30 border-primary/50 cursor-pointer");
+        return ok(isPeak ? "bg-white/10 hover:bg-white/20 border-amber-400/50 hover:border-amber-400/80 cursor-pointer" : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer");
+      }
+      if (isBooked) return ok("bg-red-500/30 border-red-500/50 cursor-pointer hover:bg-red-500/45");
+      if (isOutside) return ok("bg-white/[0.02] border-dashed border-white/15 text-white/40 cursor-pointer", "Hors horaires");
+      return ok(isPeak ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 cursor-pointer" : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer");
+    },
+    [checkSlotBooked, date, activeStudio, selectedStart, selectedEnd, studioHasPeakPricing, studioSlots, selectionMode, hoveredSlot]
+  );
+
   const formatHourLabel = (slot: string) => {
     const [h, m] = slot.split(":").map(Number);
     if (m === 0) return `${h}h`;
@@ -591,7 +664,9 @@ export function TimeSlotPicker({
           {slots.map((slot, idx) => {
             const rowIdx = Math.floor(idx / gridCols);
             const colIdx = idx % gridCols;
-            const { className: style, hint } = getSlotStyle(slot, studioId);
+            const { className: style, hint } = allowOverride
+              ? getOverrideSlotStyle(slot, studioId)
+              : getSlotStyle(slot, studioId);
             const isStart = selectedStart === slot && activeStudio === studioId;
             const isEnd = selectedEnd === slot && activeStudio === studioId;
             // Tooltip flips below the slot on the first row so it never
@@ -614,7 +689,7 @@ export function TimeSlotPicker({
               activeStudio !== studioId &&
               hoveredSlot?.studioId === studioId &&
               hoveredSlot.slot === slot &&
-              canBeStartTime(slot, slots, (t) => checkSlotBooked(t, studioId));
+              (allowOverride || canBeStartTime(slot, slots, (t) => checkSlotBooked(t, studioId)));
 
             return (
               <button
@@ -624,7 +699,7 @@ export function TimeSlotPicker({
                 onClick={() => handleSlotClick(slot, studioId)}
                 onMouseEnter={() => handleSlotMouseEnter(slot, studioId)}
                 onMouseLeave={handleSlotMouseLeave}
-                aria-disabled={hint ? true : undefined}
+                aria-disabled={!allowOverride && hint ? true : undefined}
                 aria-describedby={hint ? hintId : undefined}
               >
                 <div className="flex h-full items-center justify-center">
@@ -741,6 +816,12 @@ export function TimeSlotPicker({
             <span className="inline-block w-4 h-4 rounded bg-primary/40 border border-primary/60" />
             Sélectionné
           </span>
+          {allowOverride && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-4 w-4 rounded border border-dashed border-white/15 bg-white/[0.02]" />
+              Hors horaires
+            </span>
+          )}
         </div>
 
         {priceInfo && (

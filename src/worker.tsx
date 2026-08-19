@@ -775,7 +775,8 @@ const app = defineApp([
       const date = url.searchParams.get("date");
       if (!date) return jsonError("Date requise", 400);
 
-      const bookings = await getBookingsByDate(env.DB, date);
+      const excludeBookingId = url.searchParams.get("excludeBookingId");
+      const bookings = (await getBookingsByDate(env.DB, date)).filter((b) => b.id !== excludeBookingId);
       const blockedSlots = await getBlockedSlots(env.DB, undefined, date);
       const bookingDate = new Date(date + "T00:00:00");
 
@@ -1927,16 +1928,8 @@ const app = defineApp([
           return jsonError("Champs obligatoires manquants", 400);
         }
 
-        const conflict = await checkConflict(env.DB, body.studio_id, body.date, body.start_time, body.end_time);
-        if (conflict) {
-          return jsonError("Conflit avec une autre réservation", 409);
-        }
-
-        // Check for blocked slots
-        const blockedSlot = await checkBlockedSlotConflict(env.DB, body.studio_id, body.date, body.start_time, body.end_time);
-        if (blockedSlot) {
-          return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
-        }
+        // Admin may force overlapping / blocked / off-hours / sub-1h slots.
+        // Public POST /api/bookings still rejects those.
 
         const user = await env.DB.prepare("SELECT band_name, client_type, legal_name, siret, rna, instagram_accounts FROM users WHERE id = ?").bind(body.user_id).first<{ band_name: string | null; client_type: string | null; legal_name: string | null; siret: string | null; rna: string | null; instagram_accounts: string | null }>();
         const bookingBandName = user?.band_name ?? null;
@@ -2221,7 +2214,7 @@ const app = defineApp([
         // exclu : le serveur est l'opérateur d'invariance. Le client ne peut
         // jamais persister un montant dérivé/net — le brut est toujours
         // recalculé depuis base_price + equipment_price.
-        const ALLOWED_BOOKING_FIELDS = ["date", "start_time", "end_time", "notes", "base_price",
+        const ALLOWED_BOOKING_FIELDS = ["date", "start_time", "end_time", "studio_id", "notes", "base_price",
           "equipment_price", "equipment", "promo_discount", "cancelled_at", "cancel_reason"] as const;
         const body = Object.fromEntries(
           Object.entries(rawBody).filter(([k]) => (ALLOWED_BOOKING_FIELDS as readonly string[]).includes(k))
@@ -2229,6 +2222,7 @@ const app = defineApp([
           date?: string;
           start_time?: string;
           end_time?: string;
+          studio_id?: string;
           notes?: string;
           base_price?: number;
           equipment_price?: number;
@@ -2243,12 +2237,15 @@ const app = defineApp([
         // Une lecture n'est nécessaire que si un champ dépend de l'existant
         // (déplacement, recalcul du brut, plafonnement de la remise).
         const needsExisting = Boolean(
-          body.date || body.start_time || body.end_time ||
+          body.date || body.start_time || body.end_time || body.studio_id ||
           body.base_price !== undefined || body.equipment_price !== undefined ||
           body.promo_discount !== undefined || body.equipment !== undefined,
         );
         const existing = needsExisting ? await getBookingById(env.DB, id) : null;
         if (needsExisting && !existing) return jsonError("Réservation introuvable", 404);
+        if (body.studio_id && body.studio_id !== "la-scene" && body.studio_id !== "le-podium") {
+          return jsonError("Studio invalide", 400);
+        }
 
         if (body.equipment !== undefined) {
           const catalogue = await getEquipment(env.DB);
@@ -2276,24 +2273,8 @@ const app = defineApp([
           body.equipment_price = lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);
         }
 
-        // If rescheduling, check for conflicts
-        if (body.date || body.start_time || body.end_time) {
-          const ex = existing!;
-          const newDate = body.date || ex.date;
-          const newStart = body.start_time || ex.start_time;
-          const newEnd = body.end_time || ex.end_time;
-
-          const conflict = await checkConflict(env.DB, ex.studio_id, newDate, newStart, newEnd, id);
-          if (conflict) {
-            return jsonError("Conflit avec une autre réservation", 409);
-          }
-
-          // Check for blocked slots when rescheduling
-          const blockedSlot = await checkBlockedSlotConflict(env.DB, ex.studio_id, newDate, newStart, newEnd);
-          if (blockedSlot) {
-            return jsonError(`Ce créneau est bloqué${blockedSlot.reason ? ` : ${blockedSlot.reason}` : ""}`, 409);
-          }
-        }
+        // Admin may force overlapping / blocked / off-hours / sub-1h slots
+        // when rescheduling. Public booking creation still rejects those.
 
         // Invariant de stockage : total_price = base_price + equipment_price (brut),
         // promo_discount séparé. Toute modification de base/équipement recalcule
