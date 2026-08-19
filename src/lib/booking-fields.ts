@@ -240,6 +240,19 @@ export const BOOKING_FIELD_FORMAT_HINTS: Partial<Record<BookingFieldKey, string>
   rna: "Le numéro RNA doit commencer par W suivi de 9 caractères",
 };
 
+/**
+ * Value-aware hint. SIRET is the one field where the static hint actively
+ * misleads: a 14-digit number that fails its check digit (Luhn) is rejected
+ * while the message tells the user to type 14 digits — which they just did.
+ * Distinguish the two failures so the user knows what to fix.
+ */
+export function bookingFieldFormatHint(key: BookingFieldKey, value: string): string | undefined {
+  if (key === "siret" && /^\d{14}$/.test(normalizeSiret(value))) {
+    return "Ce numéro SIRET est invalide (clé de contrôle incorrecte) — vérifiez votre saisie";
+  }
+  return BOOKING_FIELD_FORMAT_HINTS[key];
+}
+
 // ---------------------------------------------------------------------------
 // Account profile → booking fields
 // ---------------------------------------------------------------------------
@@ -390,7 +403,7 @@ export function getBookingFieldIssues(fields: BookingUserFields, clientType: Cli
         key,
         label: bookingFieldLabel(key, clientType),
         status: "invalid",
-        reason: BOOKING_FIELD_FORMAT_HINTS[key] ?? `${bookingFieldLabel(key, clientType)} est invalide`,
+        reason: bookingFieldFormatHint(key, value) ?? `${bookingFieldLabel(key, clientType)} est invalide`,
       });
     }
   }

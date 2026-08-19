@@ -5,6 +5,7 @@ import {
   CLIENT_TYPE_RULES,
   CGV_NOT_ACCEPTED_CODE,
   CGV_NOT_ACCEPTED_ERROR,
+  bookingFieldFormatHint,
   bookingFieldLabel,
   bookingFieldPlaceholder,
   computeAccountFieldStatus,
@@ -145,6 +146,16 @@ describe("client type contract and offline identifiers", () => {
     expect(isValidSiret("35600000000001")).toBe(true); // digit sum 15
     expect(isValidSiret("35600000000002")).toBe(false); // digit sum 16
     expect(normalizeSiret("732 829 320 000 74")).toBe("73282932000074");
+  });
+
+  // A 14-digit SIRET that fails its check digit used to be rejected with
+  // "Le SIRET doit contenir 14 chiffres" — telling the user to do what they
+  // just did. The two failures must read differently.
+  it("distinguishes a wrong-length SIRET from a wrong check digit", () => {
+    expect(bookingFieldFormatHint("siret", "1234")).toBe("Le SIRET doit contenir 14 chiffres");
+    expect(bookingFieldFormatHint("siret", "12345678912345")).toMatch(/clé de contrôle/);
+    expect(bookingFieldFormatHint("siret", "732 829 320 00075")).toMatch(/clé de contrôle/);
+    expect(getBookingFieldIssues({ ...validFields, legalName: "ACME", siret: "12345678912345" }, "entreprise")[0]?.reason).toMatch(/clé de contrôle/);
   });
   it("validates and normalises RNA", () => {
     expect(isValidRna("W751234567")).toBe(true);

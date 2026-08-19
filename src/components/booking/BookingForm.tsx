@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
-import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, bookingFieldLabel, bookingFieldPlaceholder, computeAccountFieldStatus, getRequiredBookingFields, getVisibleBookingFields, isValidBookingFieldValue, type BookingFieldIssue, type BookingFieldKey, type ClientType } from "@/lib/booking-fields";
+import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, bookingFieldFormatHint, bookingFieldLabel, bookingFieldPlaceholder, computeAccountFieldStatus, getRequiredBookingFields, getVisibleBookingFields, isValidBookingFieldValue, type BookingFieldIssue, type BookingFieldKey, type ClientType } from "@/lib/booking-fields";
 import type { ClientUser } from "@/lib/client-user";
 import { ClientTypeToggle } from "./ClientTypeToggle";
 
@@ -598,7 +598,7 @@ export function BookingForm({
         {showInvalidAccountHint && (
           <span id={`${field.key}-invalid-account`} className="text-xs text-amber-300/80">
             La valeur enregistrée sur votre compte n'a pas pu être reprise — saisissez-la à nouveau.
-            {BOOKING_FIELD_FORMAT_HINTS[field.key] ? ` ${BOOKING_FIELD_FORMAT_HINTS[field.key]}.` : ""}
+            {BOOKING_FIELD_FORMAT_HINTS[field.key] ? ` ${bookingFieldFormatHint(field.key, currentValue)}.` : ""}
           </span>
         )}
         {error && (

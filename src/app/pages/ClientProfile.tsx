@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Lock, Phone, Music, MapPin, Building2, Hash, Home, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
 import { refresh, useClientAuth } from "@/lib/client-auth-store";
-import { getVisibleBookingFields, isValidRna, isValidSiret } from "@/lib/booking-fields";
+import { bookingFieldFormatHint, getVisibleBookingFields, isValidRna, isValidSiret } from "@/lib/booking-fields";
 import type { ClientType } from "@/lib/booking-fields";
 
 function RequiredAsterisk() {
@@ -208,7 +208,7 @@ export function ClientProfile() {
                     <div className="space-y-2">
                       <FieldLabel htmlFor="profile-siret" icon={Hash} required={clientType === "entreprise"}>SIRET</FieldLabel>
                       <Input id="profile-siret" value={siret} onChange={(e) => setSiret(e.target.value)} disabled={saving} placeholder="732 829 320 00074" className="bg-white/10 border-white/15 text-white placeholder:text-zinc-600 focus-visible:border-primary focus-visible:ring-primary/30 h-11" />
-                      {siret && !isValidSiret(siret) && <p className="text-xs text-amber-400">Le SIRET doit comporter 14 chiffres valides.</p>}
+                      {siret && !isValidSiret(siret) && <p className="text-xs text-amber-400">{bookingFieldFormatHint("siret", siret)}.</p>}
                     </div>
                   )}
                   {clientType === "association" && (
