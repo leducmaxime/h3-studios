@@ -31,7 +31,7 @@ import { formatDateISO } from "@/lib/utils";
 import { formatSiret, resolveUserClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
 import { formatPrice, type StudioId } from "@/lib/booking";
-import { getBookingAmountDue, getDisplayPaymentStatusFromSummary } from "@/lib/booking-totals";
+import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, studioLabel } from "@/lib/labels";
 import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
@@ -869,12 +869,21 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                                 b.payment_status,
                                 b.total_collected ?? b.total_paid ?? 0,
                                 b.total_refunded ?? 0,
+                                { keepBalanceDue: isKeepBalanceDue(b), remaining: b.remaining ?? 0 },
                               );
                               if (payDisplay === "paid") {
                                 return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>;
                               }
                               if (payDisplay === "cancelled" || payDisplay === "paid-before-cancel" || payDisplay === "refunded") {
                                 return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">{displayPaymentStatusLabel(payDisplay)}</Badge>;
+                              }
+                              if (b.status === "cancelled" && payDisplay === "pay-on-site") {
+                                const remaining = b.remaining;
+                                return (
+                                  <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">
+                                    {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : "Reste à payer"}
+                                  </Badge>
+                                );
                               }
                               if (b.payment_status === "pay-on-site") {
                                 return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>;
@@ -883,11 +892,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             })()}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            {b.status === "cancelled" ? (
+                            {b.status === "cancelled" && !isKeepBalanceDue(b) ? (
                               <span className="font-medium text-zinc-600">—</span>
                             ) : (
                               <>
-                                <span className="font-medium">{formatPrice(getBookingAmountDue(b))}</span>
+                                <span className="font-medium">{formatPrice(b.remaining ?? getBookingAmountDue(b))}</span>
                                 {b.promo_discount > 0 && (
                                   <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
                                 )}

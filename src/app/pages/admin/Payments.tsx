@@ -47,7 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatPrice } from "@/lib/booking";
-import { getBookingAmountDue, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
 import { exportPaymentsCSV } from "@/lib/export";
 import { RefundPaymentDialog } from "@/components/admin/refund";
 import { PAYMENT_RECORD_STATUS_LABELS, paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
@@ -95,6 +95,7 @@ type BookingPaymentMethod = "card" | "cash" | null;
 interface CollectBooking {
   booking_ref: string;
   status?: string;
+  keep_balance_due?: number | boolean | null;
   base_price: number;
   equipment_price: number;
   total_price: number;
@@ -581,8 +582,8 @@ export function AdminPayments() {
       if (!pJson.success) throw new Error(pJson.error || "Payments fetch failed");
 
       const booking = bJson.data as CollectBooking;
-      // Une réservation annulée ne présente jamais de montant dû.
-      if (booking.status === "cancelled") {
+      // Une réservation annulée ne peut être encaissée que si son solde a été conservé.
+      if (!bookingAllowsCollection(booking)) {
         toast.error("Cette réservation est annulée — aucun encaissement possible");
         return;
       }
