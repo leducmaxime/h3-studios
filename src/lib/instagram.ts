@@ -1,3 +1,5 @@
+import { getSetting, setSetting } from "@/lib/db";
+
 export interface InstagramChild {
   id: string;
   media_type: string;
@@ -21,15 +23,116 @@ export interface InstagramFeed {
   last_updated: string;
 }
 
+export interface InstagramRefreshResult {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export const INSTAGRAM_LONG_LIVED_TOKEN_SECONDS = 5_184_000;
+export const INSTAGRAM_TOKEN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+export const INSTAGRAM_TOKEN_SETTING = "instagram_access_token";
+export const INSTAGRAM_TOKEN_EXPIRES_AT_SETTING = "instagram_token_expires_at";
+export const INSTAGRAM_TOKEN_REFRESHED_AT_SETTING = "instagram_token_refreshed_at";
+
 const RSS_APP_FEED_URL = "https://rss.app/feeds/wpmloa9fZdyyGMag.xml";
 
 export async function getInstagramToken(db: D1Database, envToken?: string): Promise<string | undefined> {
   const storedToken = await db
     .prepare("SELECT value FROM settings WHERE key = ?")
-    .bind("instagram_access_token")
+    .bind(INSTAGRAM_TOKEN_SETTING)
     .first<{ value: string }>();
   const token = storedToken?.value?.trim();
   return token || envToken;
+}
+
+export function shouldRefreshInstagramToken(
+  refreshedAtIso: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!refreshedAtIso) return true;
+  const refreshedAt = Date.parse(refreshedAtIso);
+  if (Number.isNaN(refreshedAt)) return true;
+  return nowMs - refreshedAt >= INSTAGRAM_TOKEN_MIN_AGE_MS;
+}
+
+export function tokenExpiresAtFromExpiresIn(expiresIn: number, nowMs: number = Date.now()): string {
+  return new Date(nowMs + expiresIn * 1000).toISOString();
+}
+
+export function parseInstagramRefreshResponse(data: unknown): InstagramRefreshResult {
+  if (!data || typeof data !== "object") {
+    throw new Error("Instagram token refresh returned an invalid payload");
+  }
+  const payload = data as { access_token?: unknown; token_type?: unknown; expires_in?: unknown };
+  if (typeof payload.access_token !== "string" || !payload.access_token.trim()) {
+    throw new Error("Instagram token refresh did not return an access_token");
+  }
+  if (typeof payload.expires_in !== "number" || !Number.isFinite(payload.expires_in) || payload.expires_in <= 0) {
+    throw new Error("Instagram token refresh did not return a valid expires_in");
+  }
+  return {
+    access_token: payload.access_token.trim(),
+    token_type: typeof payload.token_type === "string" ? payload.token_type : "bearer",
+    expires_in: payload.expires_in,
+  };
+}
+
+export async function refreshInstagramAccessToken(accessToken: string): Promise<InstagramRefreshResult> {
+  const response = await fetch(
+    `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(accessToken)}`,
+  );
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`Instagram token refresh error: ${response.status} ${body}`);
+  }
+  try {
+    return parseInstagramRefreshResponse(JSON.parse(body) as unknown);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Instagram token refresh")) {
+      throw error;
+    }
+    throw new Error(`Instagram token refresh returned invalid JSON: ${body}`);
+  }
+}
+
+export async function persistInstagramToken(
+  db: D1Database,
+  accessToken: string,
+  expiresIn: number,
+  nowMs: number = Date.now(),
+): Promise<void> {
+  await setSetting(db, INSTAGRAM_TOKEN_SETTING, accessToken);
+  await setSetting(db, INSTAGRAM_TOKEN_EXPIRES_AT_SETTING, tokenExpiresAtFromExpiresIn(expiresIn, nowMs));
+  await setSetting(db, INSTAGRAM_TOKEN_REFRESHED_AT_SETTING, new Date(nowMs).toISOString());
+}
+
+export async function refreshAndPersistInstagramToken(
+  db: D1Database,
+  envToken?: string,
+  nowMs: number = Date.now(),
+): Promise<{ token?: string; refreshed: boolean; skipped?: boolean; error?: string }> {
+  const token = await getInstagramToken(db, envToken);
+  if (!token) {
+    return { refreshed: false, error: "No Instagram token configured" };
+  }
+
+  const refreshedAt = await getSetting(db, INSTAGRAM_TOKEN_REFRESHED_AT_SETTING);
+  if (!shouldRefreshInstagramToken(refreshedAt, nowMs)) {
+    return { token, refreshed: false, skipped: true };
+  }
+
+  try {
+    const result = await refreshInstagramAccessToken(token);
+    await persistInstagramToken(db, result.access_token, result.expires_in, nowMs);
+    return { token: result.access_token, refreshed: true };
+  } catch (error) {
+    return {
+      token,
+      refreshed: false,
+      error: error instanceof Error ? error.message : "Instagram token refresh failed",
+    };
+  }
 }
 
 async function fetchMediaPosts(accessToken: string): Promise<InstagramPost[]> {

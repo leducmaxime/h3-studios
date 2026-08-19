@@ -156,8 +156,14 @@ import {
   fetchInstagramFeedFromRSS,
   getCachedInstagramFeed,
   getInstagramToken,
+  INSTAGRAM_LONG_LIVED_TOKEN_SECONDS,
+  INSTAGRAM_TOKEN_EXPIRES_AT_SETTING,
+  INSTAGRAM_TOKEN_REFRESHED_AT_SETTING,
+  persistInstagramToken,
+  refreshAndPersistInstagramToken,
   syncInstagram,
 } from "@/lib/instagram";
+import { isAllowedInstagramMediaUrl } from "@/lib/instagram-media";
 
 const DocumentWithPath = ({
   children,
@@ -4576,15 +4582,6 @@ const app = defineApp([
         return jsonError("URL parameter required", 400);
       }
 
-      const isAllowedImageUrl = (candidate: URL): boolean => {
-        const hostname = candidate.hostname.toLowerCase();
-        return candidate.protocol === "https:"
-          && (hostname === "cdninstagram.com"
-            || hostname.endsWith(".cdninstagram.com")
-            || hostname === "fbcdn.net"
-            || hostname.endsWith(".fbcdn.net"));
-      };
-
       let parsedImageUrl: URL;
       try {
         parsedImageUrl = new URL(imageUrl);
@@ -4592,21 +4589,26 @@ const app = defineApp([
         return jsonError("Invalid image URL", 400);
       }
 
-      if (!isAllowedImageUrl(parsedImageUrl)) {
-        console.error("Rejected Instagram proxy image host:", parsedImageUrl.hostname);
+      if (!isAllowedInstagramMediaUrl(parsedImageUrl)) {
+        console.error("Rejected Instagram proxy media host:", parsedImageUrl.hostname);
         return new Response(null, { status: 403 });
       }
 
-      const fetchImage = (target: URL) => fetch(target, {
-        redirect: "manual",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-      });
-      let imageResponse = await fetchImage(parsedImageUrl);
+      const range = request.headers.get("Range");
+      const fetchMedia = (target: URL) => {
+        const headers: Record<string, string> = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        };
+        if (range) headers.Range = range;
+        return fetch(target, {
+          redirect: "manual",
+          headers,
+        });
+      };
+      let mediaResponse = await fetchMedia(parsedImageUrl);
 
-      if (imageResponse.status >= 300 && imageResponse.status < 400) {
-        const location = imageResponse.headers.get("Location");
+      if (mediaResponse.status >= 300 && mediaResponse.status < 400) {
+        const location = mediaResponse.headers.get("Location");
         if (!location) return new Response(null, { status: 502 });
 
         let redirectUrl: URL;
@@ -4615,21 +4617,27 @@ const app = defineApp([
         } catch {
           return new Response(null, { status: 502 });
         }
-        if (!isAllowedImageUrl(redirectUrl)) return new Response(null, { status: 502 });
+        if (!isAllowedInstagramMediaUrl(redirectUrl)) return new Response(null, { status: 502 });
 
-        imageResponse = await fetchImage(redirectUrl);
+        mediaResponse = await fetchMedia(redirectUrl);
       }
 
-      if (!imageResponse.ok) {
+      if (!mediaResponse.ok && mediaResponse.status !== 206) {
         return new Response(null, { status: 502 });
       }
 
-      const blob = await imageResponse.blob();
-      return new Response(blob, {
-        headers: {
-          "Content-Type": imageResponse.headers.get("Content-Type") || "image/jpeg",
-          "Cache-Control": "public, max-age=3600"
-        }
+      const responseHeaders = new Headers();
+      responseHeaders.set("Content-Type", mediaResponse.headers.get("Content-Type") || "application/octet-stream");
+      responseHeaders.set("Cache-Control", "public, max-age=3600");
+      responseHeaders.set("Accept-Ranges", mediaResponse.headers.get("Accept-Ranges") || "bytes");
+      const contentLength = mediaResponse.headers.get("Content-Length");
+      if (contentLength) responseHeaders.set("Content-Length", contentLength);
+      const contentRange = mediaResponse.headers.get("Content-Range");
+      if (contentRange) responseHeaders.set("Content-Range", contentRange);
+
+      return new Response(mediaResponse.body, {
+        status: mediaResponse.status,
+        headers: responseHeaders,
       });
     } catch (error) {
       console.error("GET /api/instagram/proxy-image error:", error);
@@ -4676,7 +4684,7 @@ const app = defineApp([
         return jsonError(message, 400);
       }
 
-      await setSetting(env.DB, "instagram_access_token", normalizedToken);
+      await persistInstagramToken(env.DB, normalizedToken, INSTAGRAM_LONG_LIVED_TOKEN_SECONDS);
       await addAuditLog(env.DB, "settings", "instagram", "update_token", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
       const result = await syncInstagram(env.DB, normalizedToken);
@@ -4727,12 +4735,16 @@ const app = defineApp([
       const lastSyncedAt = parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime())
         ? parsedTimestamp.toISOString()
         : null;
+      const expiresAt = await getSetting(env.DB, INSTAGRAM_TOKEN_EXPIRES_AT_SETTING);
+      const lastRefreshedAt = await getSetting(env.DB, INSTAGRAM_TOKEN_REFRESHED_AT_SETTING);
       return jsonSuccess({
         lastSyncedAt,
         postCount,
         tokenConfigured: Boolean(token),
         tokenValid,
         tokenError,
+        expiresAt,
+        lastRefreshedAt,
       });
     } catch (error) {
       console.error("GET /api/admin/instagram/status error:", error);
@@ -5396,7 +5408,18 @@ async function handleScheduled(controller: ScheduledController) {
     }
   }
 
-  const igToken = await getInstagramToken(env.DB as D1Database, (env as any).INSTAGRAM_ACCESS_TOKEN);
+  const igRefresh = await refreshAndPersistInstagramToken(
+    env.DB as D1Database,
+    (env as any).INSTAGRAM_ACCESS_TOKEN,
+  );
+  if (igRefresh.refreshed) {
+    console.log("[Cron] Instagram token refreshed");
+  } else if (igRefresh.skipped) {
+    console.log("[Cron] Instagram token refresh skipped (too recent)");
+  } else if (igRefresh.error) {
+    console.error(`[Cron] Instagram token refresh failed: ${igRefresh.error}`);
+  }
+  const igToken = igRefresh.token;
   const igResult = await syncInstagram(env.DB as D1Database, igToken);
   if (igResult.success) {
     console.log(`[Cron] Instagram synced: ${igResult.count} posts`);
