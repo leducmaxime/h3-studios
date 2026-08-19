@@ -45,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
+import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus } from "@/lib/booking-totals";
@@ -60,6 +60,7 @@ import {
   hasStripeReference,
   type PaymentRefundInfo,
 } from "@/components/admin/refund";
+import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
 
 interface BookingWithPromo extends DbBooking {
   promo_code_type?: string | null;
@@ -162,6 +163,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [newDate, setNewDate] = useState("");
   const [newStartTime, setNewStartTime] = useState("");
   const [newEndTime, setNewEndTime] = useState("");
+  const [newStudioId, setNewStudioId] = useState<StudioId | null>(null);
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [rescheduleError, setRescheduleError] = useState("");
 
@@ -206,11 +208,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     const date = newDate || booking.date;
     const start = newStartTime || booking.start_time;
     const end = newEndTime || booking.end_time;
-    fetch(`/api/equipment-availability?${new URLSearchParams({ date, start, end, studioId: booking.studio_id, excludeBookingId: booking.id })}`)
+    fetch(`/api/equipment-availability?${new URLSearchParams({ date, start, end, studioId: newStudioId ?? booking.studio_id, excludeBookingId: booking.id })}`)
       .then((r) => r.json() as Promise<{ success: boolean; data?: { items: Array<{ id: string; available: number; reserved: number }> } }>)
       .then((json) => { if (json.success && json.data) setEquipmentAvailability(Object.fromEntries(json.data.items.map((i) => [i.id, i]))); })
       .catch(() => {});
-  }, [booking, newDate, newStartTime, newEndTime]);
+  }, [booking, newDate, newStartTime, newEndTime, newStudioId]);
 
   const fetchBooking = useCallback(async () => {
     try {
@@ -221,6 +223,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         setNewDate(json.data.date);
         setNewStartTime(json.data.start_time);
         setNewEndTime(json.data.end_time);
+        setNewStudioId(json.data.studio_id as StudioId);
 
         // Fetch user
         const userRes = await fetch(`/api/admin/users/${json.data.user_id}`);
@@ -338,7 +341,12 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       const res = await fetch(`/api/admin/bookings/${booking.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: newDate, start_time: newStartTime, end_time: newEndTime }),
+        body: JSON.stringify({
+          date: newDate,
+          start_time: newStartTime,
+          end_time: newEndTime,
+          studio_id: newStudioId ?? booking.studio_id,
+        }),
       });
       const json = (await res.json()) as { success: boolean; error?: string };
       if (json.success) {
@@ -1197,54 +1205,31 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
       {/* Reschedule Dialog */}
       <Dialog open={rescheduleOpen} onOpenChange={(open) => { if (!open) { setRescheduleOpen(false); setRescheduleError(""); } }}>
-        <DialogContent className="bg-zinc-900 border-zinc-800">
+        <DialogContent className="bg-zinc-900 border-zinc-800 lg:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Déplacer la réservation</DialogTitle>
             <DialogDescription>Choisissez une nouvelle date et un nouveau créneau.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div>
-              <Label className="mb-1 block text-zinc-400">Date</Label>
-              <Input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="bg-zinc-800 border-zinc-700"
-              />
-            </div>
-            <div>
-              <Label className="mb-1 block text-zinc-400">Début</Label>
-              <Select value={newStartTime} onValueChange={setNewStartTime}>
-                <SelectTrigger className="bg-zinc-800 border-zinc-700">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-800 border-zinc-700">
-                  {TIME_SLOTS.map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="mb-1 block text-zinc-400">Fin</Label>
-              <Select value={newEndTime} onValueChange={setNewEndTime}>
-                <SelectTrigger className="bg-zinc-800 border-zinc-700">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-800 border-zinc-700">
-                  {[...TIME_SLOTS.slice(1), "00:00"].map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <AdminSlotPicker
+            date={newDate}
+            startTime={newStartTime}
+            endTime={newEndTime}
+            studioId={newStudioId}
+            groupType={(booking.group_type as GroupType) ?? null}
+            excludeBookingId={booking.id}
+            onChange={({ date: d, startTime: s, endTime: e, studioId: st }) => {
+              setNewDate(d);
+              setNewStartTime(s);
+              setNewEndTime(e);
+              setNewStudioId(st);
+            }}
+          />
           {rescheduleError && <p className="text-sm text-red-400">{rescheduleError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setRescheduleOpen(false); setRescheduleError(""); }} disabled={rescheduleLoading}>
               Annuler
             </Button>
-            <Button onClick={handleReschedule} disabled={rescheduleLoading}>
+            <Button onClick={handleReschedule} disabled={rescheduleLoading || !newDate || !newStartTime || !newEndTime || !newStudioId}>
               {rescheduleLoading ? "Déplacement..." : "Confirmer"}
             </Button>
           </DialogFooter>

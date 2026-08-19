@@ -22,6 +22,7 @@ interface WeekCalendarProps {
   groupType?: GroupType | null;
   cart?: CompletedBooking[];
   maxAdvanceDays?: number;
+  allowOverride?: boolean;
 }
 
 const DAYS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -128,7 +129,7 @@ function hasBookableAvailability(
   return false;
 }
 
-export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupType, cart = [], maxAdvanceDays = 90 }: WeekCalendarProps) {
+export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupType, cart = [], maxAdvanceDays = 90, allowOverride = false }: WeekCalendarProps) {
   const today = useMemo(() => {
     const iso = getParisDateISO();
     return new Date(iso + "T00:00:00");
@@ -139,6 +140,16 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
 
   const weekDates = useMemo(() => getSlidingWeekDates(today, dayOffset), [dayOffset, today]);
 
+  useEffect(() => {
+    if (!allowOverride || !selectedDate) return;
+    const first = weekDates[0];
+    const last = weekDates[6];
+    if (selectedDate < first || selectedDate > last) {
+      const diff = Math.round((selectedDate.getTime() - today.getTime()) / 86400000);
+      setDayOffset(Math.max(-730, Math.min(730, Math.floor(diff / 7) * 7)));
+    }
+  }, [allowOverride, selectedDate, weekDates, today]);
+
   const maxDayOffset = Math.max(0, maxAdvanceDays - 6);
 
   const weekFetchGenRef = useRef(0);
@@ -147,7 +158,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
     setWeekOccupancy(new Map());
     setDayMinAdvance(new Map());
     weekDates.forEach((date) => {
-      if (isPast(date) || isTooFarInFuture(date, maxAdvanceDays)) return;
+      if (!allowOverride && (isPast(date) || isTooFarInFuture(date, maxAdvanceDays))) return;
       const dateStr = formatDateISO(date);
       fetch(`/api/availability?date=${dateStr}`)
         .then((res) => res.json())
@@ -189,14 +200,14 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
           console.error(err);
         });
     });
-  }, [weekDates, maxAdvanceDays]);
+  }, [weekDates, maxAdvanceDays, allowOverride]);
 
   const goToPreviousWeek = () => {
-    setDayOffset((d) => Math.max(0, d - 7));
+    setDayOffset((d) => Math.max(allowOverride ? -730 : 0, d - 7));
   };
 
   const goToNextWeek = () => {
-    setDayOffset((d) => Math.min(maxDayOffset, d + 7));
+    setDayOffset((d) => Math.min(allowOverride ? 730 : maxDayOffset, d + 7));
   };
 
   return (
@@ -204,7 +215,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
       <div className="flex items-center justify-between">
         <button
           onClick={goToPreviousWeek}
-          disabled={dayOffset === 0}
+          disabled={allowOverride ? dayOffset <= -730 : dayOffset === 0}
           className="rounded-full p-2 transition-colors hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Semaine précédente"
         >
@@ -217,7 +228,7 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
         
         <button
           onClick={goToNextWeek}
-          disabled={dayOffset >= maxDayOffset}
+          disabled={allowOverride ? dayOffset >= 730 : dayOffset >= maxDayOffset}
           className="rounded-full p-2 transition-colors hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed"
           aria-label="Semaine suivante"
         >
@@ -240,12 +251,12 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
           const cartOccupancyForDate = getCartOccupancy(cart, dateKey);
           const merged = new Set<OccupancyInfo>([...apiOccupancy, ...cartOccupancyForDate]);
           const hasAvailability = hasBookableAvailability(merged, date, studioFilter, cutoff, fullyBlocked);
-          const isFull = !past && !tooFar && !hasAvailability;
-          const disabled = past || tooFar || !hasAvailability;
+          const isFull = allowOverride ? !hasAvailability : !past && !tooFar && !hasAvailability;
+          const disabled = allowOverride ? false : past || tooFar || !hasAvailability;
           // C6: pending derived from the map itself — no separate flag.
           // A bookable day that hasn't answered yet shows a pulse bar
           // instead of a premature "Disponible".
-          const isPending = !past && !tooFar && !weekOccupancy.has(dateKey);
+          const isPending = !past && (allowOverride || !tooFar) && !weekOccupancy.has(dateKey);
 
           return (
             <button
@@ -254,11 +265,17 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
               disabled={disabled}
               className={`
                 relative flex flex-col items-center justify-center rounded-lg lg:rounded-xl p-1.5 lg:p-3 min-h-[72px] lg:min-h-[100px] transition-all
-                ${past || tooFar
-                  ? "opacity-30 cursor-not-allowed bg-white/15"
-                  : isFull
-                    ? "opacity-70 cursor-not-allowed bg-white/15"
-                    : "hover:bg-primary/20 cursor-pointer bg-white/15"
+                ${allowOverride
+                  ? past
+                    ? "opacity-60 cursor-pointer bg-white/15"
+                    : isFull
+                      ? "opacity-70 cursor-pointer bg-white/15"
+                      : "hover:bg-primary/20 cursor-pointer bg-white/15"
+                  : past || tooFar
+                    ? "opacity-30 cursor-not-allowed bg-white/15"
+                    : isFull
+                      ? "opacity-70 cursor-not-allowed bg-white/15"
+                      : "hover:bg-primary/20 cursor-pointer bg-white/15"
                 }
                 ${selected
                   ? "ring-2 ring-primary ring-offset-1 lg:ring-offset-2 ring-offset-black bg-primary/20 text-primary"
@@ -293,10 +310,10 @@ export function WeekCalendar({ onSelectDate, selectedDate, studioFilter, groupTy
                 ) : (
                   <>
                     <span className="lg:hidden">
-                      {past || tooFar ? "" : isFull ? "Complet" : "Dispo"}
+                      {allowOverride ? (past ? "Passé" : isFull ? "Complet" : "Dispo") : past || tooFar ? "" : isFull ? "Complet" : "Dispo"}
                     </span>
                     <span className="hidden lg:inline">
-                      {past || tooFar ? "" : isFull ? "Complet" : "Disponible"}
+                      {allowOverride ? (past ? "Passé" : isFull ? "Complet" : "Disponible") : past || tooFar ? "" : isFull ? "Complet" : "Disponible"}
                     </span>
                   </>
                 )}

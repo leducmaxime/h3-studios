@@ -91,6 +91,19 @@ interface ExtendedBookingState {
 - **Closing boundary**: last slot in `getStudioTimeSlots` (e.g. "00:00" for la-scene) is end-only; `canBeStartTime` excludes it, `hasBookableRun` excludes it
 - **Occupied interior blocks**: a booking spanning the boundary renders the interior as filled, but the boundary slot itself can be the end of another booking
 
+### Admin override (`allowOverride`)
+
+- `TimeSlotPicker` and `WeekCalendar` accept `allowOverride?: boolean` (default `false`). When `false`, behavior is unchanged — the public tunnel never passes it.
+- When `true` (admin only, via `src/components/admin/AdminSlotPicker.tsx`):
+  - Slot grid uses the full `ALL_TIME_SLOTS` range, not `getStudioTimeSlots` — closed hours render dashed with a « Hors horaires » tooltip and stay clickable
+  - `checkSlotBooked` ignores `todayFullyBlocked`; a slot missing from the API payload is treated as free, not booked
+  - Occupied slots stay red but are selectable (`cursor-pointer`)
+  - Range validity collapses to `isOverrideRangeValid` (end after start) — the 1h minimum, opening hours, and occupancy checks do not apply, so 30-min bookings are allowed
+  - `"00:00"` remains end-only
+  - The calendar allows past dates, full days, and ±730 days of navigation, and snaps to the week holding `selectedDate`
+- Styling is isolated in `getOverrideSlotStyle`; the public `getSlotStyle` is untouched.
+- Admin surfaces show warnings from `getAdminSlotWarnings` (`src/lib/booking.ts`) instead of blocking — `POST/PUT /api/admin/bookings` no longer reject conflicts or blocked slots. Public `POST /api/bookings` still rejects them.
+
 ### Guest Checkout + Inline Login
 
 - `/api/client/me` is fetched on hydration to detect logged-in clients

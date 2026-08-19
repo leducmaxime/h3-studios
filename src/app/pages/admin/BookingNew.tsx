@@ -24,11 +24,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-import { STUDIOS, TIME_SLOTS, generateBookingRef, formatPrice, type StudioId, type GroupType } from "@/lib/booking";
+import { STUDIOS, generateBookingRef, formatPrice, slotDurationSlots, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 import { parseAmountInput } from "@/lib/booking-totals";
 import { GROUP_TYPE_LABELS, groupTypeLabel } from "@/lib/labels";
 import { formatSessionPriceDisplay, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
+
+import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
 
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { type PromoCode } from "@/lib/booking";
@@ -96,6 +98,10 @@ export function AdminBookingNew() {
   const [groupType, setGroupType] = useState<GroupType | undefined>(undefined);
   const [notes, setNotes] = useState("");
 
+  // Ordre du créneau — via slotDurationSlots pour traiter "00:00" comme fin de
+  // journée. Une comparaison lexicographique invaliderait 23:00 → 00:00.
+  const invalidRange = Boolean(startTime && endTime && slotDurationSlots(startTime, endTime) < 1);
+
   // Equipment
   const [availableEquipment, setAvailableEquipment] = useState<ApiEquipment[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentSelection[]>([]);
@@ -106,10 +112,6 @@ export function AdminBookingNew() {
   const [basePrice, setBasePrice] = useState<number | null>(null);
   const [equipmentPrices, setEquipmentPrices] = useState<{name: string; price: number}[]>([]);
   const [pricingLoading, setPricingLoading] = useState(false);
-
-  // Conflict check
-  const [conflict, setConflict] = useState(false);
-  const [, setConflictChecking] = useState(false);
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
@@ -180,36 +182,6 @@ export function AdminBookingNew() {
     }, 300);
     return () => clearTimeout(timer);
   }, [userSearch]);
-
-  // Check conflict when studio/date/time changes
-  const checkConflict = useCallback(async () => {
-    if (!date || !startTime || !endTime || !studioId) return;
-    setConflictChecking(true);
-    try {
-      const params = new URLSearchParams({
-        studio: studioId,
-        dateFrom: date,
-        dateTo: date,
-        status: "confirmed",
-      });
-      const res = await fetch(`/api/admin/bookings?${params}`);
-      const json = (await res.json()) as { success: boolean; data?: { data: Array<{ start_time: string; end_time: string }> } };
-      if (json.success && json.data) {
-        const hasConflict = json.data.data.some((b) => {
-          return b.start_time < endTime && b.end_time > startTime;
-        });
-        setConflict(hasConflict);
-      }
-    } catch {
-      // silent
-    } finally {
-      setConflictChecking(false);
-    }
-  }, [date, startTime, endTime, studioId]);
-
-  useEffect(() => {
-    checkConflict();
-  }, [checkConflict]);
 
   // Calculate price via the server quote endpoint — the SAME calculation as
   // public booking creation (computeBookingQuote), so admin-created bookings
@@ -351,10 +323,6 @@ export function AdminBookingNew() {
     }
     if (!date || !startTime || !endTime) {
       toast.error("Date et créneau requis");
-      return;
-    }
-    if (conflict) {
-      toast.error("Conflit détecté — choisissez un autre créneau");
       return;
     }
 
@@ -594,95 +562,40 @@ export function AdminBookingNew() {
           {/* Studio + Date + Time */}
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
             <h2 className="mb-4 font-semibold">Créneau</h2>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div>
-                <label htmlFor="groupType" className="mb-1 block text-sm text-zinc-400">Type de groupe *</label>
-                <select
-                  id="groupType"
-                  value={groupType}
-                  onChange={(e) => setGroupType(e.target.value as GroupType)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                  required
-                >
-                  <option value="">Sélectionner...</option>
-                  {GROUP_TYPES.map((g) => (
-                    <option key={g.value} value={g.value}>{g.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="studioId" className="mb-1 block text-sm text-zinc-400">Studio *</label>
-                <select
-                  id="studioId"
-                  value={studioId}
-                  onChange={(e) => setStudioId(e.target.value as StudioId)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                  required
-                >
-                  <option value="">Sélectionner...</option>
-                  {Object.values(STUDIOS).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.size})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="lg:col-span-2">
-                <div className="grid gap-4 grid-cols-3">
-                  <div>
-                    <label htmlFor="bookingDate" className="mb-1 block text-sm text-zinc-400">Date *</label>
-                    <input
-                      id="bookingDate"
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="startTime" className="mb-1 block text-sm text-zinc-400">Début *</label>
-                    <select
-                      id="startTime"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                      required
-                    >
-                      <option value="">Sélectionner...</option>
-                      {TIME_SLOTS.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="endTime" className="mb-1 block text-sm text-zinc-400">Fin *</label>
-                    <select
-                      id="endTime"
-                      value={endTime}
-                      onChange={(e) => setEndTime(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                      required
-                    >
-                      <option value="">Sélectionner...</option>
-                      {[...TIME_SLOTS.slice(1), "00:00"].map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
+            <div className="mb-4 max-w-xs">
+              <label htmlFor="groupType" className="mb-1 block text-sm text-zinc-400">Type de groupe *</label>
+              <select
+                id="groupType"
+                value={groupType}
+                onChange={(e) => setGroupType(e.target.value as GroupType)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                required
+              >
+                <option value="">Sélectionner...</option>
+                {GROUP_TYPES.map((g) => (
+                  <option key={g.value} value={g.value}>{g.label}</option>
+                ))}
+              </select>
             </div>
 
-            {startTime && endTime && startTime >= endTime && (
+            <AdminSlotPicker
+              date={date}
+              startTime={startTime}
+              endTime={endTime}
+              studioId={studioId ?? null}
+              groupType={groupType ?? null}
+              onChange={({ date: d, startTime: s, endTime: e, studioId: st }) => {
+                setDate(d);
+                setStartTime(s);
+                setEndTime(e);
+                setStudioId(st ?? undefined);
+              }}
+            />
+
+            {invalidRange && (
               <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 L'heure de fin doit être supérieure à l'heure de début.
-              </div>
-            )}
-
-            {conflict && (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                Conflit détecté sur ce créneau. Choisissez un autre horaire.
               </div>
             )}
           </div>
@@ -884,14 +797,14 @@ export function AdminBookingNew() {
 
             <Button
               onClick={handleSubmit}
-              disabled={submitting || !selectedUser || !date || !studioId || !startTime || !endTime || !groupType || conflict || !!(startTime && endTime && startTime >= endTime)}
+              disabled={submitting || !selectedUser || !date || !studioId || !startTime || !endTime || !groupType || invalidRange}
               className="mt-6 w-full"
               size="lg"
             >
               {submitting ? "Création..." : "Créer la réservation"}
             </Button>
 
-            {(!selectedUser || !studioId || !date || !startTime || !endTime || !groupType || (startTime && endTime && startTime >= endTime)) && (
+            {(!selectedUser || !studioId || !date || !startTime || !endTime || !groupType || invalidRange) && (
               <p className="mt-2 text-center text-xs text-red-400">
                 Saisir les champs obligatoire correctement
               </p>

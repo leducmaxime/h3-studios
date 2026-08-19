@@ -42,7 +42,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CancelBookingDialog } from "@/components/admin/refund";
-import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, parseBookingEquipmentLines, type StudioId } from "@/lib/booking";
+import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
+import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, parseBookingEquipmentLines, type StudioId, type GroupType } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, isKeepBalanceDue } from "@/lib/booking-totals";
 import { useEquipment } from "@/components/booking/useEquipment";
@@ -308,49 +309,9 @@ export function AdminCalendar() {
   const [calRescheduleDate, setCalRescheduleDate] = useState("");
   const [calRescheduleStart, setCalRescheduleStart] = useState("");
   const [calRescheduleEnd, setCalRescheduleEnd] = useState("");
+  const [calRescheduleStudio, setCalRescheduleStudio] = useState<StudioId | null>(null);
   const [calRescheduleLoading, setCalRescheduleLoading] = useState(false);
   const [calRescheduleError, setCalRescheduleError] = useState("");
-  const [calRescheduleConflict, setCalRescheduleConflict] = useState(false);
-  const [calRescheduleChecking, setCalRescheduleChecking] = useState(false);
-
-  // Vérification de conflit live quand date/heure changent
-  useEffect(() => {
-    if (!calRescheduleDate || !calRescheduleStart || !calRescheduleEnd || !selectedBooking) {
-      setCalRescheduleConflict(false);
-      return;
-    }
-    setCalRescheduleChecking(true);
-    setCalRescheduleConflict(false);
-    const controller = new AbortController();
-    fetch(`/api/availability?date=${calRescheduleDate}`, { signal: controller.signal })
-      .then(r => r.json())
-      .then((data: any) => {
-        if (!data.success) return;
-        // New format: per-studio slots object. Flatten to array for conflict check.
-        const rawSlots = data.data?.slots ?? {};
-        const slots: Array<{ studioId: string; time: string; groupType?: string; bookingId?: string }> = [];
-        for (const [studioId, studioSlots] of Object.entries(rawSlots)) {
-          for (const slot of (studioSlots as Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>)) {
-            slots.push({ studioId, time: slot.time, groupType: slot.groupType, bookingId: slot.bookingId });
-          }
-        }
-        const studioId = selectedBooking.studio_id;
-        const bookingId = selectedBooking.id;
-        // Génère les créneaux de 30min entre start et end
-        const toMinutes = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-        const startMin = toMinutes(calRescheduleStart);
-        const endMin = toMinutes(calRescheduleEnd);
-        const conflict = slots.some(s =>
-          s.studioId === studioId &&
-          s.bookingId !== bookingId && // ignore la réservation elle-même
-          (() => { const sm = toMinutes(s.time); return sm >= startMin && sm < endMin; })()
-        );
-        setCalRescheduleConflict(conflict);
-      })
-      .catch(() => {})
-      .finally(() => setCalRescheduleChecking(false));
-    return () => controller.abort();
-  }, [calRescheduleDate, calRescheduleStart, calRescheduleEnd, selectedBooking]);
 
   useEffect(() => {
     if (selectedBooking) {
@@ -421,7 +382,12 @@ export function AdminCalendar() {
       const res = await fetch(`/api/admin/bookings/${selectedBooking.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: calRescheduleDate, start_time: calRescheduleStart, end_time: calRescheduleEnd }),
+        body: JSON.stringify({
+          date: calRescheduleDate,
+          start_time: calRescheduleStart,
+          end_time: calRescheduleEnd,
+          studio_id: calRescheduleStudio ?? selectedBooking.studio_id,
+        }),
       });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
@@ -1530,6 +1496,7 @@ export function AdminCalendar() {
                     setCalRescheduleDate(b.date);
                     setCalRescheduleStart(b.start_time);
                     setCalRescheduleEnd(b.end_time);
+                    setCalRescheduleStudio(b.studio_id as StudioId);
                     setCalRescheduleOpen(true);
                   }}
                 >
@@ -1676,37 +1643,30 @@ export function AdminCalendar() {
 
       {/* Reschedule dialog */}
       <Dialog open={calRescheduleOpen} onOpenChange={setCalRescheduleOpen}>
-        <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-md">
+        <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Déplacer la réservation</DialogTitle>
             <DialogDescription>{selectedBooking?.booking_ref}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Nouvelle date</Label>
-              <Input type="date" value={calRescheduleDate} onChange={e => setCalRescheduleDate(e.target.value)} className="bg-zinc-800 border-zinc-700" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Début</Label>
-                <Input type="time" value={calRescheduleStart} onChange={e => setCalRescheduleStart(e.target.value)} step="1800" className="bg-zinc-800 border-zinc-700" />
-              </div>
-              <div className="space-y-2">
-                <Label>Fin</Label>
-                <Input type="time" value={calRescheduleEnd} onChange={e => setCalRescheduleEnd(e.target.value)} step="1800" className="bg-zinc-800 border-zinc-700" />
-              </div>
-            </div>
-            {calRescheduleConflict && (
-              <p className="text-sm text-destructive flex items-center gap-1.5">
-                <span>⚠</span> Ce créneau est déjà occupé pour ce studio.
-              </p>
-            )}
-            {calRescheduleError && <p className="text-sm text-destructive">{calRescheduleError}</p>}
-          </div>
+          <AdminSlotPicker
+            date={calRescheduleDate}
+            startTime={calRescheduleStart}
+            endTime={calRescheduleEnd}
+            studioId={calRescheduleStudio}
+            groupType={(selectedBooking?.group_type as GroupType | undefined) ?? null}
+            excludeBookingId={selectedBooking?.id}
+            onChange={({ date: d, startTime: s, endTime: e, studioId: st }) => {
+              setCalRescheduleDate(d);
+              setCalRescheduleStart(s);
+              setCalRescheduleEnd(e);
+              setCalRescheduleStudio(st);
+            }}
+          />
+          {calRescheduleError && <p className="text-sm text-destructive">{calRescheduleError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setCalRescheduleOpen(false)} className="border-zinc-700">Annuler</Button>
-            <Button onClick={handleCalReschedule} disabled={calRescheduleLoading || calRescheduleChecking || calRescheduleConflict || !calRescheduleDate || !calRescheduleStart || !calRescheduleEnd}>
-              {(calRescheduleLoading || calRescheduleChecking) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button onClick={handleCalReschedule} disabled={calRescheduleLoading || !calRescheduleDate || !calRescheduleStart || !calRescheduleEnd || !calRescheduleStudio}>
+              {calRescheduleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Déplacer
             </Button>
           </DialogFooter>
