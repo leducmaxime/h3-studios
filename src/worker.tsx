@@ -1,5 +1,5 @@
 import { render, route, layout } from "rwsdk/router";
-import { getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
 import { paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { DEFAULT_CLIENT_TYPE, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
@@ -49,7 +49,7 @@ import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
 import { createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent, type StripeCheckoutSession } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
-import { sendBookingConfirmationEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
+import { sendBookingCancellationEmail, sendBookingConfirmationEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
 import {
   type AdminRole,
   verifyPassword,
@@ -156,8 +156,14 @@ import {
   fetchInstagramFeedFromRSS,
   getCachedInstagramFeed,
   getInstagramToken,
+  INSTAGRAM_LONG_LIVED_TOKEN_SECONDS,
+  INSTAGRAM_TOKEN_EXPIRES_AT_SETTING,
+  INSTAGRAM_TOKEN_REFRESHED_AT_SETTING,
+  persistInstagramToken,
+  refreshAndPersistInstagramToken,
   syncInstagram,
 } from "@/lib/instagram";
+import { isAllowedInstagramMediaUrl } from "@/lib/instagram-media";
 
 const DocumentWithPath = ({
   children,
@@ -2337,6 +2343,7 @@ const app = defineApp([
       const body = await request.json() as {
         reason?: string;
         refundMode?: "none" | "refund";
+        keepBalanceDue?: boolean;
         refunds?: { paymentId: string; amount: number }[];
       };
       if (body.refundMode !== "none" && body.refundMode !== "refund") {
@@ -2350,11 +2357,22 @@ const app = defineApp([
       const booking = await getBookingById(env.DB, params.id);
       if (!booking) return jsonError("Réservation introuvable", 404);
 
+      const existingPayments = await getPaymentsByBookingId(env.DB, params.id);
+      const remaining = getBookingBalance(booking, existingPayments);
+      let keepBalanceDue = 0;
+      if (body.refundMode === "none" && remaining > 0.005) {
+        if (body.keepBalanceDue !== true && body.keepBalanceDue !== false) {
+          return jsonError("Précisez si le solde reste dû : keepBalanceDue true ou false", 400);
+        }
+        keepBalanceDue = body.keepBalanceDue ? 1 : 0;
+      }
+
       if (booking.status !== "cancelled") {
         const result = await updateBooking(env.DB, params.id, {
           status: "cancelled",
           cancelled_at: new Date().toISOString().replace("T", " ").slice(0, 19),
           cancel_reason: body.reason || "Annulée par l'admin",
+          keep_balance_due: keepBalanceDue,
         });
 
         if (!result.success) return jsonError(result.error || "Cancel failed", 400);
@@ -2368,7 +2386,28 @@ const app = defineApp([
 
         await addAuditLog(env.DB, "booking", params.id, "cancel", {
           reason: body.reason || "Annulée par l'admin",
+          keepBalanceDue: keepBalanceDue === 1,
         }, request.headers.get("X-Admin-User-Id") || "admin");
+
+        const client = await getUserById(env.DB, booking.user_id);
+        if (client?.email && env.RESEND_API_KEY) {
+          waitUntil(
+            sendBookingCancellationEmail(env.RESEND_API_KEY, {
+              bookingRef: booking.booking_ref,
+              studioId: booking.studio_id,
+              date: booking.date,
+              startTime: booking.start_time,
+              endTime: booking.end_time,
+              userName: client.name || "",
+              userEmail: client.email,
+              keepBalanceDue: keepBalanceDue === 1,
+              remaining: keepBalanceDue === 1 ? remaining : 0,
+              reason: body.reason,
+            }).catch((error) => {
+              console.error("PUT /api/admin/bookings/:id/cancel email error:", error);
+            }),
+          );
+        }
       }
 
       const updated = await getBookingById(env.DB, params.id);
@@ -2471,7 +2510,7 @@ const app = defineApp([
       }
       const booking = await getBookingById(env.DB, params.id);
       if (!booking) return jsonError("Réservation introuvable", 404);
-      if (booking.status === "cancelled") return jsonError("Impossible de payer une réservation annulée", 400);
+      if (!bookingAllowsCollection(booking)) return jsonError("Impossible de payer une réservation annulée", 400);
 
       // Recompute remaining server-side
       const payments = await getPaymentsByBookingId(env.DB, params.id);
@@ -2522,7 +2561,7 @@ const app = defineApp([
         if (!booking) {
           return jsonError("Réservation introuvable", 404);
         }
-        if (booking.status === "cancelled") {
+        if (!bookingAllowsCollection(booking)) {
           return jsonError("Impossible d'ajouter un paiement à une réservation annulée", 400);
         }
 
@@ -2909,104 +2948,7 @@ const app = defineApp([
       if (sortOrder) filters.sortOrder = sortOrder as typeof filters.sortOrder;
 
       const result = await getPayments(env.DB, filters, all ? 1 : page, all ? 9999 : limit);
-
-      const conditions: string[] = [];
-      const params: unknown[] = [];
-
-      if (filters.status) {
-        if (filters.status === "refunded") {
-          conditions.push("status IN ('refunded', 'partial-refund')");
-        } else {
-          conditions.push("status = ?");
-          params.push(filters.status);
-        }
-      }
-      if (filters.method) {
-        conditions.push("method = ?");
-        params.push(filters.method);
-      }
-      if (filters.paymentType) {
-        conditions.push("payment_type = ?");
-        params.push(filters.paymentType);
-      }
-      if (filters.search) {
-        conditions.push("(booking_ref LIKE ? OR user_name LIKE ? OR user_band_name LIKE ?)");
-        const term = `%${filters.search}%`;
-        params.push(term, term, term);
-      }
-      if (filters.dateFrom) {
-        conditions.push("booking_date >= ?");
-        params.push(filters.dateFrom);
-      }
-      if (filters.dateTo) {
-        conditions.push("booking_date <= ?");
-        params.push(filters.dateTo);
-      }
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-      // Stats sur l'ensemble filtré (pas paginé)
-      const statsResult = await env.DB.prepare(`
-        WITH paid_by_booking AS (
-          SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-          FROM payments GROUP BY booking_id
-        ),
-        pay_on_site_pending AS (
-          SELECT
-            'on-site:' || b.id as id,
-            b.id as booking_id,
-            (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) as amount,
-            '' as method,
-            'pending' as status,
-            0 as refunded_amount,
-            NULL as paid_at,
-            b.created_at as created_at,
-            b.booking_ref as booking_ref,
-            COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
-            u.band_name as user_band_name,
-            u.id as user_id,
-            b.date as booking_date,
-            'on-site' as payment_type
-          FROM bookings b
-          LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-          LEFT JOIN users u ON u.id = b.user_id
-          WHERE b.status != 'cancelled'
-            AND b.payment_status = 'pay-on-site'
-            AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
-        ),
-        payments_enriched AS (
-          SELECT
-            p.id as id,
-            p.booking_id as booking_id,
-            p.amount as amount,
-            CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
-            p.status as status,
-            p.refunded_amount as refunded_amount,
-            p.paid_at as paid_at,
-            p.created_at as created_at,
-            b.booking_ref as booking_ref,
-            COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
-            u.band_name as user_band_name,
-            u.id as user_id,
-            b.date as booking_date,
-            CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' WHEN p.method = 'card' THEN 'online' ELSE 'on-site' END as payment_type
-          FROM payments p
-          JOIN bookings b ON b.id = p.booking_id
-          LEFT JOIN users u ON u.id = b.user_id
-        ),
-        all_payments AS (
-          SELECT * FROM payments_enriched
-          UNION ALL
-          SELECT * FROM pay_on_site_pending
-        )
-        SELECT
-          COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
-          COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
-          COUNT(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN 1 END) as paidCount,
-          COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - COALESCE(refunded_amount, 0) ELSE 0 END), 0) as paidAmount
-        FROM all_payments ${where}
-      `).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number }>();
-
-      return jsonSuccess({ ...result, stats: statsResult ?? { pendingCount: 0, pendingAmount: 0, paidCount: 0, paidAmount: 0 } });
+      return jsonSuccess(result);
     } catch (error) {
       console.error("GET /api/admin/payments error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch payments", 500);
@@ -4157,7 +4099,7 @@ const app = defineApp([
          ORDER BY date ASC, start_time ASC`,
       ).bind(fromStr, toStr);
 
-       const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult, pendingPayResult] = await env.DB.batch([
+       const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult] = await env.DB.batch([
          occupancyStmt,
         // Studio distribution
         env.DB.prepare(
@@ -4205,62 +4147,6 @@ const app = defineApp([
             ORDER BY b.date DESC, b.start_time DESC
             LIMIT 10`,
          ).bind(fromStr, toStr),
-         env.DB.prepare(
-           `WITH paid_by_booking AS (
-             SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-             FROM payments
-             GROUP BY booking_id
-           )
-           SELECT
-             id,
-             booking_id,
-             amount,
-             user_name,
-             booking_date,
-             start_time,
-             studio_id,
-             kind
-           FROM (
-             SELECT
-               'on-site:' || b.id as id,
-               b.id as booking_id,
-               MAX(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0), 0) as amount,
-               u.name as user_name,
-               b.date as booking_date,
-               b.start_time as start_time,
-               b.studio_id as studio_id,
-               'on-site' as kind
-             FROM bookings b
-             LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-             LEFT JOIN users u ON u.id = b.user_id
-             WHERE b.status != 'cancelled'
-               AND b.payment_status = 'pay-on-site'
-               AND b.date >= ? AND b.date <= ?
-               AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
-
-             UNION ALL
-
-             SELECT
-               'card:' || b.id as id,
-               b.id as booking_id,
-               MAX(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0), 0) as amount,
-               u.name as user_name,
-               b.date as booking_date,
-               b.start_time as start_time,
-               b.studio_id as studio_id,
-               'card' as kind
-             FROM bookings b
-             LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-             LEFT JOIN users u ON u.id = b.user_id
-             WHERE b.status != 'cancelled'
-               AND b.payment_method = 'card'
-               AND b.payment_status = 'pending'
-               AND b.date >= ? AND b.date <= ?
-               AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
-           )
-           ORDER BY booking_date ASC, start_time ASC
-           LIMIT 5`,
-         ).bind(fromStr, toStr, fromStr, toStr),
        ]);
 
       type BookingSlotRow = { date: string; studio_id: string; start_time: string; end_time: string };
@@ -4403,7 +4289,6 @@ const app = defineApp([
         studios: studioData,
         payments: paymentData,
         upcomingBookings: upcomingResult.results,
-        pendingPayments: pendingPayResult.results,
       });
     } catch (error) {
       console.error("GET /api/admin/stats/charts error:", error);
@@ -4557,15 +4442,6 @@ const app = defineApp([
         return jsonError("URL parameter required", 400);
       }
 
-      const isAllowedImageUrl = (candidate: URL): boolean => {
-        const hostname = candidate.hostname.toLowerCase();
-        return candidate.protocol === "https:"
-          && (hostname === "cdninstagram.com"
-            || hostname.endsWith(".cdninstagram.com")
-            || hostname === "fbcdn.net"
-            || hostname.endsWith(".fbcdn.net"));
-      };
-
       let parsedImageUrl: URL;
       try {
         parsedImageUrl = new URL(imageUrl);
@@ -4573,21 +4449,26 @@ const app = defineApp([
         return jsonError("Invalid image URL", 400);
       }
 
-      if (!isAllowedImageUrl(parsedImageUrl)) {
-        console.error("Rejected Instagram proxy image host:", parsedImageUrl.hostname);
+      if (!isAllowedInstagramMediaUrl(parsedImageUrl)) {
+        console.error("Rejected Instagram proxy media host:", parsedImageUrl.hostname);
         return new Response(null, { status: 403 });
       }
 
-      const fetchImage = (target: URL) => fetch(target, {
-        redirect: "manual",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-      });
-      let imageResponse = await fetchImage(parsedImageUrl);
+      const range = request.headers.get("Range");
+      const fetchMedia = (target: URL) => {
+        const headers: Record<string, string> = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        };
+        if (range) headers.Range = range;
+        return fetch(target, {
+          redirect: "manual",
+          headers,
+        });
+      };
+      let mediaResponse = await fetchMedia(parsedImageUrl);
 
-      if (imageResponse.status >= 300 && imageResponse.status < 400) {
-        const location = imageResponse.headers.get("Location");
+      if (mediaResponse.status >= 300 && mediaResponse.status < 400) {
+        const location = mediaResponse.headers.get("Location");
         if (!location) return new Response(null, { status: 502 });
 
         let redirectUrl: URL;
@@ -4596,21 +4477,27 @@ const app = defineApp([
         } catch {
           return new Response(null, { status: 502 });
         }
-        if (!isAllowedImageUrl(redirectUrl)) return new Response(null, { status: 502 });
+        if (!isAllowedInstagramMediaUrl(redirectUrl)) return new Response(null, { status: 502 });
 
-        imageResponse = await fetchImage(redirectUrl);
+        mediaResponse = await fetchMedia(redirectUrl);
       }
 
-      if (!imageResponse.ok) {
+      if (!mediaResponse.ok && mediaResponse.status !== 206) {
         return new Response(null, { status: 502 });
       }
 
-      const blob = await imageResponse.blob();
-      return new Response(blob, {
-        headers: {
-          "Content-Type": imageResponse.headers.get("Content-Type") || "image/jpeg",
-          "Cache-Control": "public, max-age=3600"
-        }
+      const responseHeaders = new Headers();
+      responseHeaders.set("Content-Type", mediaResponse.headers.get("Content-Type") || "application/octet-stream");
+      responseHeaders.set("Cache-Control", "public, max-age=3600");
+      responseHeaders.set("Accept-Ranges", mediaResponse.headers.get("Accept-Ranges") || "bytes");
+      const contentLength = mediaResponse.headers.get("Content-Length");
+      if (contentLength) responseHeaders.set("Content-Length", contentLength);
+      const contentRange = mediaResponse.headers.get("Content-Range");
+      if (contentRange) responseHeaders.set("Content-Range", contentRange);
+
+      return new Response(mediaResponse.body, {
+        status: mediaResponse.status,
+        headers: responseHeaders,
       });
     } catch (error) {
       console.error("GET /api/instagram/proxy-image error:", error);
@@ -4657,7 +4544,7 @@ const app = defineApp([
         return jsonError(message, 400);
       }
 
-      await setSetting(env.DB, "instagram_access_token", normalizedToken);
+      await persistInstagramToken(env.DB, normalizedToken, INSTAGRAM_LONG_LIVED_TOKEN_SECONDS);
       await addAuditLog(env.DB, "settings", "instagram", "update_token", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
       const result = await syncInstagram(env.DB, normalizedToken);
@@ -4708,12 +4595,16 @@ const app = defineApp([
       const lastSyncedAt = parsedTimestamp && !Number.isNaN(parsedTimestamp.getTime())
         ? parsedTimestamp.toISOString()
         : null;
+      const expiresAt = await getSetting(env.DB, INSTAGRAM_TOKEN_EXPIRES_AT_SETTING);
+      const lastRefreshedAt = await getSetting(env.DB, INSTAGRAM_TOKEN_REFRESHED_AT_SETTING);
       return jsonSuccess({
         lastSyncedAt,
         postCount,
         tokenConfigured: Boolean(token),
         tokenValid,
         tokenError,
+        expiresAt,
+        lastRefreshedAt,
       });
     } catch (error) {
       console.error("GET /api/admin/instagram/status error:", error);
@@ -5058,7 +4949,7 @@ const app = defineApp([
 
       // Grand livre par réservation (une seule requête agrégée) pour permettre
       // à la fiche client de présenter correctement les annulations
-      // (Annulée / Payée avant annulation / Remboursé) sans montant dû.
+      // (Annulée / Payée avant annulation / Remboursé / Reste à payer si dû).
       const bookingIds = bookings.data.map((b) => b.id);
       let paymentTotals = new Map<string, { totalPaid: number; totalCollected: number; totalRefunded: number }>();
       if (bookingIds.length > 0) {
@@ -5079,7 +4970,7 @@ const app = defineApp([
       const parisNow = getParisNow();
       const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
       const bookingsWithStatus = bookings.data.map((booking) => {
-        let b: (typeof booking) & { total_paid?: number; total_collected?: number; total_refunded?: number } = booking;
+        let b: (typeof booking) & { total_paid?: number; total_collected?: number; total_refunded?: number; remaining?: number } = booking;
         if (booking.status === "confirmed") {
           const isPast =
             booking.date < parisNow.dateISO ||
@@ -5089,11 +4980,13 @@ const app = defineApp([
           }
         }
         const totals = paymentTotals.get(b.id);
+        const totalPaid = totals?.totalPaid ?? 0;
         return {
           ...b,
-          total_paid: totals?.totalPaid ?? 0,
+          total_paid: totalPaid,
           total_collected: totals?.totalCollected ?? 0,
           total_refunded: totals?.totalRefunded ?? 0,
+          remaining: Math.max(0, getBookingAmountDue(b) - totalPaid),
         };
       });
 
@@ -5377,7 +5270,18 @@ async function handleScheduled(controller: ScheduledController) {
     }
   }
 
-  const igToken = await getInstagramToken(env.DB as D1Database, (env as any).INSTAGRAM_ACCESS_TOKEN);
+  const igRefresh = await refreshAndPersistInstagramToken(
+    env.DB as D1Database,
+    (env as any).INSTAGRAM_ACCESS_TOKEN,
+  );
+  if (igRefresh.refreshed) {
+    console.log("[Cron] Instagram token refreshed");
+  } else if (igRefresh.skipped) {
+    console.log("[Cron] Instagram token refresh skipped (too recent)");
+  } else if (igRefresh.error) {
+    console.error(`[Cron] Instagram token refresh failed: ${igRefresh.error}`);
+  }
+  const igToken = igRefresh.token;
   const igResult = await syncInstagram(env.DB as D1Database, igToken);
   if (igResult.success) {
     console.log(`[Cron] Instagram synced: ${igResult.count} posts`);

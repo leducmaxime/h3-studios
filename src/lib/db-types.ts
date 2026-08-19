@@ -139,6 +139,8 @@ export interface DbBooking {
   updated_at: string;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  /** INTEGER 0/1 — 1 si l'annulation conserve le solde dû. Défaut SQL 0. */
+  keep_balance_due?: number;
   user_name: string | null;
   user_email: string | null;
   user_band_name: string | null;
@@ -147,7 +149,7 @@ export interface DbBooking {
 
 // Type for creating bookings (excludes auto-generated fields and user fields from LEFT JOIN)
 // Type for creating bookings (excludes auto-generated fields and user fields from LEFT JOIN)
-export type CreateBooking = Omit<DbBooking, "id" | "created_at" | "updated_at" | "user_name" | "user_email" | "user_band_name" | "user_phone">;
+export type CreateBooking = Omit<DbBooking, "id" | "created_at" | "updated_at" | "user_name" | "user_email" | "user_band_name" | "user_phone" | "keep_balance_due">;
 
 // --- Payments ---
 
@@ -363,7 +365,7 @@ export interface AuditLogFilters {
 
 // Extended type with user data from LEFT JOIN + grand livre enrichi côté
 // serveur (GET /api/admin/bookings) : totaux de paiement pour la présentation
-// des annulations sans montant dû.
+// des annulations (dette annulée vs solde toujours dû).
 export interface BookingWithUser extends DbBooking {
   total_paid?: number;
   total_collected?: number;

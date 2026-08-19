@@ -301,7 +301,7 @@ function PublicHolidaysSection() {
                   size="sm"
                   onClick={() => handleRemove(iso)}
                   disabled={saving}
-                  className="h-7 w-7 p-0 text-zinc-500 hover:text-red-400"
+                  className="h-7 w-7 p-0 text-zinc-500"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>

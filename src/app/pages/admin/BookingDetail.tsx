@@ -48,7 +48,7 @@ import {
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput, getDisplayPaymentStatus } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus } from "@/lib/booking-totals";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel } from "@/lib/labels";
 import { formatSiret, resolveBookingClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields } from "@/lib/booking-fields";
@@ -447,7 +447,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const handleAddPayment = async () => {
     if (!booking || !newPayment.amount) return;
-    if (booking.status === "cancelled") {
+    if (!bookingAllowsCollection(booking)) {
       toast.error("Impossible d'encaisser une réservation annulée");
       return;
     }
@@ -559,9 +559,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const discountEligibility = getManualDiscountEligibility(booking);
   const overpayment = getBookingOverpayment(booking, payments);
 
-  // Présentation du paiement : une réservation annulée ne présente jamais de
-  // montant dû — on dérive le libellé du grand livre (Annulée / Payée avant
-  // annulation / Remboursé) sans persister de nouvel état.
+  // Présentation du paiement : le statut d'affichage tient compte du solde
+  // conservé sur une réservation annulée.
   const isCancelled = booking.status === "cancelled";
   const displayPaymentStatus = getDisplayPaymentStatus(booking, payments);
 
@@ -764,7 +763,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 <CreditCard className="h-5 w-5 text-primary" />
                 Paiement
               </h2>
-              {isCancelled ? (
+              {isCancelled && displayPaymentStatus !== "pay-on-site" ? (
                 <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">
                   {displayPaymentStatusLabel(displayPaymentStatus)}
                 </Badge>
@@ -872,7 +871,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   {!isCancelled && overpayment > 0 && <p className="text-xs text-amber-400">Trop-perçu : {formatPrice(overpayment)} — utiliser le remboursement ci-dessous.</p>}
                   <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
                     <span className="font-semibold">Total</span>
-                    <span className="text-xl font-bold text-primary">{isCancelled ? "—" : formatPrice(finalTotal)}</span>
+                    <span className="text-xl font-bold text-primary">{isCancelled && !isKeepBalanceDue(booking) ? "—" : formatPrice(finalTotal)}</span>
                   </div>
                   {totalPaid > 0 && (
                     <div className="flex justify-between items-center text-emerald-400 text-sm">
@@ -986,7 +985,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               </div>
 
               {/* Nouvel encaissement */}
-              {!isCancelled && balance > 0 && (
+              {bookingAllowsCollection(booking) && balance > 0 && (
                 <div className="mt-6 pt-6 border-t border-zinc-800">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-4">Nouvel encaissement</p>
                   <div className="grid grid-cols-2 gap-4 mb-4">
@@ -1156,8 +1155,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 variant="outline"
                 className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
                 onClick={async () => { await generateInvoicePDF(booking, payments[0] || null, user || ({} as DbUser)); }}
-                disabled={!user || isCancelled}
-                title={isCancelled ? "Aucune facture pour une réservation annulée" : undefined}
+                disabled={!user || (isCancelled && !isKeepBalanceDue(booking))}
+                title={isCancelled && !isKeepBalanceDue(booking) ? "Aucune facture pour une réservation annulée" : undefined}
               >
                 <FileText className="mr-3 h-4 w-4 text-zinc-400" />
                 Générer la facture PDF

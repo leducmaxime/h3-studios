@@ -296,8 +296,8 @@ export function AdminBlockedSlots() {
                       size="sm"
                       className={
                         tone === "muted"
-                          ? "h-8 w-8 p-0 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-400"
-                          : "h-8 w-8 p-0 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                          ? "h-8 w-8 p-0 text-zinc-600"
+                          : "h-8 w-8 p-0 text-red-400"
                       }
                       onClick={() => {
                         setSelectedSlot(slot);
@@ -378,7 +378,7 @@ export function AdminBlockedSlots() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-[10px] text-zinc-400 hover:text-white"
+                    className="h-7 px-2 text-[10px] text-zinc-400"
                     onClick={() => {
                       setPeriodFilter("upcoming");
                       setStudioFilter("all");
@@ -589,7 +589,7 @@ export function AdminBlockedSlots() {
             <Button
               variant="ghost"
               onClick={() => setAddDialogOpen(false)}
-              className="text-zinc-400 hover:text-white"
+              className="text-zinc-400"
             >
               Annuler
             </Button>
@@ -635,7 +635,7 @@ export function AdminBlockedSlots() {
                 setDeleteDialogOpen(false);
                 setSelectedSlot(null);
               }}
-              className="text-zinc-400 hover:text-white"
+              className="text-zinc-400"
             >
               Annuler
             </Button>
