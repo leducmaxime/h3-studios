@@ -906,7 +906,7 @@ export function AdminAuditLog() {
               variant="ghost"
               size="sm"
               onClick={clearFilters}
-              className="h-7 shrink-0 px-2 text-[10px] text-zinc-400 hover:text-white"
+              className="h-7 shrink-0 px-2 text-[10px] text-zinc-400"
             >
               <X className="mr-1 h-3 w-3" />
               Effacer
