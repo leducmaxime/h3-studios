@@ -457,7 +457,7 @@ export function AdminUsers() {
             variant="ghost"
             size="sm"
             onClick={() => setSelectedIds(new Set())}
-            className="ml-auto text-zinc-400 hover:text-white"
+            className="ml-auto text-zinc-400"
           >
             Désélectionner
           </Button>

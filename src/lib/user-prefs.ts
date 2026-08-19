@@ -1,14 +1,15 @@
 "use client";
-import type { ClientType } from "./booking-fields";
+import { splitDisplayName, isClientType, type ClientType } from "./booking-fields";
 
 const STORAGE_KEY = "h3-studios-user-prefs";
 
 export interface UserPreferences {
-  userName: string;
+  firstName: string;
+  lastName: string;
   userEmail: string;
   userPhone: string;
   bandName: string;
-  clientType: ClientType;
+  clientType: ClientType | null;
   legalName: string;
   siret: string;
   lastVisit: string;
@@ -30,7 +31,9 @@ export function loadUserPreferences(): UserPreferences | null {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return null;
-    return JSON.parse(data);
+    const parsed = JSON.parse(data) as Partial<UserPreferences> & { userName?: string };
+    if (!parsed.firstName?.trim() && !parsed.lastName?.trim() && parsed.userName) Object.assign(parsed, splitDisplayName(parsed.userName));
+    return { ...parsed, firstName: parsed.firstName ?? "", lastName: parsed.lastName ?? "", clientType: isClientType(parsed.clientType) ? parsed.clientType : null } as UserPreferences;
   } catch {
     return null;
   }

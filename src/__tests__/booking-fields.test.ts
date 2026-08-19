@@ -23,7 +23,8 @@ import {
 
 const validFields: BookingUserFields = {
   legalName: "", siret: "", rna: "", instagramAccounts: "",
-  userName: "Jean Dupont",
+  firstName: "Jean",
+  lastName: "Dupont",
   userEmail: "jean.dupont@example.fr",
   userPhone: "0612345678",
   bandName: "Les Oiseaux",
@@ -73,7 +74,8 @@ describe("booking confirmation gate", () => {
   it("states each missing reason as grammatical French, not label concatenation", () => {
     const issues = getBookingFieldIssues({
       legalName: "", siret: "", rna: "", instagramAccounts: "",
-      userName: "",
+      firstName: "",
+      lastName: "",
       userEmail: "",
       userPhone: "",
       bandName: "",
@@ -82,7 +84,8 @@ describe("booking confirmation gate", () => {
       billingCity: "",
     }, "particulier");
     expect(issues.map((issue) => issue.reason)).toEqual([
-      "Le prénom et le nom sont obligatoires",
+      "Le prénom est obligatoire",
+      "Le nom est obligatoire",
       "L'email est obligatoire",
       "Le numéro de téléphone est obligatoire",
       "L'adresse de facturation est obligatoire",
@@ -113,7 +116,7 @@ describe("client type contract and offline identifiers", () => {
     }
   });
   it("keeps the particulier contract unchanged", () => {
-    expect(getRequiredBookingFields("particulier")).toEqual(["userName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"]);
+    expect(getRequiredBookingFields("particulier")).toEqual(["firstName", "lastName", "userEmail", "userPhone", "billingAddress", "billingPostalCode", "billingCity"]);
     expect(getBookingFieldIssues(validFields, "particulier")).toEqual([]);
   });
   it("applies entreprise and association requirements", () => {
@@ -180,7 +183,8 @@ describe("resolveBookingIdentity", () => {
       postalCode: " 69001 ",
       city: " Lyon ",
     }, null, "particulier")).toEqual({
-      name: "Jeanne Martin",
+      firstName: "Jeanne",
+      lastName: "Martin",
       email: "jeanne@exemple.fr",
       phone: "0612345678",
       bandName: "",
@@ -197,7 +201,7 @@ describe("resolveBookingIdentity", () => {
 
   it("uses the account display name, including the NULL first/last fallback", () => {
     const account = { ...validAccount, name: "Ancien nom", first_name: null, last_name: null };
-    expect(resolveBookingIdentity({ name: "", email: "client@example.fr" }, account, "particulier").name).toBe("Ancien nom");
+    expect(resolveBookingIdentity({ name: "", email: "client@example.fr" }, account, "particulier").firstName).toBe("Ancien");
   });
 
   it.each([
@@ -225,7 +229,8 @@ describe("client type resolution and server validation", () => {
     siret: "",
     rna: "",
     instagramAccounts: "",
-    name: validFields.userName,
+    firstName: "Jean",
+     lastName: "Dupont",
     email: validFields.userEmail,
     phone: validFields.userPhone,
     bandName: validFields.bandName,
@@ -258,7 +263,8 @@ describe("validateBookingUserFields", () => {
   it("reports missing city with an error and fields", () => {
     const result = validateBookingUserFields({
       clientType: "particulier", legalName: "", siret: "", rna: "", instagramAccounts: "",
-      name: validFields.userName,
+      firstName: "Jean",
+     lastName: "Dupont",
       email: validFields.userEmail,
       phone: validFields.userPhone,
       bandName: validFields.bandName,
@@ -276,7 +282,8 @@ describe("validateBookingUserFields", () => {
   it("accepts a complete resolved user", () => {
     expect(validateBookingUserFields({
       clientType: "particulier", legalName: "", siret: "", rna: "", instagramAccounts: "",
-      name: validFields.userName,
+      firstName: "Jean",
+     lastName: "Dupont",
       email: validFields.userEmail,
       phone: validFields.userPhone,
       bandName: validFields.bandName,
@@ -289,7 +296,8 @@ describe("validateBookingUserFields", () => {
   it("reports malformed email with the email field", () => {
     const result = validateBookingUserFields({
       clientType: "particulier", legalName: "", siret: "", rna: "", instagramAccounts: "",
-      name: validFields.userName,
+      firstName: "Jean",
+     lastName: "Dupont",
       email: "bad-email",
       phone: validFields.userPhone,
       bandName: validFields.bandName,

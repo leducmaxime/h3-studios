@@ -40,7 +40,7 @@ function makeBooking(overrides: {
     endTime: overrides.endTime,
     studioId: overrides.studioId,
     groupType: overrides.groupType ?? "group",
-    userName: "",
+    firstName: "",
     userEmail: "",
     userPhone: "",
     bandName: "",

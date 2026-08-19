@@ -26,7 +26,8 @@ const emptyBookingFields = {
   siret: "",
   rna: "",
   instagramAccounts: "",
-  userName: "",
+  firstName: "",
+  lastName: "",
   userEmail: "",
   userPhone: "",
   bandName: "",
@@ -63,8 +64,8 @@ describe("deriveDisplayName", () => {
 describe("profile classification with nullable names", () => {
   it("uses the non-empty account name when first and last names are null", () => {
     const user = { ...baseUser, first_name: null, last_name: null };
-    expect(computeAccountFieldStatus(user).userName).toBe("filled");
-    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false }).userName).toBe("JANE DOE");
+    expect(computeAccountFieldStatus(user).firstName).toBe("filled");
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false }).firstName).toBe("JANE");
   });
 
   it.each([
@@ -72,14 +73,14 @@ describe("profile classification with nullable names", () => {
     [{ first_name: "Jane", last_name: null }, "Jane"],
   ])("classifies a one-sided name as filled (%s)", (names, expected) => {
     const user = { ...baseUser, ...names };
-    expect(computeAccountFieldStatus(user).userName).toBe("filled");
-    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false }).userName).toBe(expected);
+    expect(computeAccountFieldStatus(user).firstName).toBe((names as any).first_name ? "filled" : "missing");
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false }).firstName).toBe((names as any).first_name ? expected : undefined);
   });
 
   it("classifies an all-blank name as missing", () => {
     const user = { ...baseUser, name: "   ", first_name: null, last_name: null };
-    expect(computeAccountFieldStatus(user).userName).toBe("missing");
-    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false })).not.toHaveProperty("userName");
+    expect(computeAccountFieldStatus(user).firstName).toBe("missing");
+    expect(applyProfilePrefill({ ...emptyBookingFields }, user, { initial: false })).not.toHaveProperty("firstName");
   });
 });
 
@@ -88,7 +89,8 @@ describe("applyProfilePrefill", () => {
 
   it("syncs filled account fields and leaves invalid account fields editable", () => {
     expect(applyProfilePrefill(emptyFields, baseUser, { initial: false })).toEqual({
-      userName: "Jane Doe",
+      firstName: "Jane",
+      lastName: "Doe",
       userEmail: "jane@example.fr",
       bandName: "Les Oiseaux",
       billingAddress: "12 rue de Paris",
@@ -125,7 +127,8 @@ describe("applyProfilePrefill", () => {
       siret: "",
       rna: "",
       instagramAccounts: "",
-      userName: "Typed Name",
+      firstName: "Typed Name",
+      lastName: "",
       userEmail: "typed@example.fr",
       userPhone: "0600000000",
       bandName: "My Band",
@@ -134,7 +137,8 @@ describe("applyProfilePrefill", () => {
       billingCity: "Lyon",
     };
     expect(applyProfilePrefill(typed, baseUser, { initial: false })).toEqual({
-      userName: "Jane Doe",
+      firstName: "Jane",
+      lastName: "Doe",
       userEmail: "jane@example.fr",
       bandName: "Les Oiseaux",
       billingAddress: "12 rue de Paris",
@@ -150,7 +154,8 @@ describe("applyProfilePrefill", () => {
       siret: "",
       rna: "",
       instagramAccounts: "",
-      userName: "Ancien nom",
+      firstName: "Ancien nom",
+      lastName: "",
       userEmail: "ancien@example.fr",
       userPhone: "0600000000",
       bandName: "Ancien groupe",
@@ -159,7 +164,8 @@ describe("applyProfilePrefill", () => {
       billingCity: "Lyon",
     };
     expect(applyProfilePrefill(stale, account, { initial: false })).toEqual({
-      userName: "Jane Doe",
+      firstName: "Jane",
+      lastName: "Doe",
       userEmail: "jane@example.fr",
       userPhone: "0612345678",
       bandName: "Les Oiseaux",
@@ -175,7 +181,8 @@ describe("applyProfilePrefill", () => {
       siret: "",
       rna: "",
       instagramAccounts: "",
-      userName: "Alice",
+      firstName: "Alice",
+      lastName: "",
       userEmail: "",
       userPhone: "",
       bandName: "",
@@ -184,7 +191,8 @@ describe("applyProfilePrefill", () => {
       billingCity: "",
     };
     expect(applyProfilePrefill(partial, baseUser, { initial: false })).toEqual({
-      userName: "Jane Doe",
+      firstName: "Jane",
+      lastName: "Doe",
       userEmail: "jane@example.fr",
       bandName: "Les Oiseaux",
       billingAddress: "12 rue de Paris",
@@ -195,7 +203,8 @@ describe("applyProfilePrefill", () => {
 
   it("clears an invalid account value when state still contains that value", () => {
     expect(applyProfilePrefill({ ...emptyFields, userPhone: "+33612345678" }, baseUser, { initial: false })).toEqual({
-      userName: "Jane Doe",
+      firstName: "Jane",
+      lastName: "Doe",
       userEmail: "jane@example.fr",
       userPhone: "",
       bandName: "Les Oiseaux",
@@ -256,7 +265,8 @@ describe("accountFieldsDrifted", () => {
   const completeAccount = { ...baseUser, phone: "0612345678" };
   const completeFields = {
     ...emptyBookingFields,
-    userName: "Jane Doe",
+    firstName: "Jane",
+    lastName: "Doe",
     userEmail: "jane@example.fr",
     userPhone: "0612345678",
     bandName: "Les Oiseaux",
