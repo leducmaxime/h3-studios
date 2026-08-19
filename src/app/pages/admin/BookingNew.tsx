@@ -216,7 +216,8 @@ export function AdminBookingNew() {
           const subtotal = json.data.totalPrice;
           setBasePrice(json.data.basePrice);
           setEquipmentPrices(json.data.equipment || []);
-          const finalPrice = Math.max(0, subtotal - promoDiscount - (Number.isFinite(manualDiscountValue) ? manualDiscountValue : 0));
+          const hasManual = Number.isFinite(manualDiscountValue) && manualDiscountValue > 0;
+          const finalPrice = Math.max(0, subtotal - (hasManual ? manualDiscountValue : promoDiscount));
           setEstimatedPrice(finalPrice);
           // Recalculate promo if applied (cart changed)
           recalculatePromo(subtotal);
@@ -333,10 +334,10 @@ export function AdminBookingNew() {
         ? JSON.stringify(selectedEquipment.map((s) => ({ id: s.id, quantity: s.quantity })))
         : null;
 
-      // Remise totale persistée via promo_discount (convention brut/remise) :
-      // promo + remise manuelle.
+      // Remise manuelle et code promo sont exclusifs : la remise remplace le promo.
       const manualDiscountValue = parseAmountInput(manualDiscount);
-      const totalDiscount = promoDiscount + (Number.isFinite(manualDiscountValue) && manualDiscountValue > 0 ? manualDiscountValue : 0);
+      const hasManual = Number.isFinite(manualDiscountValue) && manualDiscountValue > 0;
+      const totalDiscount = hasManual ? manualDiscountValue : promoDiscount;
 
       const res = await fetch("/api/admin/bookings", {
         method: "POST",
@@ -351,7 +352,7 @@ export function AdminBookingNew() {
           group_type: groupType,
           equipment: equipmentJson,
           notes: notes.trim() || null,
-          promo_code: appliedPromo?.code || null,
+          promo_code: hasManual ? null : (appliedPromo?.code || null),
           promo_discount: totalDiscount > 0 ? totalDiscount : null,
         }),
       });
@@ -745,6 +746,7 @@ export function AdminBookingNew() {
                     onApply={(promo, discount) => {
                       setAppliedPromo(promo);
                       setPromoDiscount(discount);
+                      setManualDiscount("");
                     }}
                     onRemove={() => {
                       setAppliedPromo(null);
@@ -772,7 +774,15 @@ export function AdminBookingNew() {
                         step="0.01"
                         placeholder="0"
                         value={manualDiscount}
-                        onChange={(e) => setManualDiscount(e.target.value)}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setManualDiscount(next);
+                          const parsed = parseAmountInput(next);
+                          if (Number.isFinite(parsed) && parsed > 0 && appliedPromo) {
+                            setAppliedPromo(null);
+                            setPromoDiscount(0);
+                          }
+                        }}
                         className="w-20 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-right text-xs focus:border-primary focus:outline-none"
                         aria-label="Remise manuelle en euros"
                       />

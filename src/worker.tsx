@@ -2242,6 +2242,8 @@ const app = defineApp([
           cancel_reason?: string;
           // Défini côté serveur uniquement (jamais accepté depuis le client).
           total_price?: number;
+          promo_code?: string | null;
+          promo_type?: string | null;
         };
 
         // Une lecture n'est nécessaire que si un champ dépend de l'existant
@@ -2298,7 +2300,16 @@ const app = defineApp([
         }
         if (body.promo_discount !== undefined) {
           if (existing!.status === "cancelled") return jsonError(getManualDiscountBlockMessage("cancelled"), 400);
-          if (typeof existing!.promo_code === "string" && existing!.promo_code.trim() !== "") return jsonError(getManualDiscountBlockMessage("promo_code"), 400);
+          // Une remise manuelle remplace le code promo : on retire le code et
+          // on décrémente son usage, comme à l'annulation.
+          const existingPromo = typeof existing!.promo_code === "string" ? existing!.promo_code.trim() : "";
+          if (existingPromo) {
+            await env.DB.prepare(
+              "UPDATE promo_codes SET usage_count = MAX(0, usage_count - 1) WHERE code = ?"
+            ).bind(existingPromo).run();
+            body.promo_code = null;
+            body.promo_type = null;
+          }
         }
 
         // Brut canonique = base_price + equipment_price (jamais le total_price
