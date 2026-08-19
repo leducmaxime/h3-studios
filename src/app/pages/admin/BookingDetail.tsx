@@ -557,7 +557,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const totalPrice = Number(booking.total_price) || 0;
   const finalTotal = getBookingAmountDue(booking);
   const balance = getBookingBalance(booking, payments);
-  const discountEligibility = getManualDiscountEligibility(booking);
   const overpayment = getBookingOverpayment(booking, payments);
 
   // Présentation du paiement : le statut d'affichage tient compte du solde
@@ -821,10 +820,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   {booking.promo_code && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm flex items-center gap-2">
-                        {booking.promo_code ? "Réduction" : "Remise manuelle"}
-                        {booking.promo_code && (
-                          <span className="px-2 py-0.5 rounded bg-primary/10 text-xs">{booking.promo_code}</span>
-                        )}
+                        Réduction
+                        <span className="px-2 py-0.5 rounded bg-primary/10 text-xs">{booking.promo_code}</span>
                         {booking.promo_code_type && booking.promo_code_value != null && (
                           <span className="text-xs text-zinc-400">
                             ({booking.promo_code_type === "percentage" ? `-${booking.promo_code_value}%` : `-${formatPrice(booking.promo_code_value || 0)}`})
@@ -836,37 +833,40 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       </span>
                     </div>
                   )}
-                  {booking.promo_code && !editingDiscount && <p className="text-xs text-zinc-500">{getManualDiscountBlockMessage("promo_code")}</p>}
                   {!booking.promo_code && booking.status === "cancelled" && booking.promo_discount > 0 && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm">Remise manuelle</span>
                       <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
                     </div>
                   )}
-                  {!booking.promo_code && booking.status !== "cancelled" && !editingDiscount && (
+                  {booking.status !== "cancelled" && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm">Remise manuelle</span>
-                      <span className="flex items-center gap-2"><span className="font-medium">{booking.promo_discount > 0 ? `-${formatPrice(booking.promo_discount)}` : "—"}</span><Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}><Pencil className="h-3 w-3" /></Button></span>
+                      <span className="flex items-center gap-2"><span className="font-medium">{!booking.promo_code && booking.promo_discount > 0 ? `-${formatPrice(booking.promo_discount)}` : "—"}</span><Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}><Pencil className="h-3 w-3" /></Button></span>
                     </div>
                   )}
-                  {/* Remise manuelle (édition directe de promo_discount — une seule
-                      ligne de réduction, pas de double affichage ni double déduction) */}
+                  {/* Remise manuelle : remplace le code promo s'il y en a un. */}
                   {editingDiscount && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-zinc-500">Remise manuelle</span>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number" step="0.01" min="0"
-                          value={discountValue}
-                          onChange={e => setDiscountValue(e.target.value)}
-                          className="h-7 w-24 text-xs bg-zinc-800 border-zinc-700"
-                          autoFocus
-                        />
-                        <Button size="sm" onClick={handleSaveDiscount} disabled={savingDiscount} className="h-7 text-xs px-2">
-                          {savingDiscount ? <Loader2 className="h-3 w-3 animate-spin" /> : "OK"}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setEditingDiscount(false)} className="h-7 text-xs px-2">✕</Button>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-zinc-500">Remise manuelle</span>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number" step="0.01" min="0"
+                            value={discountValue}
+                            onChange={e => setDiscountValue(e.target.value)}
+                            className="h-7 w-24 text-xs bg-zinc-800 border-zinc-700"
+                            autoFocus
+                          />
+                          <Button size="sm" onClick={handleSaveDiscount} disabled={savingDiscount} className="h-7 text-xs px-2">
+                            {savingDiscount ? <Loader2 className="h-3 w-3 animate-spin" /> : "OK"}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingDiscount(false)} className="h-7 text-xs px-2">✕</Button>
+                        </div>
                       </div>
+                      {booking.promo_code && (
+                        <p className="text-xs text-zinc-500">Cette remise remplacera le code promo {booking.promo_code}.</p>
+                      )}
                     </div>
                   )}
                   {!isCancelled && overpayment > 0 && <p className="text-xs text-amber-400">Trop-perçu : {formatPrice(overpayment)} — utiliser le remboursement ci-dessous.</p>}

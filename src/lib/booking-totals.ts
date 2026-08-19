@@ -1,16 +1,15 @@
 import type { DbBooking, DbPayment } from "./db-types";
 
 export type PromoRoundMode = "down" | "up" | "none";
-export type ManualDiscountBlockReason = "cancelled" | "promo_code";
+export type ManualDiscountBlockReason = "cancelled";
 export function getManualDiscountEligibility(
-  booking: { status?: string | null; promo_code?: string | null },
+  booking: { status?: string | null },
 ): { allowed: true } | { allowed: false; reason: ManualDiscountBlockReason } {
   if (booking.status === "cancelled") return { allowed: false, reason: "cancelled" };
-  if (typeof booking.promo_code === "string" && booking.promo_code.trim() !== "") return { allowed: false, reason: "promo_code" };
   return { allowed: true };
 }
 export function getManualDiscountBlockMessage(reason: ManualDiscountBlockReason): string {
-  return reason === "cancelled" ? "Impossible d'appliquer une remise sur une réservation annulée" : "Remise manuelle indisponible : un code promo est déjà appliqué";
+  return "Impossible d'appliquer une remise sur une réservation annulée";
 }
 
 /** Apply the configured rounding rule to a promo discount. */
