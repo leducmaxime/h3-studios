@@ -2934,104 +2934,7 @@ const app = defineApp([
       if (sortOrder) filters.sortOrder = sortOrder as typeof filters.sortOrder;
 
       const result = await getPayments(env.DB, filters, all ? 1 : page, all ? 9999 : limit);
-
-      const conditions: string[] = [];
-      const params: unknown[] = [];
-
-      if (filters.status) {
-        if (filters.status === "refunded") {
-          conditions.push("status IN ('refunded', 'partial-refund')");
-        } else {
-          conditions.push("status = ?");
-          params.push(filters.status);
-        }
-      }
-      if (filters.method) {
-        conditions.push("method = ?");
-        params.push(filters.method);
-      }
-      if (filters.paymentType) {
-        conditions.push("payment_type = ?");
-        params.push(filters.paymentType);
-      }
-      if (filters.search) {
-        conditions.push("(booking_ref LIKE ? OR user_name LIKE ? OR user_band_name LIKE ?)");
-        const term = `%${filters.search}%`;
-        params.push(term, term, term);
-      }
-      if (filters.dateFrom) {
-        conditions.push("booking_date >= ?");
-        params.push(filters.dateFrom);
-      }
-      if (filters.dateTo) {
-        conditions.push("booking_date <= ?");
-        params.push(filters.dateTo);
-      }
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-      // Stats sur l'ensemble filtré (pas paginé)
-      const statsResult = await env.DB.prepare(`
-        WITH paid_by_booking AS (
-          SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-          FROM payments GROUP BY booking_id
-        ),
-        pay_on_site_pending AS (
-          SELECT
-            'on-site:' || b.id as id,
-            b.id as booking_id,
-            (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) as amount,
-            '' as method,
-            'pending' as status,
-            0 as refunded_amount,
-            NULL as paid_at,
-            b.created_at as created_at,
-            b.booking_ref as booking_ref,
-            COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
-            u.band_name as user_band_name,
-            u.id as user_id,
-            b.date as booking_date,
-            'on-site' as payment_type
-          FROM bookings b
-          LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-          LEFT JOIN users u ON u.id = b.user_id
-          WHERE b.status != 'cancelled'
-            AND b.payment_status = 'pay-on-site'
-            AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
-        ),
-        payments_enriched AS (
-          SELECT
-            p.id as id,
-            p.booking_id as booking_id,
-            p.amount as amount,
-            CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
-            p.status as status,
-            p.refunded_amount as refunded_amount,
-            p.paid_at as paid_at,
-            p.created_at as created_at,
-            b.booking_ref as booking_ref,
-            COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
-            u.band_name as user_band_name,
-            u.id as user_id,
-            b.date as booking_date,
-            CASE WHEN b.payment_status = 'pay-on-site' THEN 'on-site' WHEN p.method = 'card' THEN 'online' ELSE 'on-site' END as payment_type
-          FROM payments p
-          JOIN bookings b ON b.id = p.booking_id
-          LEFT JOIN users u ON u.id = b.user_id
-        ),
-        all_payments AS (
-          SELECT * FROM payments_enriched
-          UNION ALL
-          SELECT * FROM pay_on_site_pending
-        )
-        SELECT
-          COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
-          COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
-          COUNT(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN 1 END) as paidCount,
-          COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - COALESCE(refunded_amount, 0) ELSE 0 END), 0) as paidAmount
-        FROM all_payments ${where}
-      `).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number }>();
-
-      return jsonSuccess({ ...result, stats: statsResult ?? { pendingCount: 0, pendingAmount: 0, paidCount: 0, paidAmount: 0 } });
+      return jsonSuccess(result);
     } catch (error) {
       console.error("GET /api/admin/payments error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch payments", 500);
@@ -4182,7 +4085,7 @@ const app = defineApp([
          ORDER BY date ASC, start_time ASC`,
       ).bind(fromStr, toStr);
 
-       const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult, pendingPayResult] = await env.DB.batch([
+       const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult] = await env.DB.batch([
          occupancyStmt,
         // Studio distribution
         env.DB.prepare(
@@ -4230,62 +4133,6 @@ const app = defineApp([
             ORDER BY b.date DESC, b.start_time DESC
             LIMIT 10`,
          ).bind(fromStr, toStr),
-         env.DB.prepare(
-           `WITH paid_by_booking AS (
-             SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-             FROM payments
-             GROUP BY booking_id
-           )
-           SELECT
-             id,
-             booking_id,
-             amount,
-             user_name,
-             booking_date,
-             start_time,
-             studio_id,
-             kind
-           FROM (
-             SELECT
-               'on-site:' || b.id as id,
-               b.id as booking_id,
-               MAX(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0), 0) as amount,
-               u.name as user_name,
-               b.date as booking_date,
-               b.start_time as start_time,
-               b.studio_id as studio_id,
-               'on-site' as kind
-             FROM bookings b
-             LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-             LEFT JOIN users u ON u.id = b.user_id
-             WHERE b.status != 'cancelled'
-               AND b.payment_status = 'pay-on-site'
-               AND b.date >= ? AND b.date <= ?
-               AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
-
-             UNION ALL
-
-             SELECT
-               'card:' || b.id as id,
-               b.id as booking_id,
-               MAX(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0), 0) as amount,
-               u.name as user_name,
-               b.date as booking_date,
-               b.start_time as start_time,
-               b.studio_id as studio_id,
-               'card' as kind
-             FROM bookings b
-             LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-             LEFT JOIN users u ON u.id = b.user_id
-             WHERE b.status != 'cancelled'
-               AND b.payment_method = 'card'
-               AND b.payment_status = 'pending'
-               AND b.date >= ? AND b.date <= ?
-               AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
-           )
-           ORDER BY booking_date ASC, start_time ASC
-           LIMIT 5`,
-         ).bind(fromStr, toStr, fromStr, toStr),
        ]);
 
       type BookingSlotRow = { date: string; studio_id: string; start_time: string; end_time: string };
@@ -4428,7 +4275,6 @@ const app = defineApp([
         studios: studioData,
         payments: paymentData,
         upcomingBookings: upcomingResult.results,
-        pendingPayments: pendingPayResult.results,
       });
     } catch (error) {
       console.error("GET /api/admin/stats/charts error:", error);
