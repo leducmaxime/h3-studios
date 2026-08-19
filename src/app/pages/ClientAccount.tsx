@@ -5,7 +5,7 @@ import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, User } from "lucide-react";
 import { getParisDateISO } from "@/lib/utils";
-import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, type DisplayPaymentStatus } from "@/lib/booking-totals";
+import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue, type DisplayPaymentStatus } from "@/lib/booking-totals";
 import { formatPrice } from "@/lib/booking";
 import { logout, useClientAuth } from "@/lib/client-auth-store";
 import { BOOKING_STATUS_LABELS, bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, studioLabel } from "@/lib/labels";
@@ -26,6 +26,8 @@ interface BookingRow {
   total_paid?: number;
   total_collected?: number;
   total_refunded?: number;
+  keep_balance_due?: number;
+  remaining?: number;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon?: React.ElementType }> = {
@@ -223,16 +225,18 @@ function BookingCard({ booking }: { booking: BookingRow }) {
     booking.payment_status,
     booking.total_collected ?? booking.total_paid ?? 0,
     booking.total_refunded ?? 0,
+    { keepBalanceDue: isKeepBalanceDue(booking), remaining: booking.remaining ?? 0 },
   );
   const paymentTone = PAYMENT_TONES[displayPaymentStatus];
   // L’espace client nomme explicitement le lieu de paiement pour ce statut.
-  const payment = { label: displayPaymentStatus === "pay-on-site" ? "À payer sur place" : displayPaymentStatusLabel(displayPaymentStatus), ...paymentTone };
+  const payment = { label: displayPaymentStatus === "pay-on-site" && booking.status !== "cancelled" ? "À payer sur place" : displayPaymentStatus === "pay-on-site" ? "Reste à payer" : displayPaymentStatusLabel(displayPaymentStatus), ...paymentTone };
   const studio = studioLabel(booking.studio_id);
   const group = groupTypeLabel(booking.group_type);
   const isPast = booking.date < getParisDateISO() || ["cancelled", "completed", "no-show"].includes(booking.status);
-  // Une réservation annulée ne présente jamais de montant dû.
-  const amount = booking.status === "cancelled"
+  const amount = booking.status === "cancelled" && !(isKeepBalanceDue(booking) && (booking.remaining ?? 0) > 0)
     ? null
+    : booking.status === "cancelled"
+    ? (booking.remaining ?? getBookingAmountDue({ base_price: 0, equipment_price: 0, total_price: booking.total_price, promo_discount: booking.promo_discount ?? 0 }))
     : getBookingAmountDue({ base_price: 0, equipment_price: 0, total_price: booking.total_price, promo_discount: booking.promo_discount ?? 0 });
 
   return (

@@ -17,6 +17,19 @@ export interface BookingSlot {
   totalPrice: number;
 }
 
+export interface BookingCancellationData {
+  bookingRef: string;
+  studioId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  userName: string;
+  userEmail: string;
+  keepBalanceDue: boolean;
+  remaining: number;
+  reason?: string;
+}
+
 export interface BookingConfirmationData {
   // Primary slot (kept for backward compat with single-booking)
   bookingRef: string;
@@ -469,6 +482,108 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
 </body>
 </html>
   `.trim();
+}
+
+export function buildCancellationEmailHtml(data: BookingCancellationData): string {
+  const studioName = getStudioName(data.studioId);
+  const dateLabel = formatDateFrench(data.date);
+  const timeLabel = formatTimeRange(data.startTime, data.endTime);
+  const greeting = data.userName ? `Bonjour ${data.userName},` : "Bonjour,";
+  const dueBlock = data.keepBalanceDue && data.remaining > 0.005
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;background-color:#2a1a00;border:1px solid #facc15;border-radius:10px;">
+        <tr>
+          <td style="padding:16px;">
+            <p style="margin:0 0 6px 0;color:#facc15;font-size:12px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Montant dû</p>
+            <p style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:700;">${formatPrice(data.remaining)}</p>
+            <p style="margin:0;color:#dddddd;font-size:13px;line-height:1.5;">
+              Votre réservation est annulée, mais ce montant reste intégralement dû.
+              Vous pouvez le régler sur place ou nous contacter au
+              <a href="tel:+33613440875" style="color:#facc15;text-decoration:none;">06.13.44.08.75</a>.
+            </p>
+          </td>
+        </tr>
+      </table>`
+    : `<p style="margin:0 0 24px 0;color:#aaaaaa;font-size:14px;line-height:1.6;">Aucun montant n'est dû pour cette réservation annulée.</p>`;
+
+  return `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Réservation annulée — H3 Studios</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;">
+          <tr>
+            <td style="padding-bottom:24px;">
+              <p style="margin:0;color:#facc15;font-size:12px;text-transform:uppercase;letter-spacing:2px;">H3 Studios</p>
+              <h1 style="margin:8px 0 0 0;color:#ffffff;font-size:24px;">Réservation annulée</h1>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <p style="margin:0 0 16px 0;color:#dddddd;font-size:15px;">${greeting}</p>
+              <p style="margin:0 0 24px 0;color:#aaaaaa;font-size:14px;line-height:1.6;">
+                La réservation <span style="color:#facc15;font-family:'Courier New',monospace;font-weight:700;">${data.bookingRef}</span>
+                (${studioName} · ${dateLabel} · ${timeLabel}) a été annulée.
+              </p>
+              ${dueBlock}
+              <p style="margin:0;color:#666666;font-size:12px;">
+                Une question ? Écrivez-nous à
+                <a href="mailto:contact@h3-studios.fr" style="color:#888888;text-decoration:none;">contact@h3-studios.fr</a>
+                ou appelez le 06.13.44.08.75.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+export async function sendBookingCancellationEmail(
+  apiKey: string,
+  data: BookingCancellationData,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const html = buildCancellationEmailHtml(data);
+    const subject = data.keepBalanceDue && data.remaining > 0.005
+      ? `Réservation annulée — ${formatPrice(data.remaining)} restant dû — H3 Studios`
+      : `Réservation annulée — ${data.bookingRef} — H3 Studios`;
+
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "H3 Studios <contact@h3-studios.fr>",
+        to: data.userEmail,
+        subject,
+        html,
+        reply_to: "contact@h3-studios.fr",
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorData = await resendResponse.text();
+      console.error("Resend API error (booking cancellation):", errorData);
+      return { success: false, error: errorData };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending booking cancellation email:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
 }
 
 export async function sendBookingConfirmationEmail(

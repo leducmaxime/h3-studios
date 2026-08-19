@@ -83,6 +83,9 @@ export function Reservation({ step }: ReservationProps) {
     navigateToStep,
     canNavigateToStep,
     selectPaymentMethod,
+    confirmFreeBooking,
+    setAcceptedCgv,
+    isSubmitting,
     processPayment,
     todayFullyBlocked,
     maxAdvanceDays,
@@ -740,7 +743,12 @@ export function Reservation({ step }: ReservationProps) {
                 subtotal={cartTotal}
                 promoCode={state.appliedPromo?.code}
                 promoDiscount={state.promoDiscount}
+                acceptedCgv={state.acceptedCgv}
+                onAcceptedCgvChange={setAcceptedCgv}
+                isFree={liveNet === 0}
+                isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
+                onConfirmFree={confirmFreeBooking}
                 onBack={goBack}
               />
             )}
@@ -764,7 +772,12 @@ export function Reservation({ step }: ReservationProps) {
                 subtotal={cartTotal}
                 promoCode={state.appliedPromo?.code}
                 promoDiscount={state.promoDiscount}
+                acceptedCgv={state.acceptedCgv}
+                onAcceptedCgvChange={setAcceptedCgv}
+                isFree={liveNet === 0}
+                isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
+                onConfirmFree={confirmFreeBooking}
                 onBack={goBack}
               />
             )}

@@ -429,6 +429,55 @@ export function slotDurationHours(startTime: string, endTime: string): number {
   return slotDurationSlots(startTime, endTime) * 0.5;
 }
 
+/**
+ * Admin override: any start/end pair on the 30-min grid is valid as long as
+ * end is strictly after start. Occupied, closed, past, and sub-1h ranges
+ * are allowed — the public canBeStartTime / canBeEndTime rules do not apply.
+ */
+export function isOverrideRangeValid(start: string, end: string): boolean {
+  return slotDurationSlots(start, end) >= 1;
+}
+
+/** True when `time` is outside the studio's opening hours for `date`. */
+export function isSlotOutsideOpeningHours(studioId: StudioId, date: Date, time: string): boolean {
+  return !getStudioTimeSlots(studioId, date).includes(time);
+}
+
+/**
+ * Reasons an admin-forced selection would be rejected in the public flow.
+ * Used for warning copy only — never blocks submit.
+ */
+export function getAdminSlotWarnings(input: {
+  date: Date;
+  startTime: string;
+  endTime: string;
+  studioId: StudioId;
+  occupiedTimes: string[];
+  todayISO: string;
+}): string[] {
+  const warnings: string[] = [];
+  const dateISO = formatDateISO(input.date);
+  if (dateISO < input.todayISO) {
+    warnings.push("Date passée");
+  }
+  if (slotDurationSlots(input.startTime, input.endTime) < MIN_BOOKING_SLOTS) {
+    warnings.push("Durée inférieure à 1 heure");
+  }
+  const startIdx = ALL_TIME_SLOTS.indexOf(input.startTime);
+  let endIdx = ALL_TIME_SLOTS.indexOf(input.endTime);
+  if (input.endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
+  if (startIdx !== -1 && endIdx > startIdx) {
+    const selected = ALL_TIME_SLOTS.slice(startIdx, endIdx);
+    if (selected.some((time) => input.occupiedTimes.includes(time))) {
+      warnings.push("Chevauche une réservation ou un blocage existant");
+    }
+    if (selected.some((time) => isSlotOutsideOpeningHours(input.studioId, input.date, time))) {
+      warnings.push("Hors horaires d'ouverture");
+    }
+  }
+  return warnings;
+}
+
 // Detailed occupancy information
 export interface OccupancyInfo {
   studioId: StudioId;

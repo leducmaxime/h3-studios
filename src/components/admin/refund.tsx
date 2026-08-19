@@ -22,8 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatPrice } from "@/lib/booking";
-import { parseAmountInput } from "@/lib/booking-totals";
-import type { DbPayment } from "@/lib/db-types";
+import { getBookingBalance, parseAmountInput } from "@/lib/booking-totals";
+import type { DbBooking, DbPayment } from "@/lib/db-types";
 import type { RefundFailureCode, RefundOutcome } from "@/lib/refunds";
 import { paymentMethodLabel } from "@/lib/labels";
 
@@ -170,8 +170,14 @@ export function CancelBookingDialog({
   contentClassName?: string;
 }) {
   const [mode, setMode] = useState<"none" | "refund" | null>(null);
+  // Sous-choix « Sans remboursement » : que devient le solde restant dû.
+  // « waive » = dette annulée, « keep » = paiement toujours dû.
+  const [balanceChoice, setBalanceChoice] = useState<"waive" | "keep" | null>(
+    null,
+  );
   const [reason, setReason] = useState("");
   const [payments, setPayments] = useState<PaymentRefundInfo[]>([]);
+  const [booking, setBooking] = useState<DbBooking | null>(null);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -191,12 +197,21 @@ export function CancelBookingDialog({
     if (!open || !bookingId) return;
     setSnapshot({ id: bookingId, ref: bookingRef });
     setMode(null);
+    setBalanceChoice(null);
     setReason("");
     setAmounts({});
     setInlineError(null);
     setResult(null);
     setSubmitting(false);
+    setBooking(null);
     setLoadingPayments(true);
+    fetch(`/api/admin/bookings/${bookingId}`)
+      .then((r) => r.json())
+      .then((raw: unknown) => {
+        const json = raw as { success: boolean; data?: DbBooking };
+        if (json.success && json.data) setBooking(json.data);
+      })
+      .catch(() => toast.error("Erreur lors du chargement de la réservation"));
     fetch(`/api/admin/bookings/${bookingId}/payments`)
       .then((r) => r.json())
       .then((raw: unknown) => {
@@ -249,10 +264,16 @@ export function CancelBookingDialog({
   const refundTotal = round2(selectedRefunds.reduce((s, r) => s + r.amount, 0));
   const anyInvalid = refundableRows.some(rowInvalid);
 
+  // Solde restant dû (null tant que la réservation n'est pas chargée) : s'il
+  // est positif, « Sans remboursement » exige un sous-choix explicite.
+  const remaining = booking ? getBookingBalance(booking, payments) : null;
+  const balanceChoiceRequired = remaining !== null && remaining > 0;
+
   const canConfirm =
     !submitting &&
-    (mode === "none" ||
-      (mode === "refund" && selectedRefunds.length > 0 && !anyInvalid));
+    (mode === "none"
+      ? remaining !== null && (!balanceChoiceRequired || balanceChoice !== null)
+      : mode === "refund" && selectedRefunds.length > 0 && !anyInvalid);
 
   async function handleConfirm() {
     if (!mode || !canConfirm || !snapshot.id) return;
@@ -265,6 +286,9 @@ export function CancelBookingDialog({
         body: JSON.stringify({
           reason: reason.trim() || undefined,
           refundMode: mode,
+          ...(mode === "none" && balanceChoiceRequired
+            ? { keepBalanceDue: balanceChoice === "keep" }
+            : {}),
           ...(mode === "refund" ? { refunds: selectedRefunds } : {}),
         }),
       });
@@ -416,7 +440,10 @@ export function CancelBookingDialog({
               <div className="grid gap-2 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => setMode("none")}
+                  onClick={() => {
+                    setMode("none");
+                    setBalanceChoice(null);
+                  }}
                   disabled={submitting}
                   className={choiceClass(mode === "none")}
                 >
@@ -428,7 +455,10 @@ export function CancelBookingDialog({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMode("refund")}
+                  onClick={() => {
+                    setMode("refund");
+                    setBalanceChoice(null);
+                  }}
                   disabled={submitting || refundUnavailable}
                   className={choiceClass(mode === "refund")}
                 >
@@ -449,6 +479,44 @@ export function CancelBookingDialog({
                   </p>
                 </button>
               </div>
+
+              {/* Sous-choix « Sans remboursement » quand un solde reste dû —
+                  aucune option présélectionnée */}
+              {mode === "none" && balanceChoiceRequired && (
+                <div className="space-y-2">
+                  <p className="text-xs text-zinc-400">
+                    Que devient le solde restant de{" "}
+                    <span className="font-medium text-zinc-300">
+                      {formatPrice(remaining)}
+                    </span>{" "}
+                    ?
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setBalanceChoice("waive")}
+                      disabled={submitting}
+                      className={choiceClass(balanceChoice === "waive")}
+                    >
+                      <p className="text-sm font-semibold">Dette annulée</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Le solde n&apos;est plus dû.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBalanceChoice("keep")}
+                      disabled={submitting}
+                      className={choiceClass(balanceChoice === "keep")}
+                    >
+                      <p className="text-sm font-semibold">Paiement dû</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Le solde de {formatPrice(remaining)} reste dû.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {mode === "refund" && (
                 <div className="space-y-2">
@@ -562,7 +630,9 @@ export function CancelBookingDialog({
                 {mode === "refund"
                   ? `Annuler et rembourser${refundTotal > 0 ? ` ${formatPrice(refundTotal)}` : ""}`
                   : mode === "none"
-                    ? "Annuler sans rembourser"
+                    ? balanceChoice === "keep"
+                      ? `Annuler — paiement dû (${formatPrice(remaining ?? 0)})`
+                      : "Annuler sans rembourser"
                     : "Confirmer l'annulation"}
               </Button>
             </DialogFooter>

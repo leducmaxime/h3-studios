@@ -47,7 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatPrice } from "@/lib/booking";
-import { getBookingAmountDue, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { exportPaymentsCSV } from "@/lib/export";
 import { RefundPaymentDialog } from "@/components/admin/refund";
@@ -59,7 +59,7 @@ interface ApiPayment {
   id: string;
   booking_id: string;
   amount: number;
-  method: "" | "card" | "cash" | "transfer" | "check";
+  method: "card" | "cash" | "transfer" | "check";
   payment_type: "on-site" | "online";
   status: "pending" | "paid" | "refunded" | "partial-refund";
   refunded_amount: number;
@@ -96,6 +96,7 @@ type BookingPaymentMethod = "card" | "cash" | null;
 interface CollectBooking {
   booking_ref: string;
   status?: string;
+  keep_balance_due?: number | boolean | null;
   base_price: number;
   equipment_price: number;
   total_price: number;
@@ -342,8 +343,7 @@ function PaymentActions({
   onEdit: (payment: ApiPayment) => void;
   onDelete: (payment: ApiPayment) => void;
 }) {
-  const isSynthetic = payment.id.startsWith("on-site:") && payment.method === "";
-  const canPay = payment.status === "pending" && !isSynthetic;
+  const canPay = payment.status === "pending";
   // Le plafond vient de refundable_amount pour la carte (solde encore
   // remboursable chez Stripe), du grand livre pour les autres méthodes.
   // Une ligne partiellement remboursée reste remboursable. Une carte sans
@@ -352,12 +352,11 @@ function PaymentActions({
     ? (payment.refundable_amount ?? 0)
     : payment.amount - payment.refunded_amount;
   const canRefund =
-    !isSynthetic &&
     (payment.status === "paid" || payment.status === "partial-refund") &&
     refundCap > 0.004 &&
     (payment.method !== "card" || !!payment.stripe_event_id?.startsWith("cs_"));
-  const canEdit = payment.payment_type === "on-site" && !isSynthetic;
-  const canDelete = payment.payment_type === "on-site" && !isSynthetic;
+  const canEdit = payment.payment_type === "on-site";
+  const canDelete = payment.payment_type === "on-site";
   const canAddPayment = !!payment.booking_id;
 
   if (!canPay && !canRefund && !canAddPayment && !canEdit && !canDelete) return null;
@@ -584,8 +583,8 @@ export function AdminPayments() {
       if (!pJson.success) throw new Error(pJson.error || "Payments fetch failed");
 
       const booking = bJson.data as CollectBooking;
-      // Une réservation annulée ne présente jamais de montant dû.
-      if (booking.status === "cancelled") {
+      // Une réservation annulée ne peut être encaissée que si son solde a été conservé.
+      if (!bookingAllowsCollection(booking)) {
         toast.error("Cette réservation est annulée — aucun encaissement possible");
         return;
       }
@@ -1054,7 +1053,7 @@ export function AdminPayments() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="flex items-center gap-1.5 text-sm">
-                        {payment.method === "" ? "—" : (() => {
+                        {(() => {
                           const Icon = PAYMENT_METHOD_ICONS[payment.method];
                           return Icon ? <><Icon className="h-4 w-4" /> {paymentMethodLabelShort(payment.method)}</> : paymentMethodLabelShort(payment.method);
                         })()}
@@ -1083,25 +1082,14 @@ export function AdminPayments() {
                           : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      {payment.payment_type === "on-site" && payment.status === "pending" && payment.method === "" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-zinc-700"
-                          onClick={() => openCollectDialog(payment.booking_id)}
-                        >
-                          Encaisser
-                        </Button>
-                      ) : (
-                        <PaymentActions
-                          payment={payment}
-                          onMarkPaid={handleMarkPaid}
-                          onRefund={openRefundDialog}
-                          onAddPayment={openCollectDialog}
-                          onEdit={openEditDialog}
-                          onDelete={openDeleteDialog}
-                        />
-                      )}
+                      <PaymentActions
+                        payment={payment}
+                        onMarkPaid={handleMarkPaid}
+                        onRefund={openRefundDialog}
+                        onAddPayment={openCollectDialog}
+                        onEdit={openEditDialog}
+                        onDelete={openDeleteDialog}
+                      />
                     </td>
                   </tr>
                 );

@@ -309,7 +309,7 @@ export function AdminStudios() {
                               variant="ghost"
                               size="icon"
                               onClick={() => openEquipmentEdit(eq)}
-                              className="text-zinc-400 hover:text-primary"
+                              className="text-zinc-400"
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -317,7 +317,7 @@ export function AdminStudios() {
                               variant="ghost"
                               size="icon"
                               onClick={() => confirmDeleteEquipment(eq)}
-                              className="text-zinc-400 hover:text-red-400"
+                              className="text-zinc-400"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
