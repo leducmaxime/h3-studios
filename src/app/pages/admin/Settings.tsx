@@ -65,6 +65,8 @@ interface InstagramStatus {
   tokenConfigured: boolean;
   tokenValid: boolean | null;
   tokenError: string | null;
+  expiresAt: string | null;
+  lastRefreshedAt: string | null;
 }
 
 function formatSyncDate(iso: string): string {
@@ -846,6 +848,18 @@ function InstagramTab({ settings, onUpdate }: {
             <div className="flex items-center justify-between gap-4">
               <span className="text-xs text-zinc-500">Publications en cache</span>
               <span className="text-xs font-medium text-zinc-200">{status.postCount}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs text-zinc-500">Expiration du token</span>
+              <span className="text-xs font-medium text-zinc-200">
+                {status.expiresAt ? formatSyncDate(status.expiresAt) : "Inconnue"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs text-zinc-500">Dernier rafraîchissement</span>
+              <span className="text-xs font-medium text-zinc-200">
+                {status.lastRefreshedAt ? formatSyncDate(status.lastRefreshedAt) : "Jamais"}
+              </span>
             </div>
             {status.tokenValid !== null && (
               <div className="flex items-center gap-2 border-t border-zinc-800 pt-2.5">
