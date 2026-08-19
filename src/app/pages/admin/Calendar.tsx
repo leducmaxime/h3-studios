@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, parseBookingEquipmentLines, type StudioId } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue } from "@/lib/booking-totals";
+import { getBookingAmountDue, isKeepBalanceDue } from "@/lib/booking-totals";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel, bookingStatusLabel } from "@/lib/labels";
 
@@ -79,6 +79,8 @@ interface CalendarBooking {
   equipment: string | null;
   payment_method: string | null;
   payment_status: string | null;
+  keep_balance_due?: number;
+  remaining?: number;
   notes: string | null;
 }
 
@@ -1334,7 +1336,7 @@ export function AdminCalendar() {
 
     const totalPaid = bookingPayments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
     const finalTotal = getBookingAmountDue({ ...b, promo_discount: b.promo_discount ?? 0 });
-    const balance = finalTotal - totalPaid;
+    const balance = isKeepBalanceDue(b) && b.remaining != null ? b.remaining : finalTotal - totalPaid;
 
     return (
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>

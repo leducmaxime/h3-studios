@@ -37,7 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary } from "@/lib/booking-totals";
+import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, displayPaymentStatusLabel, studioLabel } from "@/lib/labels";
 import { formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus, type BookingWithUser, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
@@ -124,7 +124,11 @@ export function AdminBookings() {
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">("all");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining">("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining">(() => {
+    if (typeof window === "undefined") return "all";
+    const p = new URLSearchParams(window.location.search).get("payment");
+    return p === "paid" || p === "remaining" ? p : "all";
+  });
   const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
   const [page, setPage] = useState(1);
@@ -456,6 +460,7 @@ export function AdminBookings() {
                     booking.payment_status,
                     booking.total_collected ?? booking.total_paid ?? 0,
                     booking.total_refunded ?? 0,
+                    { keepBalanceDue: isKeepBalanceDue(booking), remaining: booking.remaining ?? 0 },
                   );
                   let paymentBadge: React.ReactNode = <span className="text-zinc-500">—</span>;
 
@@ -521,7 +526,7 @@ export function AdminBookings() {
                         {paymentBadge}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
-                        {booking.status === "cancelled" ? (
+                        {booking.status === "cancelled" && !isKeepBalanceDue(booking) ? (
                           <span className="text-zinc-600">—</span>
                         ) : (
                           formatPrice(getBookingAmountDue(booking))

@@ -201,7 +201,7 @@ export async function createBooking(
 export async function updateBooking(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "promo_discount" | "promo_code" | "promo_type">>,
+  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "keep_balance_due" | "promo_discount" | "promo_code" | "promo_type">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -702,42 +702,10 @@ export async function mergeUsers(
 
 // ─── Payments ────────────────────────────────────────────────────────────────
 
-/** CTE SQL partagée pour les paiements enrichis avec les paiements on-site pending synthétiques */
+/** CTE SQL partagée pour enrichir les vrais enregistrements de paiement uniquement */
 function buildPaymentsCTE(): string {
   return `
-    WITH paid_by_booking AS (
-      SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-      FROM payments
-      GROUP BY booking_id
-    ),
-    pay_on_site_pending AS (
-      SELECT
-        'on-site:' || b.id as id,
-        b.id as booking_id,
-        (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) as amount,
-        '' as method,
-        'pending' as status,
-        0 as refunded_amount,
-        NULL as paid_at,
-        b.created_at as created_at,
-        NULL as stripe_event_id,
-        0 as refund_reserved_cents,
-        NULL as refundable_amount,
-        0 as refund_pending_cents,
-        b.booking_ref as booking_ref,
-        COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
-        u.band_name as user_band_name,
-        u.id as user_id,
-        b.date as booking_date,
-        'on-site' as payment_type
-      FROM bookings b
-      LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-      LEFT JOIN users u ON u.id = b.user_id
-      WHERE b.status != 'cancelled'
-        AND b.payment_status = 'pay-on-site'
-        AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0
-    ),
-    payments_enriched AS (
+    WITH payments_enriched AS (
       SELECT
         p.id as id,
         p.booking_id as booking_id,
@@ -825,12 +793,7 @@ export async function getPayments(
 
   const countResult = await db.prepare(
     `${buildPaymentsCTE()}
-      SELECT COUNT(*) as total FROM (
-        SELECT * FROM payments_enriched
-        UNION ALL
-        SELECT * FROM pay_on_site_pending
-      )
-      ${where}
+      SELECT COUNT(*) as total FROM payments_enriched ${where}
     `,
   ).bind(...params).first<{ total: number }>();
   const total = countResult?.total ?? 0;
@@ -842,24 +805,14 @@ export async function getPayments(
         COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
         COUNT(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN 1 END) as paidCount,
         COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paidAmount
-      FROM (
-        SELECT * FROM payments_enriched
-        UNION ALL
-        SELECT * FROM pay_on_site_pending
-      )
-      ${where}
+      FROM payments_enriched ${where}
     `,
   ).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number }>();
 
   const offset = (page - 1) * limit;
   const result = await db.prepare(
     `${buildPaymentsCTE()}
-      SELECT * FROM (
-        SELECT * FROM payments_enriched
-        UNION ALL
-        SELECT * FROM pay_on_site_pending
-      )
-      ${where}
+      SELECT * FROM payments_enriched ${where}
       ORDER BY ${safeSortBy} ${safeSortOrder}, created_at DESC
       LIMIT ? OFFSET ?
     `,

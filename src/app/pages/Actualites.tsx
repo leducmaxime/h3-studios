@@ -2,6 +2,7 @@
 
 import { Instagram, ExternalLink, Calendar, X, Play, ChevronLeft, ChevronRight, Images } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
+import { buildInstagramMediaProxyPath } from "@/lib/instagram-media";
 
 interface InstagramChild {
   id: string;
@@ -211,7 +212,7 @@ export function Actualites() {
             {posts.map((post, i) => {
               const currentImage = getCurrentImage(post);
               const hasCarousel = post.children && post.children.length > 1;
-              const isVideo = post.media_type === "VIDEO";
+              const isVideo = currentImage.media_type === "VIDEO";
               const tileKey = `tile-${post.id}-${carouselIndex[post.id] || 0}`;
               const tileFailed = !!failedMedia[tileKey];
 
@@ -234,11 +235,11 @@ export function Actualites() {
                     ) : (
                       <>
                     <img
-                      src={`/api/instagram/proxy-image?url=${encodeURIComponent(
-                        isVideo 
+                      src={buildInstagramMediaProxyPath(
+                        isVideo
                           ? (currentImage.thumbnail_url || currentImage.media_url)
-                          : (currentImage.media_url || currentImage.thumbnail_url || '')
-                      )}`}
+                          : (currentImage.media_url || currentImage.thumbnail_url || "")
+                      )}
                       alt={post.caption}
                       width={640}
                       height={640}
@@ -351,7 +352,7 @@ export function Actualites() {
                 ) : (
                 <div className="relative h-full w-full">
                   <img
-                    src={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.thumbnail_url || selectedPost.media_url)}`}
+                    src={buildInstagramMediaProxyPath(selectedPost.thumbnail_url || selectedPost.media_url)}
                     alt={selectedPost.caption}
                     className="h-full w-full object-cover"
                     onError={() => markFailed(`modal-thumb-${selectedPost.id}`)}
@@ -372,8 +373,8 @@ export function Actualites() {
                   <MediaFallback permalink={selectedPost.permalink} />
                 ) : (
                 <video
-                  src={selectedPost.media_url}
-                  poster={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.thumbnail_url || selectedPost.media_url)}`}
+                  src={buildInstagramMediaProxyPath(selectedPost.media_url)}
+                  poster={buildInstagramMediaProxyPath(selectedPost.thumbnail_url || selectedPost.media_url)}
                   controls
                   autoPlay
                   className="h-full w-full object-cover"
@@ -385,11 +386,25 @@ export function Actualites() {
                 <div className="relative h-full w-full">
                   {failedMedia[`modal-carousel-${selectedPost.id}-${carouselIndex[selectedPost.id] || 0}`] ? (
                     <MediaFallback permalink={selectedPost.permalink} />
+                  ) : selectedPost.children[carouselIndex[selectedPost.id] || 0]?.media_type === "VIDEO" ? (
+                  <video
+                    src={buildInstagramMediaProxyPath(
+                      selectedPost.children[carouselIndex[selectedPost.id] || 0]?.media_url || selectedPost.media_url
+                    )}
+                    poster={buildInstagramMediaProxyPath(
+                      selectedPost.children[carouselIndex[selectedPost.id] || 0]?.thumbnail_url
+                        || selectedPost.children[carouselIndex[selectedPost.id] || 0]?.media_url
+                        || selectedPost.media_url
+                    )}
+                    controls
+                    className="h-full w-full object-cover"
+                    onError={() => markFailed(`modal-carousel-${selectedPost.id}-${carouselIndex[selectedPost.id] || 0}`)}
+                  />
                   ) : (
                   <img
-                    src={`/api/instagram/proxy-image?url=${encodeURIComponent(
+                    src={buildInstagramMediaProxyPath(
                       selectedPost.children[carouselIndex[selectedPost.id] || 0]?.media_url || selectedPost.media_url
-                    )}`}
+                    )}
                     alt={selectedPost.caption}
                     className="h-full w-full object-cover"
                     onError={() => markFailed(`modal-carousel-${selectedPost.id}-${carouselIndex[selectedPost.id] || 0}`)}
@@ -433,7 +448,7 @@ export function Actualites() {
                   <MediaFallback permalink={selectedPost.permalink} />
                 ) : (
                 <img
-                  src={`/api/instagram/proxy-image?url=${encodeURIComponent(selectedPost.media_url)}`}
+                  src={buildInstagramMediaProxyPath(selectedPost.media_url)}
                   alt={selectedPost.caption}
                   className="h-full w-full object-cover"
                   onError={() => markFailed(`modal-img-${selectedPost.id}`)}

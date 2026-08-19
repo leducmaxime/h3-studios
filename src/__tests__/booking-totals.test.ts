@@ -290,6 +290,30 @@ describe("getDisplayPaymentStatus", () => {
     expect(status).toBe("cancelled");
   });
 
+  it("cancelled + keep_balance_due + unpaid → Reste à payer", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "cancelled" as const, payment_status: "pay-on-site", keep_balance_due: 1 },
+      [],
+    );
+    expect(status).toBe("pay-on-site");
+  });
+
+  it("cancelled + keep_balance_due + later collected → Payé", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "cancelled" as const, payment_status: "pay-on-site", keep_balance_due: 1 },
+      [{ amount: 23, status: "paid" as const, refunded_amount: 0 }],
+    );
+    expect(status).toBe("paid");
+  });
+
+  it("cancelled + keep_balance_due + partial payment → Reste à payer", () => {
+    const status = getDisplayPaymentStatus(
+      { ...base, status: "cancelled" as const, payment_status: "pay-on-site", keep_balance_due: 1 },
+      [{ amount: 10, status: "paid" as const, refunded_amount: 0 }],
+    );
+    expect(status).toBe("pay-on-site");
+  });
+
   it("cancelled + prior payment → Payée avant annulation", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
@@ -353,6 +377,9 @@ describe("getDisplayPaymentStatusFromSummary (list enrichment)", () => {
     expect(getDisplayPaymentStatusFromSummary("cancelled", "paid", 23, 23)).toBe("refunded");
     expect(getDisplayPaymentStatusFromSummary("confirmed", "paid", 23, 0)).toBe("paid");
     expect(getDisplayPaymentStatusFromSummary("confirmed", "pay-on-site", 0, 0)).toBe("pay-on-site");
+    expect(getDisplayPaymentStatusFromSummary("cancelled", "pay-on-site", 0, 0, { keepBalanceDue: true, remaining: 103 })).toBe("pay-on-site");
+    expect(getDisplayPaymentStatusFromSummary("cancelled", "pay-on-site", 103, 0, { keepBalanceDue: true, remaining: 0 })).toBe("paid");
+    expect(getDisplayPaymentStatusFromSummary("cancelled", "pay-on-site", 0, 0, { keepBalanceDue: false, remaining: 103 })).toBe("cancelled");
   });
 });
 
