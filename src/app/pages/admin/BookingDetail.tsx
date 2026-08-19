@@ -49,6 +49,7 @@ import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, calculateEquipmentPric
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput, getDisplayPaymentStatus } from "@/lib/booking-totals";
+import { formatTaxBreakdown } from "@/lib/tax";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel } from "@/lib/labels";
 import { formatSiret, resolveBookingClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields } from "@/lib/booking-fields";
@@ -641,8 +642,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                             <span className={`text-sm font-medium ${draftQty > 0 ? "text-zinc-200" : "text-zinc-500"}`}>{eq.name}</span>
                             <span className="text-xs text-zinc-500">
                               {eq.pricingType === "session" && eq.sessionPricing
-                                ? `à partir de ${eq.sessionPricing[0]}€/séance`
-                                : `+${eq.pricePerHour}€/h`}
+                                ? `à partir de ${eq.sessionPricing[0]}€ TTC/séance`
+                                : `+${eq.pricePerHour}€ TTC/h`}
                             </span>
                             {editingEquipment && equipmentAvailability[eq.id] && draftQty > equipmentAvailability[eq.id].available && (
                               <span className="text-xs text-amber-400">Stock restant {equipmentAvailability[eq.id].available}. Vous pouvez forcer.</span>
@@ -862,8 +863,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     </div>
                   )}
                   {!isCancelled && overpayment > 0 && <p className="text-xs text-amber-400">Trop-perçu : {formatPrice(overpayment)} — utiliser le remboursement ci-dessous.</p>}
+                  {!isCancelled && (() => {
+                    const tax = formatTaxBreakdown(finalTotal);
+                    return <div className="space-y-1 text-xs text-zinc-500">
+                      <div className="flex justify-between"><span>Total HT</span><span>{tax.ht}</span></div>
+                      <div className="flex justify-between"><span>TVA 20%</span><span>{tax.vat}</span></div>
+                    </div>;
+                  })()}
                   <div className="border-t border-zinc-700 pt-3 flex justify-between items-center">
-                    <span className="font-semibold">Total</span>
+                    <span className="font-semibold">Total TTC</span>
                     <span className="text-xl font-bold text-primary">{isCancelled ? "—" : formatPrice(finalTotal)}</span>
                   </div>
                   {totalPaid > 0 && (
@@ -983,7 +991,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-4">Nouvel encaissement</p>
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                      <Label className="text-xs text-zinc-500 mb-1.5 block">Montant (€)</Label>
+                      <Label className="text-xs text-zinc-500 mb-1.5 block">Montant (€ TTC)</Label>
                       <Input
                         type="number"
                         step="0.01"
@@ -1292,7 +1300,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-payment-amount">Montant (&euro;)</Label>
+              <Label htmlFor="edit-payment-amount">Montant (&euro; TTC)</Label>
               <Input
                 id="edit-payment-amount"
                 type="number"

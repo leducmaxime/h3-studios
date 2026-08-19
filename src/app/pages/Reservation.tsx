@@ -15,6 +15,7 @@ import { StripeRedirect } from "@/components/booking/StripeRedirect";
 import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check, PackageCheck, WrenchIcon, AlertTriangle } from "lucide-react";
 import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
+import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
 import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, sortBookingsByStart, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
@@ -302,11 +303,11 @@ export function Reservation({ step }: ReservationProps) {
                 {hasPeakPricing ? (
                   <>
                     <div className="flex items-center justify-between">
-                      <span className="text-white/60">Heure creuse — {formatBandDuration(offPeakHours)} x {offPeakRate}€/h</span>
+                      <span className="text-white/60">Heure creuse — {formatBandDuration(offPeakHours)} x {offPeakRate}€ TTC/h</span>
                       <span>{formatPrice(offPeakSubtotal)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-white/60">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€/h</span>
+                      <span className="text-white/60">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€ TTC/h</span>
                       <span>{formatPrice(peakSubtotal)}</span>
                     </div>
                   </>
@@ -314,19 +315,19 @@ export function Reservation({ step }: ReservationProps) {
                   <div className="flex items-center justify-between">
                     {peakSlots.length > 0 ? (
                       <>
-                        <span className="text-white/60">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€/h</span>
+                        <span className="text-white/60">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
                         <span>{formatPrice(total)}</span>
                       </>
                     ) : (
                       <>
-                        <span className="text-white/60">Heure creuse — {formatBandDuration(durationH)} x {anyRate}€/h</span>
+                        <span className="text-white/60">Heure creuse — {formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
                         <span>{formatPrice(total)}</span>
                       </>
                     )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
-                    <span className="text-white/60">{formatBandDuration(durationH)} x {anyRate}€/h</span>
+                    <span className="text-white/60">{formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
                     <span>{formatPrice(total)}</span>
                   </div>
                 )}
@@ -340,9 +341,12 @@ export function Reservation({ step }: ReservationProps) {
                   </div>
                 ))}
 
-                <div className="flex items-center justify-between border-t border-white/10 pt-2 mt-1">
-                  <span className="font-semibold">Total</span>
-                  <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
+                <div className="border-t border-white/10 pt-2 mt-1">
+                  <TaxBreakdown ttc={grandTotal} />
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">Total TTC</span>
+                    <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
+                  </div>
                 </div>
               </>
             )}
@@ -670,8 +674,9 @@ export function Reservation({ step }: ReservationProps) {
                               </div>
                             </>
                           )}
+                          <TaxBreakdown ttc={liveNet} />
                           <div className="flex items-center justify-between">
-                            <span className="text-lg font-semibold">Total</span>
+                            <span className="text-lg font-semibold">Total TTC</span>
                             <span className="text-2xl font-bold text-primary">
                               {formatPrice(liveNet)}
                             </span>

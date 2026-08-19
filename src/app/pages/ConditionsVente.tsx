@@ -29,7 +29,7 @@ export function ConditionsVente() {
           <section>
             <h2 className="mb-3 text-xl font-semibold text-primary">Tarifs et paiement</h2>
             <p className="text-sm leading-relaxed">
-              Les tarifs sont indiqués en euros TTC sur la page <strong className="text-white">/tarifs</strong>.
+              Les tarifs sont indiqués en euros TTC (TVA 20 %) sur la page <strong className="text-white">/tarifs</strong>.
               Ils peuvent être modifiés à tout moment sans préavis. Le paiement s'effectue :
             </p>
             <ul className="mt-2 list-inside list-disc space-y-1 text-sm leading-relaxed">

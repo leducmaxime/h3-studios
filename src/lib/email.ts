@@ -2,6 +2,7 @@ import { type BookingEquipmentLine, formatPrice, resolveEquipmentDisplay } from 
 import { offeredUnitsSuffix } from "@/lib/equipment-pricing";
 import { CLIENT_TYPE_RULES, isClientType } from "@/lib/booking-fields";
 import { groupTypeLabel, paymentMethodLabel, studioLabel } from "@/lib/labels";
+import { formatEuro, splitTtc } from "@/lib/tax";
 
 export interface BookingSlot {
   bookingRef: string;
@@ -156,6 +157,9 @@ export function buildEmailHtml(data: BookingConfirmationData): string {
 
   const isMultiSlot = data.allSlots && data.allSlots.length > 1;
   const multiSlotTotal = isMultiSlot ? data.allSlots!.reduce((sum, s) => sum + s.totalPrice, 0) : 0;
+  const multiNetTotal = multiSlotTotal - (data.promoDiscount || 0);
+  const multiTax = splitTtc(multiNetTotal);
+  const singleTax = splitTtc(data.totalPrice);
 
   const bookingRefBadge = isMultiSlot
     ? `<p style="margin:0 0 4px 0;color:#888888;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Références de réservation</p>
@@ -298,9 +302,11 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
           <td colspan="2" style="border-top:1px solid #333333;padding-top:8px;"></td>
         </tr>
         ` : ""}
+        ${multiNetTotal === 0 ? "" : `<tr><td style="padding:3px 0;color:#aaaaaa;font-size:13px;">HT</td><td align="right" style="padding:3px 0;color:#aaaaaa;font-size:13px;">${formatEuro(multiTax.ht)}</td></tr>
+        <tr><td style="padding:3px 0;color:#aaaaaa;font-size:13px;">TVA 20%</td><td align="right" style="padding:3px 0;color:#aaaaaa;font-size:13px;">${formatEuro(multiTax.vat)}</td></tr>`}
         <tr>
-          <td style="padding:6px 0;color:#ffffff;font-size:17px;font-weight:700;">Total (${data.allSlots!.length} créneaux)</td>
-          <td align="right" style="padding:6px 0;color:#facc15;font-size:22px;font-weight:700;">${multiSlotTotal === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(multiSlotTotal - (data.promoDiscount || 0))}</td>
+          <td style="padding:6px 0;color:#ffffff;font-size:17px;font-weight:700;">${multiNetTotal === 0 ? `Total (${data.allSlots!.length} créneaux)` : `Total TTC (${data.allSlots!.length} créneaux)`}</td>
+          <td align="right" style="padding:6px 0;color:#facc15;font-size:22px;font-weight:700;">${multiNetTotal === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(multiNetTotal)}</td>
         </tr>
       </table>
     </td>
@@ -327,8 +333,10 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
         <tr>
           <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
         </tr>
+        ${data.totalPrice === 0 ? "" : `<tr><td style="padding:3px 0;color:#aaaaaa;font-size:13px;">HT</td><td align="right" style="padding:3px 0;color:#aaaaaa;font-size:13px;">${formatEuro(singleTax.ht)}</td></tr>
+        <tr><td style="padding:3px 0;color:#aaaaaa;font-size:13px;">TVA 20%</td><td align="right" style="padding:3px 0;color:#aaaaaa;font-size:13px;">${formatEuro(singleTax.vat)}</td></tr>`}
         <tr>
-          <td style="padding:6px 0;color:#ffffff;font-size:16px;font-weight:600;">Total</td>
+          <td style="padding:6px 0;color:#ffffff;font-size:16px;font-weight:600;">${data.totalPrice === 0 ? "Total" : "Total TTC"}</td>
           <td align="right" style="padding:6px 0;color:#facc15;font-size:20px;font-weight:700;">${data.totalPrice === 0 ? '<span style="color:#22c55e;">GRATUIT</span>' : formatPrice(data.totalPrice)}</td>
         </tr>
       </table>

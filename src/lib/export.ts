@@ -4,6 +4,7 @@ import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
 import { bookingPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
+import { splitTtc } from "@/lib/tax";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function escapeCSV(value: string | number | null | undefined): string {
@@ -62,8 +63,10 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
     "Durée (h)",
     "Groupe",
     "Statut",
-    "Montant dû (EUR)",
-    "Remise",
+    "Montant dû TTC (EUR)",
+    "Montant dû HT (EUR)",
+    "TVA 20% (EUR)",
+    "Remise TTC (EUR)",
     "Paiement",
   ];
 
@@ -78,6 +81,7 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
     const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
     const durationHours = ((endMinutes - startMinutes) / 60).toFixed(1);
 
+    const due = splitTtc(getBookingAmountDue(booking));
     return [
       escapeCSV(booking.booking_ref),
       escapeCSV(booking.user_name || "—"),
@@ -94,7 +98,9 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
       escapeCSV(durationHours),
       escapeCSV(groupTypeLabel(booking.group_type)),
       escapeCSV(bookingStatusLabel(booking.status)),
-      escapeCSV(formatPriceForCSV(getBookingAmountDue(booking))),
+      escapeCSV(formatPriceForCSV(due.ttc)),
+      escapeCSV(formatPriceForCSV(due.ht)),
+      escapeCSV(formatPriceForCSV(due.vat)),
       escapeCSV(formatPriceForCSV(Number(booking.promo_discount) || 0)),
       escapeCSV(bookingPaymentStatusLabel(booking.payment_status)),
     ].join(",");
@@ -119,12 +125,15 @@ export function exportUsersCSV(users: DbUser[]): void {
     "Téléphone",
     "Groupe",
     "Réservations",
-    "Total dépensé (EUR)",
+    "Total dépensé TTC (EUR)",
+    "Total dépensé HT (EUR)",
+    "TVA 20% (EUR)",
     "Bloqué",
   ];
 
   const rows = users.map((user) => {
     const clientIdentity = resolveUserClientIdentity(user);
+    const spent = splitTtc(user.total_spent);
     return [
       escapeCSV(user.name),
       escapeCSV(clientIdentity.clientTypeLabel),
@@ -136,7 +145,9 @@ export function exportUsersCSV(users: DbUser[]): void {
       escapeCSV(user.phone || "—"),
       escapeCSV(user.band_name || "—"),
       escapeCSV(user.total_bookings),
-      escapeCSV(formatPriceForCSV(user.total_spent)),
+      escapeCSV(formatPriceForCSV(spent.ttc)),
+      escapeCSV(formatPriceForCSV(spent.ht)),
+      escapeCSV(formatPriceForCSV(spent.vat)),
       escapeCSV(user.is_blocked === 1 ? "Oui" : "Non"),
     ].join(",");
   });
@@ -163,12 +174,18 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
     "Type paiement",
     "Méthode",
     "Statut",
-    "Montant (EUR)",
-    "Remboursé (EUR)",
+    "Montant TTC (EUR)",
+    "Montant HT (EUR)",
+    "TVA 20% (EUR)",
+    "Remboursé TTC (EUR)",
+    "Remboursé HT (EUR)",
+    "TVA 20% remboursée (EUR)",
     "Date paiement",
   ];
 
   const rows = payments.map((payment) => {
+    const amount = splitTtc(payment.amount);
+    const refunded = splitTtc(payment.refunded_amount);
     return [
       escapeCSV(payment.booking_ref || "—"),
       escapeCSV(payment.user_name || "—"),
@@ -176,8 +193,12 @@ export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
       escapeCSV(payment.payment_type ? paymentTypeLabel(payment.payment_type) : "—"),
       escapeCSV(paymentMethodLabel(payment.method)),
       escapeCSV(paymentRecordStatusLabel(payment.status)),
-      escapeCSV(formatPriceForCSV(payment.amount)),
-      escapeCSV(formatPriceForCSV(payment.refunded_amount)),
+      escapeCSV(formatPriceForCSV(amount.ttc)),
+      escapeCSV(formatPriceForCSV(amount.ht)),
+      escapeCSV(formatPriceForCSV(amount.vat)),
+      escapeCSV(formatPriceForCSV(refunded.ttc)),
+      escapeCSV(formatPriceForCSV(refunded.ht)),
+      escapeCSV(formatPriceForCSV(refunded.vat)),
       escapeCSV(payment.paid_at ? formatDateForCSV(payment.paid_at) : "—"),
     ].join(",");
   });
@@ -340,7 +361,7 @@ export async function generateInvoicePDF(
           const eqPrice = exact ? eq.lineTotal! : undefined;
           doc.text(`  • ${eq.name || eq.id} ×${eq.quantity}`, 30, y);
           if (typeof eqPrice === "number") {
-            doc.text(`${eqPrice.toFixed(2)} €`, 140, y);
+            doc.text(`${eqPrice.toFixed(2)} € TTC`, 140, y);
           }
           y += 5;
         });
@@ -354,24 +375,24 @@ export async function generateInvoicePDF(
   y += 10;
 
   // Pricing summary
-  ensureSpace(80);
+  ensureSpace(95);
   const basePrice = booking.base_price || 0;
   const netTotal = getBookingAmountDue(booking);
 
   doc.setFont("helvetica", "normal");
   doc.text("Sous-total répétition:", 100, y);
-  doc.text(`${basePrice.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+  doc.text(`${basePrice.toFixed(2)} € TTC`, pageWidth - 20, y, { align: "right" });
   y += 6;
 
   if (equipmentTotal > 0) {
     doc.text("Équipements:", 100, y);
-    doc.text(`${equipmentTotal.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+    doc.text(`${equipmentTotal.toFixed(2)} € TTC`, pageWidth - 20, y, { align: "right" });
     y += 6;
   }
 
   if ((Number(booking.promo_discount) || 0) > 0) {
     doc.text("Remise:", 100, y);
-    doc.text(`-${(Number(booking.promo_discount) || 0).toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+    doc.text(`-${(Number(booking.promo_discount) || 0).toFixed(2)} € TTC`, pageWidth - 20, y, { align: "right" });
     y += 6;
   }
 
@@ -380,10 +401,18 @@ export async function generateInvoicePDF(
   doc.line(100, y, pageWidth - 20, y);
   y += 8;
 
+  const tax = splitTtc(netTotal);
+  doc.setFont("helvetica", "normal");
+  doc.text("HT:", 100, y);
+  doc.text(`${tax.ht.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+  y += 6;
+  doc.text("TVA 20%:", 100, y);
+  doc.text(`${tax.vat.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+  y += 6;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text("Total TTC:", 100, y);
-  doc.text(`${netTotal.toFixed(2)} €`, pageWidth - 20, y, { align: "right" });
+  doc.text(`${netTotal.toFixed(2)} € TTC`, pageWidth - 20, y, { align: "right" });
   y += 15;
 
   // Payment info
@@ -473,10 +502,12 @@ export async function generateMonthlyReportPDF(
   const noShowPct = stats.bookingCount > 0 ? Math.round((stats.noShowCount / stats.bookingCount) * 100) : 0;
 
   const kpis = [
-    ["Revenu total:", `${stats.revenue.toFixed(2)} \u20AC`],
-    ["  dont options/\u00E9quipements:", `${stats.equipmentRevenue.toFixed(2)} \u20AC (${equipPct}%)`],
+    ["Revenu total:", `${stats.revenue.toFixed(2)} \u20AC TTC`],
+    ["  HT:", `${splitTtc(stats.revenue).ht.toFixed(2)} \u20AC`],
+    ["  TVA 20%:", `${splitTtc(stats.revenue).vat.toFixed(2)} \u20AC`],
+    ["  dont options/\u00E9quipements:", `${stats.equipmentRevenue.toFixed(2)} \u20AC TTC (${equipPct}%)`],
     ["Nombre de r\u00E9servations:", `${stats.bookingCount}`],
-    ["Panier moyen:", `${stats.avgBasket.toFixed(2)} \u20AC`],
+    ["Panier moyen:", `${stats.avgBasket.toFixed(2)} \u20AC TTC`],
     ["Taux d'occupation:", `${stats.occupancyRate.toFixed(1)}%`],
     ["No-shows:", `${stats.noShowCount} (${noShowPct}% des r\u00E9servations)`],
   ];
@@ -505,7 +536,7 @@ export async function generateMonthlyReportPDF(
   stats.studioStats.forEach((studio) => {
     const studioName = studioLabel(studio.studio_id);
     doc.text(`${studioName}:`, 25, y);
-    doc.text(`${studio.count} réservation${studio.count > 1 ? "s" : ""}, ${studio.revenue.toFixed(2)} €`, 80, y);
+    doc.text(`${studio.count} réservation${studio.count > 1 ? "s" : ""}, ${studio.revenue.toFixed(2)} € TTC`, 80, y);
     y += 7;
   });
 
@@ -528,7 +559,7 @@ export async function generateMonthlyReportPDF(
     stats.paymentMethods.forEach((pm) => {
       const label = paymentMethodLabelShort(pm.method);
       doc.text(`${label}:`, 25, y);
-      doc.text(`${pm.count} paiement${pm.count > 1 ? "s" : ""}, ${pm.revenue.toFixed(2)} \u20AC`, 80, y);
+      doc.text(`${pm.count} paiement${pm.count > 1 ? "s" : ""}, ${pm.revenue.toFixed(2)} \u20AC TTC`, 80, y);
       y += 7;
     });
   } else {
@@ -555,7 +586,7 @@ export async function generateMonthlyReportPDF(
     stats.topClients.forEach((client, idx) => {
       const bandSuffix = client.band_name ? ` (${client.band_name})` : "";
       doc.text(`${idx + 1}. ${client.name}${bandSuffix}`, 25, y);
-      doc.text(`${client.bookings} r\u00E9sa, ${client.revenue.toFixed(2)} \u20AC`, 120, y);
+      doc.text(`${client.bookings} r\u00E9sa, ${client.revenue.toFixed(2)} \u20AC TTC`, 120, y);
       y += 7;
     });
   } else {
@@ -580,7 +611,7 @@ export async function generateMonthlyReportPDF(
 
   stats.weeklyStats.forEach((week) => {
     doc.text(`Semaine ${week.week}:`, 25, y);
-    doc.text(`${week.count} r\u00E9sa, ${week.revenue.toFixed(2)} \u20AC`, 80, y);
+    doc.text(`${week.count} r\u00E9sa, ${week.revenue.toFixed(2)} \u20AC TTC`, 80, y);
     y += 6;
   });
 

@@ -115,14 +115,19 @@ describe("calculatePrice", () => {
 });
 
 describe("formatPrice", () => {
-  it("should format integer prices without decimals", () => {
-    expect(formatPrice(10)).toBe("10€");
-    expect(formatPrice(100)).toBe("100€");
+  it("should format integer prices without decimals and suffix TTC", () => {
+    expect(formatPrice(10)).toBe("10€ TTC");
+    expect(formatPrice(100)).toBe("100€ TTC");
   });
 
-  it("should format decimal prices with comma", () => {
-    expect(formatPrice(10.5)).toBe("10,50€");
-    expect(formatPrice(12.75)).toBe("12,75€");
+  it("should format decimal prices with comma and suffix TTC", () => {
+    expect(formatPrice(10.5)).toBe("10,50€ TTC");
+    expect(formatPrice(12.75)).toBe("12,75€ TTC");
+  });
+
+  it("should omit the TTC suffix when bare is set", () => {
+    expect(formatPrice(10, { bare: true })).toBe("10€");
+    expect(formatPrice(10.5, { bare: true })).toBe("10,50€");
   });
 });
 

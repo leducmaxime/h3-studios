@@ -49,7 +49,7 @@ const OPTIONS: { type: GroupType; label: string; sublabel: string; icon: Compone
 function getPriceRange(groupType: GroupType, minMaxByGroupType?: MinMaxByGroupType | null): string {
   if (!minMaxByGroupType || !minMaxByGroupType[groupType]) return "…";
   const { min, max } = minMaxByGroupType[groupType];
-  return min === max ? `${min}€/h` : `${min}€ – ${max}€/h`;
+  return min === max ? `${min}€ TTC/h` : `${min}€ – ${max}€ TTC/h`;
 }
 
 export function GroupTypeToggle({ value, onChange, minMaxByGroupType }: GroupTypeToggleProps) {

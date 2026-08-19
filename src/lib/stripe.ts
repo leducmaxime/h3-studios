@@ -120,7 +120,7 @@ export async function createCheckoutSession(
     "currency": "eur",
     "line_items[0][price_data][currency]": "eur",
     "line_items[0][price_data][unit_amount]": params.amountCents.toString(),
-    "line_items[0][price_data][product_data][name]": "Reservation H3 Studios",
+    "line_items[0][price_data][product_data][name]": "Reservation H3 Studios (TTC)",
     "line_items[0][price_data][product_data][description]": `Reservation(s): ${params.bookingRefs.join(", ")}`,
     "line_items[0][quantity]": "1",
     "customer_email": params.customerEmail,

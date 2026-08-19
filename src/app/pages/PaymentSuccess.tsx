@@ -5,6 +5,7 @@ import { CheckCircle, Calendar, Clock, Home, Loader2, PackageCheck } from "lucid
 import { formatDate, formatDuration, formatPrice, type GroupType, type StudioId } from "@/lib/booking";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { groupTypeLabel, studioLabel } from "@/lib/labels";
+import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 
 interface PaymentSuccessProps {
   paymentId?: string;
@@ -229,8 +230,9 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                       <span>-{formatPrice(aggregatePromoDiscount)}</span>
                     </div>
                   )}
+                  <TaxBreakdown ttc={session.amountTotal / 100} />
                   <div className="flex items-center justify-between">
-                    <span className="text-white/60">{isPaid ? "Total payé" : "Montant total"}</span>
+                    <span className="text-white/60">{isPaid ? "Total TTC payé" : "Montant total TTC"}</span>
                     <span className="text-xl font-bold text-primary">
                       {formatPrice(session.amountTotal / 100)}
                     </span>
@@ -254,8 +256,9 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                     {fallback.refs.join(", ")}
                   </span>
                 </div>
+                <TaxBreakdown ttc={fallback.total} />
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-white/60">Total payé</span>
+                  <span className="text-white/60">Total TTC payé</span>
                   <span className="text-xl font-bold text-primary">
                     {formatPrice(fallback.total)}
                   </span>

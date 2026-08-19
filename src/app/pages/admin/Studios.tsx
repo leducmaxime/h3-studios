@@ -294,7 +294,7 @@ export function AdminStudios() {
                           ) : (
                             <div>
                               <Badge variant="outline" className="mb-1">Horaire</Badge>
-                              <p className="text-xs text-zinc-400">{eq.price_per_hour}\u20AC/h</p>
+                              <p className="text-xs text-zinc-400">{eq.price_per_hour}€ TTC/h</p>
                             </div>
                           )}
                         </td>
@@ -419,7 +419,7 @@ export function AdminStudios() {
               </div>
             ) : (
               <div>
-                <label className="mb-1 block text-sm text-zinc-400">Prix par heure (€)</label>
+                <label className="mb-1 block text-sm text-zinc-400">Prix par heure (€ TTC)</label>
                 <input
                   type="number"
                   min={0}
