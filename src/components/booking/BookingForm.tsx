@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowUp, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, bookingFieldLabel, bookingFieldPlaceholder, computeAccountFieldStatus, getRequiredBookingFields, getVisibleBookingFields, isValidBookingFieldValue, type BookingFieldIssue, type BookingFieldKey, type ClientType } from "@/lib/booking-fields";
 import type { ClientUser } from "@/lib/client-user";
@@ -536,9 +536,6 @@ export function BookingForm({
   const nameFieldDefs = guestFieldGroup(NAME_FIELD_KEYS);
   const contactFieldDefs = guestFieldGroup(CONTACT_FIELD_KEYS);
   const groupFieldDefs = guestFieldGroup(GROUP_FIELD_KEYS);
-  // The one issue that blocks an unchosen client type — feeds the guidance
-  // panel and the Continue button's aria-describedby.
-  const clientTypeIssue = bookingFieldIssues.find((issue) => issue.key === "clientType");
   const filledAccountFieldDefinitions: BookingFieldDef[] = clientUser
     ? visibleFields.filter((key) => accountFieldStatus[key] === "filled").map(fieldDef)
     : [];
@@ -685,22 +682,9 @@ export function BookingForm({
          updateFields({ clientType: type });
         }} />
 
-      {clientType === null ? (
-        /* Rien à remplir tant que le type n'est pas choisi — invitation,
-           pas une erreur : c'est l'état normal d'arrivée pour un invité. */
-        <div
-          id="client-type-guidance"
-          className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-6 text-center lg:px-6 lg:py-8"
-        >
-          <ArrowUp className="h-4 w-4 text-primary" aria-hidden="true" />
-          <p className="text-sm font-medium text-white/80">
-            {clientTypeIssue?.reason ?? "Choisissez votre type de client"}
-          </p>
-          <p className="max-w-md text-xs leading-relaxed text-white/50 lg:text-sm">
-            Les champs à remplir dépendent de votre situation. Ils s'afficheront ici dès que vous aurez choisi.
-          </p>
-        </div>
-      ) : clientUser ? (
+      {/* Rien sous le sélecteur tant que le type n'est pas choisi : les champs
+          à afficher en dépendent entièrement. */}
+      {clientType === null ? null : clientUser ? (
         <div className="flex flex-col gap-4 lg:gap-5">
           {filledAccountFieldDefinitions.length > 0 && (
             <section
@@ -812,7 +796,6 @@ export function BookingForm({
         onClick={handleContinue}
         disabled={continueLoading}
         aria-disabled={!canContinue}
-        aria-describedby={!canContinue && clientType === null ? "client-type-guidance" : undefined}
         className={`
           w-full rounded-lg py-3.5 text-base font-semibold transition-all lg:py-4 lg:text-lg
           ${canContinue && !continueLoading
