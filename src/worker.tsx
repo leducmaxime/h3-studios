@@ -1,6 +1,6 @@
 import { render, route, layout } from "rwsdk/router";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
-import { paymentMethodLabelShort, studioLabel } from "@/lib/labels";
+import { groupTypeLabel, paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
@@ -1862,6 +1862,9 @@ const app = defineApp([
         const search = url.searchParams.get("search");
         if (search) filters.search = search;
         const paymentStatus = url.searchParams.get("paymentStatus");
+        if (paymentStatus === "on-site-due") {
+          filters.paymentStatus = "pay-on-site";
+        }
         const dateDirection = url.searchParams.get("dateDirection");
         if (dateDirection) {
           (filters as Record<string, unknown>).dateDirection = dateDirection;
@@ -1875,7 +1878,7 @@ const app = defineApp([
         const limit = parseInt(url.searchParams.get("limit") || "20", 10);
         const all = url.searchParams.get("all") === "true";
 
-        const needsPostFilter = statusFilter || paymentStatus === "paid" || paymentStatus === "remaining";
+        const needsPostFilter = statusFilter || paymentStatus === "paid" || paymentStatus === "remaining" || paymentStatus === "on-site-due";
         const fetchLimit = all ? 5000 : needsPostFilter ? 1000 : limit;
 
         const result = await getBookings(env.DB, filters, 1, fetchLimit);
@@ -1917,6 +1920,10 @@ const app = defineApp([
         } else if (paymentStatus === "remaining") {
           bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
             (b) => b.payment_status !== "paid"
+          );
+        } else if (paymentStatus === "on-site-due") {
+          bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
+            (b) => b.status !== "cancelled" && (b.remaining ?? 0) > 0
           );
         }
 
@@ -4279,13 +4286,19 @@ const app = defineApp([
          ORDER BY date ASC, start_time ASC`,
       ).bind(fromStr, toStr);
 
-       const [occupancyResult, studioResult, onSitePaidResult, onlineCardResult, upcomingResult] = await env.DB.batch([
+       const [occupancyResult, studioResult, groupTypeResult, onSitePaidResult, onlineCardResult, upcomingResult] = await env.DB.batch([
          occupancyStmt,
         // Studio distribution
         env.DB.prepare(
           `SELECT studio_id, COUNT(*) as count, SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)) as revenue
            FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
            GROUP BY studio_id`,
+        ).bind(fromStr, toStr),
+        // Client type distribution (solo / duo / group)
+        env.DB.prepare(
+          `SELECT group_type, COUNT(*) as count, SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)) as revenue
+           FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
+           GROUP BY group_type`,
         ).bind(fromStr, toStr),
         env.DB.prepare(
           `SELECT
@@ -4341,6 +4354,7 @@ const app = defineApp([
 
       type BookingSlotRow = { date: string; studio_id: string; start_time: string; end_time: string };
       type StudioRow = { studio_id: string; count: number; revenue: number };
+      type GroupTypeRow = { group_type: string; count: number; revenue: number };
       type PaymentRow = { method: string; count: number; revenue: number };
       type OnlineCardRow = { count: number; revenue: number };
 
@@ -4452,6 +4466,18 @@ const app = defineApp([
         revenue: row.revenue,
       }));
 
+      const groupTypeCounts: Record<string, { count: number; revenue: number }> = {};
+      for (const row of groupTypeResult.results as unknown as GroupTypeRow[]) {
+        groupTypeCounts[row.group_type] = { count: row.count ?? 0, revenue: row.revenue ?? 0 };
+      }
+      // Ordre fixe + entrées à zéro : le donut garde des couleurs stables même
+      // quand un type de client n'a aucune réservation sur la période.
+      const groupTypeData = (["solo", "duo", "group"] as const).map((groupType) => ({
+        groupType: groupTypeLabel(groupType),
+        count: groupTypeCounts[groupType]?.count ?? 0,
+        revenue: groupTypeCounts[groupType]?.revenue ?? 0,
+      }));
+
       const onSitePayments = (onSitePaidResult.results as unknown as PaymentRow[]);
       const onlineCard = (onlineCardResult.results as unknown as OnlineCardRow[])[0] ?? { count: 0, revenue: 0 };
       const merged: Record<string, { count: number; revenue: number }> = {};
@@ -4478,6 +4504,7 @@ const app = defineApp([
       return jsonSuccess({
         occupancy: occupancyData,
         studios: studioData,
+        groupTypes: groupTypeData,
         payments: paymentData,
         upcomingBookings: upcomingResult.results,
       });

@@ -113,6 +113,12 @@ function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: stri
   }
 }
 
+function getUrlDateParam(name: string): string {
+  if (typeof window === "undefined") return "";
+  const value = new URLSearchParams(window.location.search).get(name);
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function AdminBookings() {
@@ -121,13 +127,17 @@ export function AdminBookings() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
   const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">("all");
-  const [customDateFrom, setCustomDateFrom] = useState("");
-  const [customDateTo, setCustomDateTo] = useState("");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining">(() => {
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">(() => {
+    return getUrlDateParam("dateFrom") ? "custom" : "all";
+  });
+  const [customDateFrom, setCustomDateFrom] = useState(() => getUrlDateParam("dateFrom"));
+  const [customDateTo, setCustomDateTo] = useState(() => {
+    return getUrlDateParam("dateFrom") ? getUrlDateParam("dateTo") : "";
+  });
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining" | "on-site-due">(() => {
     if (typeof window === "undefined") return "all";
     const p = new URLSearchParams(window.location.search).get("payment");
-    return p === "paid" || p === "remaining" ? p : "all";
+    return p === "paid" || p === "remaining" || p === "on-site-due" ? p : "all";
   });
   const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
@@ -375,12 +385,13 @@ export function AdminBookings() {
           </select>
           <select
             value={paymentStatusFilter}
-            onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "remaining"); setPage(1); }}
+            onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "remaining" | "on-site-due"); setPage(1); }}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
             <option value="all">Paiement</option>
             <option value="paid">Payé</option>
             <option value="remaining">Reste à payer</option>
+            <option value="on-site-due">Sur place à encaisser</option>
           </select>
 
           <div className="ml-auto flex items-center gap-1">

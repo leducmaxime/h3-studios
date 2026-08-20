@@ -12,7 +12,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, WrenchIcon, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, PiggyBank, WrenchIcon, AlertTriangle } from "lucide-react";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { BookingOptionsStep } from "@/components/booking/BookingOptionsStep";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -642,11 +642,21 @@ export function Reservation({ step }: ReservationProps) {
       </div>
 
       {state.step === "creneau" && state.groupType === "group" && !state.studioId && (
-        <p className="mt-4 text-center text-sm font-medium text-primary/80">
-          Les tarifs varient selon l'heure (après 18h) et le jour (weekend &
-          jour férié). Économisez jusqu'à 20% en réservant avant 18h en semaine
-          !
-        </p>
+        <div className="-mx-2 mt-4 self-stretch border-y-2 border-primary/70 bg-primary text-primary-foreground shadow-lg shadow-primary/20 lg:mx-0 lg:rounded-xl lg:border-2">
+          <div className="flex items-center gap-3 px-4 py-3 sm:mx-auto sm:max-w-[640px] lg:max-w-none lg:px-8">
+            <PiggyBank className="h-6 w-6 shrink-0" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold sm:text-base">
+                Jusqu'à 20% d'économie
+              </p>
+              <p className="text-xs leading-snug opacity-80 sm:text-sm">
+                Les tarifs varient selon l'heure (après 18h) et le jour
+                (weekend et jour férié) : réservez avant 18h en semaine pour en
+                profiter.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {state.step !== "groupe" && state.step !== "termine" && (

@@ -67,6 +67,12 @@ interface StudioPoint {
   revenue: number;
 }
 
+interface GroupTypePoint {
+  groupType: string;
+  count: number;
+  revenue: number;
+}
+
 interface PaymentPoint {
   method: string;
   count: number;
@@ -899,6 +905,7 @@ export function AdminDashboard() {
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
   const [occupancyData, setOccupancyData] = useState<OccupancyPoint[]>([]);
   const [studioData, setStudioData] = useState<StudioPoint[]>([]);
+  const [groupTypeData, setGroupTypeData] = useState<GroupTypePoint[]>([]);
   const [paymentData, setPaymentData] = useState<PaymentPoint[]>([]);
   const [activityCalendarBookings, setActivityCalendarBookings] = useState<CalendarBooking[]>([]);
   const [activityCalendarLoading, setActivityCalendarLoading] = useState(false);
@@ -1085,12 +1092,14 @@ export function AdminDashboard() {
         data?: {
           occupancy: OccupancyPoint[];
           studios: StudioPoint[];
+          groupTypes: GroupTypePoint[];
           payments: PaymentPoint[];
         };
       };
       if (chartsJson.success && chartsJson.data) {
         setOccupancyData(chartsJson.data.occupancy);
         setStudioData(chartsJson.data.studios);
+        setGroupTypeData(chartsJson.data.groupTypes);
         setPaymentData(chartsJson.data.payments);
       }
     } catch (err) {
@@ -1497,7 +1506,10 @@ export function AdminDashboard() {
           color="zinc"
           className="lg:col-span-3"
         />
-        <a href="/admin/bookings?payment=remaining" className="block sm:col-span-2 lg:col-span-3">
+        <a
+          href={stats ? `/admin/bookings?payment=on-site-due&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}` : "/admin/bookings?payment=on-site-due"}
+          className="block sm:col-span-2 lg:col-span-3"
+        >
           <StatCard
             title="Sur place à encaisser"
             value={stats?.rangePendingPayments ?? 0}
@@ -1794,12 +1806,12 @@ export function AdminDashboard() {
               })()}
             </ChartCard>
 
-            <ChartCard title="Méthodes de paiement">
+            <ChartCard title="Répartition par type de client">
               {(() => {
-                const totalCount = paymentData.reduce((acc, p) => acc + p.count, 0);
-                const labels = paymentData.map((p) => {
-                  const pct = totalCount > 0 ? Math.round((p.count / totalCount) * 100) : 0;
-                  return { method: p.method, count: p.count, pct };
+                const totalGroupTypeCount = groupTypeData.reduce((acc, g) => acc + g.count, 0);
+                const labels = groupTypeData.map((g) => {
+                  const pct = totalGroupTypeCount > 0 ? Math.round((g.count / totalGroupTypeCount) * 100) : 0;
+                  return { groupType: g.groupType, count: g.count, pct };
                 });
 
                 return (
@@ -1808,22 +1820,22 @@ export function AdminDashboard() {
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={paymentData}
+                            data={groupTypeData}
                             cx="50%"
                             cy="50%"
                             innerRadius="58%"
                             outerRadius="85%"
                             paddingAngle={3}
                             dataKey="count"
-                            nameKey="method"
+                            nameKey="groupType"
                             labelLine={false}
                             label={renderPiePercentLabel}
                           >
-                            {paymentData.map((p, i) => (
-                              <Cell key={p.method} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                            {groupTypeData.map((g, i) => (
+                              <Cell key={g.groupType} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip content={<PaymentPieTooltip total={totalCount} />} />
+                          <Tooltip content={<PieTooltip />} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -1831,13 +1843,13 @@ export function AdminDashboard() {
                     <div className="w-full lg:w-1/2">
                       <div className="space-y-2">
                         {labels.map((l, i) => (
-                          <div key={l.method} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
+                          <div key={l.groupType} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
                             <div className="flex items-center gap-2">
                               <span
                                 className="h-2.5 w-2.5 rounded-full"
                                 style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                               />
-                              <span className="text-sm text-zinc-300">{l.method}</span>
+                              <span className="text-sm text-zinc-300">{l.groupType}</span>
                             </div>
                             <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
                           </div>
@@ -1848,6 +1860,66 @@ export function AdminDashboard() {
                 );
               })()}
             </ChartCard>
+
+            {/* 5 cartes dans une grille 2 colonnes : "Méthodes de paiement"
+                occupe toute la largeur de la dernière ligne pour éviter un
+                vide à droite. */}
+            <div className="lg:col-span-2">
+              <ChartCard title="Méthodes de paiement">
+                {(() => {
+                  const totalCount = paymentData.reduce((acc, p) => acc + p.count, 0);
+                  const labels = paymentData.map((p) => {
+                    const pct = totalCount > 0 ? Math.round((p.count / totalCount) * 100) : 0;
+                    return { method: p.method, count: p.count, pct };
+                  });
+  
+                  return (
+                    <div className="flex flex-col gap-4 lg:h-[280px] lg:flex-row lg:items-center">
+                      <div className="h-[190px] w-full lg:h-full lg:w-1/2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={paymentData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius="58%"
+                              outerRadius="85%"
+                              paddingAngle={3}
+                              dataKey="count"
+                              nameKey="method"
+                              labelLine={false}
+                              label={renderPiePercentLabel}
+                            >
+                              {paymentData.map((p, i) => (
+                                <Cell key={p.method} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<PaymentPieTooltip total={totalCount} />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+  
+                      <div className="w-full lg:w-1/2">
+                        <div className="space-y-2">
+                          {labels.map((l, i) => (
+                            <div key={l.method} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="h-2.5 w-2.5 rounded-full"
+                                  style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                                />
+                                <span className="text-sm text-zinc-300">{l.method}</span>
+                              </div>
+                              <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                  })()}
+              </ChartCard>
+            </div>
           </div>
       </div>
     </div>
