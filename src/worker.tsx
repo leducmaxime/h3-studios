@@ -2351,23 +2351,28 @@ const app = defineApp([
           }
         }
 
-        // Brut canonique = base_price + equipment_price (jamais le total_price
-        // hérité, potentiellement corrompu sur les lignes legacy post-remise).
-        const canonicalGross = getBookingGrossTotal({
-          base_price: body.base_price ?? existing!.base_price,
-          equipment_price: body.equipment_price ?? existing!.equipment_price,
-        });
+        // Le plafonnement de la remise ne concerne que les mutations qui
+        // touchent au brut ou à la remise. Une mise à jour purement descriptive
+        // (notes, annulation) n'a pas chargé `existing` et ne doit rien recalculer.
+        if (body.promo_discount !== undefined || body.base_price !== undefined || body.equipment_price !== undefined) {
+          // Brut canonique = base_price + equipment_price (jamais le total_price
+          // hérité, potentiellement corrompu sur les lignes legacy post-remise).
+          const canonicalGross = getBookingGrossTotal({
+            base_price: body.base_price ?? existing!.base_price,
+            equipment_price: body.equipment_price ?? existing!.equipment_price,
+          });
 
-        // La remise reste séparée du brut et est plafonnée au brut canonique
-        // pour garder un grand livre sain (due = max(0, brut - remise)).
-        if (body.promo_discount !== undefined) {
-          body.promo_discount = Math.max(0, Math.min(Number(body.promo_discount) || 0, canonicalGross));
-        } else if (body.base_price !== undefined || body.equipment_price !== undefined) {
-          // Le brut a baissé : re-plafonner la remise existante pour qu'elle ne
-          // dépasse jamais le nouveau brut canonique.
-          const existingDiscount = Number(existing!.promo_discount) || 0;
-          if (existingDiscount > canonicalGross) {
-            body.promo_discount = canonicalGross;
+          // La remise reste séparée du brut et est plafonnée au brut canonique
+          // pour garder un grand livre sain (due = max(0, brut - remise)).
+          if (body.promo_discount !== undefined) {
+            body.promo_discount = Math.max(0, Math.min(Number(body.promo_discount) || 0, canonicalGross));
+          } else {
+            // Le brut a baissé : re-plafonner la remise existante pour qu'elle ne
+            // dépasse jamais le nouveau brut canonique.
+            const existingDiscount = Number(existing!.promo_discount) || 0;
+            if (existingDiscount > canonicalGross) {
+              body.promo_discount = canonicalGross;
+            }
           }
         }
 
