@@ -6,11 +6,16 @@ import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 import { calculateEquipmentPrice, formatDate, formatDuration, formatPrice, TIME_SLOTS, STUDIOS, type CompletedBooking, type EquipmentSelection, type GroupType, type StudioId } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
-import type { PricingData } from "@/lib/pricing";
+import type { PricingGrid } from "@/lib/pricing";
 
 interface Props {
   state: { selectedDate: Date | null; startTime: string | null; endTime: string | null; studioId: StudioId | null; groupType: GroupType | null; equipment: EquipmentSelection[]; cart: CompletedBooking[]; duplicateError: string | null };
-  pricingData: PricingData | null | undefined;
+  /**
+   * Grid effective on the session date (issue #47), resolved by the parent via
+   * `gridFor(selectedDate)` — never the active-today grid, otherwise a booking
+   * placed after a scheduled rate change would be quoted at the old rates.
+   */
+  grid: PricingGrid | null;
   pricingError: string | null;
   refetchPricing: () => void;
   availableEquipment: Array<{ id: string; name: string; maxPerSession: number; pricingType: "hourly" | "session"; sessionPricing: number[] | null; pricePerHour: number }>;
@@ -26,10 +31,9 @@ interface Props {
 
 const RECAP_GROUP_LABELS: Record<GroupType, string> = { solo: "Solo / Prof particulier", duo: "Duo", group: "Groupe (3+)" };
 
-export function BookingOptionsStep({ state, pricingData, pricingError, refetchPricing, availableEquipment, equipmentLoading, equipmentAvailability, equipmentClampMessage, cartTotal, updateEquipment, getEquipmentName, onConfirm, onBack }: Props) {
+export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, availableEquipment, equipmentLoading, equipmentAvailability, equipmentClampMessage, cartTotal, updateEquipment, getEquipmentName, onConfirm, onBack }: Props) {
     if (!state.selectedDate || !state.startTime || !state.endTime || !state.studioId) return null;
 
-    const grid = pricingData?.grid;
     const studio = STUDIOS[state.studioId as StudioId];
     const gt = (state.groupType || "group") as GroupType;
     const priceResult = grid

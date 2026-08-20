@@ -17,6 +17,8 @@ import {
   Percent,
   Tag,
   CalendarDays,
+  CalendarClock,
+  CalendarPlus,
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +46,7 @@ import {
 import { STUDIOS, type StudioId } from "@/lib/booking";
 import { type DbPricing, type DbPromoCode } from "@/lib/db-types";
 import { groupTypeLabel } from "@/lib/labels";
+import { getParisDateISO } from "@/lib/utils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -53,6 +56,7 @@ interface PricingRow {
   groupType: string;
   isPeak: boolean;
   price: number;
+  effectiveFrom: string;
 }
 
 interface PromoFormData {
@@ -90,7 +94,59 @@ function transformPricing(rows: DbPricing[]): PricingRow[] {
     groupType: row.group_type,
     isPeak: row.is_peak === 1,
     price: row.price_per_half_hour / 100,
+    effectiveFrom: row.effective_from,
   }));
+}
+
+// ─── Pricing versions helpers ───────────────────────────────────────────────
+
+interface PricingVersion {
+  effectiveFrom: string;
+  rows: PricingRow[];
+}
+
+/**
+ * Splits rows into the active grid (latest effective_from <= today) and the
+ * scheduled grids (effective_from > today, ascending). Older past dates are
+ * historical and never returned.
+ */
+function splitPricingVersions(
+  rows: PricingRow[],
+  today: string,
+): { active: PricingVersion | null; scheduled: PricingVersion[] } {
+  const byDate = new Map<string, PricingRow[]>();
+  for (const row of rows) {
+    const list = byDate.get(row.effectiveFrom) ?? [];
+    list.push(row);
+    byDate.set(row.effectiveFrom, list);
+  }
+
+  const pastDates = [...byDate.keys()].filter((d) => d <= today).sort();
+  const activeDate = pastDates[pastDates.length - 1] ?? null;
+
+  return {
+    active: activeDate
+      ? { effectiveFrom: activeDate, rows: byDate.get(activeDate)! }
+      : null,
+    scheduled: [...byDate.keys()]
+      .filter((d) => d > today)
+      .sort()
+      .map((d) => ({ effectiveFrom: d, rows: byDate.get(d)! })),
+  };
+}
+
+function formatEffectiveDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function tomorrowParisISO(): string {
+  const [y, m, d] = getParisDateISO().split("-").map(Number);
+  return toISO(addDays(new Date(y, m - 1, d), 1));
 }
 
 function formatPromoValue(promo: DbPromoCode): string {
@@ -461,104 +517,23 @@ function PeakHoursSection() {
   );
 }
 
-// ─── PricingTab Component ────────────────────────────────────────────────────
+// ─── StudioPricingTables Component ──────────────────────────────────────────
 
-function PricingTab() {
-  const [pricingRows, setPricingRows] = useState<PricingRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editedPrices, setEditedPrices] = useState<Map<string, number>>(new Map());
-
-  const fetchPricing = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/pricing");
-      if (!res.ok) throw new Error("Failed to fetch pricing");
-
-      const json = (await res.json()) as { success: boolean; data: DbPricing[] };
-      if (json.success) {
-        setPricingRows(transformPricing(json.data));
-      }
-    } catch (error) {
-      console.error("Failed to fetch pricing:", error);
-      toast.error("Erreur lors du chargement des tarifs");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPricing();
-  }, [fetchPricing]);
-
-  const handleStartEdit = () => {
-    setEditing(true);
-    setEditedPrices(new Map());
-  };
-
-  const handleCancelEdit = () => {
-    setEditing(false);
-    setEditedPrices(new Map());
-  };
-
-  const handlePriceChange = (id: string, value: string) => {
-    const numValue = parseInt(value, 10);
-    if (isNaN(numValue) || numValue < 0) return;
-
-    setEditedPrices((prev) => {
-      const next = new Map(prev);
-      // Stocker la valeur saisie en €/h (conversion en demi-heure à la sauvegarde)
-      next.set(id, numValue);
-      return next;
-    });
-  };
-
-  const handleSave = async () => {
-    if (editedPrices.size === 0) {
-      toast.info("Aucune modification à sauvegarder");
-      setEditing(false);
-      return;
-    }
-
-    setSaving(true);
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const [id, pricePerHour] of editedPrices.entries()) {
-      try {
-        const res = await fetch(`/api/admin/pricing/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ price: Math.round(pricePerHour * 100 / 2) }),
-        });
-
-        const json = (await res.json()) as { success: boolean; error?: string };
-        if (json.success) {
-          successCount++;
-        } else {
-          errorCount++;
-          console.error(`Failed to update pricing ${id}:`, json.error);
-        }
-      } catch (error) {
-        errorCount++;
-        console.error(`Failed to update pricing ${id}:`, error);
-      }
-    }
-
-    if (errorCount === 0) {
-      toast.success(`${successCount} tarif${successCount > 1 ? "s" : ""} mis à jour`);
-    } else {
-      toast.error(`${errorCount} erreur${errorCount > 1 ? "s" : ""} lors de la sauvegarde`);
-    }
-
-    setEditing(false);
-    setEditedPrices(new Map());
-    setSaving(false);
-    fetchPricing();
-  };
+function StudioPricingTables({
+  rows,
+  editing,
+  editedPrices,
+  onPriceChange,
+}: {
+  rows: PricingRow[];
+  editing: boolean;
+  editedPrices: Map<string, number>;
+  onPriceChange: (id: string, value: string) => void;
+}) {
+  const studioEntries = Object.entries(STUDIOS) as [StudioId, (typeof STUDIOS)[StudioId]][];
 
   const getPrice = (studioId: string, groupType: string, isPeak: boolean): PricingRow | undefined => {
-    return pricingRows.find(
+    return rows.find(
       (r) => r.studioId === studioId && r.groupType === groupType && r.isPeak === isPeak,
     );
   };
@@ -573,52 +548,8 @@ function PricingTab() {
     return row.price * 2;
   };
 
-  const studioEntries = Object.entries(STUDIOS) as [StudioId, (typeof STUDIOS)[StudioId]][];
-
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className="text-zinc-400">Prix par heure selon studio, groupe et créneau</p>
-        <div className="flex items-center gap-2">
-          {editing ? (
-            <>
-              <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
-                <X className="mr-2 h-4 w-4" />
-                Annuler
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sauvegarde...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Sauvegarder
-                  </>
-                )}
-              </Button>
-            </>
-          ) : (
-            <Button onClick={handleStartEdit}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Modifier les prix
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Pricing tables per studio */}
+    <>
       {studioEntries.map(([studioId, studio]) => (
         <div
           key={studioId}
@@ -676,7 +607,7 @@ function PricingTab() {
                               type="number"
                               min={0}
                               value={getDisplayPrice(offPeakRow)}
-                              onChange={(e) => handlePriceChange(offPeakRow.id, e.target.value)}
+                              onChange={(e) => onPriceChange(offPeakRow.id, e.target.value)}
                               className="w-24 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm font-medium tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                             />
                             <span className="text-sm text-zinc-500">€/h</span>
@@ -695,7 +626,7 @@ function PricingTab() {
                               type="number"
                               min={0}
                               value={getDisplayPrice(peakRow)}
-                              onChange={(e) => handlePriceChange(peakRow.id, e.target.value)}
+                              onChange={(e) => onPriceChange(peakRow.id, e.target.value)}
                               className="w-24 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm font-medium tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                             />
                             <span className="text-sm text-zinc-500">€/h</span>
@@ -714,10 +645,571 @@ function PricingTab() {
           </div>
         </div>
       ))}
+    </>
+  );
+}
+
+// ─── PricingTab Component ────────────────────────────────────────────────────
+
+function PricingTab() {
+  const [pricingRows, setPricingRows] = useState<PricingRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingFrom, setEditingFrom] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editedPrices, setEditedPrices] = useState<Map<string, number>>(new Map());
+
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleCells, setScheduleCells] = useState<Map<string, number>>(new Map());
+  const [scheduling, setScheduling] = useState(false);
+
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  const fetchPricing = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/pricing");
+      if (!res.ok) throw new Error("Failed to fetch pricing");
+
+      const json = (await res.json()) as { success: boolean; data: DbPricing[] };
+      if (json.success) {
+        setPricingRows(transformPricing(json.data));
+      }
+    } catch (error) {
+      console.error("Failed to fetch pricing:", error);
+      toast.error("Erreur lors du chargement des tarifs");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPricing();
+  }, [fetchPricing]);
+
+  const today = getParisDateISO();
+  const { active, scheduled } = splitPricingVersions(pricingRows, today);
+  const isEditingActive = active !== null && editingFrom === active.effectiveFrom;
+
+  const handleStartEdit = (effectiveFrom: string) => {
+    setEditingFrom(effectiveFrom);
+    setEditedPrices(new Map());
+  };
+
+  const handleCancelEdit = () => {
+    setEditingFrom(null);
+    setEditedPrices(new Map());
+  };
+
+  const handlePriceChange = (id: string, value: string) => {
+    const numValue = parseInt(value, 10);
+    if (isNaN(numValue) || numValue < 0) return;
+
+    setEditedPrices((prev) => {
+      const next = new Map(prev);
+      // Stocker la valeur saisie en €/h (conversion en demi-heure à la sauvegarde)
+      next.set(id, numValue);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (editedPrices.size === 0) {
+      toast.info("Aucune modification à sauvegarder");
+      setEditingFrom(null);
+      return;
+    }
+
+    setSaving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const [id, pricePerHour] of editedPrices.entries()) {
+      try {
+        const res = await fetch(`/api/admin/pricing/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ price: Math.round(pricePerHour * 100 / 2) }),
+        });
+
+        const json = (await res.json()) as { success: boolean; error?: string };
+        if (json.success) {
+          successCount++;
+        } else {
+          errorCount++;
+          console.error(`Failed to update pricing ${id}:`, json.error);
+        }
+      } catch (error) {
+        errorCount++;
+        console.error(`Failed to update pricing ${id}:`, error);
+      }
+    }
+
+    if (errorCount === 0) {
+      toast.success(`${successCount} tarif${successCount > 1 ? "s" : ""} mis à jour`);
+    } else {
+      toast.error(`${errorCount} erreur${errorCount > 1 ? "s" : ""} lors de la sauvegarde`);
+    }
+
+    setEditingFrom(null);
+    setEditedPrices(new Map());
+    setSaving(false);
+    fetchPricing();
+  };
+
+  // ─── Schedule dialog ──────────────────────────────────────────────────────
+
+  const cellKey = (studioId: string, groupType: string, isPeak: boolean) =>
+    `${studioId}|${groupType}|${isPeak ? 1 : 0}`;
+
+  const openScheduleDialog = () => {
+    if (!active) return;
+    const cells = new Map<string, number>();
+    for (const row of active.rows) {
+      // Pré-remplir avec les tarifs de la grille active, en €/h
+      cells.set(cellKey(row.studioId, row.groupType, row.isPeak), row.price * 2);
+    }
+    setScheduleCells(cells);
+    setScheduleDate(tomorrowParisISO());
+    setScheduleOpen(true);
+  };
+
+  const handleScheduleCellChange = (key: string, value: string) => {
+    const numValue = parseInt(value, 10);
+    if (value !== "" && (isNaN(numValue) || numValue < 0)) return;
+    setScheduleCells((prev) => {
+      const next = new Map(prev);
+      if (value === "") {
+        next.delete(key);
+      } else {
+        next.set(key, numValue);
+      }
+      return next;
+    });
+  };
+
+  const handleSchedule = async () => {
+    if (!scheduleDate) {
+      toast.error("Choisissez une date d'entrée en vigueur");
+      return;
+    }
+    if (scheduleDate <= today) {
+      toast.error("La date d'entrée en vigueur doit être postérieure à aujourd'hui");
+      return;
+    }
+
+    const prices: {
+      studio_id: string;
+      group_type: string;
+      is_peak: number;
+      price_per_half_hour: number;
+    }[] = [];
+
+    for (const studioId of Object.keys(STUDIOS)) {
+      for (const groupType of GROUP_ORDER) {
+        for (const isPeak of [false, true]) {
+          const eurPerHour = scheduleCells.get(cellKey(studioId, groupType, isPeak));
+          if (eurPerHour === undefined || eurPerHour < 0) {
+            toast.error("Tous les tarifs doivent être renseignés (montants positifs)");
+            return;
+          }
+          prices.push({
+            studio_id: studioId,
+            group_type: groupType,
+            is_peak: isPeak ? 1 : 0,
+            price_per_half_hour: Math.round(eurPerHour * 100 / 2),
+          });
+        }
+      }
+    }
+
+    setScheduling(true);
+    try {
+      const res = await fetch("/api/admin/pricing/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ effectiveFrom: scheduleDate, prices }),
+      });
+
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success(`Grille programmée au ${formatEffectiveDate(scheduleDate)}`);
+        setScheduleOpen(false);
+        fetchPricing();
+      } else {
+        toast.error(json.error || "Erreur lors de la programmation");
+      }
+    } catch (error) {
+      console.error("Failed to schedule pricing:", error);
+      toast.error("Erreur lors de la programmation de la grille");
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  // ─── Cancel scheduled grid ────────────────────────────────────────────────
+
+  const handleCancelSchedule = async () => {
+    if (!cancelTarget) return;
+
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/admin/pricing/schedule/${cancelTarget}`, {
+        method: "DELETE",
+      });
+
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (json.success) {
+        toast.success(`Grille du ${formatEffectiveDate(cancelTarget)} annulée`);
+        setCancelTarget(null);
+        fetchPricing();
+      } else {
+        toast.error(json.error || "Erreur lors de l'annulation");
+      }
+    } catch (error) {
+      console.error("Failed to cancel scheduled pricing:", error);
+      toast.error("Erreur lors de l'annulation de la grille");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const studioEntries = Object.entries(STUDIOS) as [StudioId, (typeof STUDIOS)[StudioId]][];
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-zinc-400">Prix par heure selon studio, groupe et créneau</p>
+        <div className="flex items-center gap-2">
+          {isEditingActive ? (
+            <>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
+                <X className="mr-2 h-4 w-4" />
+                Annuler
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sauvegarde...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Sauvegarder
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => active && handleStartEdit(active.effectiveFrom)}
+                disabled={!active || editingFrom !== null}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Modifier les prix
+              </Button>
+              <Button onClick={openScheduleDialog} disabled={!active || editingFrom !== null}>
+                <CalendarPlus className="mr-2 h-4 w-4" />
+                Programmer un changement
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Grille active */}
+      {active ? (
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-primary">
+              <Euro className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">Tarifs en vigueur</h2>
+                <Badge>Grille active</Badge>
+              </div>
+              <p className="text-sm text-zinc-400">
+                Appliqués depuis le {formatEffectiveDate(active.effectiveFrom)}
+              </p>
+            </div>
+          </div>
+
+          <StudioPricingTables
+            rows={active.rows}
+            editing={isEditingActive}
+            editedPrices={editedPrices}
+            onPriceChange={handlePriceChange}
+          />
+        </section>
+      ) : (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-6 py-10 text-center">
+          <p className="text-sm text-zinc-500 italic">Aucune grille tarifaire active.</p>
+        </div>
+      )}
+
+      {/* Grilles programmées */}
+      {scheduled.map((version) => {
+        const isEditingThis = editingFrom === version.effectiveFrom;
+
+        return (
+          <section
+            key={version.effectiveFrom}
+            className="space-y-4 rounded-xl border border-dashed border-amber-500/30 bg-amber-500/[0.03] p-4 sm:p-5"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
+                  <CalendarClock className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-semibold">
+                      À partir du {formatEffectiveDate(version.effectiveFrom)}
+                    </h2>
+                    <Badge
+                      variant="outline"
+                      className="border-amber-500/40 bg-amber-500/10 text-amber-400"
+                    >
+                      Programmée
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-zinc-400">
+                    Remplacera la grille active à cette date
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isEditingThis ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={saving}>
+                      <X className="mr-1.5 h-3.5 w-3.5" />
+                      Annuler
+                    </Button>
+                    <Button size="sm" onClick={handleSave} disabled={saving}>
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Sauvegarde...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-1.5 h-3.5 w-3.5" />
+                          Sauvegarder
+                        </>
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleStartEdit(version.effectiveFrom)}
+                      disabled={editingFrom !== null}
+                    >
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      Modifier
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCancelTarget(version.effectiveFrom)}
+                      disabled={editingFrom !== null}
+                      className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      Annuler
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <StudioPricingTables
+              rows={version.rows}
+              editing={isEditingThis}
+              editedPrices={editedPrices}
+              onPriceChange={handlePriceChange}
+            />
+          </section>
+        );
+      })}
 
       <PeakHoursSection />
 
       <PublicHolidaysSection />
+
+      {/* Dialog : programmer un changement */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="lg:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Programmer un changement de tarifs</DialogTitle>
+            <DialogDescription>
+              La nouvelle grille s&apos;appliquera automatiquement à partir de la date
+              choisie. D&apos;ici là, la grille active reste inchangée.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="schedule-date">Date d&apos;entrée en vigueur</Label>
+              <Input
+                id="schedule-date"
+                type="date"
+                min={tomorrowParisISO()}
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                className="w-auto"
+              />
+              <p className="text-xs text-zinc-500">
+                La date doit être postérieure à aujourd&apos;hui.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tarifs de la nouvelle grille (€ par heure)</Label>
+              <div className="overflow-x-auto rounded-lg border border-zinc-800">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-left text-xs text-zinc-400">
+                      <th className="px-3 py-2 font-medium">Studio</th>
+                      <th className="px-3 py-2 font-medium">Type de groupe</th>
+                      <th className="px-3 py-2 font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <Sun className="h-3.5 w-3.5 text-zinc-500" />
+                          Heures creuses
+                        </div>
+                      </th>
+                      <th className="px-3 py-2 font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <Moon className="h-3.5 w-3.5 text-primary" />
+                          Heures pleines
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studioEntries.flatMap(([studioId, studio]) =>
+                      GROUP_ORDER.map((groupType, groupIndex) => (
+                        <tr
+                          key={`${studioId}-${groupType}`}
+                          className="border-b border-zinc-800/50 last:border-0"
+                        >
+                          {groupIndex === 0 && (
+                            <td
+                              rowSpan={GROUP_ORDER.length}
+                              className="px-3 py-2 align-top font-medium"
+                            >
+                              {studio.name}
+                            </td>
+                          )}
+                          <td className="px-3 py-2">
+                            <Badge variant="secondary">{groupTypeLabel(groupType)}</Badge>
+                          </td>
+                          {[false, true].map((isPeak) => {
+                            const key = cellKey(studioId, groupType, isPeak);
+                            return (
+                              <td key={key} className="px-3 py-2">
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={scheduleCells.get(key) ?? ""}
+                                    onChange={(e) =>
+                                      handleScheduleCellChange(key, e.target.value)
+                                    }
+                                    className="w-20 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                  <span className="text-xs text-zinc-500">€/h</span>
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      )),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-zinc-500">
+                Pré-remplie avec les tarifs actuellement en vigueur.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)} disabled={scheduling}>
+              Annuler
+            </Button>
+            <Button onClick={handleSchedule} disabled={scheduling}>
+              {scheduling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Programmation...
+                </>
+              ) : (
+                <>
+                  <CalendarPlus className="mr-2 h-4 w-4" />
+                  Programmer
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog : annuler une grille programmée */}
+      <Dialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelTarget(null);
+        }}
+      >
+        <DialogContent className="border-zinc-800 bg-zinc-900">
+          <DialogHeader>
+            <DialogTitle>Annuler la grille programmée</DialogTitle>
+            <DialogDescription>
+              La grille prévue pour le{" "}
+              <span className="font-semibold text-zinc-200">
+                {cancelTarget ? formatEffectiveDate(cancelTarget) : ""}
+              </span>{" "}
+              sera supprimée. La grille active restera inchangée.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelling}>
+              Conserver
+            </Button>
+            <Button variant="destructive" onClick={handleCancelSchedule} disabled={cancelling}>
+              {cancelling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Annulation...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Annuler la grille
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

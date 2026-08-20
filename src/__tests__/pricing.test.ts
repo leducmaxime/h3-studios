@@ -2,8 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   calculatePrice,
   getSlotRate,
+  selectPriceCentsAsOf,
+  buildPricingGridAsOf,
+  listScheduledEffectiveDates,
+  resolveGridForDate,
   type PricingGrid,
+  type PricingVersion,
 } from "../lib/pricing";
+import type { DbPricing } from "../lib/db-types";
 import {
   isPeakTime,
   formatPrice,
@@ -111,6 +117,59 @@ describe("calculatePrice", () => {
     const weekday = new Date("2026-02-13");
     const rate = getSlotRate(TEST_GRID, "la-scene", "solo", weekday, "10:00");
     expect(rate).toBe(6);
+  });
+});
+
+describe("selectPriceCentsAsOf / buildPricingGridAsOf / listScheduledEffectiveDates (effective-dated)", () => {
+  const makeRow = (
+    studioId: string,
+    groupType: string,
+    isPeak: boolean,
+    priceCents: number,
+    effectiveFrom: string,
+  ): DbPricing => ({
+    id: crypto.randomUUID(),
+    studio_id: studioId,
+    group_type: groupType,
+    is_peak: isPeak ? 1 : 0,
+    price_per_half_hour: priceCents,
+    updated_at: "2026-08-20 10:00:00",
+    effective_from: effectiveFrom,
+  });
+
+  const rows = [
+    makeRow("la-scene", "solo", false, 3000, "1970-01-01"),
+    makeRow("la-scene", "solo", false, 6000, "2026-09-01"),
+    makeRow("la-scene", "solo", false, 9000, "2026-12-01"),
+    makeRow("la-scene", "solo", true, 4000, "1970-01-01"),
+    makeRow("le-podium", "duo", false, 5000, "2026-09-01"),
+  ];
+
+  it("résout avant, à et après la date d'effet", () => {
+    expect(selectPriceCentsAsOf(rows, "la-scene", "solo", false, "2026-08-20")).toBe(3000);
+    expect(selectPriceCentsAsOf(rows, "la-scene", "solo", false, "2026-09-01")).toBe(6000);
+    expect(selectPriceCentsAsOf(rows, "la-scene", "solo", false, "2026-09-15")).toBe(6000);
+  });
+
+  it("choisit la version correspondant à la date de séance", () => {
+    expect(selectPriceCentsAsOf(rows, "la-scene", "solo", false, "2026-10-15")).toBe(6000);
+    expect(selectPriceCentsAsOf(rows, "la-scene", "solo", false, "2026-12-15")).toBe(9000);
+  });
+
+  it("utilise la première version connue en cas d'absence de correspondance passée", () => {
+    expect(selectPriceCentsAsOf(rows, "le-podium", "duo", false, "2026-08-01")).toBe(5000);
+  });
+
+  it("construit une grille en €/heure avec des cellules à des frontières différentes", () => {
+    const before = buildPricingGridAsOf(rows, "2026-08-20");
+    const after = buildPricingGridAsOf(rows, "2026-09-15");
+    expect(before["la-scene"].solo.offPeak).toBe(60);
+    expect(after["la-scene"].solo.offPeak).toBe(120);
+    expect(after["le-podium"].duo.offPeak).toBe(100);
+  });
+
+  it("liste les dates futures distinctes et triées", () => {
+    expect(listScheduledEffectiveDates(rows, "2026-08-20")).toEqual(["2026-09-01", "2026-12-01"]);
   });
 });
 
@@ -251,5 +310,46 @@ describe("calculatePromoDiscount", () => {
     const promo = { code: "TEST", type: "fixed" as const, value: 50, description: "" };
     const discount = calculatePromoDiscount(promo, 30);
     expect(discount).toBe(30);
+  });
+});
+
+describe("resolveGridForDate", () => {
+  const gridWith = (rate: number): PricingGrid => ({
+    "la-scene": { solo: { peak: rate, offPeak: rate } },
+  });
+  const base = { effectiveFrom: "1970-01-01", grid: gridWith(30) };
+  const autumn = { effectiveFrom: "2026-09-01", grid: gridWith(40) };
+  const winter = { effectiveFrom: "2026-12-01", grid: gridWith(50) };
+  const rate = (versions: PricingVersion[], date: string) =>
+    resolveGridForDate(versions, date)?.["la-scene"].solo.peak;
+
+  it("resolves the version in force on the session date", () => {
+    expect(rate([base, autumn, winter], "2026-08-20")).toBe(30);
+    expect(rate([base, autumn, winter], "2026-10-15")).toBe(40);
+    expect(rate([base, autumn, winter], "2026-12-25")).toBe(50);
+  });
+
+  it("treats effective_from as inclusive on the activation day", () => {
+    expect(rate([base, autumn], "2026-08-31")).toBe(30);
+    expect(rate([base, autumn], "2026-09-01")).toBe(40);
+  });
+
+  // Regression: the resolver must pick the greatest matching effectiveFrom,
+  // never the last matching array element. Emission order from GET /api/pricing
+  // is not a contract — if it ever changed, an order-dependent resolver would
+  // silently quote every future session at the oldest grid.
+  it("is independent of the order of the versions array", () => {
+    const shuffled = [winter, base, autumn];
+    expect(rate(shuffled, "2026-08-20")).toBe(30);
+    expect(rate(shuffled, "2026-10-15")).toBe(40);
+    expect(rate(shuffled, "2026-12-25")).toBe(50);
+  });
+
+  it("falls back to the earliest version for a session before any version", () => {
+    expect(rate([winter, autumn], "2026-01-01")).toBe(40);
+  });
+
+  it("returns null when there is no version at all", () => {
+    expect(resolveGridForDate([], "2026-08-20")).toBeNull();
   });
 });

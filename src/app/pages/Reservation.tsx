@@ -46,6 +46,7 @@ export function Reservation({ step }: ReservationProps) {
     pricingData,
     pricingError,
     refetchPricing,
+    gridFor,
     cartTotal,
     canConfirmBooking,
     bookingFieldIssues,
@@ -142,7 +143,9 @@ export function Reservation({ step }: ReservationProps) {
   // back-navigation). null while the pricing grid is unavailable.
   const selectionComplete = !!(state.selectedDate && state.startTime && state.endTime && state.studioId);
   const creneauTotal = (() => {
-    const grid = pricingData?.grid;
+    // Date-effective grid (issue #47): a session dated after a scheduled rate
+    // change must be quoted with the grid in force on that date, not today's.
+    const grid = state.selectedDate ? gridFor(state.selectedDate) : null;
     if (!selectionComplete || !grid) return null;
     const studioTotal = calculatePrice(
       grid,
@@ -160,7 +163,7 @@ export function Reservation({ step }: ReservationProps) {
    * Falls back to the stored price when grid is not loaded.
    */
   const recomputeCartItemPrice = useCallback((booking: CompletedBooking): number => {
-    const grid = pricingData?.grid;
+    const grid = gridFor(booking.date);
     if (!grid) return booking.price;
     const timePrice = calculatePrice(
       grid,
@@ -171,7 +174,7 @@ export function Reservation({ step }: ReservationProps) {
       booking.endTime
     ).total;
     return timePrice + (booking.equipmentPrice || 0);
-  }, [pricingData]);
+  }, [gridFor]);
 
   const liveNet = Math.max(0, cartTotal - state.promoDiscount);
   const confirmedNet = state.confirmedNetTotal ?? liveNet;
@@ -338,7 +341,7 @@ export function Reservation({ step }: ReservationProps) {
                       hideHeader
                       groupType={state.groupType || "group"}
                       todayFullyBlocked={todayFullyBlocked}
-                      pricingGrid={pricingData?.grid}
+                      pricingGrid={gridFor(state.selectedDate)}
                       pricingError={pricingError}
                       refetchPricing={refetchPricing}
                     />
@@ -371,7 +374,7 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === "options" && (
               <BookingOptionsStep
                 state={state}
-                pricingData={pricingData}
+                grid={state.selectedDate ? gridFor(state.selectedDate) : null}
                 pricingError={pricingError}
                 refetchPricing={refetchPricing}
                 availableEquipment={availableEquipment}

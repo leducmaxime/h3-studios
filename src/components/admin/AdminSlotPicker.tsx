@@ -49,7 +49,7 @@ export function AdminSlotPicker({
   onChange,
   excludeBookingId,
 }: AdminSlotPickerProps) {
-  const { pricing, error: pricingError, refetch: refetchPricing } = usePricing();
+  const { error: pricingError, refetch: refetchPricing, gridFor } = usePricing();
   const [slotsByStudio, setSlotsByStudio] = useState<Record<string, SlotData[]>>({});
   const [slotsLoading, setSlotsLoading] = useState(false);
 
@@ -145,7 +145,7 @@ export function AdminSlotPicker({
           onSelectRange={handleSelectRange}
           onClear={handleClear}
           groupType={groupType ?? "group"}
-          pricingGrid={pricing?.grid}
+          pricingGrid={gridFor(date)}
           pricingError={pricingError}
           refetchPricing={refetchPricing}
         />

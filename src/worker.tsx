@@ -107,6 +107,8 @@ import {
   getPricing,
   updatePricing,
   getPricingForBooking,
+  upsertScheduledPricing,
+  deleteScheduledPricing,
   getEquipment,
   updateEquipment,
   getPromoCodes,
@@ -140,6 +142,7 @@ import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeni
 import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
 import { getOfferedUnits } from "@/lib/equipment-pricing";
+import { buildPricingGridAsOf, listScheduledEffectiveDates } from "@/lib/pricing";
 import {
   getParisDateISO,
   getParisNow,
@@ -389,6 +392,15 @@ const adminAuthMiddleware = (): RouteMiddleware =>
     modifiedHeaders.set("X-Admin-User-Name", user.name);
     rInfo.request = new Request(request, { headers: modifiedHeaders });
   };
+
+function isValidScheduledEffectiveDate(effectiveFrom: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return false;
+  try {
+    return getParisDateISO(new Date(`${effectiveFrom}T12:00:00Z`)) === effectiveFrom && effectiveFrom > getParisDateISO();
+  } catch {
+    return false;
+  }
+}
 
 const app = defineApp([
   setCommonHeaders(),
@@ -1171,8 +1183,8 @@ const app = defineApp([
       const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
       const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
-      const peakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, true);
-      const offPeakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, false);
+      const peakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, true, body.date);
+      const offPeakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, false, body.date);
 
       const allEquipment = await getEquipment(env.DB);
       const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
@@ -1502,23 +1514,23 @@ const app = defineApp([
       const maxAdvanceDays = parseInt(await getSetting(env.DB, "booking.max_advance_days") || "90", 10);
       const allowCash = parseAllowCash(await getSetting(env.DB, "booking.allow_cash"));
 
-      // Build grid: studio_id × group_type × { peak, offPeak } in €/hour
-      // DB stores price_per_half_hour in cents → €/h = cents * 2 / 100 = cents / 50
-      const grid: Record<string, Record<string, { peak: number; offPeak: number }>> = {};
+      const todayParis = getParisDateISO();
+      const activeGrid = buildPricingGridAsOf(rows, todayParis);
+      const activeEffectiveFrom = rows
+        .map((row) => row.effective_from)
+        .filter((date) => date <= todayParis)
+        .sort()
+        .at(-1) ?? "1970-01-01";
+      const versions = [
+        { effectiveFrom: activeEffectiveFrom, grid: activeGrid },
+        ...listScheduledEffectiveDates(rows, todayParis).map((date) => ({
+          effectiveFrom: date,
+          grid: buildPricingGridAsOf(rows, date),
+        })),
+      ];
       const groupTypes = new Set<string>();
-
-      for (const row of rows) {
-        if (!grid[row.studio_id]) grid[row.studio_id] = {};
-        if (!grid[row.studio_id][row.group_type]) {
-          grid[row.studio_id][row.group_type] = { peak: 0, offPeak: 0 };
-          groupTypes.add(row.group_type);
-        }
-        const hourly = row.price_per_half_hour * 2 / 100;
-        if (row.is_peak) {
-          grid[row.studio_id][row.group_type].peak = hourly;
-        } else {
-          grid[row.studio_id][row.group_type].offPeak = hourly;
-        }
+      for (const studio of Object.values(activeGrid)) {
+        for (const groupType of Object.keys(studio)) groupTypes.add(groupType);
       }
 
       // Compute min/max per group type across all studios and peak/offPeak
@@ -1526,8 +1538,8 @@ const app = defineApp([
       for (const gt of groupTypes) {
         let min = Infinity;
         let max = -Infinity;
-        for (const studioId of Object.keys(grid)) {
-          const entry = grid[studioId][gt];
+        for (const studioId of Object.keys(activeGrid)) {
+          const entry = activeGrid[studioId][gt];
           if (entry) {
             if (entry.peak < min) min = entry.peak;
             if (entry.offPeak < min) min = entry.offPeak;
@@ -1542,7 +1554,7 @@ const app = defineApp([
       const openingHours = buildOpeningHoursMap(await getOpeningHours(env.DB));
 
       // Admin pricing edits must be visible on next page load — never cache.
-      const res = jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays, openingHours, allowCash });
+      const res = jsonSuccess({ grid: activeGrid, versions, minMaxByGroupType, maxAdvanceDays, openingHours, allowCash });
       res.headers.set("Cache-Control", "no-store");
       return res;
     } catch (error) {
@@ -1957,6 +1969,13 @@ const app = defineApp([
         if (!body.booking_ref || !body.user_id || !body.studio_id || !body.date || !body.start_time || !body.end_time || !body.group_type) {
           return jsonError("Champs obligatoires manquants", 400);
         }
+        // Format uniquement (pas de plage) : le mode admin autorise volontairement
+        // les dates passées et futures lointaines. La résolution de grille
+        // versionnée compare les dates ISO lexicographiquement — un format non
+        // conforme choisirait silencieusement une mauvaise version de tarif.
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+          return jsonError("Format de date invalide", 400);
+        }
 
         // Admin may force overlapping / blocked / off-hours / sub-1h slots.
         // Public POST /api/bookings still rejects those.
@@ -1987,8 +2006,8 @@ const app = defineApp([
         const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
         const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
-        const peakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, true);
-        const offPeakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, false);
+        const peakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, true, body.date);
+        const offPeakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, false, body.date);
 
         const allEquipment = await getEquipment(env.DB);
         const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
@@ -2160,8 +2179,8 @@ const app = defineApp([
       const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
       const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
-      const peakRate = await getPricingForBooking(env.DB, studioId, groupType, true);
-      const offPeakRate = await getPricingForBooking(env.DB, studioId, groupType, false);
+      const peakRate = await getPricingForBooking(env.DB, studioId, groupType, true, date);
+      const offPeakRate = await getPricingForBooking(env.DB, studioId, groupType, false, date);
 
       const allEquipment = await getEquipment(env.DB);
       const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
@@ -3591,6 +3610,103 @@ const app = defineApp([
     }
   }),
 
+  route("/api/admin/pricing/schedule", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as {
+        effectiveFrom?: string;
+        prices?: Array<{
+          studio_id?: string;
+          group_type?: string;
+          is_peak?: number;
+          price_per_half_hour?: number;
+        }>;
+      };
+      const effectiveFrom = body.effectiveFrom;
+      if (!effectiveFrom || !isValidScheduledEffectiveDate(effectiveFrom)) {
+        return jsonError("La date d'effet doit être postérieure à aujourd'hui", 400);
+      }
+
+      const studios = new Set(["la-scene", "le-podium"]);
+      const groupTypes = new Set(["solo", "duo", "group"]);
+      const prices = body.prices;
+      const keys = new Set<string>();
+      let invalidGrid = !Array.isArray(prices) || prices.length !== 12;
+      const cells = [] as Array<{
+        studio_id: string;
+        group_type: string;
+        is_peak: number;
+        price_per_half_hour: number;
+      }>;
+      if (Array.isArray(prices)) {
+        for (const price of prices) {
+          if (
+            typeof price.studio_id !== "string" || !studios.has(price.studio_id) ||
+            typeof price.group_type !== "string" || !groupTypes.has(price.group_type) ||
+            (price.is_peak !== 0 && price.is_peak !== 1) ||
+            typeof price.price_per_half_hour !== "number" ||
+            !Number.isFinite(price.price_per_half_hour) ||
+            !Number.isInteger(price.price_per_half_hour) || price.price_per_half_hour < 0
+          ) {
+            invalidGrid = true;
+            continue;
+          }
+          const key = `${price.studio_id}\0${price.group_type}\0${price.is_peak}`;
+          if (keys.has(key)) {
+            invalidGrid = true;
+            continue;
+          }
+          keys.add(key);
+          cells.push({
+            studio_id: price.studio_id,
+            group_type: price.group_type,
+            is_peak: price.is_peak,
+            price_per_half_hour: price.price_per_half_hour,
+          });
+        }
+      }
+      if (invalidGrid || cells.length !== 12 || keys.size !== 12) {
+        return jsonError("Grille incomplète : 12 tarifs requis (2 studios × 3 types × 2 créneaux)", 400);
+      }
+
+      await upsertScheduledPricing(env.DB, effectiveFrom, cells);
+      const adminId = request.headers.get("X-Admin-User-Id") || "admin";
+      await addAuditLog(env.DB, "pricing", `schedule:${effectiveFrom}`, "schedule", {
+        effective_from: effectiveFrom,
+        count: cells.length,
+      }, adminId);
+      return jsonSuccess({ effectiveFrom, count: cells.length });
+    } catch (error) {
+      console.error("POST /api/admin/pricing/schedule error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to schedule pricing", 500);
+    }
+  }),
+
+  route("/api/admin/pricing/schedule/:effectiveFrom", async ({ request, params }) => {
+    if (request.method !== "DELETE") return jsonError("Method not allowed", 405);
+
+    const effectiveFrom = params.effectiveFrom;
+    if (!isValidScheduledEffectiveDate(effectiveFrom)) {
+      return jsonError("Date d'effet invalide ou passée", 400);
+    }
+    try {
+      const result = await deleteScheduledPricing(env.DB, effectiveFrom);
+      if (result.deleted === 0) {
+        return jsonError("Aucune grille programmée à cette date", 404);
+      }
+      const adminId = request.headers.get("X-Admin-User-Id") || "admin";
+      await addAuditLog(env.DB, "pricing", `schedule:${effectiveFrom}`, "cancel-schedule", {
+        effective_from: effectiveFrom,
+        deleted: result.deleted,
+      }, adminId);
+      return jsonSuccess({ effectiveFrom, deleted: result.deleted });
+    } catch (error) {
+      console.error("DELETE /api/admin/pricing/schedule/:effectiveFrom error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to cancel scheduled pricing", 500);
+    }
+  }),
+
   route("/api/admin/pricing/:id", async ({ request, params }) => {
     if (request.method !== "PUT") return jsonError("Method not allowed", 405);
 
@@ -3605,8 +3721,12 @@ const app = defineApp([
         return jsonError("Tarif introuvable", 404);
       }
 
+      const row = await env.DB.prepare("SELECT effective_from FROM pricing WHERE id = ?")
+        .bind(params.id).first<{ effective_from: string }>();
+
       await addAuditLog(env.DB, "pricing", params.id, "update", {
         price_per_half_hour: body.price,
+        effective_from: row?.effective_from ?? null,
       }, request.headers.get("X-Admin-User-Id") || "admin");
 
       return jsonSuccess({ id: params.id, price: body.price });
