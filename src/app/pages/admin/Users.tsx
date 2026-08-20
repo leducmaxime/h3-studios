@@ -12,6 +12,7 @@ import {
   Eye,
   UserPlus,
   Plus,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -259,6 +260,7 @@ export function AdminUsers() {
 
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            <Download className="mr-2 h-4 w-4" />
             Exporter CSV
           </Button>
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

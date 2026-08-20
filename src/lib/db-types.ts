@@ -114,6 +114,20 @@ export interface DbUser {
   is_blocked: number;
   total_bookings: number;
   total_spent: number;
+  /**
+   * Agrégats d'export calculés côté serveur par `getUsers` (issue #61).
+   * Optionnels : `getUserById` / `getUserByEmail` ne les renvoient pas.
+   * Toujours hors réservations annulées, sauf `total_cancellations`.
+   */
+  total_cancellations?: number;
+  /** Somme des remises accordées (TTC). */
+  total_discounts?: number;
+  /** Somme des options/équipements facturés (TTC). */
+  total_equipment?: number;
+  /** Durée totale réservée, en minutes (00:00 = fin de journée). */
+  total_minutes?: number;
+  total_bookings_la_scene?: number;
+  total_bookings_le_podium?: number;
   created_at: string;
   updated_at: string;
 }

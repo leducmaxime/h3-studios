@@ -74,7 +74,7 @@ export function parseBookingEquipmentLines(raw: string | null | undefined | unkn
   });
 }
 
-function timeToMinutes(time: string): number {
+export function timeToMinutes(time: string): number {
   if (time === "00:00") return 24 * 60;
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
