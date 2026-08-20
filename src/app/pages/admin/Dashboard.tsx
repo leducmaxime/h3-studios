@@ -30,6 +30,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ComposedChart,
+  ReferenceLine,
 } from "recharts";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -85,6 +87,8 @@ interface DurationPoint {
   label: string;
   count: number;
   hours: number;
+  // Part cumulée (courbe de Pareto), calculée côté client à partir de count.
+  cumPct?: number;
 }
 
 interface UpcomingBooking {
@@ -948,6 +952,11 @@ function DurationTooltip({
       <p className="text-xs text-zinc-400">
         Heures réservées : <span className="text-zinc-100">{formatHours(Math.round(p.hours * 60))}</span>
       </p>
+      {typeof p.cumPct === "number" && (
+        <p className="text-xs text-zinc-400">
+          Cumul : <span className="text-zinc-100">{p.cumPct}%</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -973,6 +982,7 @@ export function AdminDashboard() {
   const [paymentData, setPaymentData] = useState<PaymentPoint[]>([]);
   const [durationData, setDurationData] = useState<DurationPoint[]>([]);
   const [avgDurationMinutes, setAvgDurationMinutes] = useState(0);
+  const [medianDurationMinutes, setMedianDurationMinutes] = useState(0);
 
   // Dérivation locale du graphique « Méthodes de paiement » selon le mode
   // choisi : "all" = une part par méthode, "channel" = deux parts agrégées
@@ -1255,6 +1265,7 @@ export function AdminDashboard() {
           payments: PaymentPoint[];
           durations?: DurationPoint[];
           avgDurationMinutes?: number;
+          medianDurationMinutes?: number;
         };
       };
       if (chartsJson.success && chartsJson.data) {
@@ -1266,6 +1277,8 @@ export function AdminDashboard() {
         setDurationData(Array.isArray(chartsJson.data.durations) ? chartsJson.data.durations : []);
         const avg = chartsJson.data.avgDurationMinutes;
         setAvgDurationMinutes(typeof avg === "number" && Number.isFinite(avg) ? avg : 0);
+        const median = chartsJson.data.medianDurationMinutes;
+        setMedianDurationMinutes(typeof median === "number" && Number.isFinite(median) ? median : 0);
       }
     } catch (err) {
       console.error("Failed to fetch chart data:", err);
@@ -1916,72 +1929,6 @@ export function AdminDashboard() {
                 </div>
               </div>
             </ChartCard>
-
-            {/* Histogramme des durées de réservation : pleine largeur pour
-                rester proche du graphique d'occupation tout en gardant deux
-                lignes équilibrées (Studio / Type client, Paiements / Top 5)
-                en dessous. */}
-            {(() => {
-              const totalDurationCount = durationData.reduce((acc, d) => acc + d.count, 0);
-
-              return (
-                <ChartCard
-                  title="Durée des sessions"
-                  className="lg:col-span-2"
-                  action={
-                    totalDurationCount > 0 ? (
-                      <p className="text-xs text-zinc-500">
-                        Durée moyenne : <span className="font-medium text-primary">{formatHours(Math.round(avgDurationMinutes))}</span>
-                      </p>
-                    ) : undefined
-                  }
-                >
-                  {totalDurationCount === 0 ? (
-                    <div className="flex h-[280px] items-center justify-center rounded-lg border border-dashed border-zinc-800 text-sm text-zinc-500">
-                      Aucune réservation sur cette période.
-                    </div>
-                  ) : (
-                    <div className="h-[280px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        {/* mêmes marges que les autres graphiques : headroom
-                            pour le tick Y le plus haut. */}
-                        <BarChart data={durationData} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.zinc800} />
-                          <XAxis
-                            dataKey="label"
-                            stroke={CHART_COLORS.zinc400}
-                            tick={{ fontSize: 11 }}
-                            axisLine={{ stroke: CHART_COLORS.zinc700 }}
-                          />
-                          <YAxis
-                            stroke={CHART_COLORS.zinc400}
-                            tick={{ fontSize: 11 }}
-                            axisLine={{ stroke: CHART_COLORS.zinc700 }}
-                            allowDecimals={false}
-                          />
-                          <Tooltip
-                            content={<DurationTooltip total={totalDurationCount} />}
-                            contentStyle={{
-                              backgroundColor: CHART_COLORS.zinc900,
-                              border: `1px solid ${CHART_COLORS.zinc700}`,
-                              borderRadius: "8px",
-                              fontSize: "13px",
-                            }}
-                            labelStyle={{ color: CHART_COLORS.zinc400 }}
-                          />
-                          <Bar
-                            dataKey="count"
-                            name="Réservations"
-                            fill={CHART_COLORS.primary}
-                            radius={[4, 4, 0, 0]}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </ChartCard>
-              );
-            })()}
 
             <ChartCard title="Répartition par studio">
               {(() => {

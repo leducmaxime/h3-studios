@@ -4338,8 +4338,21 @@ const app = defineApp([
          FROM (SELECT ${durationExpression} as duration_minutes FROM bookings b WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled')
          WHERE duration_minutes > 0`,
       ).bind(fromStr, toStr);
+      // Médiane exacte : on moyenne la (ou les deux) valeur(s) centrale(s) selon
+      // la parité du nombre de réservations.
+      const medianDurationStmt = env.DB.prepare(
+        `SELECT COALESCE(AVG(duration_minutes), 0) as median_minutes
+         FROM (
+           SELECT duration_minutes,
+                  ROW_NUMBER() OVER (ORDER BY duration_minutes) as rn,
+                  COUNT(*) OVER () as cnt
+           FROM (SELECT ${durationExpression} as duration_minutes FROM bookings b WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled')
+           WHERE duration_minutes > 0
+         )
+         WHERE rn IN ((cnt + 1) / 2, (cnt + 2) / 2)`,
+      ).bind(fromStr, toStr);
 
-       const [occupancyResult, studioResult, groupTypeResult, onSitePaidResult, onlineCardResult, upcomingResult, durationRowsResult, avgDurationResult] = await env.DB.batch([
+       const [occupancyResult, studioResult, groupTypeResult, onSitePaidResult, onlineCardResult, upcomingResult, durationRowsResult, avgDurationResult, medianDurationResult] = await env.DB.batch([
          occupancyStmt,
         // Studio distribution
         env.DB.prepare(
@@ -4405,6 +4418,7 @@ const app = defineApp([
          ).bind(fromStr, toStr),
          durationRowsStmt,
          avgDurationStmt,
+         medianDurationStmt,
        ]);
 
       type BookingSlotRow = { date: string; studio_id: string; start_time: string; end_time: string };
@@ -4577,6 +4591,9 @@ const app = defineApp([
       const avgDurationMinutes = Math.round(Number(
         (avgDurationResult.results as unknown as Array<{ average_minutes: number }>)[0]?.average_minutes ?? 0,
       ));
+      const medianDurationMinutes = Math.round(Number(
+        (medianDurationResult.results as unknown as Array<{ median_minutes: number }>)[0]?.median_minutes ?? 0,
+      ));
 
       return jsonSuccess({
         occupancy: occupancyData,
@@ -4586,6 +4603,7 @@ const app = defineApp([
         upcomingBookings: upcomingResult.results,
         durations,
         avgDurationMinutes,
+        medianDurationMinutes,
       });
     } catch (error) {
       console.error("GET /api/admin/stats/charts error:", error);
