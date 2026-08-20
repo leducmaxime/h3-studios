@@ -5,6 +5,7 @@ import {
   type StudioId,
   type GroupType,
 } from "./booking";
+import type { DbPricing } from "./db-types";
 
 export interface PricingGrid {
   [studioId: string]: {
@@ -35,6 +36,53 @@ export interface PriceSlot {
   time: string;
   isPeak: boolean;
   rate: number;
+}
+
+/**
+ * Résolution versionnée : dernière version avec effective_from <= sessionDate.
+ * Fallback : si aucune version n'est <= sessionDate, prendre la plus ancienne.
+ * Returns cents (price_per_half_hour as stored).
+ */
+export function selectPriceCentsAsOf(
+  rows: DbPricing[],
+  studioId: string,
+  groupType: string,
+  isPeak: boolean,
+  sessionDateISO: string,
+): number {
+  const matching = rows.filter(
+    (row) =>
+      row.studio_id === studioId &&
+      row.group_type === groupType &&
+      Boolean(row.is_peak) === isPeak,
+  );
+  const effective = matching
+    .filter((row) => row.effective_from <= sessionDateISO)
+    .sort((a, b) => b.effective_from.localeCompare(a.effective_from));
+  return (effective[0] ?? matching.sort((a, b) => a.effective_from.localeCompare(b.effective_from))[0])
+    ?.price_per_half_hour ?? 0;
+}
+
+/** Construit la grille en €/heure à la date de séance donnée. */
+export function buildPricingGridAsOf(rows: DbPricing[], sessionDateISO: string): PricingGrid {
+  const grid: PricingGrid = {};
+  const cells = new Set(rows.map((row) => `${row.studio_id}\0${row.group_type}`));
+
+  for (const cell of cells) {
+    const [studioId, groupType] = cell.split("\0");
+    grid[studioId] ??= {};
+    grid[studioId][groupType] = {
+      offPeak: selectPriceCentsAsOf(rows, studioId, groupType, false, sessionDateISO) * 2 / 100,
+      peak: selectPriceCentsAsOf(rows, studioId, groupType, true, sessionDateISO) * 2 / 100,
+    };
+  }
+
+  return grid;
+}
+
+/** Liste les dates d'effet futures, distinctes et triées. */
+export function listScheduledEffectiveDates(rows: DbPricing[], todayParisISO: string): string[] {
+  return [...new Set(rows.map((row) => row.effective_from).filter((date) => date > todayParisISO))].sort();
 }
 
 /**

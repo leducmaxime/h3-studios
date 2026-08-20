@@ -232,6 +232,7 @@ export interface DbPricing {
   is_peak: number; // 0 | 1
   price_per_half_hour: number;
   updated_at: string;
+  effective_from: string;
 }
 
 // --- Equipment ---

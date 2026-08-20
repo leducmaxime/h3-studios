@@ -1226,7 +1226,7 @@ export async function removeBlockedSlot(
 
 export async function getPricing(db: D1Database): Promise<DbPricing[]> {
   const result = await db.prepare(
-    "SELECT * FROM pricing ORDER BY studio_id, group_type, is_peak",
+    "SELECT * FROM pricing ORDER BY studio_id, group_type, is_peak, effective_from",
   ).all<DbPricing>();
   return result.results;
 }
@@ -1247,11 +1247,16 @@ export async function getPricingForBooking(
   studioId: string,
   groupType: string,
   isPeak: boolean,
+  sessionDate: string,
 ): Promise<number> {
   const result = await db.prepare(
-    "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ?",
+    "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ? AND effective_from <= ? ORDER BY effective_from DESC LIMIT 1",
+  ).bind(studioId, groupType, isPeak ? 1 : 0, sessionDate).first<{ price_per_half_hour: number }>();
+  if (result) return result.price_per_half_hour / 100;
+  const fallback = await db.prepare(
+    "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ? ORDER BY effective_from ASC LIMIT 1",
   ).bind(studioId, groupType, isPeak ? 1 : 0).first<{ price_per_half_hour: number }>();
-  return (result?.price_per_half_hour ?? 0) / 100;
+  return (fallback?.price_per_half_hour ?? 0) / 100;
 }
 
 // ─── Equipment ───────────────────────────────────────────────────────────────

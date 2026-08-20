@@ -1155,8 +1155,8 @@ const app = defineApp([
       const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
       const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
-      const peakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, true);
-      const offPeakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, false);
+      const peakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, true, body.date);
+      const offPeakRate = await getPricingForBooking(env.DB, body.studioId, body.groupType, false, body.date);
 
       const allEquipment = await getEquipment(env.DB);
       const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
@@ -1967,8 +1967,8 @@ const app = defineApp([
         const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
         const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
-        const peakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, true);
-        const offPeakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, false);
+        const peakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, true, body.date);
+        const offPeakRate = await getPricingForBooking(env.DB, body.studio_id, body.group_type, false, body.date);
 
         const allEquipment = await getEquipment(env.DB);
         const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
@@ -2140,8 +2140,8 @@ const app = defineApp([
       const publicHolidaysRaw = await getSetting(env.DB, "public_holidays") || "[]";
       const publicHolidays = JSON.parse(publicHolidaysRaw) as string[];
 
-      const peakRate = await getPricingForBooking(env.DB, studioId, groupType, true);
-      const offPeakRate = await getPricingForBooking(env.DB, studioId, groupType, false);
+      const peakRate = await getPricingForBooking(env.DB, studioId, groupType, true, date);
+      const offPeakRate = await getPricingForBooking(env.DB, studioId, groupType, false, date);
 
       const allEquipment = await getEquipment(env.DB);
       const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((e) => ({
