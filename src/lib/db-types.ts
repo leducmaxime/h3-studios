@@ -366,6 +366,7 @@ export type BookingSortOrder = "asc" | "desc";
 
 export interface BookingFilters {
   status?: BookingStatus;
+  statusNot?: BookingStatus;
   studioId?: string;
   userId?: string;
   dateFrom?: string;

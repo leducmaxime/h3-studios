@@ -1455,14 +1455,18 @@ export function AdminDashboard() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-        <StatCard
-          title={`Réservations (${rangeTitle})`}
-          value={stats?.rangeBookings ?? 0}
-          subValue={stats ? `${rangeSubtitle} · ${formatSlotsToDuration(rangeBookedSlots)}` : rangeSubtitle}
-          icon={Calendar}
-          color="primary"
-          className="lg:col-span-2"
-        />
+        <a
+          href={stats ? `/admin/bookings?status=not-cancelled&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}` : "/admin/bookings?status=not-cancelled"}
+          className="block lg:col-span-2"
+        >
+          <StatCard
+            title={`Réservations (${rangeTitle})`}
+            value={stats?.rangeBookings ?? 0}
+            subValue={stats ? `${rangeSubtitle} · ${formatSlotsToDuration(rangeBookedSlots)}` : rangeSubtitle}
+            icon={Calendar}
+            color="primary"
+          />
+        </a>
         <StatCard
           title="CA réservé (total)"
           value={formatPrice(stats?.rangeRevenue ?? 0)}

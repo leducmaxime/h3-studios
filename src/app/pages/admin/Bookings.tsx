@@ -119,13 +119,21 @@ function getUrlDateParam(name: string): string {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 }
 
+function getUrlParam(name: string): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get(name) ?? "";
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function AdminBookings() {
   const [bookings, setBookings] = useState<BookingWithUser[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all" | "not-cancelled">(() => {
+    const status = getUrlParam("status");
+    return status === "confirmed" || status === "completed" || status === "cancelled" || status === "no-show" || status === "not-cancelled" ? status : "all";
+  });
   const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">(() => {
     return getUrlDateParam("dateFrom") ? "custom" : "all";
@@ -365,10 +373,11 @@ export function AdminBookings() {
           )}
           <select
             value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all"); setPage(1); }}
+            onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all" | "not-cancelled"); setPage(1); }}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
             <option value="all">Statut</option>
+            <option value="not-cancelled">Hors annulées</option>
             <option value="confirmed">Confirmé</option>
             <option value="completed">Terminé</option>
             <option value="cancelled">Annulé</option>

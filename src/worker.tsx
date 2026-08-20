@@ -137,7 +137,7 @@ import {
   resolveStatsRange,
 } from "@/lib/db";
 import { refundCardPayment, refundPayments } from "@/lib/refunds";
-import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
+import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
@@ -1851,6 +1851,11 @@ const app = defineApp([
         const url = new URL(request.url);
         const filters: BookingFilters = {};
         const statusFilter = url.searchParams.get("status");
+        if (statusFilter === "not-cancelled") {
+          filters.statusNot = "cancelled";
+        } else if (statusFilter) {
+          filters.status = statusFilter as BookingStatus;
+        }
         const studioId = url.searchParams.get("studio");
         if (studioId) filters.studioId = studioId;
         const userIdFilter = url.searchParams.get("userId");
@@ -1878,7 +1883,7 @@ const app = defineApp([
         const limit = parseInt(url.searchParams.get("limit") || "20", 10);
         const all = url.searchParams.get("all") === "true";
 
-        const needsPostFilter = statusFilter || paymentStatus === "paid" || paymentStatus === "remaining" || paymentStatus === "on-site-due";
+        const needsPostFilter = paymentStatus === "paid" || paymentStatus === "remaining" || paymentStatus === "on-site-due";
         const fetchLimit = all ? 5000 : needsPostFilter ? 1000 : limit;
 
         const result = await getBookings(env.DB, filters, 1, fetchLimit);
@@ -1906,12 +1911,6 @@ const app = defineApp([
             };
           })
         );
-
-        if (statusFilter) {
-          bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
-            (b) => b.status === statusFilter
-          );
-        }
 
         if (paymentStatus === "paid") {
           bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(

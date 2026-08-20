@@ -91,6 +91,10 @@ export async function getBookings(
     conditions.push("b.status = ?");
     params.push(filters.status);
   }
+  if (filters.statusNot) {
+    conditions.push("b.status != ?");
+    params.push(filters.statusNot);
+  }
   if (filters.studioId) {
     conditions.push("b.studio_id = ?");
     params.push(filters.studioId);
