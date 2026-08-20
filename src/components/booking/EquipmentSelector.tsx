@@ -4,9 +4,9 @@ import { Plus, Minus, Gift, Info } from "lucide-react";
 import {
   type EquipmentSelection,
   type EquipmentId,
-  formatPrice,
 } from "@/lib/booking";
-import { formatSessionPriceDisplay, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
+import { getSessionPriceParts, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
+import { Price } from "@/components/common/Price";
 
 interface ApiEquipment {
   id: string;
@@ -183,7 +183,7 @@ export function EquipmentSelector({
             availabilityInfo && availabilityInfo.available < eq.maxPerSession
               ? getAvailabilityReason(availabilityInfo)
               : null;
-          const priceDisplay = formatSessionPriceDisplay(eq, quantity, subtotal);
+          const priceParts = getSessionPriceParts(eq, quantity, subtotal);
 
           const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
 
@@ -196,8 +196,10 @@ export function EquipmentSelector({
                 <span className="text-sm font-medium text-white">
                   {eq.name}
                 </span>
-                <span className="text-xs text-white/50">
-                  {priceDisplay}
+                <span className="text-xs text-white/70">
+                  {priceParts.prefix}
+                  <Price amount={priceParts.amount} unit={priceParts.unit} />
+                  {priceParts.degressive && " (dégressif)"}
                 </span>
                 {isSelectedUnitOffered && (
                   <span className="flex items-center gap-1 text-xs text-green-400">
@@ -219,7 +221,7 @@ export function EquipmentSelector({
               <div className="flex items-center gap-2">
                 {quantity > 0 && subtotal > 0 && (
                   <span className="text-xs text-primary">
-                    {formatPrice(subtotal)}
+                    <Price amount={subtotal} />
                   </span>
                 )}
 
@@ -260,7 +262,7 @@ export function EquipmentSelector({
         <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
           <span className="text-sm text-white/70">Total options supplémentaires</span>
           <span className="font-semibold text-primary">
-            {formatPrice(totalCost)}
+            <Price amount={totalCost} />
           </span>
         </div>
       )}

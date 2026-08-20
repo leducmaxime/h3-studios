@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, User } from "lucide-react";
 import { getParisDateISO } from "@/lib/utils";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue, shouldShowDisplayPaymentStatus, type DisplayPaymentStatus } from "@/lib/booking-totals";
-import { formatPrice } from "@/lib/booking";
+import { Price } from "@/components/common/Price";
 import { logout, useClientAuth } from "@/lib/client-auth-store";
 import { BOOKING_STATUS_LABELS, bookingStatusLabel, clientDisplayPaymentStatusLabel, groupTypeLabel, PAYMENT_STATUS_FAQ_HREF, studioLabel } from "@/lib/labels";
 
@@ -290,7 +290,7 @@ function BookingCard({ booking }: { booking: BookingRow }) {
               {payment.label}
             </span>
           ))}
-          {amount !== null && <span className="text-white font-bold text-sm ml-1">{formatPrice(amount)}</span>}
+          {amount !== null && <span className="text-white font-bold text-sm ml-1"><Price amount={amount} /></span>}
         </div>
       </div>
     </div>

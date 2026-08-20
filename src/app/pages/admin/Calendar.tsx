@@ -1395,7 +1395,7 @@ export function AdminCalendar() {
                 <div>
                   <p className="text-[10px] uppercase text-zinc-500 font-bold">Total à payer TTC</p>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-sm font-bold text-primary">{formatPrice(finalTotal)}</p>
+                    <p className="text-sm font-bold text-primary">{formatPrice(finalTotal, { bare: true })}</p>
                     {(b.promo_discount || 0) > 0 && (
                       <p className="text-[10px] text-emerald-500 font-medium">(Promo: -{formatPrice(b.promo_discount || 0)})</p>
                     )}

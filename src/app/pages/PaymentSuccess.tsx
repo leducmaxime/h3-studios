@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle, Calendar, Clock, Home, Loader2, PackageCheck } from "lucide-react";
-import { formatDate, formatDuration, formatPrice, type GroupType, type StudioId } from "@/lib/booking";
+import { formatDate, formatDuration, type GroupType, type StudioId } from "@/lib/booking";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { groupTypeLabel, studioLabel } from "@/lib/labels";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
+import { Price } from "@/components/common/Price";
 
 interface PaymentSuccessProps {
   paymentId?: string;
@@ -190,7 +191,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                           </p>
                         </div>
                         <span className="shrink-0 text-lg font-bold text-primary">
-                          {formatPrice(booking.totalPrice)}
+                          <Price amount={booking.totalPrice} />
                         </span>
                       </div>
                       <p className="mt-2 text-sm text-white/60 capitalize">
@@ -203,7 +204,7 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                         <div className="mt-1.5 space-y-0.5">
                           {booking.equipmentPrice > 0 && (
                             <p className="text-xs text-white/40">
-                              Équipements supplémentaires : {formatPrice(booking.equipmentPrice)}
+                              Équipements supplémentaires : <Price amount={booking.equipmentPrice} className="text-white/70" />
                             </p>
                           )}
                           {equipmentItems.map((item) => (
@@ -227,14 +228,15 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                   {aggregatePromoDiscount > 0 && (
                     <div className="flex items-center justify-between text-sm text-green-400">
                       <span>Réduction{promoCode ? ` (${promoCode})` : ""}</span>
-                      <span>-{formatPrice(aggregatePromoDiscount)}</span>
+                      <span>-<Price amount={aggregatePromoDiscount} /></span>
                     </div>
                   )}
                   <TaxBreakdown ttc={session.amountTotal / 100} />
                   <div className="flex items-center justify-between">
                     <span className="text-white/60">{isPaid ? "Total TTC payé" : "Montant total TTC"}</span>
+                    {/* Mention portée par le libellé « Total TTC … » : montant nu (pas de doublon). */}
                     <span className="text-xl font-bold text-primary">
-                      {formatPrice(session.amountTotal / 100)}
+                      <Price amount={session.amountTotal / 100} bare />
                     </span>
                   </div>
                 </div>
@@ -259,8 +261,9 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                 <TaxBreakdown ttc={fallback.total} />
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-white/60">Total TTC payé</span>
+                  {/* Mention portée par le libellé « Total TTC payé » : montant nu (pas de doublon). */}
                   <span className="text-xl font-bold text-primary">
-                    {formatPrice(fallback.total)}
+                    <Price amount={fallback.total} bare />
                   </span>
                 </div>
                 <div className="flex flex-col gap-0.5">

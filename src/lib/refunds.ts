@@ -264,7 +264,7 @@ export async function refundCardPayment(
 
   if (discoveredCommittedCents > 0) {
     const reconciledAmount = discoveredCommittedCents / 100;
-    const message = `Un remboursement de ${reconciledAmount} € existait déjà chez Stripe et vient d'être enregistré. Vérifiez le solde avant toute nouvelle demande.`;
+    const message = `Un remboursement de ${reconciledAmount} € TTC existait déjà chez Stripe et vient d'être enregistré. Vérifiez le solde avant toute nouvelle demande.`;
     return fail("reconciled", message, { reconciledAmount });
   }
 

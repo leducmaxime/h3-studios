@@ -16,10 +16,11 @@ import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, BadgePercent
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { BookingOptionsStep } from "@/components/booking/BookingOptionsStep";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
-import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, sortBookingsByStart, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
+import { formatDate, formatDuration, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, sortBookingsByStart, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
+import { Price } from "@/components/common/Price";
 import { DEFAULT_RESERVATION_BANNER, type ReservationBanner } from "@/lib/reservation-banner";
 import { ReservationBannerIcon } from "@/components/common/ReservationBannerIcon";
 
@@ -238,7 +239,7 @@ export function Reservation({ step }: ReservationProps) {
                 <span className="font-medium">
                   {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""} dans le panier
                 </span>
-                <span className="ml-2 text-lg font-bold text-primary">{formatPrice(cartTotal)}</span>
+                <span className="ml-2 text-lg font-bold text-primary"><Price amount={cartTotal} /></span>
               </div>
             </div>
             <button
@@ -362,7 +363,8 @@ export function Reservation({ step }: ReservationProps) {
                       onClick={goToOptions}
                       className="hidden w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-black shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99] lg:flex"
                     >
-                      {creneauTotal !== null ? `Continuer – ${formatPrice(creneauTotal)}` : "Continuer"}
+                      {/* Un seul item flex : sinon le gap-2 du bouton s'insère entre « Continuer – » et le montant. */}
+                      {creneauTotal !== null ? <span>Continuer – <Price amount={creneauTotal} /></span> : "Continuer"}
                       <ArrowRight className="h-5 w-5" />
                     </button>
                     <StickyBookingCTA
@@ -459,7 +461,7 @@ export function Reservation({ step }: ReservationProps) {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-lg font-bold text-primary">
-                                {formatPrice(displayPrice)}
+                                <Price amount={displayPrice} />
                               </span>
                               <button
                                 onClick={() => removeFromCart(booking.id)}
@@ -478,9 +480,9 @@ export function Reservation({ step }: ReservationProps) {
                              <div className="mt-2 space-y-1">
                                {booking.equipment.filter(e => e.quantity > 0).map(e => {
                                   const eqPrice = calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], slotDurationHours(booking.startTime, booking.endTime), availableEquipment);
-                                 return (
-                                  <p key={e.id} className="text-xs text-white/40">
-                                    + {getEquipmentName(e.id)} ×{e.quantity} : {formatPrice(eqPrice)}
+                                  return (
+                                   <p key={e.id} className="text-xs text-white/40">
+                                    + {getEquipmentName(e.id)} ×{e.quantity} : <Price amount={eqPrice} className="text-white/70" />
                                   </p>
                                 );
                               })}
@@ -516,19 +518,20 @@ export function Reservation({ step }: ReservationProps) {
                             <>
                               <div className="flex items-center justify-between text-sm text-white/70">
                                 <span>Sous-total</span>
-                                <span>{formatPrice(cartTotal)}</span>
+                                <span><Price amount={cartTotal} /></span>
                               </div>
                               <div className="flex items-center justify-between text-sm text-green-400">
                                 <span>Réduction ({state.appliedPromo?.code})</span>
-                                <span>-{formatPrice(state.promoDiscount)}</span>
+                                <span>-<Price amount={state.promoDiscount} /></span>
                               </div>
                             </>
                           )}
                           <TaxBreakdown ttc={liveNet} />
                           <div className="flex items-center justify-between">
                             <span className="text-lg font-semibold">Total TTC</span>
+                            {/* Mention portée par le libellé « Total TTC » : montant nu (pas de doublon). */}
                             <span className="text-2xl font-bold text-primary">
-                              {formatPrice(liveNet)}
+                              <Price amount={liveNet} bare />
                             </span>
                           </div>
                         </div>

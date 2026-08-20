@@ -5,7 +5,6 @@ import {
   STUDIOS,
   formatDate,
   formatDuration,
-  formatPrice,
   generateICS,
   downloadICS,
   generateGoogleCalendarUrl,
@@ -14,6 +13,7 @@ import {
 } from "@/lib/booking";
 import { useEquipment } from "./useEquipment";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
+import { Price } from "@/components/common/Price";
 
 interface FinalCheckoutProps {
   cart: CompletedBooking[];
@@ -108,7 +108,7 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
                 <p className="text-sm text-primary">Réf: {booking.bookingRef}</p>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <span className="font-semibold text-primary">{formatPrice(displayPrices[booking.id] ?? booking.price)}</span>
+                <span className="font-semibold text-primary"><Price amount={displayPrices[booking.id] ?? booking.price} /></span>
                 {booking.paymentStatus === "paid" ? (
                   <span className="flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
                     <CreditCard className="h-3 w-3" />
@@ -124,10 +124,10 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
             </div>
             
             {booking.equipmentPrice > 0 && (
-              <div className="mb-3 text-xs text-white/60">
+              <div className="mb-3 text-xs text-white/70">
                 Options suppl. : {booking.equipment.filter(e => e.quantity > 0).map(e => 
                   `${getEquipmentName(e.id)} ×${e.quantity}`
-                ).join(", ")} ({formatPrice(booking.equipmentPrice)})
+                ).join(", ")} (<Price amount={booking.equipmentPrice} />)
               </div>
             )}
 
@@ -172,7 +172,7 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
           {promoDiscount > 0 && (
             <div className="flex items-center justify-between text-sm text-green-400">
               <span>Réduction{promoCode ? ` (${promoCode})` : ""}</span>
-              <span>-{formatPrice(promoDiscount)}</span>
+              <span>-<Price amount={promoDiscount} /></span>
             </div>
           )}
           <TaxBreakdown ttc={total} />
@@ -180,7 +180,8 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
             <span className="min-w-0 text-lg">
               {isPaid ? "Total TTC payé" : <>Total TTC à régler sur place <span className="whitespace-nowrap">(CB ou espèces)</span></>}
             </span>
-            <span className="shrink-0 text-2xl font-bold text-primary">{formatPrice(total)}</span>
+            {/* Mention portée par le libellé « Total TTC … » : montant nu (pas de doublon). */}
+            <span className="shrink-0 text-2xl font-bold text-primary"><Price amount={total} bare /></span>
           </div>
         </div>
       </div>

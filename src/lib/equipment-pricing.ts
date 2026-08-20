@@ -51,15 +51,29 @@ export function parseSessionPricingInput(raw: string): number[] {
   return raw.split(",").map((s) => parseFloat(s.trim())).filter((n) => !isNaN(n));
 }
 
+/** Décompose le prix affiché d'une option selon son type de tarification. */
+export function getSessionPriceParts(
+  eq: { pricingType: string; sessionPricing: number[] | null; pricePerHour: number },
+  quantity: number,
+  subtotal: number,
+): { prefix: string; amount: number; unit: string; degressive: boolean } {
+  if (eq.pricingType === "session" && eq.sessionPricing?.length) {
+    return {
+      prefix: "",
+      amount: quantity === 0 ? eq.sessionPricing[0] : subtotal,
+      unit: "/séance",
+      degressive: isDegressiveSessionPricing(eq.sessionPricing),
+    };
+  }
+  return { prefix: "+", amount: eq.pricePerHour, unit: "/h", degressive: false };
+}
+
 /** Formate le prix affiché d'une option selon son type de tarification. */
 export function formatSessionPriceDisplay(
   eq: { pricingType: string; sessionPricing: number[] | null; pricePerHour: number },
   quantity: number,
   subtotal: number,
 ): string {
-  if (eq.pricingType === "session" && eq.sessionPricing?.length) {
-    const isDegressive = isDegressiveSessionPricing(eq.sessionPricing);
-    return `${formatEuro(quantity === 0 ? eq.sessionPricing[0] : subtotal)} TTC/séance${isDegressive ? " (dégressif)" : ""}`;
-  }
-  return `+${formatEuro(eq.pricePerHour)} TTC/h`;
+  const { prefix, amount, unit, degressive } = getSessionPriceParts(eq, quantity, subtotal);
+  return `${prefix}${formatEuro(amount)} TTC${unit}${degressive ? " (dégressif)" : ""}`;
 }
