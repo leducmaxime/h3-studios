@@ -1,5 +1,7 @@
-export const SITE_URL = "https://h3-studios.fr";
-export const SITE_NAME = "H3 STUDIOS";
+import { COMPANY } from "@/lib/company";
+
+export const SITE_URL = COMPANY.siteUrl;
+export const SITE_NAME = COMPANY.legalName;
 
 export interface PageSEO {
   title: string;
@@ -217,21 +219,21 @@ export const pageSEO: Record<string, PageSEO> = {
 export const routes = Object.keys(pageSEO);
 
 export const businessInfo = {
-  name: "H3 STUDIOS",
+  name: COMPANY.legalName,
   description:
     "Studios de répétition et d'enregistrement pour groupes de musique à Sucy-en-Brie",
   url: SITE_URL,
-  telephone: "+33613440875",
-  email: "contact@h3-studios.fr",
+  telephone: COMPANY.phoneTel,
+  email: COMPANY.email,
   address: {
-    streetAddress: "3 Rue de la Grande Ceinture",
-    addressLocality: "Sucy-en-Brie",
-    postalCode: "94370",
-    addressCountry: "FR",
+    streetAddress: COMPANY.address.street,
+    addressLocality: COMPANY.address.city,
+    postalCode: COMPANY.address.postalCode,
+    addressCountry: COMPANY.address.country,
   },
   geo: {
-    latitude: 48.7697,
-    longitude: 2.5178,
+    latitude: COMPANY.geo.latitude,
+    longitude: COMPANY.geo.longitude,
   },
   openingHours: ["Mo 18:00-00:00", "Tu-Su 10:00-00:00"],
   priceRange: "€€",
@@ -358,7 +360,7 @@ export function generateSitemap(): string {
     } else if (legalPages.includes(path)) {
       priority = "0.5";
       changefreq = "yearly";
-      lastmod = "2025-06-01";
+      lastmod = "2026-08-20";
     } else {
       priority = "0.8";
       changefreq = "monthly";

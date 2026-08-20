@@ -1,3 +1,5 @@
+import { COMPANY, LEGAL_UPDATED_AT, companyFullAddress } from "@/lib/company";
+
 export function ConditionsVente() {
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
@@ -13,20 +15,25 @@ export function ConditionsVente() {
             <p className="text-sm leading-relaxed">
               Les présentes conditions générales de vente (CGV) s'appliquent aux
               réservations effectuées sur le site{" "}
-              <strong className="text-white">h3-studios.fr</strong>, exploité par
-              Marcel Hamon, auto-entrepreneur, immatriculé sous le numéro SIRET
-              499 465 721 00026.
+              <strong className="text-white">{COMPANY.siteHost}</strong>, exploité par{" "}
+              <strong className="text-white">{COMPANY.legalName}</strong>, {COMPANY.legalForm} ({COMPANY.legalFormLong}) au capital de {COMPANY.shareCapital}, immatriculée au R.C.S. de {COMPANY.rcsCity} sous le numéro {COMPANY.siren}.
             </p>
             <p className="mt-2 text-sm leading-relaxed">
-              <strong className="text-white">Siège social :</strong> 3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie
+              <strong className="text-white">SIRET :</strong> {COMPANY.siret}
             </p>
             <p className="mt-2 text-sm leading-relaxed">
-              <strong className="text-white">Téléphone :</strong> 06 13 44 08 75
+              <strong className="text-white">N° TVA intracommunautaire :</strong> {COMPANY.vatNumber}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed">
+              <strong className="text-white">Siège social :</strong> {companyFullAddress()}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed">
+              <strong className="text-white">Téléphone :</strong> {COMPANY.phoneDisplay}
             </p>
             <p className="mt-2 text-sm leading-relaxed">
               <strong className="text-white">Email :</strong>{" "}
-              <a href="mailto:contact@h3-studios.fr" className="text-primary hover:underline">
-                contact@h3-studios.fr
+              <a href={`mailto:${COMPANY.email}`} className="text-primary hover:underline">
+                {COMPANY.email}
               </a>
             </p>
           </section>
@@ -160,7 +167,7 @@ export function ConditionsVente() {
           </section>
 
           <p className="text-xs text-white/40">
-            Dernière mise à jour : 19 août 2026
+            Dernière mise à jour : {LEGAL_UPDATED_AT}
           </p>
         </div>
       </div>
