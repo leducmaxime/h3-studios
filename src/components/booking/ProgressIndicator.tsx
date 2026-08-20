@@ -108,6 +108,13 @@ export function ProgressIndicator({
         })}
       </div>
 
+      {/* Current step label — mobile only. At 7 steps the 14px icons alone
+          are not self-explanatory (Package, IdCard…); desktop keeps the
+          numeric captions under each circle instead. */}
+      <div className="mt-2 text-center text-xs font-medium text-primary lg:hidden">
+        {STEP_DEFS[currentIdx]?.label}
+      </div>
+
       <div className="mt-4 flex gap-1">
         {STEP_DEFS.map(({ step }, index) => (
           <div

@@ -797,9 +797,9 @@ export function BookingForm({
         disabled={continueLoading}
         aria-disabled={!canContinue}
         className={`
-          w-full rounded-lg py-3.5 text-base font-semibold transition-all lg:py-4 lg:text-lg
+          w-full rounded-xl py-3.5 text-base font-semibold transition-all lg:py-4 lg:text-lg
           ${canContinue && !continueLoading
-            ? "bg-primary text-black hover:bg-primary/90"
+            ? "bg-primary text-black shadow-lg shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99]"
             : "bg-white/15 text-white/50 cursor-not-allowed"
           }
         `}

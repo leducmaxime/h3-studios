@@ -53,10 +53,10 @@ export function StickyBookingCTA({
           disabled={disabled}
           aria-busy={priceLoading}
           className={`
-            w-full rounded-lg px-6 py-3 font-semibold transition-all
+            w-full rounded-xl px-6 py-3 font-semibold transition-all
             ${disabled
               ? "cursor-not-allowed bg-white/15 text-white/50"
-              : "bg-primary text-black hover:bg-primary/90 active:scale-[0.98]"
+              : "bg-primary text-black shadow-lg shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99]"
             }
           `}
         >

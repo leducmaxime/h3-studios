@@ -12,7 +12,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check, PackageCheck, WrenchIcon, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, WrenchIcon, AlertTriangle } from "lucide-react";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { BookingOptionsStep } from "@/components/booking/BookingOptionsStep";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -44,11 +44,9 @@ export function Reservation({ step }: ReservationProps) {
     slotsByStudio,
     slotsLoading,
     pricingData,
-    pricingLoading,
     pricingError,
     refetchPricing,
     cartTotal,
-    canProceedToStudio,
     canConfirmBooking,
     bookingFieldIssues,
     submitError,
@@ -137,6 +135,24 @@ export function Reservation({ step }: ReservationProps) {
       })())
     : 0;
 
+  // Live total for the creneau → options CTA: studio price from the grid plus
+  // any equipment already chosen (equipment survives an options → creneau
+  // back-navigation). null while the pricing grid is unavailable.
+  const selectionComplete = !!(state.selectedDate && state.startTime && state.endTime && state.studioId);
+  const creneauTotal = (() => {
+    const grid = pricingData?.grid;
+    if (!selectionComplete || !grid) return null;
+    const studioTotal = calculatePrice(
+      grid,
+      state.studioId as StudioId,
+      (state.groupType || "group") as GroupType,
+      state.selectedDate!,
+      state.startTime!,
+      state.endTime!
+    ).total;
+    return studioTotal + calculateEquipmentPrice(state.equipment, durationHours, availableEquipment);
+  })();
+
   /**
    * Recompute a cart item's time-based price from the pricing grid.
    * Falls back to the stored price when grid is not loaded.
@@ -162,8 +178,9 @@ export function Reservation({ step }: ReservationProps) {
     [state.cart, recomputeCartItemPrice],
   );
 
-  // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau)
-  const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "groupe" || state.step === "creneau" || state.step === "options");
+  // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau;
+  // options shows its own in-column cart chip, and goToCart would wipe the in-progress selection there)
+  const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "groupe" || state.step === "creneau");
 
   // Selection pills: bright primary on creneau (where the selection is being
   // made), muted context chips on options (where they only remind the user
@@ -289,7 +306,7 @@ export function Reservation({ step }: ReservationProps) {
                       ? "Choisissez une date"
                       : !state.startTime
                         ? "Choisissez votre créneau horaire"
-                        : "Créneau sélectionné, passez aux options"}
+                        : "Créneau sélectionné — passez aux options"}
                   </p>
                 </div>
 
@@ -333,10 +350,17 @@ export function Reservation({ step }: ReservationProps) {
                       onClick={goToOptions}
                       className="hidden w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-black shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99] lg:flex"
                     >
-                      Continuer
+                      {creneauTotal !== null ? `Continuer – ${formatPrice(creneauTotal)}` : "Continuer"}
                       <ArrowRight className="h-5 w-5" />
                     </button>
-                    <StickyBookingCTA studioPrice={0} equipmentPrice={0} onConfirm={goToOptions} buttonText="Continuer" showPrice={false} />
+                    <StickyBookingCTA
+                      studioPrice={creneauTotal ?? 0}
+                      equipmentPrice={0}
+                      onConfirm={goToOptions}
+                      buttonText="Continuer"
+                      showPrice={creneauTotal !== null}
+                      priceLoading={creneauTotal === null && !pricingError}
+                    />
                   </div>
                 )}
               </div>

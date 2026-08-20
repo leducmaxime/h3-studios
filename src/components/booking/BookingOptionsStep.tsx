@@ -76,7 +76,7 @@ export function BookingOptionsStep({ state, pricingData, pricingError, refetchPr
     };
 
     return (
-      <div className="flex flex-col gap-6 pb-24 lg:pb-0">
+      <div className="flex flex-col gap-6">
         {/* Step header */}
         <div className="flex items-start gap-3">
           <button
@@ -102,22 +102,24 @@ export function BookingOptionsStep({ state, pricingData, pricingError, refetchPr
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10">
                   <PackageCheck className="h-4 w-4 text-primary" />
                 </div>
-                <h3 className="text-sm font-semibold text-white/80">Inclus dans votre réservation</h3>
+                <h3 className="text-base font-semibold text-white/80">Inclus dans votre réservation</h3>
                 <span className="ml-auto rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                   Sans surcoût
                 </span>
               </div>
-              <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+              {/* Chip cloud instead of one row per item: same passive
+                  reassurance in ~3 lines instead of 7 on mobile. Chips are
+                  non-interactive (no hover, no button) so they don't read as
+                  actionable next to the equipment steppers below. */}
+              <div className="flex flex-wrap gap-2">
                 {["Batterie (sans crash)", "Sono", "Amplis guitare", "Amplis basse", "4 micros", "Pupitres", "Pied synthé"].map((item) => (
-                  <div key={item} className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-white/70">{item}</span>
-                    <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary/80">
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15">
-                        <Check className="h-2.5 w-2.5 text-primary" />
-                      </span>
-                      Inclus
-                    </span>
-                  </div>
+                  <span
+                    key={item}
+                    className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-white/70"
+                  >
+                    <Check className="h-3 w-3 shrink-0 text-primary" />
+                    {item}
+                  </span>
                 ))}
               </div>
             </section>
@@ -144,8 +146,9 @@ export function BookingOptionsStep({ state, pricingData, pricingError, refetchPr
             </section>
           </div>
 
-          {/* Right column: the decision surface */}
-          <div className="flex min-w-0 flex-col gap-4">
+          {/* Right column: the decision surface — sticky on desktop so the
+              total and add-to-cart CTA stay in view while the options list grows */}
+          <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-8">
             <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
               <h3 className="mb-3 text-sm font-semibold text-white/80">Récapitulatif</h3>
 
@@ -194,11 +197,11 @@ export function BookingOptionsStep({ state, pricingData, pricingError, refetchPr
                     {hasPeakPricing ? (
                       <>
                         <div className="flex items-center justify-between">
-                          <span className="text-white/60">Heure creuse — {formatBandDuration(offPeakHours)} x {offPeakRate}€ TTC/h</span>
+                          <span className="text-white/60">Heure creuse — {formatBandDuration(offPeakHours)} × {offPeakRate}€ TTC/h</span>
                           <span>{formatPrice(offPeakSubtotal)}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-white/60">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€ TTC/h</span>
+                          <span className="text-white/60">Heure pleine — {formatBandDuration(peakHours)} × {peakRate}€ TTC/h</span>
                           <span>{formatPrice(peakSubtotal)}</span>
                         </div>
                       </>
@@ -206,19 +209,19 @@ export function BookingOptionsStep({ state, pricingData, pricingError, refetchPr
                       <div className="flex items-center justify-between">
                         {peakSlots.length > 0 ? (
                           <>
-                            <span className="text-white/60">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
+                            <span className="text-white/60">Heure pleine — {formatBandDuration(durationH)} × {anyRate}€ TTC/h</span>
                             <span>{formatPrice(total)}</span>
                           </>
                         ) : (
                           <>
-                            <span className="text-white/60">Heure creuse — {formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
+                            <span className="text-white/60">Heure creuse — {formatBandDuration(durationH)} × {anyRate}€ TTC/h</span>
                             <span>{formatPrice(total)}</span>
                           </>
                         )}
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <span className="text-white/60">{formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
+                        <span className="text-white/60">{formatBandDuration(durationH)} × {anyRate}€ TTC/h</span>
                         <span>{formatPrice(total)}</span>
                       </div>
                     )}
@@ -226,7 +229,7 @@ export function BookingOptionsStep({ state, pricingData, pricingError, refetchPr
                     {state.equipment.filter(e => e.quantity > 0).map(e => (
                       <div key={e.id} className="flex items-center justify-between">
                         <span className="text-white/60">
-                          {getEquipmentName(e.id)} x{e.quantity}
+                          {getEquipmentName(e.id)} ×{e.quantity}
                         </span>
                         <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH, availableEquipment))}</span>
                       </div>

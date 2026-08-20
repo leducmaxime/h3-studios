@@ -102,7 +102,7 @@ export function PaymentChoice({
           className={`w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-black transition-all lg:py-4 lg:text-lg ${
             actionsDisabled
               ? "cursor-not-allowed opacity-40"
-              : "hover:bg-primary/90"
+              : "shadow-lg shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99]"
           }`}
         >
           Confirmer la réservation

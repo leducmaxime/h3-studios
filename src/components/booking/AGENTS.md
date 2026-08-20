@@ -139,7 +139,7 @@ interface ExtendedBookingState {
 - `navigateToStep` applies guards then sets step; groupe-reset (solo→duo→group) only fires when guard allows the navigation
 - URL sync effect enforces guards reactively (except for termine which is terminal)
 - `options` backs to `creneau` while retaining date/time/studio and equipment. The next back clears the range; a creneau back without a date returns to groupe.
-- Equipment is cleared whenever a date or range is cleared (`selectDate`, `clearTimeRange`, group-type advance, or creneau back that clears the date). Options back does not clear it.
+- Equipment survives date/range changes and is reconciled by the availability clamp; it is cleared only on group-type change and full step-reset. Options back does not clear it.
 
 ## STALE-FETCH GUARD
 

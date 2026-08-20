@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { formatDateISO } from "@/lib/utils";
+import { formatDateISO, getParisDateISO } from "@/lib/utils";
 import type { PricingData } from "@/lib/pricing";
 import type { ClientUser } from "@/lib/client-user";
 import { calculatePrice } from "@/lib/pricing";
@@ -246,6 +246,32 @@ export function applyGoBack<T extends {
   return s;
 }
 
+export function applySelectDate<T extends {
+  selectedDate: Date | null; startTime: string | null; endTime: string | null;
+  equipment: EquipmentSelection[];
+}>(s: T, date: Date): T {
+  if (s.selectedDate && getParisDateISO(s.selectedDate) === getParisDateISO(date)) return s;
+  return { ...s, selectedDate: date, startTime: null, endTime: null };
+}
+
+export function applyClearTimeRange<T extends {
+  startTime: string | null; endTime: string | null; studioId: StudioId | null;
+  equipment: EquipmentSelection[];
+}>(s: T): T {
+  return { ...s, startTime: null, endTime: null, studioId: null };
+}
+
+export function applySetGroupType<T extends {
+  groupType: GroupType | null; step: BookingStep; selectedDate: Date | null;
+  startTime: string | null; endTime: string | null; studioId: StudioId | null;
+  equipment: EquipmentSelection[];
+}>(s: T, groupType: GroupType | null): T {
+  if (groupType === "solo" || groupType === "duo" || groupType === "group") {
+    return { ...s, groupType, step: "creneau", selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
+  }
+  return { ...s, groupType };
+}
+
 // ---------------------------------------------------------------------------
 // Serialization
 // ---------------------------------------------------------------------------
@@ -268,7 +294,7 @@ function serializeState(state: ExtendedBookingState): SerializedBookingState {
   };
 }
 
-function deserializeState(serialized: SerializedBookingState): ExtendedBookingState {
+export function deserializeState(serialized: SerializedBookingState): ExtendedBookingState {
   // Defensive: drop any credential fields that a previous version may have
   // persisted — they must never round-trip through localStorage.
   const { accountPassword, accountPasswordConfirm, ...safe } = serialized as SerializedBookingState & {
@@ -766,7 +792,7 @@ export function useBookingWithRouter(urlStep?: string) {
       if (targetStep === "groupe" && guardedStep === targetStep && (s.groupType === "solo" || s.groupType === "duo")) {
         return {
           ...s, step: "groupe", groupType: null,
-          selectedDate: null, startTime: null, endTime: null, studioId: null,
+          selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [],
         };
       }
 
@@ -775,13 +801,7 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const selectDate = useCallback((date: Date) => {
-    setState((s) => ({
-      ...s,
-      selectedDate: date,
-      startTime: null,
-      endTime: null,
-      equipment: [],
-    }));
+    setState((s) => applySelectDate(s, date));
   }, []);
 
   const selectTimeRange = useCallback((startTime: string, endTime: string, studioId: StudioId) => {
@@ -789,16 +809,11 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const clearTimeRange = useCallback(() => {
-    setState((s) => ({ ...s, startTime: null, endTime: null, studioId: null, equipment: [] }));
+    setState((s) => applyClearTimeRange(s));
   }, []);
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
-    setState((s) => {
-      if (groupType === "solo" || groupType === "duo" || groupType === "group") {
-        return { ...s, groupType, step: "creneau", selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
-      }
-      return { ...s, groupType };
-    });
+    setState((s) => applySetGroupType(s, groupType));
   }, []);
 
   const selectStudio = useCallback((studioId: StudioId) => {
