@@ -1055,21 +1055,6 @@ export function AdminBookingNew() {
           )}
         </div>
 
-        {/* Informations supplémentaires */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-          <div>
-            <label htmlFor="bookingNotes" className="mb-1 block text-sm text-zinc-400">Informations supplémentaires</label>
-            <textarea
-              id="bookingNotes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
-              rows={3}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
-            />
-          </div>
-        </div>
-
         {/* Equipment */}
         {availableEquipment.length > 0 && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
@@ -1145,6 +1130,21 @@ export function AdminBookingNew() {
             </div>
           </div>
         )}
+
+        {/* Informations supplémentaires */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+          <div>
+            <label htmlFor="bookingNotes" className="mb-1 block text-sm text-zinc-400">Informations supplémentaires</label>
+            <textarea
+              id="bookingNotes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
+              rows={3}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
+            />
+          </div>
+        </div>
 
         {/* Récapitulatif */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
