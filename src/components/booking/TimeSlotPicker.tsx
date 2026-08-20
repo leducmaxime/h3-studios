@@ -607,7 +607,7 @@ export function TimeSlotPicker({
           {/* Photo — same shared embla carousel as /les-studios (compact mode,
               manual navigation only: two auto-playing blocks side by side in
               the booking grid would be distracting). */}
-          <div className="relative h-[110px] w-full overflow-hidden sm:h-[130px]">
+          <div className="relative h-[130px] w-full overflow-hidden sm:h-[160px]">
             <ImageCarousel images={studio.images} autoPlay={false} compact />
             {/* Gradient overlay — pointer-events-none so the carousel arrows
                 and dots underneath stay clickable. */}
