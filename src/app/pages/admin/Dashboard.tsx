@@ -153,7 +153,7 @@ const CHART_COLORS = {
   zinc900: "#18181b",
 };
 
-const PIE_COLORS = [CHART_COLORS.primary, CHART_COLORS.secondary, CHART_COLORS.blue, CHART_COLORS.green];
+const PIE_COLORS = [CHART_COLORS.primary, CHART_COLORS.secondary, CHART_COLORS.blue, CHART_COLORS.green, CHART_COLORS.red];
 
 const MONTH_LABELS = [
   "Janvier",

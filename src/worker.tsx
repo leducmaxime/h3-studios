@@ -4267,7 +4267,12 @@ const app = defineApp([
         ).bind(fromStr, toStr),
         env.DB.prepare(
           `SELECT
-            p.method as method,
+            CASE
+              WHEN p.method = 'card' AND (p.stripe_event_id IS NOT NULL OR p.amount = 0) THEN 'card-online'
+              WHEN p.method = 'card' THEN 'card-onsite'
+              WHEN p.method = 'cheque' THEN 'check'
+              ELSE p.method
+            END AS method,
             COUNT(*) as count,
             COALESCE(SUM(p.amount - COALESCE(p.refunded_amount, 0)), 0) as revenue
           FROM payments p
@@ -4275,7 +4280,12 @@ const app = defineApp([
           WHERE b.date >= ? AND b.date <= ?
             AND b.status != 'cancelled'
             AND p.status IN ('paid', 'refunded', 'partial-refund')
-          GROUP BY p.method`,
+          GROUP BY CASE
+            WHEN p.method = 'card' AND (p.stripe_event_id IS NOT NULL OR p.amount = 0) THEN 'card-online'
+            WHEN p.method = 'card' THEN 'card-onsite'
+            WHEN p.method = 'cheque' THEN 'check'
+            ELSE p.method
+          END`,
         ).bind(fromStr, toStr),
         env.DB.prepare(
           `SELECT
@@ -4423,19 +4433,20 @@ const app = defineApp([
       const onSitePayments = (onSitePaidResult.results as unknown as PaymentRow[]);
       const onlineCard = (onlineCardResult.results as unknown as OnlineCardRow[])[0] ?? { count: 0, revenue: 0 };
       const merged: Record<string, { count: number; revenue: number }> = {};
+      // `method` est déjà normalisé par le CASE SQL (card-online / card-onsite,
+      // cheque → check) : aucune normalisation supplémentaire ici.
       for (const row of onSitePayments) {
-        const method = row.method === "cheque" ? "check" : row.method;
-        merged[method] = {
-          count: (merged[method]?.count ?? 0) + (row.count ?? 0),
-          revenue: (merged[method]?.revenue ?? 0) + (row.revenue ?? 0),
+        merged[row.method] = {
+          count: (merged[row.method]?.count ?? 0) + (row.count ?? 0),
+          revenue: (merged[row.method]?.revenue ?? 0) + (row.revenue ?? 0),
         };
       }
-      merged.card = {
-        count: (merged.card?.count ?? 0) + onlineCard.count,
-        revenue: (merged.card?.revenue ?? 0) + onlineCard.revenue,
+      merged["card-online"] = {
+        count: (merged["card-online"]?.count ?? 0) + onlineCard.count,
+        revenue: (merged["card-online"]?.revenue ?? 0) + onlineCard.revenue,
       };
 
-      const paymentMethods = ["cash", "card", "transfer", "check"] as const;
+      const paymentMethods = ["cash", "card-online", "card-onsite", "transfer", "check"] as const;
       const paymentData = paymentMethods.map((method) => ({
         method: paymentMethodLabelShort(method),
         count: merged[method]?.count ?? 0,

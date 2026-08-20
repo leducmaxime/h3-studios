@@ -95,11 +95,22 @@ export function bookingStatusLabel(
 /**
  * `check` et `cheque` coexistent en base (alias hérité) et rendent le même
  * libellé.
+ * `card-online` et `card-onsite` sont des clés d'agrégation statistique
+ * (graphique du dashboard), pas des valeurs stockées dans `payments.method`.
  */
-export type PaymentMethodKey = "card" | "cash" | "transfer" | "check" | "cheque";
+export type PaymentMethodKey =
+  | "card"
+  | "card-online"
+  | "card-onsite"
+  | "cash"
+  | "transfer"
+  | "check"
+  | "cheque";
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethodKey, string> = {
   card: "Carte bancaire",
+  "card-online": "Carte bancaire en ligne",
+  "card-onsite": "Carte bancaire sur place",
   cash: "Espèces",
   transfer: "Virement",
   check: "Chèque",
@@ -109,6 +120,8 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethodKey, string> = {
 /** Variante compacte pour les colonnes et légendes de graphiques étroites. */
 export const PAYMENT_METHOD_LABELS_SHORT: Record<PaymentMethodKey, string> = {
   card: "CB",
+  "card-online": "CB en ligne",
+  "card-onsite": "CB sur place",
   cash: "Espèces",
   transfer: "Virement",
   check: "Chèque",

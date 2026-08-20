@@ -35,8 +35,8 @@ describe("libellés français partagés", () => {
     expect(STUDIO_LABELS).toEqual({ "la-scene": "La Scène", "le-podium": "Le Podium" });
     expect(STUDIO_LABELS_SHORT).toEqual({ "la-scene": "Scène", "le-podium": "Podium" });
     expect(BOOKING_STATUS_LABELS).toEqual({ confirmed: "Confirmée", cancelled: "Annulée", completed: "Terminée", "no-show": "Absent" });
-    expect(PAYMENT_METHOD_LABELS).toEqual({ card: "Carte bancaire", cash: "Espèces", transfer: "Virement", check: "Chèque", cheque: "Chèque" });
-    expect(PAYMENT_METHOD_LABELS_SHORT).toEqual({ card: "CB", cash: "Espèces", transfer: "Virement", check: "Chèque", cheque: "Chèque" });
+    expect(PAYMENT_METHOD_LABELS).toEqual({ card: "Carte bancaire", "card-online": "Carte bancaire en ligne", "card-onsite": "Carte bancaire sur place", cash: "Espèces", transfer: "Virement", check: "Chèque", cheque: "Chèque" });
+    expect(PAYMENT_METHOD_LABELS_SHORT).toEqual({ card: "CB", "card-online": "CB en ligne", "card-onsite": "CB sur place", cash: "Espèces", transfer: "Virement", check: "Chèque", cheque: "Chèque" });
     expect(STORED_PAYMENT_STATUS_LABELS).toEqual({ pending: "En attente", paid: "Payé", "pay-on-site": "Paiement sur place" });
     expect(PAYMENT_RECORD_STATUS_LABELS).toEqual({ pending: "En attente", paid: "Payé", refunded: "Remboursé", "partial-refund": "Remboursé partiel" });
     expect(DISPLAY_PAYMENT_STATUS_LABELS).toEqual({ paid: "Payé", pending: "En attente", "pay-on-site": "Reste à payer", cancelled: "Annulée", "paid-before-cancel": "Payée avant annulation", refunded: "Remboursement effectué" });
