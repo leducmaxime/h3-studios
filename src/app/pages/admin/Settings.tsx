@@ -16,6 +16,7 @@ import {
   RefreshCw,
   ExternalLink,
   Trash2,
+  BadgePercent,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReservationBannerSettings } from "./ReservationBannerSettings";
 
 interface SettingValue {
   key: string;
@@ -945,6 +947,10 @@ export function AdminSettings() {
             <Clock className="h-4 w-4" />
             Règles de réservation
           </TabsTrigger>
+          <TabsTrigger value="banner" className="gap-2">
+            <BadgePercent className="h-4 w-4" />
+            Bandeau tarifs
+          </TabsTrigger>
           <TabsTrigger value="security" className="gap-2">
             <Shield className="h-4 w-4" />
             Sécurité
@@ -957,6 +963,10 @@ export function AdminSettings() {
 
         <TabsContent value="booking" className="mt-6">
           <BookingRulesTab settings={settings} onUpdate={handleSettingUpdate} />
+        </TabsContent>
+
+        <TabsContent value="banner" className="mt-6">
+          <ReservationBannerSettings settings={settings} onUpdate={handleSettingUpdate} />
         </TabsContent>
 
         <TabsContent value="security" className="mt-6">

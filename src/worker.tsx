@@ -168,6 +168,12 @@ import {
   syncInstagram,
 } from "@/lib/instagram";
 import { isAllowedInstagramMediaUrl } from "@/lib/instagram-media";
+import {
+  RESERVATION_BANNER_DESCRIPTION_MAX_LENGTH,
+  RESERVATION_BANNER_SETTING_KEYS,
+  RESERVATION_BANNER_TITLE_MAX_LENGTH,
+  resolveReservationBanner,
+} from "@/lib/reservation-banner";
 
 const DocumentWithPath = ({
   children,
@@ -280,6 +286,17 @@ function validateAdminSettingValue(key: string, rawValue: string): { ok: true; v
       }
       return { ok: true, value };
     default:
+      if (RESERVATION_BANNER_SETTING_KEYS.includes(key)) {
+        const isTitle = key.endsWith(".title");
+        const maxLength = isTitle
+          ? RESERVATION_BANNER_TITLE_MAX_LENGTH
+          : RESERVATION_BANNER_DESCRIPTION_MAX_LENGTH;
+        const label = isTitle ? "Titre du bandeau" : "Description du bandeau";
+        if (value.length > maxLength) {
+          return { ok: false, error: `${label} : trop long (max ${maxLength} caractères)` };
+        }
+        return { ok: true, value };
+      }
       return { ok: true, value: rawValue };
   }
 }
@@ -1573,6 +1590,24 @@ const app = defineApp([
     } catch (error) {
       console.error("GET /api/peak-hours error:", error);
       return jsonError("Failed to fetch peak hours config", 500);
+    }
+  }),
+
+  route("/api/reservation-banner", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+    try {
+      // Une seule requête D1 évite six lectures séquentielles des settings.
+      const settings = await getAllSettings(env.DB);
+      const values: Record<string, string> = {};
+      for (const setting of settings) {
+        if (RESERVATION_BANNER_SETTING_KEYS.includes(setting.key)) {
+          values[setting.key] = setting.value;
+        }
+      }
+      return jsonSuccess(resolveReservationBanner(values));
+    } catch (error) {
+      console.error("GET /api/reservation-banner error:", error);
+      return jsonError("Failed to fetch reservation banner", 500);
     }
   }),
 

@@ -20,6 +20,7 @@ import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPu
 import { calculatePrice } from "@/lib/pricing";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
+import { DEFAULT_RESERVATION_BANNER, type ReservationBanner } from "@/lib/reservation-banner";
 
 const GROUP_LABELS: Record<GroupType, string> = {
   solo: "Solo/Prof particulier",
@@ -93,6 +94,7 @@ export function Reservation({ step }: ReservationProps) {
 
   const [isVisible, setIsVisible] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [banner, setBanner] = useState<ReservationBanner>(DEFAULT_RESERVATION_BANNER);
 
   useEffect(() => {
     setIsVisible(true);
@@ -110,6 +112,10 @@ export function Reservation({ step }: ReservationProps) {
     fetch("/api/peak-hours")
       .then((r) => r.json() as Promise<{ success: boolean; data: { peakStartHour: number } }>)
       .then((json) => { if (json.success) setPeakStartHour(json.data.peakStartHour); })
+      .catch(() => {});
+    fetch("/api/reservation-banner")
+      .then((r) => r.json() as Promise<{ success: boolean; data: ReservationBanner }>)
+      .then((json) => { if (json.success && json.data) setBanner(json.data); })
       .catch(() => {});
   }, []);
 
@@ -649,15 +655,10 @@ export function Reservation({ step }: ReservationProps) {
                 className="h-5 w-5 shrink-0 sm:h-6 sm:w-6"
                 aria-hidden="true"
               />
-              {state.groupType === "solo"
-                ? "Plus de 70% de réduction"
-                : state.groupType === "duo"
-                  ? "Plus de 45% de réduction"
-                  : "Jusqu'à 20% d'économie"}
+              {banner[state.groupType].title}
             </p>
             <p className="mt-1 text-xs leading-snug opacity-80 lg:whitespace-nowrap lg:text-sm">
-              Les tarifs varient selon l'heure (après 18h) et le jour (weekend
-              et jour férié) : réservez avant 18h en semaine pour en profiter.
+              {banner[state.groupType].description}
             </p>
           </div>
         </div>
