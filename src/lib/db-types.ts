@@ -44,6 +44,24 @@ export interface DashboardStats {
   rangeMaxPrice: number;
 }
 
+export interface TopClientEntry {
+  userId: string;
+  name: string;
+  bandName: string | null;
+  email: string | null;
+  bookings: number;
+  revenue: number;
+  minutes: number;
+}
+
+export interface TopClientsResult {
+  rangeFrom: string;
+  rangeTo: string;
+  byRevenue: TopClientEntry[];
+  byBookings: TopClientEntry[];
+  byHours: TopClientEntry[];
+}
+
 // --- Admin Users ---
 
 export type AdminRole = "super-admin" | "operator";

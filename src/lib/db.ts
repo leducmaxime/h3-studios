@@ -23,6 +23,8 @@ import {
   type DbPaymentWithRefund,
   type CreateBooking,
   type DashboardStats,
+  type TopClientEntry,
+  type TopClientsResult,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
@@ -2058,6 +2060,109 @@ export async function getDashboardStats(
     rangeEquipmentRevenue: rangeEquipmentRow.total,
     rangeMinPrice: rangeMinMaxRow.min_price,
     rangeMaxPrice: rangeMinMaxRow.max_price,
+  };
+}
+
+export async function getTopClients(
+  db: D1Database,
+  opts?: {
+    month?: number;
+    year?: number;
+    week?: number;
+    mode?: "today" | "rolling" | "week" | "month" | "year" | "custom";
+    period?: "week" | "month" | "quarter" | "year";
+    dateFrom?: string;
+    dateTo?: string;
+  },
+): Promise<TopClientsResult> {
+  const today = getParisDateISO();
+
+  const inferredMode: "today" | "rolling" | "week" | "month" | "year" | "custom" = (() => {
+    if (opts?.mode) return opts.mode;
+    if (opts?.year && opts?.week) return "week";
+    if (opts?.year && opts?.month) return "month";
+    if (opts?.year) return "year";
+    return "rolling";
+  })();
+  const inferredPeriod: "week" | "month" | "quarter" | "year" = opts?.period || "month";
+
+  const { from: rangeFrom, to: rangeTo } = resolveStatsRange({
+    mode: opts?.mode as any,
+    period: inferredPeriod,
+    year: opts?.year,
+    month: opts?.month,
+    week: opts?.week,
+    dateFrom: opts?.dateFrom,
+    dateTo: opts?.dateTo,
+    today,
+  });
+
+  const durationExpression = `
+    (
+      CASE WHEN b.end_time = '00:00'
+        THEN 1440
+        ELSE (CAST(substr(b.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.end_time, 4, 2) AS INTEGER))
+      END
+    )
+    -
+    (
+      CASE WHEN b.start_time = '00:00'
+        THEN 1440
+        ELSE (CAST(substr(b.start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.start_time, 4, 2) AS INTEGER))
+      END
+    )`;
+  const topClientsSql = (orderBy: string) => `
+    SELECT
+      b.user_id as user_id,
+      u.name as name,
+      u.band_name as band_name,
+      u.email as email,
+      COUNT(*) as bookings,
+      COALESCE(SUM(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0)), 0) as revenue,
+      COALESCE(SUM(${durationExpression}), 0) as minutes
+    FROM bookings b
+    JOIN users u ON b.user_id = u.id
+    WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled'
+    GROUP BY b.user_id
+    ORDER BY ${orderBy}
+    LIMIT 5`;
+
+  const [revenueResult, bookingsResult, hoursResult] = await db.batch([
+    db.prepare(topClientsSql("revenue DESC, bookings DESC")).bind(rangeFrom, rangeTo),
+    db.prepare(topClientsSql("bookings DESC, revenue DESC")).bind(rangeFrom, rangeTo),
+    db.prepare(topClientsSql("minutes DESC, revenue DESC")).bind(rangeFrom, rangeTo),
+  ]);
+
+  type TopClientRow = {
+    user_id: string;
+    name: string;
+    band_name: string | null;
+    email: string | null;
+    bookings: number | string;
+    revenue: number | string;
+    minutes: number | string;
+  };
+  const toNumber = (value: number | string | null | undefined): number => {
+    const n = typeof value === "string" ? parseInt(value, 10) : value;
+    return typeof n === "number" && Number.isFinite(n) ? n : 0;
+  };
+  const mapRows = (result: D1Result<unknown>): TopClientEntry[] =>
+    (result.results as TopClientRow[]).map((row) => ({
+      userId: row.user_id,
+      name: row.name,
+      bandName: row.band_name,
+      email: row.email,
+      bookings: toNumber(row.bookings),
+      revenue: toNumber(row.revenue),
+      minutes: toNumber(row.minutes),
+    }));
+
+  return {
+    rangeFrom,
+    rangeTo,
+    byRevenue: mapRows(revenueResult),
+    byBookings: mapRows(bookingsResult),
+    byHours: mapRows(hoursResult),
   };
 }
 

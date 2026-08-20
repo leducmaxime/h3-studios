@@ -124,6 +124,7 @@ import {
   addAuditLog,
   getAuditLogs,
   getDashboardStats,
+  getTopClients,
   getMonthlyReportData,
   getSetting,
   claimPaymentConfirmation,
@@ -4184,6 +4185,45 @@ const app = defineApp([
     } catch (error) {
       console.error("GET /api/admin/stats error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch stats", 500);
+    }
+  }),
+
+  route("/api/admin/stats/top-clients", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const url = new URL(request.url);
+      const monthRaw = url.searchParams.get("month");
+      const yearRaw = url.searchParams.get("year");
+      const weekRaw = url.searchParams.get("week");
+      const modeRaw = url.searchParams.get("mode");
+      const periodRaw = url.searchParams.get("period");
+
+      const month = monthRaw ? parseInt(monthRaw, 10) : undefined;
+      const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
+      const week = weekRaw ? parseInt(weekRaw, 10) : undefined;
+
+      const mode = (modeRaw === "today" || modeRaw === "rolling" || modeRaw === "week" || modeRaw === "month" || modeRaw === "year" || modeRaw === "custom")
+        ? modeRaw
+        : undefined;
+      const period = (periodRaw === "week" || periodRaw === "month" || periodRaw === "quarter" || periodRaw === "year")
+        ? periodRaw
+        : undefined;
+
+      const dateFromRaw = url.searchParams.get("dateFrom");
+      const dateToRaw = url.searchParams.get("dateTo");
+      const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+      const dateFrom = dateFromRaw && ISO_DATE_RE.test(dateFromRaw) ? dateFromRaw : undefined;
+      const dateTo = dateToRaw && ISO_DATE_RE.test(dateToRaw) ? dateToRaw : undefined;
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        return jsonError("dateFrom must be <= dateTo", 400);
+      }
+
+      const stats = await getTopClients(env.DB, { month, year, week, mode, period, dateFrom, dateTo });
+      return jsonSuccess(stats);
+    } catch (error) {
+      console.error("GET /api/admin/stats/top-clients error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch top clients", 500);
     }
   }),
 

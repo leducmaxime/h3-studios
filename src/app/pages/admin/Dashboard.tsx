@@ -181,6 +181,22 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
 }
 
+function formatHours(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder > 0 ? `${hours}h${String(remainder).padStart(2, "0")}` : `${hours}h`;
+}
+
+type TopClientEntry = {
+  userId: string;
+  name: string;
+  bandName: string | null;
+  email: string | null;
+  bookings: number;
+  revenue: number;
+  minutes: number;
+};
+
 function formatShortDate(dateStr: string): string {
   if (/^\d{4}-\d{2}$/.test(dateStr)) {
     const [y, m] = dateStr.split("-").map(Number);
@@ -901,6 +917,15 @@ function PaymentPieTooltip({
 export function AdminDashboard() {
   const nowISO = getISOWeekYearAndNumber(new Date());
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [topClients, setTopClients] = useState<{
+    rangeFrom: string;
+    rangeTo: string;
+    byRevenue: TopClientEntry[];
+    byBookings: TopClientEntry[];
+    byHours: TopClientEntry[];
+  } | null>(null);
+  const [topClientsLoading, setTopClientsLoading] = useState(false);
+  const [topMetric, setTopMetric] = useState<"revenue" | "bookings" | "hours">("revenue");
   const [statsMeta, setStatsMeta] = useState<{ minYear: number | null; maxYear: number | null } | null>(null);
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
   const [occupancyData, setOccupancyData] = useState<OccupancyPoint[]>([]);
@@ -1039,6 +1064,63 @@ export function AdminDashboard() {
       if (json.success && json.data) setStats(json.data);
     } catch (err) {
       console.error("Failed to fetch stats:", err);
+    }
+  }, [rangeMode, reportMonth, selectedYear, selectedWeek, customDateFrom, customDateTo]);
+
+  const fetchTopClients = useCallback(async () => {
+    setTopClientsLoading(true);
+    try {
+      const url = new URL("/api/admin/stats/top-clients", window.location.origin);
+
+      if (rangeMode === "today") {
+        url.searchParams.set("mode", "today");
+      } else if (rangeMode === "custom") {
+        if (customDateFrom && customDateTo && customDateFrom <= customDateTo) {
+          url.searchParams.set("dateFrom", customDateFrom);
+          url.searchParams.set("dateTo", customDateTo);
+        }
+      } else if (rangeMode === "month") {
+        url.searchParams.set("mode", "month");
+        const [y, m] = reportMonth.split("-").map(Number);
+        url.searchParams.set("year", String(y));
+        url.searchParams.set("month", String(m));
+      } else if (rangeMode === "week") {
+        url.searchParams.set("mode", "week");
+        url.searchParams.set("year", selectedYear);
+        url.searchParams.set("week", selectedWeek);
+      } else if (rangeMode === "year") {
+        url.searchParams.set("mode", "year");
+        url.searchParams.set("year", selectedYear);
+      }
+
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error(`Top clients request failed: ${res.status}`);
+      const json = await res.json() as {
+        success: boolean;
+        data?: {
+          rangeFrom: string;
+          rangeTo: string;
+          byRevenue: TopClientEntry[];
+          byBookings: TopClientEntry[];
+          byHours: TopClientEntry[];
+        };
+      };
+      if (json.success && json.data) {
+        setTopClients({
+          rangeFrom: json.data.rangeFrom,
+          rangeTo: json.data.rangeTo,
+          byRevenue: json.data.byRevenue ?? [],
+          byBookings: json.data.byBookings ?? [],
+          byHours: json.data.byHours ?? [],
+        });
+      } else {
+        setTopClients(null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch top clients:", err);
+      setTopClients(null);
+    } finally {
+      setTopClientsLoading(false);
     }
   }, [rangeMode, reportMonth, selectedYear, selectedWeek, customDateFrom, customDateTo]);
 
@@ -1208,8 +1290,8 @@ export function AdminDashboard() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchStats(), fetchCharts()]).finally(() => setLoading(false));
-  }, [fetchStats, fetchCharts]);
+    Promise.all([fetchStats(), fetchCharts(), fetchTopClients()]).finally(() => setLoading(false));
+  }, [fetchStats, fetchCharts, fetchTopClients]);
 
   const handleGenerateMonthlyReport = async () => {
     const [year, month] = reportMonth.split("-").map(Number);
@@ -1924,6 +2006,73 @@ export function AdminDashboard() {
                   })()}
               </ChartCard>
             </div>
+          </div>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-medium text-zinc-400">Top 5 des meilleurs clients</h3>
+                {stats && (
+                  <p className="mt-0.5 text-xs text-zinc-500">Du {formatDate(stats.rangeFrom)} au {formatDate(stats.rangeTo)}</p>
+                )}
+              </div>
+              <div className="inline-flex shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+                {([
+                  ["revenue", "CA"],
+                  ["bookings", "Réservations"],
+                  ["hours", "Heures"],
+                ] as const).map(([metric, label]) => (
+                  <button
+                    key={metric}
+                    type="button"
+                    onClick={() => setTopMetric(metric)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${topMetric === metric ? "bg-primary/15 text-primary" : "text-zinc-400 hover:text-zinc-200"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {topClientsLoading && !topClients ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }, (_, i) => <div key={i} className="h-[52px] animate-pulse rounded-lg bg-zinc-800/40" />)}
+              </div>
+            ) : (() => {
+              const entries = topClients?.[
+                topMetric === "revenue" ? "byRevenue" : topMetric === "bookings" ? "byBookings" : "byHours"
+              ] ?? [];
+              if (entries.length === 0) {
+                return <div className="rounded-lg border border-dashed border-zinc-800 py-8 text-center text-sm text-zinc-500">Aucune réservation sur cette période.</div>;
+              }
+              return (
+                <div className="space-y-2">
+                  {entries.map((entry, i) => {
+                    const activeMetric = topMetric === "revenue"
+                      ? formatPrice(entry.revenue)
+                      : topMetric === "bookings"
+                        ? `${entry.bookings} rés.`
+                        : formatHours(entry.minutes);
+                    const secondaryMetrics = topMetric === "revenue"
+                      ? `${entry.bookings} rés. · ${formatHours(entry.minutes)}`
+                      : topMetric === "bookings"
+                        ? `${formatPrice(entry.revenue)} · ${formatHours(entry.minutes)}`
+                        : `${formatPrice(entry.revenue)} · ${entry.bookings} rés.`;
+                    return (
+                      <div key={entry.userId} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${i === 0 ? "border-primary/30 bg-primary/5" : "border-zinc-800 bg-zinc-900/50"}`}>
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === 0 ? "bg-primary/20 text-primary" : "bg-zinc-800 text-zinc-400"}`}>{i + 1}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-zinc-100">{entry.name?.trim() || "Client sans nom"}</p>
+                          {entry.bandName && <p className="truncate text-xs text-zinc-500">{entry.bandName}</p>}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-base font-bold tabular-nums text-zinc-50">{activeMetric}</p>
+                          <p className="mt-0.5 text-[11px] tabular-nums text-zinc-500">{secondaryMetrics}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
       </div>
     </div>
