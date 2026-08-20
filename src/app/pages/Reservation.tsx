@@ -641,7 +641,7 @@ export function Reservation({ step }: ReservationProps) {
         </div>
       </div>
 
-      {state.step === "creneau" && state.groupType === "group" && !state.studioId && (
+      {state.step === "creneau" && !!state.groupType && !state.studioId && (
         <div className="-mx-2 mt-4 self-stretch border-y-2 border-primary/70 bg-primary text-primary-foreground shadow-lg shadow-primary/20 lg:mx-0 lg:rounded-xl lg:border-2">
           <div className="flex flex-col items-center px-4 py-3 text-center sm:mx-auto sm:max-w-[640px] lg:max-w-none lg:px-8">
             <p className="flex items-center gap-2 text-sm font-bold sm:text-base">
@@ -649,7 +649,11 @@ export function Reservation({ step }: ReservationProps) {
                 className="h-5 w-5 shrink-0 sm:h-6 sm:w-6"
                 aria-hidden="true"
               />
-              Jusqu'à 20% d'économie
+              {state.groupType === "solo"
+                ? "Plus de 70% de réduction"
+                : state.groupType === "duo"
+                  ? "Plus de 45% de réduction"
+                  : "Jusqu'à 20% d'économie"}
             </p>
             <p className="mt-1 max-w-prose text-xs leading-snug opacity-80 sm:text-sm">
               Les tarifs varient selon l'heure (après 18h) et le jour (weekend
