@@ -44,6 +44,7 @@ import { SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayStatus } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, studioLabel, studioLabelShort } from "@/lib/labels";
 import { generateMonthlyReportPDF } from "@/lib/export";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { BookingStatus, DashboardStats } from "@/lib/db-types";
@@ -1197,13 +1198,43 @@ export function AdminDashboard() {
   const handleGenerateMonthlyReport = async () => {
     const [year, month] = reportMonth.split("-").map(Number);
     try {
-      const res = await fetch(`/api/admin/stats/report?month=${month}&year=${year}`);
-      const json = await res.json() as { success: boolean; data?: Parameters<typeof generateMonthlyReportPDF>[0] };
-      if (json.success && json.data) {
-        await generateMonthlyReportPDF(json.data, { month, year });
+      const [reportRes, chartsRes, revenueRes] = await Promise.all([
+        fetch(`/api/admin/stats/report?month=${month}&year=${year}`),
+        fetch(`/api/admin/stats/charts?mode=month&month=${month}&year=${year}`),
+        fetch(`/api/admin/stats/revenue?mode=month&month=${month}&year=${year}`),
+      ]);
+
+      const reportJson = await reportRes.json() as { success: boolean; data?: Parameters<typeof generateMonthlyReportPDF>[0] };
+      const chartsJson = await chartsRes.json() as {
+        success: boolean;
+        data?: { occupancy?: Array<{ day: string; occupancyPct: number }> };
+      };
+      const revenueJson = await revenueRes.json() as {
+        success: boolean;
+        data?: Array<{ date: string; revenue: number }>;
+      };
+
+      if (!reportJson.success || !reportJson.data) {
+        toast.error("Échec de la génération du rapport");
+        return;
       }
+
+      const { renderReportCharts, zeroFillDaily } = await import("@/lib/report-charts");
+      // L'API revenue ne renvoie que les jours avec du CA : on comble le mois
+      // pour que l'axe des abscisses reste linéaire (et non NaN sur 1 seul jour).
+      const monthStr = String(month).padStart(2, "0");
+      const lastDay = String(new Date(year, month, 0).getDate()).padStart(2, "0");
+      const chartPngs = renderReportCharts({
+        revenue: zeroFillDaily(revenueJson.data ?? [], `${year}-${monthStr}-01`, `${year}-${monthStr}-${lastDay}`),
+        occupancy: chartsJson.data?.occupancy ?? [],
+        studios: reportJson.data.studioStats,
+        paymentMethods: reportJson.data.paymentMethods,
+      });
+
+      await generateMonthlyReportPDF(reportJson.data, { month, year }, chartPngs);
     } catch (err) {
       console.error("Failed to generate report:", err);
+      toast.error("Échec de la génération du rapport");
     }
   };
 

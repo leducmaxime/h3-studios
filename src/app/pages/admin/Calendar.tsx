@@ -18,6 +18,7 @@ import {
   Banknote,
   Wallet,
   Loader2,
+  Download,
 } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -258,6 +259,7 @@ export function AdminCalendar() {
   const [bookings, setBookings] = useState<CalendarBooking[]>([]);
   const [blockedSlots, setBlockedSlots] = useState<CalendarBlockedSlot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -459,6 +461,29 @@ export function AdminCalendar() {
   useEffect(() => {
     loadBookings();
   }, [loadBookings]);
+
+  // ─── Export planning as image ────────────────────────────────────────────
+
+  const handleExportImage = async () => {
+    if (loading || exporting) return;
+    setExporting(true);
+    try {
+      const { exportCalendarAsPng } = await import("@/lib/calendar-export");
+      const filename = await exportCalendarAsPng({
+        view,
+        currentDate,
+        weekDates,
+        bookings,
+        blockedSlots,
+      });
+      toast.success(`Planning exporté (${filename})`);
+    } catch (err) {
+      console.error("Calendar export failed:", err);
+      toast.error(err instanceof Error ? err.message : "Échec de l'export du planning");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // ─── Navigation ─────────────────────────────────────────────────────────
 
@@ -1602,21 +1627,38 @@ export function AdminCalendar() {
 
         <p className="min-w-0 flex-1 truncate text-center text-sm text-zinc-400 lg:hidden">{subtitle}</p>
 
-        <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
-          <TabsList>
-            {isMobile ? (
-              <>
-                <TabsTrigger value="day">Jour</TabsTrigger>
-                <TabsTrigger value="month">Mois</TabsTrigger>
-              </>
+        <div className="flex items-center gap-1 lg:gap-2">
+          <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
+            <TabsList>
+              {isMobile ? (
+                <>
+                  <TabsTrigger value="day">Jour</TabsTrigger>
+                  <TabsTrigger value="month">Mois</TabsTrigger>
+                </>
+              ) : (
+                <>
+                  <TabsTrigger value="week">Semaine</TabsTrigger>
+                  <TabsTrigger value="month">Mois</TabsTrigger>
+                </>
+              )}
+            </TabsList>
+          </Tabs>
+          <button
+            type="button"
+            onClick={handleExportImage}
+            disabled={loading || exporting}
+            aria-label="Exporter le planning en image"
+            title="Exporter le planning en image"
+            className="flex h-10 w-10 items-center justify-center gap-2 rounded-lg border border-zinc-700 text-sm transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 lg:w-auto lg:px-3"
+          >
+            {exporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <>
-                <TabsTrigger value="week">Semaine</TabsTrigger>
-                <TabsTrigger value="month">Mois</TabsTrigger>
-              </>
+              <Download className="h-4 w-4" />
             )}
-          </TabsList>
-        </Tabs>
+            <span className="hidden lg:inline">Exporter</span>
+          </button>
+        </div>
       </div>
 
       {/* Calendar content */}
