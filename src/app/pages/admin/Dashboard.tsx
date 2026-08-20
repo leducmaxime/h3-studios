@@ -1158,6 +1158,13 @@ export function AdminDashboard() {
     return { kind: "range" as const, startDate, endDate };
   }, [activityCalendarView, activityCalendarMonth, activityRange.from, activityRange.to]);
 
+  const totalOccupancy = useMemo(() => {
+    const totalBookedSlots = occupancyData.reduce((sum, p) => sum + p.bookedSlots, 0);
+    const totalOpenSlots = occupancyData.reduce((sum, p) => sum + p.openSlots, 0);
+    const totalPct = totalOpenSlots > 0 ? Math.round((totalBookedSlots / totalOpenSlots) * 1000) / 10 : 0;
+    return { totalBookedSlots, totalOpenSlots, totalPct };
+  }, [occupancyData]);
+
   useEffect(() => {
     setActivityCalendarLoading(true);
     const url = (() => {
@@ -1709,6 +1716,17 @@ export function AdminDashboard() {
                     />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+              <div className="mt-3 flex flex-col gap-1 border-t border-zinc-800 pt-3 sm:flex-row sm:items-baseline sm:justify-between">
+                <p className="text-xs text-zinc-400">Occupation totale sur la période</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold text-primary">
+                    {totalOccupancy.totalPct % 1 === 0 ? totalOccupancy.totalPct.toFixed(0) : totalOccupancy.totalPct.toFixed(1)}%
+                  </span>
+                  <span className="text-xs text-zinc-500">
+                    Réservé : {formatSlotsToDuration(totalOccupancy.totalBookedSlots)} / {formatSlotsToDuration(totalOccupancy.totalOpenSlots)}
+                  </span>
+                </div>
               </div>
             </ChartCard>
 
