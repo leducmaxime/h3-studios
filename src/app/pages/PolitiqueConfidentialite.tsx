@@ -1,3 +1,5 @@
+import { COMPANY, LEGAL_UPDATED_AT } from "@/lib/company";
+
 export function PolitiqueConfidentialite() {
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
@@ -11,8 +13,9 @@ export function PolitiqueConfidentialite() {
           <section>
             <h2 className="mb-3 text-xl font-semibold text-primary">Qui sommes-nous ?</h2>
             <p className="text-sm leading-relaxed">
-              Le site <strong className="text-white">h3-studios.fr</strong> est géré par Marcel Hamon,
-              auto-entrepreneur. Nous nous engageons à protéger la vie privée de nos utilisateurs
+              Le site <strong className="text-white">{COMPANY.siteHost}</strong> est géré par{" "}
+              <strong className="text-white">{COMPANY.legalName}</strong>, {COMPANY.legalForm} ({COMPANY.legalFormLong}),
+              responsable du traitement. Nous nous engageons à protéger la vie privée de nos utilisateurs
               et à traiter leurs données personnelles avec le plus grand soin.
             </p>
           </section>
@@ -68,9 +71,18 @@ export function PolitiqueConfidentialite() {
             </ul>
             <p className="mt-3 text-sm leading-relaxed">
               Pour exercer ces droits, contactez-nous à{' '}
-              <a href="mailto:contact@h3-studios.fr" className="text-primary hover:underline">
-                contact@h3-studios.fr
+              <a href={`mailto:${COMPANY.email}`} className="text-primary hover:underline">
+                {COMPANY.email}
               </a>
+              .
+            </p>
+            <p className="mt-3 text-sm leading-relaxed">
+              Vous pouvez également introduire une réclamation auprès de la Commission nationale
+              de l'informatique et des libertés (CNIL) :{" "}
+              <a href="https://www.cnil.fr" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                www.cnil.fr
+              </a>
+              .
             </p>
           </section>
 
@@ -82,6 +94,10 @@ export function PolitiqueConfidentialite() {
               Les communications sont sécurisées via HTTPS et les mots de passe sont hashés avec PBKDF2.
             </p>
           </section>
+
+          <p className="text-xs text-white/40">
+            Dernière mise à jour : {LEGAL_UPDATED_AT}
+          </p>
         </div>
       </div>
     </div>

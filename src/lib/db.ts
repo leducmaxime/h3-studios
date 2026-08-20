@@ -36,7 +36,37 @@ function normEnd(time: string): string {
 }
 
 /** Clause SQL pour comparer end_time en traitant "00:00" comme "24:00" */
-const END_CMP = "CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END";
+function endCmp(alias: string): string {
+  return `CASE WHEN ${alias}.end_time = '00:00' THEN '24:00' ELSE ${alias}.end_time END`;
+}
+
+/**
+ * Prédicat SQL « À venir » / « Passées » basé sur l'instant de fin (Europe/Paris).
+ * Une réservation du jour dont l'heure de fin est dépassée est « passée »,
+ * jamais « à venir ». end_time = "00:00" compte comme une fin en fin de journée.
+ */
+export function dateDirectionCondition(
+  direction: "upcoming" | "past",
+  now: { dateISO: string; hours: number; minutes: number },
+): { sql: string; params: unknown[] } {
+  const nowTimeStr = `${String(now.hours).padStart(2, "0")}:${String(now.minutes).padStart(2, "0")}`;
+  if (direction === "upcoming") {
+    return {
+      sql: `(b.date > ? OR (b.date = ? AND ${endCmp("b")} > ?))`,
+      params: [now.dateISO, now.dateISO, nowTimeStr],
+    };
+  }
+  return {
+    sql: `(b.date < ? OR (b.date = ? AND ${endCmp("b")} <= ?))`,
+    params: [now.dateISO, now.dateISO, nowTimeStr],
+  };
+}
+
+const PAID_BY_BOOKING_CTE = `paid_by_booking AS (
+  SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
+  FROM payments
+  GROUP BY booking_id
+)`;
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -88,18 +118,20 @@ export async function getBookings(
   }
 
   if (filters.dateDirection && filters.dateDirection !== "all") {
-    const today = getParisDateISO();
+    // Une seule lecture d'horloge : éviter de chevaucher minuit entre les branches.
+    const parisNow = getParisNow();
     if (filters.dateDirection === "upcoming") {
-      conditions.push("b.date >= ?");
-      params.push(today);
+      const { sql, params: dirParams } = dateDirectionCondition("upcoming", parisNow);
+      conditions.push(sql);
+      params.push(...dirParams);
       conditions.push("b.status != 'cancelled'");
     } else if (filters.dateDirection === "past") {
-      conditions.push("b.date < ?");
-      params.push(today);
+      const { sql, params: dirParams } = dateDirectionCondition("past", parisNow);
+      conditions.push(sql);
+      params.push(...dirParams);
     } else if (filters.dateDirection === "now") {
       conditions.push("b.date = ?");
-      params.push(today);
-      const parisNow = getParisNow();
+      params.push(parisNow.dateISO);
       const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
       // Disparaît 15 min après la fin : end_time + 15min > now → end_time > now - 15min
       const nowMinus15 = parisNow.hours * 60 + parisNow.minutes - 15;
@@ -322,6 +354,31 @@ export async function checkBlockedSlotConflict(
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
+export const USER_BOOKING_STATS_SQL = `
+  SELECT
+    user_id,
+    SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) as total_bookings,
+    COALESCE(SUM(CASE WHEN status != 'cancelled' THEN MAX(total_price - COALESCE(promo_discount, 0), 0) ELSE 0 END), 0) as total_spent,
+    SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as total_cancellations,
+    COALESCE(SUM(CASE WHEN status != 'cancelled' THEN COALESCE(promo_discount, 0) ELSE 0 END), 0) as total_discounts,
+    COALESCE(SUM(CASE WHEN status != 'cancelled' THEN COALESCE(equipment_price, 0) ELSE 0 END), 0) as total_equipment,
+    COALESCE(SUM(CASE WHEN status != 'cancelled' THEN
+      (
+        CASE WHEN end_time = '00:00' THEN 1440
+        ELSE (CAST(substr(end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(end_time, 4, 2) AS INTEGER))
+        END
+      ) - (
+        CASE WHEN start_time = '00:00' THEN 1440
+        ELSE (CAST(substr(start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(start_time, 4, 2) AS INTEGER))
+        END
+      )
+    ELSE 0 END), 0) as total_minutes,
+    SUM(CASE WHEN status != 'cancelled' AND studio_id = 'la-scene' THEN 1 ELSE 0 END) as total_bookings_la_scene,
+    SUM(CASE WHEN status != 'cancelled' AND studio_id = 'le-podium' THEN 1 ELSE 0 END) as total_bookings_le_podium
+  FROM bookings
+  GROUP BY user_id
+`;
+
 export function buildUserFilterConditions(filters: UserFilters = {}): {
   conditions: string[];
   params: unknown[];
@@ -384,15 +441,7 @@ export async function getUsers(
     `
       SELECT COUNT(*) as total
       FROM users u
-      LEFT JOIN (
-        SELECT
-          user_id,
-          COUNT(*) as total_bookings,
-          COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as total_spent
-        FROM bookings
-        WHERE status != 'cancelled'
-        GROUP BY user_id
-      ) s ON u.id = s.user_id
+      LEFT JOIN (${USER_BOOKING_STATS_SQL}) s ON u.id = s.user_id
       ${where}
     `,
   ).bind(...params).first<{ total: number }>();
@@ -425,18 +474,16 @@ export async function getUsers(
         u.is_blocked,
         COALESCE(s.total_bookings, 0) as total_bookings,
         COALESCE(s.total_spent, 0) as total_spent,
+        COALESCE(s.total_cancellations, 0) as total_cancellations,
+        COALESCE(s.total_discounts, 0) as total_discounts,
+        COALESCE(s.total_equipment, 0) as total_equipment,
+        COALESCE(s.total_minutes, 0) as total_minutes,
+        COALESCE(s.total_bookings_la_scene, 0) as total_bookings_la_scene,
+        COALESCE(s.total_bookings_le_podium, 0) as total_bookings_le_podium,
         u.created_at,
         u.updated_at
       FROM users u
-      LEFT JOIN (
-        SELECT
-          user_id,
-          COUNT(*) as total_bookings,
-          COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as total_spent
-        FROM bookings
-        WHERE status != 'cancelled'
-        GROUP BY user_id
-      ) s ON u.id = s.user_id
+      LEFT JOIN (${USER_BOOKING_STATS_SQL}) s ON u.id = s.user_id
       ${where}
       ORDER BY ${sortExpr} ${safeSortOrder}, u.created_at DESC
       LIMIT ? OFFSET ?
@@ -1692,6 +1739,11 @@ export async function getDashboardStats(
   },
 ): Promise<DashboardStats> {
   const today = getParisDateISO();
+  const parisNow = getParisNow();
+  const nowHHMM = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
+  const sessionEndedSql = `(b.date < ? OR (b.date = ? AND CASE WHEN b.end_time = '00:00' THEN '24:00' ELSE b.end_time END <= ?))`;
+  const sessionNotEndedSql = `(b.date > ? OR (b.date = ? AND CASE WHEN b.end_time = '00:00' THEN '24:00' ELSE b.end_time END > ?))`;
+  const remainingExpr = `(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) - COALESCE(paid.paid_amount, 0))`;
 
   const inferredMode: "today" | "rolling" | "week" | "month" | "year" | "custom" = (() => {
     if (opts?.mode) return opts.mode;
@@ -1759,7 +1811,7 @@ export async function getDashboardStats(
     }
   }
 
-  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult, rangeEquipmentResult, rangeMinMaxResult, rangeDiscountsResult] = await db.batch([
+  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult, rangeEquipmentResult, rangeMinMaxResult, rangeDiscountsResult, rangeCancellationsResult, rangeOverdueAggregateResult, rangeOverdueListResult] = await db.batch([
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as revenue FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
@@ -1770,11 +1822,7 @@ export async function getDashboardStats(
       "SELECT COUNT(*) as count, COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as revenue FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(monthFrom, today),
     db.prepare(
-      `WITH paid_by_booking AS (
-        SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-        FROM payments
-        GROUP BY booking_id
-      )
+      `WITH ${PAID_BY_BOOKING_CTE}
       SELECT
         COUNT(*) as count,
         COALESCE(SUM(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)), 0) as total
@@ -1818,11 +1866,7 @@ export async function getDashboardStats(
     ).bind(rangeFrom, rangeTo),
 
     db.prepare(
-      `WITH paid_by_booking AS (
-        SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-        FROM payments
-        GROUP BY booking_id
-      )
+      `WITH ${PAID_BY_BOOKING_CTE}
       SELECT
         COUNT(*) as count,
         COALESCE(SUM(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)), 0) as total
@@ -1831,8 +1875,9 @@ export async function getDashboardStats(
       WHERE b.status != 'cancelled'
         AND b.payment_status = 'pay-on-site'
         AND b.date >= ? AND b.date <= ?
+        AND ${sessionNotEndedSql}
         AND (b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0)) > 0`,
-    ).bind(rangeFrom, rangeTo),
+    ).bind(rangeFrom, rangeTo, today, today, nowHHMM),
 
     db.prepare(
       "SELECT COALESCE(SUM(equipment_price), 0) as total FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
@@ -1842,8 +1887,40 @@ export async function getDashboardStats(
       "SELECT COALESCE(MIN(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as min_price, COALESCE(MAX(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as max_price FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
     ).bind(rangeFrom, rangeTo),
     db.prepare(
-      "SELECT COALESCE(SUM(MIN(COALESCE(promo_discount, 0), MAX(total_price, 0))), 0) as discounts FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'",
+      `SELECT
+        COALESCE(SUM(CASE WHEN promo_code IS NOT NULL AND TRIM(promo_code) != '' THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as promo_discounts,
+        COALESCE(SUM(CASE WHEN promo_code IS NULL OR TRIM(promo_code) = '' THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as manual_discounts
+      FROM bookings
+      WHERE date >= ? AND date <= ? AND status != 'cancelled'`,
     ).bind(rangeFrom, rangeTo),
+    db.prepare(
+      "SELECT COUNT(*) as count FROM bookings WHERE date >= ? AND date <= ? AND status = 'cancelled'",
+    ).bind(rangeFrom, rangeTo),
+    db.prepare(
+      `WITH ${PAID_BY_BOOKING_CTE}
+      SELECT COUNT(*) as count, COALESCE(SUM(${remainingExpr}), 0) as total
+      FROM bookings b
+      LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+      WHERE (b.status != 'cancelled' OR b.keep_balance_due = 1)
+        AND b.date >= ? AND b.date <= ?
+        AND ${sessionEndedSql}
+        AND ${remainingExpr} > 0.005`,
+    ).bind(rangeFrom, rangeTo, today, today, nowHHMM),
+    db.prepare(
+      `WITH ${PAID_BY_BOOKING_CTE}
+      SELECT b.id, b.booking_ref, b.date, b.start_time, b.end_time, b.studio_id, b.status,
+        u.name as user_name, COALESCE(b.band_name, u.band_name) as band_name,
+        ${remainingExpr} as remaining
+      FROM bookings b
+      LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+      LEFT JOIN users u ON u.id = b.user_id
+      WHERE (b.status != 'cancelled' OR b.keep_balance_due = 1)
+        AND b.date >= ? AND b.date <= ?
+        AND ${sessionEndedSql}
+        AND ${remainingExpr} > 0.005
+      ORDER BY b.date ASC, b.start_time ASC
+      LIMIT 50`,
+    ).bind(rangeFrom, rangeTo, today, today, nowHHMM),
   ]);
 
   type CountRevenue = { count: number; revenue: number };
@@ -1861,7 +1938,13 @@ export async function getDashboardStats(
   const rangePendingRow = (rangePendingResult.results as unknown as CountTotal[])[0] ?? { count: 0, total: 0 };
   const rangeEquipmentRow = (rangeEquipmentResult.results as unknown as Array<{ total: number }>)[0] ?? { total: 0 };
   const rangeMinMaxRow = (rangeMinMaxResult.results as unknown as Array<{ min_price: number; max_price: number }>)[0] ?? { min_price: 0, max_price: 0 };
-  const rangeDiscountsRow = (rangeDiscountsResult.results as unknown as Array<{ discounts: number }>)[0] ?? { discounts: 0 };
+  const rangeDiscountsRow = (rangeDiscountsResult.results as unknown as Array<{ promo_discounts: number; manual_discounts: number }>)[0] ?? { promo_discounts: 0, manual_discounts: 0 };
+  const rangeCancellationsRow = (rangeCancellationsResult.results as unknown as Array<{ count: number }>)[0] ?? { count: 0 };
+  const rangeOverdueRow = (rangeOverdueAggregateResult.results as unknown as Array<{ count: number; total: number }>)[0] ?? { count: 0, total: 0 };
+  const rangeOverdueBookings = (rangeOverdueListResult.results as unknown as Array<Record<string, unknown>>).map((row) => ({
+    ...row,
+    remaining: Number(row.remaining) || 0,
+  })) as DashboardStats["rangeOverdueBookings"];
   const todaySlots = occupancyResult.results as unknown as TimeRange[];
 
   const rangeBookedMinutes = (() => {
@@ -1903,7 +1986,13 @@ export async function getDashboardStats(
     rangeDays,
     rangeBookings: rangeRow.count,
     rangeRevenue: rangeRow.revenue,
-    rangeDiscounts: rangeDiscountsRow.discounts,
+    rangePromoDiscounts: rangeDiscountsRow.promo_discounts,
+    rangeManualDiscounts: rangeDiscountsRow.manual_discounts,
+    rangeDiscounts: rangeDiscountsRow.promo_discounts + rangeDiscountsRow.manual_discounts,
+    rangeCancellations: rangeCancellationsRow.count,
+    rangeOverduePayments: rangeOverdueRow.count,
+    rangeOverdueAmount: rangeOverdueRow.total,
+    rangeOverdueBookings,
     rangeBookedMinutes,
     rangePendingPayments: rangePendingRow.count,
     rangePendingAmount: rangePendingRow.total,
