@@ -570,7 +570,7 @@ export function AdminBookingNew() {
         {/* Studio + Date + Time */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="mb-4 font-semibold">Créneau</h2>
-          <div className="mb-4 max-w-md">
+          <div className="mb-4">
             <GroupTypeToggle
               value={groupType}
               onChange={setGroupType}
