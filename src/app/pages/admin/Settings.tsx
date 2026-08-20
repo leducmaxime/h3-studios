@@ -9,7 +9,6 @@ import {
   UserX,
   UserCheck,
   Loader2,
-  Phone,
   Banknote,
   CalendarClock,
   CalendarDays,
@@ -115,14 +114,12 @@ function BookingRulesTab({ settings, onUpdate }: {
 }) {
   const [minAdvanceHours, setMinAdvanceHours] = useState(settings["booking.min_advance_hours"] || "2");
   const [maxAdvanceDays, setMaxAdvanceDays] = useState(settings["booking.max_advance_days"] || "30");
-  const [requirePhone, setRequirePhone] = useState(settings["booking.require_phone"] !== "false");
   const [allowCash, setAllowCash] = useState(settings["booking.allow_cash"] !== "false");
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     setMinAdvanceHours(settings["booking.min_advance_hours"] || "2");
     setMaxAdvanceDays(settings["booking.max_advance_days"] || "30");
-    setRequirePhone(settings["booking.require_phone"] !== "false");
     setAllowCash(settings["booking.allow_cash"] !== "false");
   }, [settings]);
 
@@ -210,32 +207,11 @@ function BookingRulesTab({ settings, onUpdate }: {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ToggleCard
-          icon={<Phone className="h-4 w-4" />}
-          label="Téléphone obligatoire"
-          description="Exiger le numéro de téléphone lors de la réservation"
-          checked={requirePhone}
-          saving={saving === "booking.require_phone"}
-          onToggle={async () => {
-            const newVal = !requirePhone;
-            setRequirePhone(newVal);
-            setSaving("booking.require_phone");
-            const ok = await saveSetting("booking.require_phone", String(newVal));
-            if (ok) {
-              onUpdate("booking.require_phone", String(newVal));
-              toast.success("Paramètre enregistré");
-            } else {
-              setRequirePhone(!newVal);
-            }
-            setSaving(null);
-          }}
-        />
-
+      <div>
         <ToggleCard
           icon={<Banknote className="h-4 w-4" />}
-          label="Paiement espèces"
-          description="Autoriser le paiement en espèces sur place"
+          label="Paiement sur place"
+          description="Autoriser le paiement sur place (espèces ou CB)"
           checked={allowCash}
           saving={saving === "booking.allow_cash"}
           onToggle={async () => {
