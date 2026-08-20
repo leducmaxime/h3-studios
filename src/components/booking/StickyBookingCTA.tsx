@@ -10,6 +10,7 @@ interface StickyBookingCTAProps {
   buttonText?: string;
   /** When true, prices are replaced by skeleton bars (tariffs still loading) */
   priceLoading?: boolean;
+  showPrice?: boolean;
 }
 
 export function StickyBookingCTA({
@@ -19,6 +20,7 @@ export function StickyBookingCTA({
   disabled = false,
   buttonText = "Confirmer",
   priceLoading = false,
+  showPrice = true,
 }: StickyBookingCTAProps) {
   const total = studioPrice + equipmentPrice;
 
@@ -67,7 +69,7 @@ export function StickyBookingCTA({
               </span>
             </span>
           ) : (
-            `${buttonText} – ${formatPrice(total)}`
+            showPrice ? `${buttonText} – ${formatPrice(total)}` : buttonText
           )}
         </button>
       </div>

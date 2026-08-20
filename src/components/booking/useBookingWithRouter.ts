@@ -152,11 +152,12 @@ export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile, 
 
 /**
  * Slug-based step flow:
- *   groupe → creneau → panier → coordonnees → paiement → termine
+ *   groupe → creneau → options → panier → coordonnees → paiement → termine
  *
  * Guards:
- *   - Cart lock:   cart.length > 0 && !isAddingNew → groupe/creneau → panier
+ *   - Cart lock:   cart.length > 0 && !isAddingNew → groupe/creneau/options → panier
  *   - creneau:     requires groupType, else → groupe
+ *   - options:     requires groupType and a complete slot selection
  *   - panier/coordonnees/paiement: require cart.length > 0, else → groupe
  *   - termine:     terminal (direct nav → groupe)
  */
@@ -194,21 +195,26 @@ function navigateToUrl(step: BookingStep, replace = false) {
 // ---------------------------------------------------------------------------
 // Guard logic — pure function, no side-effects
 // ---------------------------------------------------------------------------
-function applyStepGuards(
-  cart: CompletedBooking[],
-  isAddingNew: boolean,
-  groupType: GroupType | null,
-  targetStep: BookingStep,
-): { step: BookingStep; isRedirect: boolean } {
-  // Cart lock: groupe or creneau → panier
-  if (cart.length > 0 && !isAddingNew && (targetStep === "groupe" || targetStep === "creneau")) {
+export function hasSlotSelection(s: { selectedDate: Date | null; startTime: string | null; endTime: string | null; studioId: StudioId | null }): boolean {
+  return !!(s.selectedDate && s.startTime && s.endTime && s.studioId);
+}
+
+export function applyStepGuards(args: {
+  cart: CompletedBooking[];
+  isAddingNew: boolean;
+  groupType: GroupType | null;
+  hasSlotSelection: boolean;
+  targetStep: BookingStep;
+}): { step: BookingStep; isRedirect: boolean } {
+  const { cart, isAddingNew, groupType, hasSlotSelection: selected, targetStep } = args;
+  if (cart.length > 0 && !isAddingNew && (targetStep === "groupe" || targetStep === "creneau" || targetStep === "options")) {
     return { step: "panier", isRedirect: true };
   }
-  // Creneau: needs groupType
   if (targetStep === "creneau" && !groupType) {
     return { step: "groupe", isRedirect: true };
   }
-  // Panier, coordonnees, paiement: need cart items
+  if (targetStep === "options" && !groupType) return { step: "groupe", isRedirect: true };
+  if (targetStep === "options" && !selected) return { step: "creneau", isRedirect: true };
   if ((targetStep === "panier" || targetStep === "coordonnees" || targetStep === "paiement") && cart.length === 0) {
     return { step: "groupe", isRedirect: true };
   }
@@ -217,6 +223,27 @@ function applyStepGuards(
     return { step: "groupe", isRedirect: true };
   }
   return { step: targetStep, isRedirect: false };
+}
+
+export function applyGoBack<T extends {
+  step: BookingStep; selectedDate: Date | null; startTime: string | null; endTime: string | null;
+  studioId: StudioId | null; groupType: GroupType | null; equipment: EquipmentSelection[];
+  cart: CompletedBooking[]; isAddingNew: boolean; bookingRef: string | null; paymentMethod: PaymentMethod | null;
+}>(s: T): T {
+  if (s.step === "groupe") {
+    if (s.isAddingNew && s.cart.length > 0) return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null, groupType: null, bookingRef: null, equipment: [], step: "panier", isAddingNew: false };
+    return s;
+  }
+  if (s.step === "options") return { ...s, step: "creneau" };
+  if (s.step === "creneau") {
+    if (s.selectedDate) return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
+    return { ...s, step: "groupe", groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
+  }
+  if (s.step === "coordonnees") return { ...s, step: "panier" };
+  if (s.step === "panier") return s;
+  if (s.step === "paiement") return { ...s, step: "coordonnees", paymentMethod: null };
+  if (s.step === "termine") return { ...s, step: "paiement" };
+  return s;
 }
 
 // ---------------------------------------------------------------------------
@@ -371,7 +398,7 @@ export function useBookingWithRouter(urlStep?: string) {
     ...initialState,
     // Guard the URL-derived step even for the very first render (SSR included):
     // a fresh visitor has no cart/groupType, so deep links land on groupe.
-    step: applyStepGuards([], false, null, initialStep).step,
+    step: applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: false, targetStep: initialStep }).step,
   });
   const [isHydrated, setIsHydrated] = useState(false);
   const isInitialMount = useRef(true);
@@ -593,12 +620,7 @@ export function useBookingWithRouter(urlStep?: string) {
       }
 
       // Apply guards
-      const { step: guardedStep, isRedirect } = applyStepGuards(
-        restoredState.cart,
-        restoredState.isAddingNew,
-        restoredState.groupType,
-        restoredState.step,
-      );
+      const { step: guardedStep, isRedirect } = applyStepGuards({ cart: restoredState.cart, isAddingNew: restoredState.isAddingNew, groupType: restoredState.groupType, hasSlotSelection: hasSlotSelection(restoredState), targetStep: restoredState.step });
       restoredState.step = guardedStep;
 
       setState(restoredState);
@@ -611,7 +633,7 @@ export function useBookingWithRouter(urlStep?: string) {
       // panier/coordonnees/paiement/termine redirect to groupe) and replace
       // the URL so it never points at an unreachable step.
       const urlStepSlug = resolveStepFromUrl(urlStep);
-      const { step: guardedStep, isRedirect } = applyStepGuards([], false, null, urlStepSlug);
+      const { step: guardedStep, isRedirect } = applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: false, targetStep: urlStepSlug });
       setState((s) => ({
         ...s,
         step: guardedStep,
@@ -676,12 +698,7 @@ export function useBookingWithRouter(urlStep?: string) {
       return;
     }
 
-    const { step: guardedStep, isRedirect } = applyStepGuards(
-      state.cart,
-      state.isAddingNew,
-      state.groupType,
-      state.step,
-    );
+    const { step: guardedStep, isRedirect } = applyStepGuards({ cart: state.cart, isAddingNew: state.isAddingNew, groupType: state.groupType, hasSlotSelection: hasSlotSelection(state), targetStep: state.step });
 
     if (guardedStep !== state.step) {
       setState((s) => ({ ...s, step: guardedStep }));
@@ -690,7 +707,7 @@ export function useBookingWithRouter(urlStep?: string) {
     }
 
     navigateToUrl(state.step);
-  }, [state.step, isHydrated, state.cart.length, state.isAddingNew, state.groupType]);
+  }, [state.step, isHydrated, state.cart.length, state.isAddingNew, state.groupType, state.selectedDate, state.startTime, state.endTime, state.studioId]);
 
   // Scroll to top on step change
   useEffect(() => {
@@ -718,12 +735,7 @@ export function useBookingWithRouter(urlStep?: string) {
           return { ...initialState };
         }
 
-        const { step: guardedStep, isRedirect } = applyStepGuards(
-          s.cart,
-          s.isAddingNew,
-          s.groupType,
-          urlStep,
-        );
+        const { step: guardedStep, isRedirect } = applyStepGuards({ cart: s.cart, isAddingNew: s.isAddingNew, groupType: s.groupType, hasSlotSelection: hasSlotSelection(s), targetStep: urlStep });
 
         if (isRedirect && guardedStep !== urlStep) {
           window.history.replaceState({}, "", `/reservation/${guardedStep}`);
@@ -747,9 +759,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const navigateToStep = useCallback((targetStep: BookingStep) => {
     setState((s) => {
       // Apply guards
-      const { step: guardedStep } = applyStepGuards(
-        s.cart, s.isAddingNew, s.groupType, targetStep,
-      );
+      const { step: guardedStep } = applyStepGuards({ cart: s.cart, isAddingNew: s.isAddingNew, groupType: s.groupType, hasSlotSelection: hasSlotSelection(s), targetStep });
 
       // Preserve reset behavior for groupe when switching group type —
       // only apply when the guard allowed the navigation (no redirect).
@@ -770,6 +780,7 @@ export function useBookingWithRouter(urlStep?: string) {
       selectedDate: date,
       startTime: null,
       endTime: null,
+      equipment: [],
     }));
   }, []);
 
@@ -778,13 +789,13 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const clearTimeRange = useCallback(() => {
-    setState((s) => ({ ...s, startTime: null, endTime: null, studioId: null }));
+    setState((s) => ({ ...s, startTime: null, endTime: null, studioId: null, equipment: [] }));
   }, []);
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
     setState((s) => {
       if (groupType === "solo" || groupType === "duo" || groupType === "group") {
-        return { ...s, groupType, step: "creneau", selectedDate: null, startTime: null, endTime: null, studioId: null };
+        return { ...s, groupType, step: "creneau", selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
       }
       return { ...s, groupType };
     });
@@ -827,6 +838,10 @@ export function useBookingWithRouter(urlStep?: string) {
   /** From cart page: go to coordonnées */
   const goToCoordonnees = useCallback(() => {
     setState((s) => ({ ...s, step: "coordonnees" }));
+  }, []);
+
+  const goToOptions = useCallback(() => {
+    setState((s) => ({ ...s, step: "options" }));
   }, []);
 
   const isDuplicateBooking = useCallback((
@@ -1185,36 +1200,7 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const goBack = useCallback(() => {
-    setState((s) => {
-      if (s.step === "groupe") {
-        if (s.isAddingNew && s.cart.length > 0) {
-          return {
-            ...s,
-            selectedDate: null,
-            startTime: null,
-            endTime: null,
-            studioId: null,
-            groupType: null,
-            bookingRef: null,
-            equipment: [],
-            step: "panier",
-            isAddingNew: false,
-          };
-        }
-        return s;
-      }
-      if (s.step === "creneau") {
-        if (s.selectedDate) {
-          return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null };
-        }
-        return { ...s, step: "groupe", groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
-      }
-      if (s.step === "coordonnees") return { ...s, step: "panier" };
-      if (s.step === "panier") return s;
-      if (s.step === "paiement") return { ...s, step: "coordonnees", paymentMethod: null };
-      if (s.step === "termine") return { ...s, step: "paiement" };
-      return s;
-    });
+    setState((s) => applyGoBack(s));
   }, []);
 
   // -------------------------------------------------------------------------
@@ -1293,11 +1279,9 @@ export function useBookingWithRouter(urlStep?: string) {
   /** Exposed for ProgressIndicator — checks if a slug step is reachable via user click */
   const canNavigateToStep = useCallback((targetStep: BookingStep): boolean => {
     if (targetStep === "paiement" || targetStep === "termine") return false;
-    const { isRedirect } = applyStepGuards(
-      state.cart, state.isAddingNew, state.groupType, targetStep,
-    );
+    const { isRedirect } = applyStepGuards({ cart: state.cart, isAddingNew: state.isAddingNew, groupType: state.groupType, hasSlotSelection: hasSlotSelection(state), targetStep });
     return !isRedirect;
-  }, [state.cart, state.isAddingNew, state.groupType]);
+  }, [state.cart, state.isAddingNew, state.groupType, state.selectedDate, state.startTime, state.endTime, state.studioId]);
 
   return {
     state,
@@ -1335,6 +1319,7 @@ export function useBookingWithRouter(urlStep?: string) {
     applyPromo,
     removePromo,
     goToCoordonnees,
+    goToOptions,
     confirmBooking,
     clearDuplicateError,
     addAnotherBooking,

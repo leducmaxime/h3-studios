@@ -4,14 +4,14 @@ Multi-step booking flow for studio reservations (refactored Jul 2026).
 
 ## OVERVIEW
 
-State machine: group type → date → slots (2 studios stacked, implicit studio) → cart → user info → payment → confirmation.
+State machine: group type → date → slots (2 studios stacked, implicit studio) → options → cart → user info → payment → confirmation.
 
 Slug-based step model with guard-based navigation, per-step URLs, and localStorage persistence (v2 key `h3-studios-booking-state-v2`).
 
 ## STEP FLOW
 
 ```
-groupe → creneau → panier → coordonnees → paiement → termine
+groupe → creneau → options → panier → coordonnees → paiement → termine
 ```
 
 Each slug corresponds to its own URL path (`/reservation/<slug>`). Guards prevent direct access to unreachable steps (e.g., deep-linking to `/reservation/panier` with an empty cart redirects to `groupe`).
@@ -20,8 +20,9 @@ Each slug corresponds to its own URL path (`/reservation/<slug>`). Guards preven
 
 | Target Step | Guard Condition | Redirect To |
 |---|---|---|
-| `groupe` / `creneau` | Cart lock: `cart.length > 0 && !isAddingNew` | `panier` |
+| `groupe` / `creneau` / `options` | Cart lock: `cart.length > 0 && !isAddingNew` | `panier` |
 | `creneau` | No `groupType` selected | `groupe` |
+| `options` | No group, then incomplete date/time/studio selection | `groupe`, then `creneau` |
 | `panier` / `coordonnees` / `paiement` | Empty cart | `groupe` |
 | `termine` | Always (terminal, direct → groupe) | `groupe` |
 
@@ -38,7 +39,8 @@ booking/
 ├── BookingForm.tsx            # Step coordonnees: User info form + inline login + account creation
 │   ├── LoginCard              # Subcomponent: inline login/logout card
 │   └── AccountCreationCard    # Subcomponent: password creation with validation
-├── EquipmentSelector.tsx      # Optional equipment add-ons (shown inline in creneau recap)
+├── EquipmentSelector.tsx      # Optional equipment add-ons
+├── BookingOptionsStep.tsx     # Included equipment, add-ons, recap and add-to-cart CTA
 ├── PromoCodeInput.tsx         # Promo code entry in cart
 ├── FinalCheckout.tsx          # Step termine: Confirmation + calendar downloads
 ├── PaymentChoice.tsx          # Step paiement: Card vs Cash choice
@@ -57,7 +59,7 @@ booking/
 
 ```typescript
 interface ExtendedBookingState {
-  step: BookingStep;                      // "groupe" | "creneau" | "panier" | "coordonnees" | "paiement" | "termine"
+  step: BookingStep;                      // "groupe" | "creneau" | "options" | "panier" | "coordonnees" | "paiement" | "termine"
   selectedDate: Date | null;
   startTime / endTime: string | null;
   studioId: "la-scene" | "le-podium" | null;  // implicit from selected slot
@@ -72,6 +74,7 @@ interface ExtendedBookingState {
 
 - **localStorage key**: `h3-studios-booking-state-v2` (v2 = slug-based steps)
 - Old `h3-studios-booking-state` is discarded on hydration (no migration)
+- The v2 state key remains the source of truth; stale `termine` state is cleared on hydration (no migration from v1).
 - `termine` state is cleared on hydration (terminal states are stale)
 - Account credentials (`accountPassword`, `accountPasswordConfirm`) are NEVER persisted
 - User preferences (`userName`, `userEmail`, `userPhone`, `bandName`) persist separately under `h3-studios-user-prefs`
@@ -135,6 +138,8 @@ interface ExtendedBookingState {
 - paiement/termine are always excluded from clickability (user must proceed through flow)
 - `navigateToStep` applies guards then sets step; groupe-reset (solo→duo→group) only fires when guard allows the navigation
 - URL sync effect enforces guards reactively (except for termine which is terminal)
+- `options` backs to `creneau` while retaining date/time/studio and equipment. The next back clears the range; a creneau back without a date returns to groupe.
+- Equipment is cleared whenever a date or range is cleared (`selectDate`, `clearTimeRange`, group-type advance, or creneau back that clears the date). Options back does not clear it.
 
 ## STALE-FETCH GUARD
 
