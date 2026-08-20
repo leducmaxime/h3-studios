@@ -1432,7 +1432,7 @@ export function AdminCalendar() {
 
               {b.notes && (
                 <div className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-3 text-sm italic text-zinc-400">
-                  <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500 not-italic">Notes</p>
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500 not-italic">Informations supplémentaires</p>
                   {b.notes}
                 </div>
               )}

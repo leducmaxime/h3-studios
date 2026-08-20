@@ -375,7 +375,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
-        toast.success("Notes sauvegardées");
+        toast.success("Informations sauvegardées");
         setEditingNotes(false);
         fetchBooking();
       } else {
@@ -723,10 +723,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 </div>
               )}
 
-              {/* Notes */}
+              {/* Informations supplémentaires */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Notes internes</p>
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Informations supplémentaires</p>
                   {!editingNotes && (
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-400" onClick={() => { setNotesValue(booking?.notes || ""); setEditingNotes(true); }}>
                       <Pencil className="h-3 w-3 mr-1" />Modifier
@@ -738,7 +738,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     <Textarea
                       value={notesValue}
                       onChange={e => setNotesValue(e.target.value)}
-                      placeholder="Notes internes..."
+                      placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
                       className="bg-zinc-800 border-zinc-700 text-sm min-h-[80px]"
                       autoFocus
                     />
@@ -750,7 +750,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-400 whitespace-pre-wrap">{booking?.notes || <span className="italic text-zinc-600">Aucune note</span>}</p>
+                  <p className="text-sm text-zinc-400 whitespace-pre-wrap">{booking?.notes || <span className="italic text-zinc-600">Aucune information</span>}</p>
                 )}
               </div>
             </div>
