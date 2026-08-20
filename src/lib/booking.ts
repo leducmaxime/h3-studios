@@ -809,6 +809,18 @@ export function parseMinAdvanceHours(
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultValue;
 }
 
+export function parseAllowCash(rawValue: string | null | undefined): boolean {
+  return rawValue !== "false";
+}
+
+export function isCashPaymentForbidden(
+  paymentMethod: string,
+  allowCash: boolean,
+  netTotal: number,
+): boolean {
+  return paymentMethod === "cash" && !allowCash && netTotal > 0;
+}
+
 /** Return whether a same-day start time violates the minimum-advance cutoff. */
 export function isMinAdvanceViolation(
   startTime: string,

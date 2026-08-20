@@ -1224,8 +1224,8 @@ export function AdminPricing() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="pricing">
-        <TabsList>
+      <Tabs defaultValue="pricing" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="pricing">
             <Euro className="mr-1.5 h-4 w-4" />
             Tarifs

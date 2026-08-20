@@ -1206,7 +1206,7 @@ export function AdminPayments() {
             {collectContext && (
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs text-zinc-400">Remise manuelle</Label>
+                  <Label className="text-xs text-zinc-400 !mb-0">Remise manuelle</Label>
                   <Input value={discountInput} onChange={(e) => setDiscountInput(e.target.value)} className="h-7 w-24 border-zinc-700 bg-zinc-800 text-xs" inputMode="decimal" />
                   <Button type="button" size="sm" onClick={applyCollectDiscount} disabled={discountSaving} className="h-7 text-xs">Appliquer</Button>
                 </div>
