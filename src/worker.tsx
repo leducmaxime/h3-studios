@@ -2736,6 +2736,9 @@ const app = defineApp([
         const hasBookingsParam = url.searchParams.get("hasBookings");
         const hasBookings = hasBookingsParam === "true" ? true : hasBookingsParam === "false" ? false : undefined;
 
+        const clientTypeRaw = url.searchParams.get("clientType");
+        const clientType = isClientType(clientTypeRaw) ? clientTypeRaw : undefined;
+
         const sortByRaw = url.searchParams.get("sortBy") || undefined;
         const sortOrderRaw = url.searchParams.get("sortOrder") || undefined;
 
@@ -2751,7 +2754,7 @@ const app = defineApp([
 
         const result = await getUsers(
           env.DB,
-          { search, isBlocked, hasBookings, sortBy, sortOrder },
+          { search, isBlocked, hasBookings, clientType, sortBy, sortOrder },
           all ? 1 : page,
           all ? 9999 : limit,
         );
