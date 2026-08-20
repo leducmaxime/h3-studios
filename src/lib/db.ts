@@ -322,6 +322,31 @@ export async function checkBlockedSlotConflict(
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
+export const USER_BOOKING_STATS_SQL = `
+  SELECT
+    user_id,
+    SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) as total_bookings,
+    COALESCE(SUM(CASE WHEN status != 'cancelled' THEN MAX(total_price - COALESCE(promo_discount, 0), 0) ELSE 0 END), 0) as total_spent,
+    SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as total_cancellations,
+    COALESCE(SUM(CASE WHEN status != 'cancelled' THEN COALESCE(promo_discount, 0) ELSE 0 END), 0) as total_discounts,
+    COALESCE(SUM(CASE WHEN status != 'cancelled' THEN COALESCE(equipment_price, 0) ELSE 0 END), 0) as total_equipment,
+    COALESCE(SUM(CASE WHEN status != 'cancelled' THEN
+      (
+        CASE WHEN end_time = '00:00' THEN 1440
+        ELSE (CAST(substr(end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(end_time, 4, 2) AS INTEGER))
+        END
+      ) - (
+        CASE WHEN start_time = '00:00' THEN 1440
+        ELSE (CAST(substr(start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(start_time, 4, 2) AS INTEGER))
+        END
+      )
+    ELSE 0 END), 0) as total_minutes,
+    SUM(CASE WHEN status != 'cancelled' AND studio_id = 'la-scene' THEN 1 ELSE 0 END) as total_bookings_la_scene,
+    SUM(CASE WHEN status != 'cancelled' AND studio_id = 'le-podium' THEN 1 ELSE 0 END) as total_bookings_le_podium
+  FROM bookings
+  GROUP BY user_id
+`;
+
 export async function getUsers(
   db: D1Database,
   filters: UserFilters = {},
@@ -373,15 +398,7 @@ export async function getUsers(
     `
       SELECT COUNT(*) as total
       FROM users u
-      LEFT JOIN (
-        SELECT
-          user_id,
-          COUNT(*) as total_bookings,
-          COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as total_spent
-        FROM bookings
-        WHERE status != 'cancelled'
-        GROUP BY user_id
-      ) s ON u.id = s.user_id
+      LEFT JOIN (${USER_BOOKING_STATS_SQL}) s ON u.id = s.user_id
       ${where}
     `,
   ).bind(...params).first<{ total: number }>();
@@ -414,18 +431,16 @@ export async function getUsers(
         u.is_blocked,
         COALESCE(s.total_bookings, 0) as total_bookings,
         COALESCE(s.total_spent, 0) as total_spent,
+        COALESCE(s.total_cancellations, 0) as total_cancellations,
+        COALESCE(s.total_discounts, 0) as total_discounts,
+        COALESCE(s.total_equipment, 0) as total_equipment,
+        COALESCE(s.total_minutes, 0) as total_minutes,
+        COALESCE(s.total_bookings_la_scene, 0) as total_bookings_la_scene,
+        COALESCE(s.total_bookings_le_podium, 0) as total_bookings_le_podium,
         u.created_at,
         u.updated_at
       FROM users u
-      LEFT JOIN (
-        SELECT
-          user_id,
-          COUNT(*) as total_bookings,
-          COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as total_spent
-        FROM bookings
-        WHERE status != 'cancelled'
-        GROUP BY user_id
-      ) s ON u.id = s.user_id
+      LEFT JOIN (${USER_BOOKING_STATS_SQL}) s ON u.id = s.user_id
       ${where}
       ORDER BY ${sortExpr} ${safeSortOrder}, u.created_at DESC
       LIMIT ? OFFSET ?

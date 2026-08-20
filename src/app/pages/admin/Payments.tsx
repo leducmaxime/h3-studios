@@ -17,6 +17,7 @@ import {
   Search,
   Pencil,
   Trash2,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -822,6 +823,7 @@ export function AdminPayments() {
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={handleExportCSV}>
+          <Download className="mr-2 h-4 w-4" />
           Exporter CSV
         </Button>
       </div>
