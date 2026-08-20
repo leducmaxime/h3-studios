@@ -1645,7 +1645,11 @@ export function AdminDashboard() {
               </div>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={revenueData}>
+                  {/* top margin leaves room for the highest Y tick label,
+                      which recharts centers on the top gridline and would
+                      otherwise clip against the SVG edge (labels wrap to
+                      two lines: "240€" / "TTC"). */}
+                  <LineChart data={revenueData} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.zinc800} />
                     <XAxis
                       dataKey="date"
@@ -1681,7 +1685,9 @@ export function AdminDashboard() {
             >
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={occupancyData}>
+                  {/* same reason as the revenue chart: the "100%" tick sits on
+                      the top gridline and needs headroom. */}
+                  <BarChart data={occupancyData} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.zinc800} />
                     <XAxis
                       dataKey="day"
