@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/select";
 import { SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
 import { getBookingAmountDue } from "@/lib/booking-totals";
-import { studioLabel, studioLabelShort } from "@/lib/labels";
+import { DISPLAY_PAYMENT_STATUS_LABELS, studioLabel, studioLabelShort } from "@/lib/labels";
 import { generateMonthlyReportPDF } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1498,9 +1498,9 @@ export function AdminDashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                   {booking.payment_status === "paid" ? (
-                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">Payé</Badge>
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">{DISPLAY_PAYMENT_STATUS_LABELS.paid}</Badge>
                   ) : (
-                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px]">{(booking as any).remaining > 0 ? `Reste ${formatPrice((booking as any).remaining)}` : "Reste à payer"}</Badge>
+                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px]">{(booking as any).remaining > 0 ? `Reste ${formatPrice((booking as any).remaining)}` : DISPLAY_PAYMENT_STATUS_LABELS["pay-on-site"]}</Badge>
                   )}
 
                 </div>

@@ -3,7 +3,7 @@ import { formatPrice, resolveEquipmentDisplay } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
-import { bookingPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
+import { storedPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
 import { splitTtc } from "@/lib/tax";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
       escapeCSV(formatPriceForCSV(due.ht)),
       escapeCSV(formatPriceForCSV(due.vat)),
       escapeCSV(formatPriceForCSV(Number(booking.promo_discount) || 0)),
-      escapeCSV(bookingPaymentStatusLabel(booking.payment_status)),
+      escapeCSV(storedPaymentStatusLabel(booking.payment_status)),
     ].join(",");
   });
 

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   ADMIN_ROLE_LABELS,
-  BOOKING_PAYMENT_STATUS_LABELS,
+  STORED_PAYMENT_STATUS_LABELS,
+  CLIENT_DISPLAY_PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_FAQ_HREF,
   BOOKING_STATUS_LABELS,
   DISPLAY_PAYMENT_STATUS_LABELS,
   GROUP_TYPE_LABELS,
@@ -13,7 +15,8 @@ import {
   STUDIO_LABELS,
   STUDIO_LABELS_SHORT,
   adminRoleLabel,
-  bookingPaymentStatusLabel,
+  storedPaymentStatusLabel,
+  clientDisplayPaymentStatusLabel,
   bookingStatusLabel,
   displayPaymentStatusLabel,
   groupTypeLabel,
@@ -34,9 +37,9 @@ describe("libellés français partagés", () => {
     expect(BOOKING_STATUS_LABELS).toEqual({ confirmed: "Confirmée", cancelled: "Annulée", completed: "Terminée", "no-show": "Absent" });
     expect(PAYMENT_METHOD_LABELS).toEqual({ card: "Carte bancaire", cash: "Espèces", transfer: "Virement", check: "Chèque", cheque: "Chèque" });
     expect(PAYMENT_METHOD_LABELS_SHORT).toEqual({ card: "CB", cash: "Espèces", transfer: "Virement", check: "Chèque", cheque: "Chèque" });
-    expect(BOOKING_PAYMENT_STATUS_LABELS).toEqual({ pending: "En attente", paid: "Payé", "pay-on-site": "Sur place" });
+    expect(STORED_PAYMENT_STATUS_LABELS).toEqual({ pending: "En attente", paid: "Payé", "pay-on-site": "Paiement sur place" });
     expect(PAYMENT_RECORD_STATUS_LABELS).toEqual({ pending: "En attente", paid: "Payé", refunded: "Remboursé", "partial-refund": "Remboursé partiel" });
-    expect(DISPLAY_PAYMENT_STATUS_LABELS).toEqual({ paid: "Payé", pending: "En attente", "pay-on-site": "Reste à payer", cancelled: "Annulée", "paid-before-cancel": "Payée avant annulation", refunded: "Remboursé" });
+    expect(DISPLAY_PAYMENT_STATUS_LABELS).toEqual({ paid: "Payé", pending: "En attente", "pay-on-site": "Reste à payer", cancelled: "Annulée", "paid-before-cancel": "Payée avant annulation", refunded: "Remboursement effectué" });
     expect(PAYMENT_TYPE_LABELS).toEqual({ "on-site": "Sur place", online: "En ligne" });
     expect(ADMIN_ROLE_LABELS).toEqual({ "super-admin": "Super administrateur", operator: "Opérateur" });
   });
@@ -49,7 +52,8 @@ describe("libellés français partagés", () => {
       bookingStatusLabel,
       paymentMethodLabel,
       paymentMethodLabelShort,
-      bookingPaymentStatusLabel,
+      storedPaymentStatusLabel,
+      clientDisplayPaymentStatusLabel,
       paymentRecordStatusLabel,
       displayPaymentStatusLabel,
       paymentTypeLabel,
@@ -60,6 +64,17 @@ describe("libellés français partagés", () => {
         expect(accessor(value as never)).toBe("—");
       }
     }
+  });
+
+  it("utilise la formulation client et le lien FAQ dédiés", () => {
+    expect(CLIENT_DISPLAY_PAYMENT_STATUS_LABELS["paid-before-cancel"]).toBe("Non remboursable, voir FAQ");
+    expect(clientDisplayPaymentStatusLabel("paid-before-cancel")).toBe("Non remboursable, voir FAQ");
+    expect(clientDisplayPaymentStatusLabel("refunded")).toBe("Remboursement effectué");
+    expect(clientDisplayPaymentStatusLabel("pay-on-site")).toBe("Reste à payer");
+    expect(clientDisplayPaymentStatusLabel(null)).toBe("—");
+    // Glossaire stocké et vocabulaire de badge distincts volontairement.
+    expect(STORED_PAYMENT_STATUS_LABELS["pay-on-site"]).not.toBe(DISPLAY_PAYMENT_STATUS_LABELS["pay-on-site"]);
+    expect(PAYMENT_STATUS_FAQ_HREF).toBe("/a-propos#faq-annulation");
   });
 
   it("gère les alias et variantes de copie attendus", () => {

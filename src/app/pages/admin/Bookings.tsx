@@ -465,14 +465,14 @@ export function AdminBookings() {
                   let paymentBadge: React.ReactNode = <span className="text-zinc-500">—</span>;
 
                   if (displayPaymentStatus === "paid") {
-                    paymentBadge = <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Payé</Badge>;
-                  } else if (displayPaymentStatus === "cancelled" || displayPaymentStatus === "paid-before-cancel" || displayPaymentStatus === "refunded") {
+                    paymentBadge = <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">{displayPaymentStatusLabel(displayPaymentStatus)}</Badge>;
+                  } else if (displayPaymentStatus === "paid-before-cancel" || displayPaymentStatus === "refunded") {
                     paymentBadge = <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">{displayPaymentStatusLabel(displayPaymentStatus)}</Badge>;
-                  } else {
+                  } else if (displayPaymentStatus === "pay-on-site" || displayPaymentStatus === "pending") {
                     const remaining = booking.remaining;
                     paymentBadge = (
                       <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
-                        {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : "Reste à payer"}
+                        {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : displayPaymentStatusLabel(displayPaymentStatus)}
                       </Badge>
                     );
                   }

@@ -9,6 +9,7 @@ import {
   getTotalRefunded,
   getManualDiscountEligibility,
   getBookingOverpayment,
+  shouldShowDisplayPaymentStatus,
 } from "@/lib/booking-totals";
 
 describe("manual discounts", () => {
@@ -380,6 +381,17 @@ describe("getDisplayPaymentStatusFromSummary (list enrichment)", () => {
     expect(getDisplayPaymentStatusFromSummary("cancelled", "pay-on-site", 0, 0, { keepBalanceDue: true, remaining: 103 })).toBe("pay-on-site");
     expect(getDisplayPaymentStatusFromSummary("cancelled", "pay-on-site", 103, 0, { keepBalanceDue: true, remaining: 0 })).toBe("paid");
     expect(getDisplayPaymentStatusFromSummary("cancelled", "pay-on-site", 0, 0, { keepBalanceDue: false, remaining: 103 })).toBe("cancelled");
+  });
+});
+
+describe("shouldShowDisplayPaymentStatus", () => {
+  it("shows all payment statuses except a plain cancellation", () => {
+    expect(shouldShowDisplayPaymentStatus("paid")).toBe(true);
+    expect(shouldShowDisplayPaymentStatus("pending")).toBe(true);
+    expect(shouldShowDisplayPaymentStatus("pay-on-site")).toBe(true);
+    expect(shouldShowDisplayPaymentStatus("paid-before-cancel")).toBe(true);
+    expect(shouldShowDisplayPaymentStatus("refunded")).toBe(true);
+    expect(shouldShowDisplayPaymentStatus("cancelled")).toBe(false);
   });
 });
 

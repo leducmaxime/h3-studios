@@ -242,6 +242,14 @@ export function APropos() {
     setIsVisible(true);
   }, []);
 
+  useEffect(() => {
+    if (window.location.hash.slice(1) !== "faq-annulation") return;
+    setOpenFaq(0);
+    setTimeout(() => {
+      document.getElementById("faq-annulation")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }, []);
+
   return (
     <div className="flex min-h-fit grow flex-col items-center gap-12 pb-16 pt-32">
 
@@ -393,13 +401,13 @@ export function APropos() {
       </div>
 
       {/* FAQ */}
-      <section className="w-full py-16 lg:py-20">
+      <section id="faq" className="w-full py-16 lg:py-20">
         <div className="mx-auto w-full max-w-4xl sm:max-w-[640px] lg:max-w-4xl px-4">
           <h2 className="mb-2 text-center font-blanka text-3xl lg:text-4xl">FAQ</h2>
           <p className="mb-10 text-center text-white/60">Questions fréquentes</p>
           <div className="space-y-3">
             {FAQ_ITEMS.map((item, i) => (
-              <div key={i} className="w-full rounded-xl border border-white/10 bg-black overflow-hidden">
+              <div id={i === 0 ? "faq-annulation" : undefined} key={i} className="w-full rounded-xl border border-white/10 bg-black overflow-hidden">
                 <button
                   type="button"
                   className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/5"
