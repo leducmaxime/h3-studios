@@ -974,25 +974,45 @@ export function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/admin/bookings?dateDirection=upcoming&limit=3&sortBy=date&sortOrder=asc")
-      .then((res) => res.json())
-      .then((json: any) => {
-        if (json?.success && json?.data?.data) {
-          // Le serveur exclut déjà les réservations du jour dont l'heure de fin
-          // est dépassée (filtre sur date + heure, Europe/Paris).
-          setUpcomingBookings(json.data.data);
-        }
-      })
-      .catch((err) => console.error("Failed to fetch upcoming bookings:", err));
+    const refreshBookings = () => {
+      fetch("/api/admin/bookings?dateDirection=upcoming&limit=3&sortBy=date&sortOrder=asc")
+        .then((res) => res.json())
+        .then((json: any) => {
+          if (json?.success && json?.data?.data) {
+            // Le serveur exclut déjà les réservations du jour dont l'heure de fin
+            // est dépassée (filtre sur date + heure, Europe/Paris).
+            setUpcomingBookings(json.data.data);
+          }
+        })
+        .catch((err) => console.error("Failed to fetch upcoming bookings:", err));
 
-    // Fetch bookings en cours maintenant
-    fetch("/api/admin/bookings?dateDirection=now&limit=10&sortBy=start_time&sortOrder=asc")
-      .then(r => r.json())
-      .then((d: unknown) => {
-        const data = d as { success: boolean; data?: { data?: NowBooking[] } };
-        if (data.success && data.data?.data) setNowBookings(data.data.data);
-      })
-      .catch(console.error);
+      // Fetch bookings en cours maintenant
+      fetch("/api/admin/bookings?dateDirection=now&limit=10&sortBy=start_time&sortOrder=asc")
+        .then(r => r.json())
+        .then((d: unknown) => {
+          const data = d as { success: boolean; data?: { data?: NowBooking[] } };
+          if (data.success && data.data?.data) setNowBookings(data.data.data);
+        })
+        .catch(console.error);
+    };
+
+    refreshBookings();
+
+    // Rafraîchissement auto toutes les 60s (le widget "En cours" est borné à end_time + 15min côté serveur)
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") refreshBookings();
+    }, 60_000);
+
+    // Rafraîchit immédiatement au retour sur l'onglet
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshBookings();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   useEffect(() => {
