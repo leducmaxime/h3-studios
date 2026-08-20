@@ -670,7 +670,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-400 text-sm">Ancienneté</span>
+                    <span className="text-zinc-400 text-sm">Client depuis</span>
                     <span className="text-sm font-medium">{firstBooking ? formatDate(firstBooking.date) : "—"}</span>
                   </div>
                   <div className="flex items-center justify-between">

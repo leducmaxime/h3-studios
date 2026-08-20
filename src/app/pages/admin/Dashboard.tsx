@@ -35,6 +35,7 @@ import {
 } from "recharts";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectTrigger,
@@ -958,6 +959,51 @@ function DurationTooltip({
         </p>
       )}
     </div>
+  );
+}
+
+// Item de légende du graphique « Durée des sessions » avec explication.
+// Popover contrôlé : ouverture au survol souris (pointerType "mouse"
+// uniquement, pour éviter le double déclenchement ouverture/fermeture
+// sur tactile où un tap synthétise aussi un mouseenter), au tap et au
+// clavier via le comportement natif du bouton déclencheur.
+function DurationLegendHint({
+  swatch,
+  label,
+  explanation,
+}: {
+  swatch: React.ReactNode;
+  label: string;
+  explanation: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        className="flex cursor-help items-center gap-1.5 underline decoration-zinc-600 decoration-dotted underline-offset-[3px] transition-colors hover:text-zinc-300 focus-visible:text-zinc-300 focus-visible:outline-none"
+        onPointerEnter={(e) => {
+          if (e.pointerType === "mouse") setOpen(true);
+        }}
+        onPointerLeave={(e) => {
+          if (e.pointerType === "mouse") setOpen(false);
+        }}
+      >
+        {swatch}
+        {label}
+      </PopoverTrigger>
+      {/* side="top" : la carte est le dernier élément de la page, on
+          s'ouvre vers le haut (radix retourne le popover si besoin).
+          w-64 dimensionné pour le texte le plus long (« Part cumulée »). */}
+      <PopoverContent
+        side="top"
+        collisionPadding={12}
+        className="w-64 rounded-lg border-zinc-700 bg-zinc-900 p-3 text-xs leading-relaxed text-zinc-300 shadow-xl"
+      >
+        <p className="mb-1 font-medium text-zinc-100">{label}</p>
+        <p>{explanation}</p>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -2316,23 +2362,27 @@ export function AdminDashboard() {
                         </ResponsiveContainer>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
-                        <span className="flex items-center gap-1.5">
-                          <span className="h-2 w-3 rounded-[2px]" style={{ backgroundColor: CHART_COLORS.primary }} />
-                          Réservations
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="h-[2px] w-3 rounded-full" style={{ backgroundColor: CHART_COLORS.secondary }} />
-                          Part cumulée
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-3 border-t-2 border-dashed" style={{ borderColor: CHART_COLORS.blue }} />
-                          Moyenne
-                        </span>
+                        <DurationLegendHint
+                          swatch={<span className="h-2 w-3 rounded-[2px]" style={{ backgroundColor: CHART_COLORS.primary }} />}
+                          label="Réservations"
+                          explanation="Nombre de réservations dont la durée correspond à cette barre, sur la période sélectionnée."
+                        />
+                        <DurationLegendHint
+                          swatch={<span className="h-[2px] w-3 rounded-full" style={{ backgroundColor: CHART_COLORS.secondary }} />}
+                          label="Part cumulée"
+                          explanation="Pourcentage de réservations dont la durée est inférieure ou égale à cette barre. Exemple : 70 % au niveau de la barre 2h signifie que 7 réservations sur 10 durent 2h ou moins."
+                        />
+                        <DurationLegendHint
+                          swatch={<span className="w-3 border-t-2 border-dashed" style={{ borderColor: CHART_COLORS.blue }} />}
+                          label="Moyenne"
+                          explanation="Durée totale réservée divisée par le nombre de réservations. Sensible aux sessions très longues, qui la tirent vers le haut."
+                        />
                         {medianDurationMinutes > 0 && (
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-3 border-t-2 border-dotted" style={{ borderColor: CHART_COLORS.green }} />
-                            Médiane
-                          </span>
+                          <DurationLegendHint
+                            swatch={<span className="w-3 border-t-2 border-dotted" style={{ borderColor: CHART_COLORS.green }} />}
+                            label="Médiane"
+                            explanation="Durée qui sépare les réservations en deux moitiés égales : la moitié dure moins longtemps, l'autre moitié dure plus longtemps. Moins sensible aux valeurs extrêmes que la moyenne."
+                          />
                         )}
                       </div>
                     </>
