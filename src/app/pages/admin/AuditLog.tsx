@@ -89,6 +89,15 @@ function formatTime(dateStr: string): string {
   });
 }
 
+function formatDateFr(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00Z`).toLocaleDateString("fr-FR", {
+    timeZone: "Europe/Paris",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 const ENTITY_CONFIG: Record<string, { label: string; icon: typeof FileText; color: string }> = {
   booking: { label: "Réservation", icon: Calendar, color: "text-blue-400" },
   user: { label: "Client", icon: User, color: "text-emerald-400" },
@@ -110,6 +119,8 @@ const ACTION_LABELS: Record<string, { label: string; variant: "default" | "secon
   create: { label: "Création", variant: "default" },
   "create-range": { label: "Création (plage)", variant: "default" },
   update: { label: "Modification", variant: "secondary" },
+  schedule: { label: "Programmation", variant: "secondary" },
+  "cancel-schedule": { label: "Programmation annulée", variant: "destructive" },
   delete: { label: "Suppression", variant: "destructive" },
   "bulk-delete": { label: "Suppression groupée", variant: "destructive" },
   cancel: { label: "Annulation", variant: "destructive" },
@@ -488,7 +499,14 @@ function summarizeLog(log: ApiAuditLog): string[] {
       ]);
     }
     case "pricing:update":
-      return compact([money(obj.price_per_half_hour) && `Nouveau tarif : ${money(obj.price_per_half_hour)} / 30 min`]);
+      return compact([
+        money(obj.price_per_half_hour) && `Nouveau tarif : ${money(obj.price_per_half_hour)} / 30 min`,
+        str("effective_from") && `Version du ${formatDateFr(str("effective_from")!)}`,
+      ]);
+    case "pricing:schedule":
+      return compact([str("effective_from") && `Grille programmée au ${formatDateFr(str("effective_from")!)} — ${num("count")} tarifs.`]);
+    case "pricing:cancel-schedule":
+      return compact([str("effective_from") && `Programmation du ${formatDateFr(str("effective_from")!)} annulée — ${num("deleted")} tarif(s) supprimé(s).`]);
     case "equipment:create":
       return compact([str("name") && `Nom : ${str("name")}`]);
     case "equipment:update": {

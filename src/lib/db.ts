@@ -1224,6 +1224,13 @@ export async function removeBlockedSlot(
 
 // ─── Pricing ─────────────────────────────────────────────────────────────────
 
+// Résolution versionnée : dernière version effective_from <= date de séance.
+export const PRICING_AS_OF_SQL =
+  "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ? AND effective_from <= ? ORDER BY effective_from DESC LIMIT 1";
+// Fallback : version la plus ancienne connue (jamais 0€ sur données bien formées).
+export const PRICING_EARLIEST_SQL =
+  "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ? ORDER BY effective_from ASC LIMIT 1";
+
 export async function getPricing(db: D1Database): Promise<DbPricing[]> {
   const result = await db.prepare(
     "SELECT * FROM pricing ORDER BY studio_id, group_type, is_peak, effective_from",
@@ -1250,13 +1257,42 @@ export async function getPricingForBooking(
   sessionDate: string,
 ): Promise<number> {
   const result = await db.prepare(
-    "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ? AND effective_from <= ? ORDER BY effective_from DESC LIMIT 1",
+    PRICING_AS_OF_SQL,
   ).bind(studioId, groupType, isPeak ? 1 : 0, sessionDate).first<{ price_per_half_hour: number }>();
   if (result) return result.price_per_half_hour / 100;
   const fallback = await db.prepare(
-    "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ? ORDER BY effective_from ASC LIMIT 1",
+    PRICING_EARLIEST_SQL,
   ).bind(studioId, groupType, isPeak ? 1 : 0).first<{ price_per_half_hour: number }>();
   return (fallback?.price_per_half_hour ?? 0) / 100;
+}
+
+export interface ScheduledPricingCell {
+  studio_id: string;
+  group_type: string;
+  is_peak: number; // 0 | 1
+  price_per_half_hour: number;
+}
+
+/** Upsert atomique des 12 cellules d'une grille programmée. */
+export async function upsertScheduledPricing(
+  db: D1Database,
+  effectiveFrom: string,
+  cells: ScheduledPricingCell[],
+): Promise<{ success: boolean }> {
+  const updatedAt = now();
+  await db.batch(cells.map((cell) => db.prepare(
+    "INSERT INTO pricing (id, studio_id, group_type, is_peak, price_per_half_hour, updated_at, effective_from) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(studio_id, group_type, is_peak, effective_from) DO UPDATE SET price_per_half_hour = excluded.price_per_half_hour, updated_at = excluded.updated_at",
+  ).bind(generateId(), cell.studio_id, cell.group_type, cell.is_peak, cell.price_per_half_hour, updatedAt, effectiveFrom)));
+  return { success: true };
+}
+
+/** Supprime toutes les lignes d'une grille programmée. */
+export async function deleteScheduledPricing(
+  db: D1Database,
+  effectiveFrom: string,
+): Promise<{ success: boolean; deleted: number }> {
+  const result = await db.prepare("DELETE FROM pricing WHERE effective_from = ?").bind(effectiveFrom).run();
+  return { success: result.meta.changes > 0, deleted: result.meta.changes };
 }
 
 // ─── Equipment ───────────────────────────────────────────────────────────────
