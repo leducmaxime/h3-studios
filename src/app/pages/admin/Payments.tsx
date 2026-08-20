@@ -855,7 +855,7 @@ export function AdminPayments() {
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-sm text-zinc-400">Remboursés</p>
-          <p className="mt-1 text-2xl font-bold text-orange-400">
+          <p className="mt-1 text-2xl font-bold text-red-400">
             {stats.refundedCount}
           </p>
           <p className="text-sm text-zinc-500">
