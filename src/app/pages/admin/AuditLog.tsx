@@ -26,7 +26,7 @@ import {
   REFUND_FAILURE_CODE_LABELS,
   STRIPE_REFUND_STATUS_LABELS,
 } from "@/components/admin/refund";
-import { adminRoleLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, bookingPaymentStatusLabel, studioLabel } from "@/lib/labels";
+import { adminRoleLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, storedPaymentStatusLabel, studioLabel } from "@/lib/labels";
 import {
   Dialog,
   DialogContent,
@@ -242,7 +242,7 @@ function formatFieldValue(key: string, value: unknown): string {
     case "status":
       return bookingStatusLabel(str);
     case "payment_status":
-      return bookingPaymentStatusLabel(str);
+      return storedPaymentStatusLabel(str);
     case "method":
     case "previousMethod":
       return paymentMethodLabel(str);

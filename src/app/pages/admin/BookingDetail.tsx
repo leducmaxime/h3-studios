@@ -48,7 +48,7 @@ import {
 import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
-import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus, shouldShowDisplayPaymentStatus } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel } from "@/lib/labels";
 import { formatSiret, resolveBookingClientIdentity } from "@/lib/client-identity";
@@ -763,7 +763,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 <CreditCard className="h-5 w-5 text-primary" />
                 Paiement
               </h2>
-              {isCancelled && displayPaymentStatus !== "pay-on-site" ? (
+              {isCancelled && !shouldShowDisplayPaymentStatus(displayPaymentStatus) ? null :
+               isCancelled && displayPaymentStatus !== "pay-on-site" ? (
                 <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">
                   {displayPaymentStatusLabel(displayPaymentStatus)}
                 </Badge>

@@ -871,24 +871,21 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                                 b.total_refunded ?? 0,
                                 { keepBalanceDue: isKeepBalanceDue(b), remaining: b.remaining ?? 0 },
                               );
-                              if (payDisplay === "paid") {
-                                return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Payé</Badge>;
+                              if (payDisplay === "cancelled") {
+                                return <span className="text-zinc-600">—</span>;
                               }
-                              if (payDisplay === "cancelled" || payDisplay === "paid-before-cancel" || payDisplay === "refunded") {
+                              if (payDisplay === "paid") {
+                                return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">{displayPaymentStatusLabel(payDisplay)}</Badge>;
+                              }
+                              if (payDisplay === "paid-before-cancel" || payDisplay === "refunded") {
                                 return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">{displayPaymentStatusLabel(payDisplay)}</Badge>;
                               }
-                              if (b.status === "cancelled" && payDisplay === "pay-on-site") {
-                                const remaining = b.remaining;
-                                return (
-                                  <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">
-                                    {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : "Reste à payer"}
-                                  </Badge>
-                                );
-                              }
-                              if (b.payment_status === "pay-on-site") {
-                                return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">Sur place</Badge>;
-                              }
-                              return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">Reste à payer</Badge>;
+                              const remaining = b.remaining;
+                              return (
+                                <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">
+                                  {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : displayPaymentStatusLabel(payDisplay)}
+                                </Badge>
+                              );
                             })()}
                           </td>
                           <td className="px-4 py-3 text-right">
