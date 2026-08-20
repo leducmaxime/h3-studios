@@ -736,77 +736,81 @@ export function AdminBookingNew() {
                 ))}
               </div>
             )}
-            {estimatedPrice !== null && estimatedPrice > 0 && (
-              <div className="border-t border-zinc-800 pt-3">
-                <PromoCodeInput
-                  total={estimatedPrice + promoDiscount}
-                  appliedPromo={appliedPromo}
-                  onApply={(promo, discount) => {
-                    setAppliedPromo(promo);
-                    setPromoDiscount(discount);
-                    setManualDiscount("");
-                  }}
-                  onRemove={() => {
-                    setAppliedPromo(null);
-                    setPromoDiscount(0);
-                  }}
-                />
-              </div>
-            )}
-            {promoDiscount > 0 && (
-              <div className="flex justify-between text-sm text-green-400">
-                <span>Réduction (promo)</span>
-                <span>-{formatPrice(promoDiscount)}</span>
-              </div>
-            )}
-            {(() => {
-              const manualDiscountValue = parseAmountInput(manualDiscount);
-              const validManual = Number.isFinite(manualDiscountValue) && manualDiscountValue > 0;
-              return (
-                <>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-400">Remise manuelle</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0"
-                      value={manualDiscount}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setManualDiscount(next);
-                        const parsed = parseAmountInput(next);
-                        if (Number.isFinite(parsed) && parsed > 0 && appliedPromo) {
-                          setAppliedPromo(null);
-                          setPromoDiscount(0);
-                        }
-                      }}
-                      className="w-20 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-right text-xs focus:border-primary focus:outline-none"
-                      aria-label="Remise manuelle en euros"
-                    />
+            <div className="border-t border-zinc-800 pt-3 grid gap-4 md:grid-cols-2 md:gap-6">
+              {/* Remises */}
+              <div className="space-y-3">
+                {estimatedPrice !== null && estimatedPrice > 0 && (
+                  <PromoCodeInput
+                    total={estimatedPrice + promoDiscount}
+                    appliedPromo={appliedPromo}
+                    onApply={(promo, discount) => {
+                      setAppliedPromo(promo);
+                      setPromoDiscount(discount);
+                      setManualDiscount("");
+                    }}
+                    onRemove={() => {
+                      setAppliedPromo(null);
+                      setPromoDiscount(0);
+                    }}
+                  />
+                )}
+                {promoDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-green-400">
+                    <span>Réduction (promo)</span>
+                    <span>-{formatPrice(promoDiscount)}</span>
                   </div>
-                  {validManual && (
-                    <div className="flex justify-between text-sm text-green-400">
-                      <span>Remise</span>
-                      <span>-{formatPrice(manualDiscountValue)}</span>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-            <div className="border-t border-zinc-800 pt-3">
-              {typeof estimatedPrice === "number" && (() => {
-                const tax = formatTaxBreakdown(estimatedPrice);
-                return <div className="mb-2 space-y-1 text-xs text-zinc-500">
-                  <div className="flex justify-between"><span>Total HT</span><span>{tax.ht}</span></div>
-                  <div className="flex justify-between"><span>TVA 20%</span><span>{tax.vat}</span></div>
-                </div>;
-              })()}
-              <div className="flex items-center justify-between text-lg font-semibold">
-                <span>Total TTC</span>
-                <span className="text-primary">
-                  {pricingLoading ? "..." : estimatedPrice !== null ? formatPrice(estimatedPrice) : "—"}
-                </span>
+                )}
+                {(() => {
+                  const manualDiscountValue = parseAmountInput(manualDiscount);
+                  const validManual = Number.isFinite(manualDiscountValue) && manualDiscountValue > 0;
+                  return (
+                    <>
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-zinc-400">Remise manuelle</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0"
+                          value={manualDiscount}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            setManualDiscount(next);
+                            const parsed = parseAmountInput(next);
+                            if (Number.isFinite(parsed) && parsed > 0 && appliedPromo) {
+                              setAppliedPromo(null);
+                              setPromoDiscount(0);
+                            }
+                          }}
+                          className="w-24 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-right text-xs focus:border-primary focus:outline-none"
+                          aria-label="Remise manuelle en euros"
+                        />
+                      </div>
+                      {validManual && (
+                        <div className="flex justify-between text-sm text-green-400">
+                          <span>Remise</span>
+                          <span>-{formatPrice(manualDiscountValue)}</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              {/* Total */}
+              <div>
+                {typeof estimatedPrice === "number" && (() => {
+                  const tax = formatTaxBreakdown(estimatedPrice);
+                  return <div className="mb-2 space-y-1 text-xs text-zinc-500">
+                    <div className="flex justify-between"><span>Total HT</span><span>{tax.ht}</span></div>
+                    <div className="flex justify-between"><span>TVA 20%</span><span>{tax.vat}</span></div>
+                  </div>;
+                })()}
+                <div className="flex items-center justify-between text-lg font-semibold">
+                  <span>Total TTC</span>
+                  <span className="text-primary">
+                    {pricingLoading ? "..." : estimatedPrice !== null ? formatPrice(estimatedPrice) : "—"}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
