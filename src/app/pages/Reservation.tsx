@@ -655,7 +655,7 @@ export function Reservation({ step }: ReservationProps) {
                   ? "Plus de 45% de réduction"
                   : "Jusqu'à 20% d'économie"}
             </p>
-            <p className="mt-1 max-w-prose text-xs leading-snug opacity-80 sm:text-sm">
+            <p className="mt-1 text-xs leading-snug opacity-80 lg:whitespace-nowrap lg:text-sm">
               Les tarifs varient selon l'heure (après 18h) et le jour (weekend
               et jour férié) : réservez avant 18h en semaine pour en profiter.
             </p>
