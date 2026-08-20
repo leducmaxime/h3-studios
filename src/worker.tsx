@@ -4534,7 +4534,11 @@ const app = defineApp([
       };
 
       const paymentMethods = ["cash", "card-online", "card-onsite", "transfer", "check"] as const;
+      // `key` expose la clé brute (non traduite) pour permettre au dashboard de
+      // regrouper les méthodes côté client (ex. « en ligne » vs « sur place »)
+      // sans dépendre du libellé affiché.
       const paymentData = paymentMethods.map((method) => ({
+        key: method,
         method: paymentMethodLabelShort(method),
         count: merged[method]?.count ?? 0,
         revenue: merged[method]?.revenue ?? 0,

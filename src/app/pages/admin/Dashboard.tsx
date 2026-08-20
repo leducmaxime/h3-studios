@@ -74,6 +74,7 @@ interface GroupTypePoint {
 }
 
 interface PaymentPoint {
+  key: string;
   method: string;
   count: number;
   revenue: number;
@@ -838,10 +839,13 @@ function StatCard({
   );
 }
 
-function ChartCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
+function ChartCard({ title, action, children, className = "" }: { title: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <div className={`rounded-xl border border-zinc-800 bg-zinc-900 p-4 ${className}`}>
-      <h3 className="mb-4 text-sm font-medium text-zinc-400">{title}</h3>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <h3 className="text-sm font-medium text-zinc-400">{title}</h3>
+        {action}
+      </div>
       {children}
     </div>
   );
@@ -926,12 +930,29 @@ export function AdminDashboard() {
   } | null>(null);
   const [topClientsLoading, setTopClientsLoading] = useState(false);
   const [topMetric, setTopMetric] = useState<"revenue" | "bookings" | "hours">("revenue");
+  const [paymentMode, setPaymentMode] = useState<"all" | "channel">("all");
   const [statsMeta, setStatsMeta] = useState<{ minYear: number | null; maxYear: number | null } | null>(null);
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
   const [occupancyData, setOccupancyData] = useState<OccupancyPoint[]>([]);
   const [studioData, setStudioData] = useState<StudioPoint[]>([]);
   const [groupTypeData, setGroupTypeData] = useState<GroupTypePoint[]>([]);
   const [paymentData, setPaymentData] = useState<PaymentPoint[]>([]);
+
+  // Dérivation locale du graphique « Méthodes de paiement » selon le mode
+  // choisi : "all" = une part par méthode, "channel" = deux parts agrégées
+  // « En ligne » (card-online) vs « Sur place » (cash, card-onsite,
+  // transfer, check). Aucun refetch : calculé à partir de paymentData.
+  const displayedPaymentData = useMemo<PaymentPoint[]>(() => {
+    if (paymentMode === "all" || paymentData.length === 0) return paymentData;
+    const online: PaymentPoint = { key: "channel-online", method: "En ligne", count: 0, revenue: 0 };
+    const onsite: PaymentPoint = { key: "channel-onsite", method: "Sur place", count: 0, revenue: 0 };
+    for (const p of paymentData) {
+      const target = p.key === "card-online" ? online : onsite;
+      target.count += p.count;
+      target.revenue += p.revenue;
+    }
+    return [online, onsite];
+  }, [paymentData, paymentMode]);
   const [activityCalendarBookings, setActivityCalendarBookings] = useState<CalendarBooking[]>([]);
   const [activityCalendarLoading, setActivityCalendarLoading] = useState(false);
   const [activityCalendarMonth, setActivityCalendarMonth] = useState(() => {
@@ -1970,21 +1991,41 @@ export function AdminDashboard() {
             {/* Dernière ligne de la grille 2 colonnes : "Méthodes de paiement"
                 à gauche, "Top 5 des meilleurs clients" à droite. */}
             <div>
-              <ChartCard title="Méthodes de paiement" className="h-full">
+              <ChartCard
+                title="Méthodes de paiement"
+                className="h-full"
+                action={
+                  <div className="inline-flex shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+                    {([
+                      ["all", "Tous"],
+                      ["channel", "En ligne / Sur place"],
+                    ] as const).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setPaymentMode(mode)}
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${paymentMode === mode ? "bg-primary/15 text-primary" : "text-zinc-400 hover:text-zinc-200"}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                }
+              >
                 {(() => {
-                  const totalCount = paymentData.reduce((acc, p) => acc + p.count, 0);
-                  const labels = paymentData.map((p) => {
+                  const totalCount = displayedPaymentData.reduce((acc, p) => acc + p.count, 0);
+                  const labels = displayedPaymentData.map((p) => {
                     const pct = totalCount > 0 ? Math.round((p.count / totalCount) * 100) : 0;
                     return { method: p.method, count: p.count, pct };
                   });
-  
+
                   return (
                     <div className="flex flex-col gap-4 lg:h-[280px] lg:flex-row lg:items-center">
                       <div className="h-[190px] w-full lg:h-full lg:w-1/2">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
-                              data={paymentData}
+                              data={displayedPaymentData}
                               cx="50%"
                               cy="50%"
                               innerRadius="58%"
@@ -1995,15 +2036,15 @@ export function AdminDashboard() {
                               labelLine={false}
                               label={renderPiePercentLabel}
                             >
-                              {paymentData.map((p, i) => (
-                                <Cell key={p.method} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                              {displayedPaymentData.map((p, i) => (
+                                <Cell key={p.key} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                               ))}
                             </Pie>
                             <Tooltip content={<PaymentPieTooltip total={totalCount} />} />
                           </PieChart>
                         </ResponsiveContainer>
                       </div>
-  
+
                       <div className="w-full lg:w-1/2">
                         <div className="space-y-2">
                           {labels.map((l, i) => (
