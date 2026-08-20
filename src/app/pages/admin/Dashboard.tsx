@@ -2184,6 +2184,162 @@ export function AdminDashboard() {
               );
             })()}
             </div>
+
+            {/* Dernière carte du dashboard, pleine largeur : histogramme des
+                durées avec repères moyenne/médiane et courbe de part cumulée. */}
+            {(() => {
+              const totalDurationCount = durationData.reduce((acc, d) => acc + d.count, 0);
+              const labelBySlots = new Map(durationData.map((d) => [d.slots, d.label]));
+
+              // Courbe de Pareto calculée côté client : cumul des count dans
+              // l'ordre des buckets, dernier point = 100 %.
+              let runningCount = 0;
+              const durationChartData: DurationPoint[] = durationData.map((d) => {
+                runningCount += d.count;
+                return {
+                  ...d,
+                  cumPct: totalDurationCount > 0 ? Math.round((runningCount / totalDurationCount) * 100) : 0,
+                };
+              });
+
+              // Positions exactes des repères sur l'axe numérique (slots).
+              const avgSlots = avgDurationMinutes / SLOT_DURATION_MINUTES;
+              const medianSlots = medianDurationMinutes / SLOT_DURATION_MINUTES;
+
+              return (
+                <ChartCard
+                  title="Durée des sessions"
+                  action={
+                    totalDurationCount > 0 ? (
+                      <p className="text-xs text-zinc-500">
+                        Moyenne <span className="font-medium text-primary">{formatHours(Math.round(avgDurationMinutes))}</span>
+                        {medianDurationMinutes > 0 && (
+                          <> · Médiane <span className="font-medium text-primary">{formatHours(Math.round(medianDurationMinutes))}</span></>
+                        )}
+                      </p>
+                    ) : undefined
+                  }
+                >
+                  {totalDurationCount === 0 ? (
+                    <div className="flex h-[320px] items-center justify-center rounded-lg border border-dashed border-zinc-800 text-sm text-zinc-500">
+                      Aucune réservation sur cette période.
+                    </div>
+                  ) : (
+                    <>
+                      {/* 320px au lieu de 280px : carte pleine largeur en bas de
+                          page, densité supérieure (barres + courbe + 2 repères +
+                          second axe Y). */}
+                      <div className="h-[320px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          {/* mêmes marges que les autres graphiques : headroom
+                              pour le tick Y le plus haut. */}
+                          <ComposedChart data={durationChartData} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.zinc800} />
+                            {/* Axe numérique (slots) plutôt que catégoriel :
+                                permet de poser les ReferenceLine à la position
+                                exacte (ex. moyenne de 2h15 → x = 4.5). Les
+                                ticks 2..9 sont reformatés en labels ("1h"...). */}
+                            <XAxis
+                              type="number"
+                              dataKey="slots"
+                              domain={[1.5, 9.5]}
+                              ticks={[2, 3, 4, 5, 6, 7, 8, 9]}
+                              interval={0}
+                              tickFormatter={(v: number) => labelBySlots.get(v) ?? formatSlotsToDuration(v)}
+                              stroke={CHART_COLORS.zinc400}
+                              tick={{ fontSize: 11 }}
+                              axisLine={{ stroke: CHART_COLORS.zinc700 }}
+                            />
+                            <YAxis
+                              yAxisId="left"
+                              stroke={CHART_COLORS.zinc400}
+                              tick={{ fontSize: 11 }}
+                              axisLine={{ stroke: CHART_COLORS.zinc700 }}
+                              allowDecimals={false}
+                            />
+                            <YAxis
+                              yAxisId="right"
+                              orientation="right"
+                              domain={[0, 100]}
+                              tickFormatter={(v: number) => `${v}%`}
+                              stroke={CHART_COLORS.zinc400}
+                              tick={{ fontSize: 11 }}
+                              axisLine={{ stroke: CHART_COLORS.zinc700 }}
+                            />
+                            <Tooltip
+                              content={<DurationTooltip total={totalDurationCount} />}
+                              contentStyle={{
+                                backgroundColor: CHART_COLORS.zinc900,
+                                border: `1px solid ${CHART_COLORS.zinc700}`,
+                                borderRadius: "8px",
+                                fontSize: "13px",
+                              }}
+                              labelStyle={{ color: CHART_COLORS.zinc400 }}
+                            />
+                            <Bar
+                              yAxisId="left"
+                              dataKey="count"
+                              name="Réservations"
+                              fill={CHART_COLORS.primary}
+                              radius={[4, 4, 0, 0]}
+                              barSize={36}
+                            />
+                            <Line
+                              yAxisId="right"
+                              type="monotone"
+                              dataKey="cumPct"
+                              name="Part cumulée"
+                              stroke={CHART_COLORS.secondary}
+                              strokeWidth={2}
+                              dot={{ fill: CHART_COLORS.secondary, r: 2.5 }}
+                              activeDot={{ r: 4, fill: CHART_COLORS.secondary }}
+                            />
+                            {avgDurationMinutes > 0 && (
+                              <ReferenceLine
+                                yAxisId="left"
+                                x={avgSlots}
+                                stroke={CHART_COLORS.blue}
+                                strokeDasharray="6 4"
+                                strokeWidth={1.5}
+                              />
+                            )}
+                            {medianDurationMinutes > 0 && (
+                              <ReferenceLine
+                                yAxisId="left"
+                                x={medianSlots}
+                                stroke={CHART_COLORS.green}
+                                strokeDasharray="2 3"
+                                strokeWidth={1.5}
+                              />
+                            )}
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-2 w-3 rounded-[2px]" style={{ backgroundColor: CHART_COLORS.primary }} />
+                          Réservations
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-[2px] w-3 rounded-full" style={{ backgroundColor: CHART_COLORS.secondary }} />
+                          Part cumulée
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-3 border-t-2 border-dashed" style={{ borderColor: CHART_COLORS.blue }} />
+                          Moyenne
+                        </span>
+                        {medianDurationMinutes > 0 && (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 border-t-2 border-dotted" style={{ borderColor: CHART_COLORS.green }} />
+                            Médiane
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </ChartCard>
+              );
+            })()}
           </div>
       </div>
     </div>
