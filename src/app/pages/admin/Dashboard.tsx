@@ -928,20 +928,13 @@ export function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/admin/bookings?dateDirection=upcoming&limit=20&sortBy=date&sortOrder=asc")
+    fetch("/api/admin/bookings?dateDirection=upcoming&limit=3&sortBy=date&sortOrder=asc")
       .then((res) => res.json())
       .then((json: any) => {
         if (json?.success && json?.data?.data) {
-          const now = new Date();
-          const todayISO = now.toLocaleDateString("en-CA");
-          const nowTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-          // Exclure les réservations passées (aujourd'hui avec end_time déjà passée)
-          const filtered = json.data.data.filter((b: any) => {
-            if (b.date < todayISO) return false;
-            if (b.date === todayISO && b.end_time <= nowTimeStr) return false;
-            return true;
-          });
-          setUpcomingBookings(filtered.slice(0, 3));
+          // Le serveur exclut déjà les réservations du jour dont l'heure de fin
+          // est dépassée (filtre sur date + heure, Europe/Paris).
+          setUpcomingBookings(json.data.data);
         }
       })
       .catch((err) => console.error("Failed to fetch upcoming bookings:", err));
