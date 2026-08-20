@@ -5,6 +5,7 @@ import { formatDateISO } from "./utils";
 import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
 import { bookingPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
 import { splitTtc } from "@/lib/tax";
+import { COMPANY, companyRcs } from "@/lib/company";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function escapeCSV(value: string | number | null | undefined): string {
@@ -238,13 +239,19 @@ export async function generateInvoicePDF(
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("16 Rue de la Liberté", 20, y);
+  doc.text(COMPANY.address.street, 20, y);
   y += 5;
-  doc.text("94370 Sucy-en-Brie", 20, y);
+  doc.text(`${COMPANY.address.postalCode} ${COMPANY.address.city}`, 20, y);
   y += 5;
-  doc.text("Tél: 01 45 90 00 00", 20, y);
+  doc.text(`Tél: ${COMPANY.phoneDisplay}`, 20, y);
   y += 5;
-  doc.text("Email: contact@h3studios.fr", 20, y);
+  doc.text(`Email: ${COMPANY.email}`, 20, y);
+  y += 5;
+  doc.text(`${COMPANY.legalForm} au capital de ${COMPANY.shareCapital} — ${companyRcs()}`, 20, y);
+  y += 5;
+  doc.text(`SIRET: ${COMPANY.siret}`, 20, y);
+  y += 5;
+  doc.text(`TVA intracommunautaire: ${COMPANY.vatNumber}`, 20, y);
   y += 15;
 
   // Invoice title
@@ -438,7 +445,7 @@ export async function generateInvoicePDF(
   doc.setTextColor(120);
   doc.text("Merci de votre confiance !", pageWidth / 2, y, { align: "center" });
   y += 5;
-  doc.text("H3 Studios - SIRET: 944 221 753 00014", pageWidth / 2, y, { align: "center" });
+  doc.text(`${COMPANY.brandName} - SIRET: ${COMPANY.siret} - TVA: ${COMPANY.vatNumber}`, pageWidth / 2, y, { align: "center" });
 
   // Download
   doc.save(`h3-facture-${booking.booking_ref}.pdf`);
