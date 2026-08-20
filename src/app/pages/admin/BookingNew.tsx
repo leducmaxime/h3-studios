@@ -30,6 +30,8 @@ import { parseAmountInput } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { groupTypeLabel } from "@/lib/labels";
 import type { MinMaxByGroupType } from "@/lib/pricing";
+import { resolveUserClientIdentity, formatSiret } from "@/lib/client-identity";
+import { bookingFieldLabel, getVisibleBookingFields } from "@/lib/booking-fields";
 import { formatSessionPriceDisplay, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
 
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
@@ -41,6 +43,10 @@ import { type PromoCode } from "@/lib/booking";
 interface UserSearchResult {
   data: DbUser[];
   total: number;
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
 interface EquipmentSelection {
@@ -395,16 +401,123 @@ export function AdminBookingNew() {
           <h2 className="mb-4 font-semibold">Client</h2>
 
           {selectedUser ? (
-            <div className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-800 p-4">
-              <div>
-                <p className="font-medium">{selectedUser.name}</p>
-                <p className="text-sm text-zinc-400">{selectedUser.email || "—"} · {selectedUser.phone || "—"}</p>
-                {selectedUser.band_name && <p className="text-sm text-zinc-400">{selectedUser.band_name}</p>}
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setSelectedUser(null)}>
-                Changer
-              </Button>
-            </div>
+            (() => {
+              const clientIdentity = resolveUserClientIdentity(selectedUser);
+              const visibleFields = getVisibleBookingFields(clientIdentity.clientType);
+              const displayName =
+                [selectedUser.first_name, selectedUser.last_name].filter(Boolean).join(" ")
+                || selectedUser.name?.trim()
+                || selectedUser.email
+                || "—";
+              const showCountry =
+                selectedUser.country
+                && !["fr", "france"].includes(selectedUser.country.trim().toLowerCase());
+              const hasAddress =
+                selectedUser.address_line1 || selectedUser.address_line2
+                || selectedUser.postal_code || selectedUser.city || showCountry;
+              return (
+                <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{displayName}</p>
+                      {selectedUser.is_blocked === 1 && (
+                        <Badge variant="destructive">Bloqué</Badge>
+                      )}
+                    </div>
+                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => setSelectedUser(null)}>
+                      Changer
+                    </Button>
+                  </div>
+
+                  {selectedUser.is_blocked === 1 && (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      Ce client est bloqué : vérifiez son compte avant de créer la réservation.
+                    </div>
+                  )}
+
+                  <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                      <p className="text-xs text-zinc-500">Type de client</p>
+                      <p className="text-sm">{clientIdentity.clientTypeLabel}</p>
+                    </div>
+                    {clientIdentity.isBusiness && (
+                      <div>
+                        <p className="text-xs text-zinc-500">{bookingFieldLabel("legalName", clientIdentity.clientType)}</p>
+                        <p className="text-sm">{clientIdentity.legalName || "—"}</p>
+                      </div>
+                    )}
+                    {visibleFields.includes("siret") && (
+                      <div>
+                        <p className="text-xs text-zinc-500">SIRET</p>
+                        <p className="text-sm">{clientIdentity.siret ? formatSiret(clientIdentity.siret) : "—"}</p>
+                      </div>
+                    )}
+                    {visibleFields.includes("rna") && (
+                      <div>
+                        <p className="text-xs text-zinc-500">RNA</p>
+                        <p className="text-sm">{clientIdentity.rna || "—"}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs text-zinc-500">Email</p>
+                      <p className="text-sm break-all">{selectedUser.email || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500">Téléphone</p>
+                      <p className="text-sm">{selectedUser.phone || "—"}</p>
+                    </div>
+                    {selectedUser.band_name && (
+                      <div>
+                        <p className="text-xs text-zinc-500">Groupe / Artiste</p>
+                        <p className="text-sm">{selectedUser.band_name}</p>
+                      </div>
+                    )}
+                    {clientIdentity.instagramAccounts && (
+                      <div>
+                        <p className="text-xs text-zinc-500">Compte(s) Instagram</p>
+                        <p className="text-sm">{clientIdentity.instagramAccounts}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs text-zinc-500">Inscrit le</p>
+                      <p className="text-sm">{formatDate(selectedUser.created_at)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500">Total réservations</p>
+                      <p className="text-sm">{selectedUser.total_bookings}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500">Total dépensé</p>
+                      <p className="text-sm">{formatPrice(selectedUser.total_spent)}</p>
+                    </div>
+                  </div>
+
+                  {hasAddress && (
+                    <div className="mt-4 border-t border-zinc-700 pt-3">
+                      <p className="mb-2 text-xs font-medium text-zinc-500">Adresse</p>
+                      <div className="grid gap-1.5 text-sm">
+                        {selectedUser.address_line1 && <p>{selectedUser.address_line1}</p>}
+                        {selectedUser.address_line2 && <p>{selectedUser.address_line2}</p>}
+                        {(selectedUser.postal_code || selectedUser.city) && (
+                          <p>{[selectedUser.postal_code, selectedUser.city].filter(Boolean).join(" ")}</p>
+                        )}
+                        {showCountry && <p>{selectedUser.country}</p>}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedUser.notes && (
+                    <div className="mt-4 border-t border-zinc-700 pt-3">
+                      <p className="mb-2 text-xs font-medium text-zinc-500">Notes internes</p>
+                      <div className="rounded-lg bg-zinc-900 p-3">
+                        <p className="whitespace-pre-wrap text-sm">{selectedUser.notes}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             <div className="space-y-3">
               <div className="relative">
