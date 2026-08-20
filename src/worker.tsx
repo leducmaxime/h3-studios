@@ -2808,6 +2808,8 @@ const app = defineApp([
       try {
         const body = await request.json() as {
           name?: string;
+          first_name?: string;
+          last_name?: string;
           email?: string;
           phone?: string;
           band_name?: string;
@@ -2817,13 +2819,23 @@ const app = defineApp([
           postal_code?: string;
           city?: string;
           country?: string;
+          client_type?: string;
+          legal_name?: string;
+          siret?: string;
+          rna?: string;
+          instagram_accounts?: string;
         };
         if (!body.name) {
           return jsonError("Champ obligatoire manquant: name", 400);
         }
+        if (body.client_type !== undefined && !isClientType(body.client_type)) return jsonError("Type de client invalide", 400);
+        if (body.siret !== undefined && isValidSiret(body.siret)) body.siret = normalizeSiret(body.siret);
+        if (body.rna !== undefined && isValidRna(body.rna)) body.rna = normalizeRna(body.rna);
 
         const user = await createUser(env.DB, {
           name: body.name,
+          first_name: body.first_name,
+          last_name: body.last_name,
           email: body.email,
           phone: body.phone,
           band_name: body.band_name,
@@ -2833,6 +2845,11 @@ const app = defineApp([
           postal_code: body.postal_code,
           city: body.city,
           country: body.country,
+          client_type: body.client_type,
+          legal_name: body.legal_name,
+          siret: body.siret,
+          rna: body.rna,
+          instagram_accounts: body.instagram_accounts,
         });
 
         await addAuditLog(env.DB, "user", user.id, "create", {

@@ -9,6 +9,7 @@ import {
   Plus,
   Minus,
   Gift,
+  Edit,
 } from "lucide-react";
 
 interface ApiEquipment {
@@ -23,6 +24,9 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { STUDIOS, generateBookingRef, formatPrice, slotDurationSlots, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
@@ -31,7 +35,7 @@ import { formatTaxBreakdown } from "@/lib/tax";
 import { groupTypeLabel } from "@/lib/labels";
 import type { MinMaxByGroupType } from "@/lib/pricing";
 import { resolveUserClientIdentity, formatSiret } from "@/lib/client-identity";
-import { bookingFieldLabel, getVisibleBookingFields } from "@/lib/booking-fields";
+import { bookingFieldLabel, bookingFieldRequiredHint, getRequiredBookingFields, getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
 import { formatSessionPriceDisplay, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
 
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
@@ -47,6 +51,53 @@ interface UserSearchResult {
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+}
+
+const CLIENT_TYPE_OPTIONS: { value: ClientType; label: string }[] = [
+  { value: "particulier", label: "Particulier" },
+  { value: "association", label: "Association" },
+  { value: "entreprise", label: "Entreprise" },
+];
+
+/** Formulaire d'édition de la fiche client (miroir des champs modifiables du PUT). */
+interface UserEditForm {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  band_name: string;
+  notes: string;
+  address_line1: string;
+  address_line2: string;
+  postal_code: string;
+  city: string;
+  country: string;
+  client_type: ClientType;
+  legal_name: string;
+  siret: string;
+  rna: string;
+  instagram_accounts: string;
+}
+
+function editFormFromUser(user: DbUser): UserEditForm {
+  return {
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    band_name: user.band_name || "",
+    notes: user.notes || "",
+    address_line1: user.address_line1 || "",
+    address_line2: user.address_line2 || "",
+    postal_code: user.postal_code || "",
+    city: user.city || "",
+    country: user.country || "",
+    client_type: isClientType(user.client_type) ? user.client_type : "particulier",
+    legal_name: user.legal_name || "",
+    siret: user.siret || "",
+    rna: user.rna || "",
+    instagram_accounts: user.instagram_accounts || "",
+  };
 }
 
 interface EquipmentSelection {
@@ -91,6 +142,17 @@ export function AdminBookingNew() {
   const [newUserCity, setNewUserCity] = useState("");
   const [newUserCountry, setNewUserCountry] = useState("France");
   const [creatingUser, setCreatingUser] = useState(false);
+  // Type de client + champs conditionnels (création)
+  const [newUserClientType, setNewUserClientType] = useState<ClientType>("particulier");
+  const [newUserLegalName, setNewUserLegalName] = useState("");
+  const [newUserSiret, setNewUserSiret] = useState("");
+  const [newUserRna, setNewUserRna] = useState("");
+  const [newUserInstagram, setNewUserInstagram] = useState("");
+
+  // Édition de la fiche du client sélectionné
+  const [editingClient, setEditingClient] = useState(false);
+  const [savingClient, setSavingClient] = useState(false);
+  const [editForm, setEditForm] = useState<UserEditForm | null>(null);
 
   // Booking fields
   const [studioId, setStudioId] = useState<StudioId | undefined>(undefined);
@@ -248,6 +310,17 @@ export function AdminBookingNew() {
     if (!newUserAddressLine1.trim()) { toast.error("L'adresse est obligatoire"); return; }
     if (!newUserPostalCode.trim()) { toast.error("Le code postal est obligatoire"); return; }
     if (!newUserCity.trim()) { toast.error("La ville est obligatoire"); return; }
+    // Champs requis selon le type de client (CLIENT_TYPE_RULES)
+    const requiredFields = getRequiredBookingFields(newUserClientType);
+    if (requiredFields.includes("legalName") && !newUserLegalName.trim()) {
+      toast.error(bookingFieldRequiredHint("legalName", newUserClientType));
+      return;
+    }
+    if (requiredFields.includes("siret") && !newUserSiret.trim()) {
+      toast.error(bookingFieldRequiredHint("siret", newUserClientType));
+      return;
+    }
+    const visibleNewFields = getVisibleBookingFields(newUserClientType);
     const fullName = `${newUserFirstName.trim()} ${newUserLastName.trim()}`;
     setCreatingUser(true);
     try {
@@ -267,6 +340,11 @@ export function AdminBookingNew() {
           postal_code: newUserPostalCode.trim(),
           city: newUserCity.trim(),
           country: newUserCountry.trim() || undefined,
+          client_type: newUserClientType,
+          legal_name: visibleNewFields.includes("legalName") ? newUserLegalName.trim() || null : null,
+          siret: visibleNewFields.includes("siret") ? newUserSiret.trim() || null : null,
+          rna: visibleNewFields.includes("rna") ? newUserRna.trim() || null : null,
+          instagram_accounts: visibleNewFields.includes("instagramAccounts") ? newUserInstagram.trim() || null : null,
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
@@ -283,6 +361,11 @@ export function AdminBookingNew() {
         setNewUserPostalCode("");
         setNewUserCity("");
         setNewUserCountry("France");
+        setNewUserClientType("particulier");
+        setNewUserLegalName("");
+        setNewUserSiret("");
+        setNewUserRna("");
+        setNewUserInstagram("");
         toast.success("Client créé");
       } else {
         toast.error(json.error || "Erreur lors de la création");
@@ -291,6 +374,61 @@ export function AdminBookingNew() {
       toast.error("Erreur réseau");
     } finally {
       setCreatingUser(false);
+    }
+  };
+
+  // Édition de la fiche client — même modèle que UserDetail.handleSave :
+  // champs vides → null, champs non visibles pour le type → null.
+  const handleSaveClient = async () => {
+    if (!selectedUser || !editForm) return;
+    if (!editForm.first_name.trim() && !editForm.last_name.trim()) {
+      toast.error("Le nom est obligatoire");
+      return;
+    }
+    setSavingClient(true);
+    try {
+      const visibleFields = getVisibleBookingFields(editForm.client_type);
+      // On envoie first_name + last_name ET name (concaténation) pour que la
+      // fiche, qui affiche first+last en priorité, reste cohérente.
+      const fullName = [editForm.first_name.trim(), editForm.last_name.trim()].filter(Boolean).join(" ");
+      const res = await fetch(`/api/admin/users/${selectedUser.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fullName || selectedUser.name,
+          first_name: editForm.first_name.trim() || null,
+          last_name: editForm.last_name.trim() || null,
+          email: editForm.email.trim() || null,
+          phone: editForm.phone.trim() || null,
+          band_name: editForm.band_name.trim() || null,
+          notes: editForm.notes.trim() || null,
+          address_line1: editForm.address_line1.trim() || null,
+          address_line2: editForm.address_line2.trim() || null,
+          postal_code: editForm.postal_code.trim() || null,
+          city: editForm.city.trim() || null,
+          country: editForm.country.trim() || null,
+          client_type: editForm.client_type,
+          legal_name: visibleFields.includes("legalName") ? editForm.legal_name.trim() || null : null,
+          siret: visibleFields.includes("siret") ? editForm.siret.trim() || null : null,
+          rna: visibleFields.includes("rna") ? editForm.rna.trim() || null : null,
+          instagram_accounts: visibleFields.includes("instagramAccounts") ? editForm.instagram_accounts.trim() || null : null,
+        }),
+      });
+      const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
+      if (json.success && json.data) {
+        toast.success("Profil mis à jour");
+        setSelectedUser(json.data);
+        setEditingClient(false);
+        setEditForm(null);
+      } else {
+        // Ex. email déjà utilisé : l'erreur remonte brute du backend, on
+        // l'affiche telle quelle et on reste en mode édition (saisies intactes).
+        toast.error(json.error || "Erreur lors de la sauvegarde");
+      }
+    } catch {
+      toast.error("Erreur lors de la sauvegarde");
+    } finally {
+      setSavingClient(false);
     }
   };
 
@@ -401,6 +539,116 @@ export function AdminBookingNew() {
           <h2 className="mb-4 font-semibold">Client</h2>
 
           {selectedUser ? (
+            editingClient && editForm ? (
+              <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-4">
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="grid gap-2 lg:col-span-2">
+                    <Label htmlFor="editClientType">Type de client</Label>
+                    <Select
+                      value={editForm.client_type}
+                      onValueChange={(value) => {
+                        const t = value as ClientType;
+                        const visible = getVisibleBookingFields(t);
+                        // Vide les champs devenus invisibles pour ne pas les renvoyer
+                        setEditForm({
+                          ...editForm,
+                          client_type: t,
+                          legal_name: visible.includes("legalName") ? editForm.legal_name : "",
+                          siret: visible.includes("siret") ? editForm.siret : "",
+                          rna: visible.includes("rna") ? editForm.rna : "",
+                        });
+                      }}
+                    >
+                      <SelectTrigger id="editClientType" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CLIENT_TYPE_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {editForm.client_type !== "particulier" && (
+                    <div className="grid gap-2 lg:col-span-2">
+                      <Label htmlFor="editClientLegalName">{bookingFieldLabel("legalName", editForm.client_type)}</Label>
+                      <Input id="editClientLegalName" value={editForm.legal_name} onChange={(e) => setEditForm({ ...editForm, legal_name: e.target.value })} />
+                    </div>
+                  )}
+                  {getVisibleBookingFields(editForm.client_type).includes("siret") && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="editClientSiret">SIRET</Label>
+                      <Input id="editClientSiret" value={editForm.siret} onChange={(e) => setEditForm({ ...editForm, siret: e.target.value })} />
+                    </div>
+                  )}
+                  {getVisibleBookingFields(editForm.client_type).includes("rna") && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="editClientRna">RNA</Label>
+                      <Input id="editClientRna" value={editForm.rna} onChange={(e) => setEditForm({ ...editForm, rna: e.target.value })} />
+                    </div>
+                  )}
+                  <div className="grid gap-2">
+                    <Label htmlFor="editClientFirstName">Prénom</Label>
+                    <Input id="editClientFirstName" value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="editClientLastName">Nom</Label>
+                    <Input id="editClientLastName" value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="editClientEmail">Email</Label>
+                    <Input id="editClientEmail" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="editClientPhone">Téléphone</Label>
+                    <Input id="editClientPhone" type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="editClientBand">Groupe / Artiste</Label>
+                    <Input id="editClientBand" value={editForm.band_name} onChange={(e) => setEditForm({ ...editForm, band_name: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="editClientInstagram">Compte(s) Instagram</Label>
+                    <Input id="editClientInstagram" value={editForm.instagram_accounts} onChange={(e) => setEditForm({ ...editForm, instagram_accounts: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2 lg:col-span-2">
+                    <Label htmlFor="editClientAddress1">Nom et numéro de rue</Label>
+                    <Input id="editClientAddress1" value={editForm.address_line1} onChange={(e) => setEditForm({ ...editForm, address_line1: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2 lg:col-span-2">
+                    <Label htmlFor="editClientAddress2">Complément d'adresse</Label>
+                    <Input id="editClientAddress2" value={editForm.address_line2} onChange={(e) => setEditForm({ ...editForm, address_line2: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="editClientPostalCode">Code postal</Label>
+                    <Input id="editClientPostalCode" value={editForm.postal_code} onChange={(e) => setEditForm({ ...editForm, postal_code: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="editClientCity">Ville</Label>
+                    <Input id="editClientCity" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2 lg:col-span-2">
+                    <Label htmlFor="editClientNotes">Notes internes</Label>
+                    <textarea
+                      id="editClientNotes"
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                      rows={3}
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
+                    />
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-zinc-500">
+                  Ces informations seront mises à jour sur la fiche client, pas seulement pour cette réservation.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" onClick={handleSaveClient} disabled={savingClient}>
+                    {savingClient ? "Enregistrement..." : "Enregistrer"}
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={savingClient} onClick={() => { setEditingClient(false); setEditForm(null); }}>
+                    Annuler
+                  </Button>
+                </div>
+              </div>
+            ) : (
             (() => {
               const clientIdentity = resolveUserClientIdentity(selectedUser);
               const visibleFields = getVisibleBookingFields(clientIdentity.clientType);
@@ -424,9 +672,23 @@ export function AdminBookingNew() {
                         <Badge variant="destructive">Bloqué</Badge>
                       )}
                     </div>
-                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => setSelectedUser(null)}>
-                      Changer
-                    </Button>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setEditForm(editFormFromUser(selectedUser)); setEditingClient(true); }}
+                      >
+                        <Edit className="mr-1 h-4 w-4" />
+                        Modifier
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setSelectedUser(null); setEditingClient(false); setEditForm(null); }}
+                      >
+                        Changer
+                      </Button>
+                    </div>
                   </div>
 
                   {selectedUser.is_blocked === 1 && (
@@ -518,6 +780,7 @@ export function AdminBookingNew() {
                 </div>
               );
             })()
+            )
           ) : (
             <div className="space-y-3">
               <div className="relative">
@@ -560,6 +823,72 @@ export function AdminBookingNew() {
               ) : (
                 <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-800 p-4">
                   <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="lg:col-span-2">
+                      <label htmlFor="newUserClientType" className="mb-1 block text-xs text-zinc-400">Type de client <span className="text-primary">*</span></label>
+                      <Select
+                        value={newUserClientType}
+                        onValueChange={(value) => {
+                          const t = value as ClientType;
+                          const visible = getVisibleBookingFields(t);
+                          setNewUserClientType(t);
+                          // Vide les champs devenus invisibles pour ne pas les envoyer
+                          if (!visible.includes("legalName")) setNewUserLegalName("");
+                          if (!visible.includes("siret")) setNewUserSiret("");
+                          if (!visible.includes("rna")) setNewUserRna("");
+                        }}
+                      >
+                        <SelectTrigger id="newUserClientType" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CLIENT_TYPE_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {newUserClientType !== "particulier" && (
+                      <div className="lg:col-span-2">
+                        <label htmlFor="newUserLegalName" className="mb-1 block text-xs text-zinc-400">{bookingFieldLabel("legalName", newUserClientType)} <span className="text-primary">*</span></label>
+                        <input
+                          id="newUserLegalName"
+                          type="text"
+                          value={newUserLegalName}
+                          onChange={(e) => setNewUserLegalName(e.target.value)}
+                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {getVisibleBookingFields(newUserClientType).includes("siret") && (
+                      <div>
+                        <label htmlFor="newUserSiret" className="mb-1 block text-xs text-zinc-400">
+                          SIRET {getRequiredBookingFields(newUserClientType).includes("siret")
+                            ? <span className="text-primary">*</span>
+                            : <span className="text-zinc-500">(optionnel)</span>}
+                        </label>
+                        <input
+                          id="newUserSiret"
+                          type="text"
+                          value={newUserSiret}
+                          onChange={(e) => setNewUserSiret(e.target.value)}
+                          placeholder="123 456 789 00012"
+                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {getVisibleBookingFields(newUserClientType).includes("rna") && (
+                      <div>
+                        <label htmlFor="newUserRna" className="mb-1 block text-xs text-zinc-400">RNA <span className="text-zinc-500">(optionnel)</span></label>
+                        <input
+                          id="newUserRna"
+                          type="text"
+                          value={newUserRna}
+                          onChange={(e) => setNewUserRna(e.target.value)}
+                          placeholder="W123456789"
+                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                    )}
                     <div className="lg:col-span-2">
                       <label htmlFor="newUserName" className="mb-1 block text-xs text-zinc-400">Prénom et Nom <span className="text-primary">*</span></label>
                       <input
@@ -606,6 +935,17 @@ export function AdminBookingNew() {
                         value={newUserBand}
                         onChange={(e) => setNewUserBand(e.target.value)}
                         placeholder="Les Rockers"
+                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div className="lg:col-span-2">
+                      <label htmlFor="newUserInstagram" className="mb-1 block text-xs text-zinc-400">Compte(s) Instagram <span className="text-zinc-500">(optionnel)</span></label>
+                      <input
+                        id="newUserInstagram"
+                        type="text"
+                        value={newUserInstagram}
+                        onChange={(e) => setNewUserInstagram(e.target.value)}
+                        placeholder="@lesrockers"
                         className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                       />
                     </div>

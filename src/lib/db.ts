@@ -646,14 +646,19 @@ export async function createUser(
     postal_code?: string;
     city?: string;
     country?: string;
+    client_type?: string;
+    legal_name?: string;
+    siret?: string;
+    rna?: string;
+    instagram_accounts?: string;
   },
 ): Promise<DbUser> {
   const id = generateId();
   const timestamp = now();
 
   await db.prepare(`
-    INSERT INTO users (id, email, name, first_name, last_name, phone, band_name, notes, address_line1, address_line2, postal_code, city, country, is_blocked, total_bookings, total_spent, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
+    INSERT INTO users (id, email, name, first_name, last_name, phone, band_name, notes, address_line1, address_line2, postal_code, city, country, client_type, legal_name, siret, rna, instagram_accounts, is_blocked, total_bookings, total_spent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?)
   `).bind(
     id,
     data.email ? data.email.trim().toLowerCase() : null,
@@ -668,6 +673,11 @@ export async function createUser(
     data.postal_code ?? null,
     data.city ?? null,
     data.country ?? null,
+    data.client_type ?? "particulier",
+    data.legal_name ?? null,
+    data.siret ?? null,
+    data.rna ?? null,
+    data.instagram_accounts ?? null,
     timestamp,
     timestamp,
   ).run();
