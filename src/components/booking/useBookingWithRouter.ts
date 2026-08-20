@@ -386,7 +386,9 @@ export function useBookingWithRouter(urlStep?: string) {
   const [todayFullyBlocked, setTodayFullyBlocked] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [cashNotAllowed, setCashNotAllowed] = useState(false);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing } = usePricing();
+  const allowCash = pricingLoading ? false : (pricingData?.allowCash ?? true);
   const { equipment: availableEquipment } = useEquipment();
   const auth = useClientAuth();
   const clientUser = auth.user;
@@ -962,6 +964,7 @@ export function useBookingWithRouter(urlStep?: string) {
     }
     setIsSubmitting(true);
     setSubmitError(null);
+    setCashNotAllowed(false);
 
     try {
       const promoCodeToApply = appliedPromoRef.current?.code ?? null;
@@ -1034,6 +1037,10 @@ export function useBookingWithRouter(urlStep?: string) {
         });
         const json = await res.json() as { success: boolean; data?: { accountStatus?: string; promoCode?: string | null; promoDiscount?: number; netTotal?: number }; error?: string; code?: string };
         if (!json.success) {
+          if (json.code === "cash-not-allowed") {
+            setCashNotAllowed(true);
+            setState((s) => s.paymentMethod === "cash" ? { ...s, paymentMethod: null } : s);
+          }
           if (json.code === "account-exists" && clientUser) {
             await prefillFromClientProfile();
             throw new Error("Votre session a expiré. Reconnectez-vous pour finaliser votre réservation.");
@@ -1118,13 +1125,21 @@ export function useBookingWithRouter(urlStep?: string) {
 
   /** Select payment method → POST bookings, then termine (cash) or stay paiement (card) */
   const selectPaymentMethod = useCallback(async (method: PaymentMethod) => {
+    if (method === "cash" && !allowCash) return;
+    if (method === "card") setCashNotAllowed(false);
     await submitCart(method);
-  }, [submitCart]);
+  }, [allowCash, submitCart]);
 
-  /** 0 € cart: same POST path as cash, after CGV acceptance. */
+  /**
+   * 0 € cart: same POST path as cash, after CGV acceptance.
+   * Le code promo n'est envoyé que sur la dernière requête du panier : sur un
+   * panier multi-créneaux, les requêtes précédentes ont un net > 0 et seraient
+   * refusées si le paiement sur place est désactivé. On soumet donc en "card",
+   * qui aboutit au même résultat (le serveur force "paid" à 0 €, sans Stripe).
+   */
   const confirmFreeBooking = useCallback(async () => {
-    await submitCart(null);
-  }, [submitCart]);
+    await submitCart(allowCash ? null : "card");
+  }, [allowCash, submitCart]);
 
   const setAcceptedCgv = useCallback((accepted: boolean) => {
     setState((s) => ({ ...s, acceptedCgv: accepted }));
@@ -1143,6 +1158,8 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
+    // Le refus serveur portait sur l'ancien panier : il ne vaut plus rien ici.
+    setCashNotAllowed(false);
     setState((s) => {
       const newCart = s.cart.filter((b) => b.id !== bookingId);
       return { ...s, cart: newCart, appliedPromo: null, promoDiscount: 0 };
@@ -1310,6 +1327,7 @@ export function useBookingWithRouter(urlStep?: string) {
     pricingData,
     maxAdvanceDays: pricingData?.maxAdvanceDays ?? 90,
     pricingLoading,
+    allowCash,
     pricingError,
     refetchPricing,
     cartTotal,
@@ -1317,6 +1335,7 @@ export function useBookingWithRouter(urlStep?: string) {
     canConfirmBooking,
     bookingFieldIssues,
     submitError,
+    cashNotAllowed,
     clearSubmitError,
     clientUser,
     clientUserLoading,
