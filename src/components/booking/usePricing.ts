@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { PricingData, PricingGrid } from "@/lib/pricing";
+import type { PricingData, PricingGrid, PricingVersion } from "@/lib/pricing";
+import { resolveGridForDate } from "@/lib/pricing";
 import { setOpeningHours } from "@/lib/booking";
 import { formatDateISO } from "@/lib/utils";
 
-export interface PricingVersion {
-  effectiveFrom: string;
-  grid: PricingGrid;
-}
+export type { PricingVersion };
 
 type PricingApiData = PricingData & { versions?: PricingVersion[] };
 
@@ -70,9 +68,7 @@ export function usePricing() {
     const cached = gridCacheRef.current.get(sessionISO);
     if (cached) return cached;
 
-    const resolved = versions.reduce<PricingGrid | null>((selected, version) => (
-      version.effectiveFrom <= sessionISO ? version.grid : selected
-    ), null) ?? versions[0]?.grid ?? pricing?.grid ?? null;
+    const resolved = resolveGridForDate(versions, sessionISO) ?? pricing?.grid ?? null;
     if (resolved) gridCacheRef.current.set(sessionISO, resolved);
     return resolved;
   }, [pricing, versions]);

@@ -130,6 +130,13 @@ export type DisplayPaymentStatus =
   | "paid-before-cancel"
   | "refunded";
 
+/** Un badge de statut de paiement n'a rien à afficher pour une annulation sans
+ *  solde conservé : le statut "cancelled" est déjà porté par le badge de
+ *  réservation. */
+export function shouldShowDisplayPaymentStatus(status: DisplayPaymentStatus): boolean {
+  return status !== "cancelled";
+}
+
 /** Somme des paiements réellement encaissés (status 'paid'). */
 export function getTotalCurrentlyPaid(payments: Pick<DbPayment, "amount" | "status">[]): number {
   return payments

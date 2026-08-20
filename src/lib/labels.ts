@@ -127,18 +127,21 @@ export function paymentMethodLabelShort(
   return PAYMENT_METHOD_LABELS_SHORT[value as PaymentMethodKey] ?? UNKNOWN_LABEL;
 }
 
-// ─── Statut de paiement porté par la réservation ──────────────────────────────
+// ─── Glossaire de la colonne de paiement stockée ──────────────────────────────
+// Token brut booking.payment_status, utilisé UNIQUEMENT par le journal d'audit
+// et l'export CSV — jamais rendu comme badge de paiement ; les badges utilisent
+// DISPLAY_PAYMENT_STATUS_LABELS.
 
-export const BOOKING_PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+export const STORED_PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   pending: "En attente",
   paid: "Payé",
-  "pay-on-site": "Sur place",
+  "pay-on-site": "Paiement sur place",
 };
 
-export function bookingPaymentStatusLabel(
+export function storedPaymentStatusLabel(
   value: PaymentStatus | (string & {}) | null | undefined
 ): string {
-  return BOOKING_PAYMENT_STATUS_LABELS[value as PaymentStatus] ?? UNKNOWN_LABEL;
+  return STORED_PAYMENT_STATUS_LABELS[value as PaymentStatus] ?? UNKNOWN_LABEL;
 }
 
 // ─── Statut d'une ligne du grand livre `payments` ─────────────────────────────
@@ -156,7 +159,7 @@ export function paymentRecordStatusLabel(
   return PAYMENT_RECORD_STATUS_LABELS[value as DbPaymentStatus] ?? UNKNOWN_LABEL;
 }
 
-// ─── Statut de paiement dérivé (affichage réservation) ────────────────────────
+// ─── Autorité unique des badges de statut de paiement ─────────────────────────
 
 export const DISPLAY_PAYMENT_STATUS_LABELS: Record<DisplayPaymentStatus, string> = {
   paid: "Payé",
@@ -164,7 +167,7 @@ export const DISPLAY_PAYMENT_STATUS_LABELS: Record<DisplayPaymentStatus, string>
   "pay-on-site": "Reste à payer",
   cancelled: "Annulée",
   "paid-before-cancel": "Payée avant annulation",
-  refunded: "Remboursé",
+  refunded: "Remboursement effectué",
 };
 
 export function displayPaymentStatusLabel(
@@ -172,6 +175,21 @@ export function displayPaymentStatusLabel(
 ): string {
   return value == null ? UNKNOWN_LABEL : DISPLAY_PAYMENT_STATUS_LABELS[value] ?? UNKNOWN_LABEL;
 }
+
+/** Variante espace client : formulation adressée au client. Retombe sur la table partagée. */
+export const CLIENT_DISPLAY_PAYMENT_STATUS_LABELS: Partial<Record<DisplayPaymentStatus, string>> = {
+  "paid-before-cancel": "Non remboursable, voir FAQ",
+};
+
+export function clientDisplayPaymentStatusLabel(
+  value: DisplayPaymentStatus | null | undefined,
+): string {
+  if (value == null) return UNKNOWN_LABEL;
+  return CLIENT_DISPLAY_PAYMENT_STATUS_LABELS[value] ?? DISPLAY_PAYMENT_STATUS_LABELS[value] ?? UNKNOWN_LABEL;
+}
+
+/** Ancre de la FAQ relative à la politique d'annulation. */
+export const PAYMENT_STATUS_FAQ_HREF = "/a-propos#faq-annulation";
 
 // ─── Nature du paiement ───────────────────────────────────────────────────────
 

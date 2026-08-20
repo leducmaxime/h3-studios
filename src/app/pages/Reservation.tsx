@@ -12,25 +12,19 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, Plus, RotateCcw, ShoppingCart, X, Wifi, TrainFront, MapPin, Check, PackageCheck, WrenchIcon, AlertTriangle } from "lucide-react";
-import { EquipmentSelector } from "@/components/booking/EquipmentSelector";
+import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, WrenchIcon, AlertTriangle } from "lucide-react";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
-import { TaxBreakdown } from "@/components/common/TaxBreakdown";
+import { BookingOptionsStep } from "@/components/booking/BookingOptionsStep";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
 import { formatDate, formatDuration, formatPrice, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, sortBookingsByStart, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
 import { useEquipment } from "@/components/booking/useEquipment";
+import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 
 const GROUP_LABELS: Record<GroupType, string> = {
   solo: "Solo/Prof particulier",
   duo: "Duo",
   group: "Groupe",
-};
-
-const RECAP_GROUP_LABELS: Record<GroupType, string> = {
-  solo: "Solo / Prof particulier",
-  duo: "Duo",
-  group: "Groupe (3+)",
 };
 
 function formatShortDate(date: Date): string {
@@ -50,15 +44,15 @@ export function Reservation({ step }: ReservationProps) {
     slotsByStudio,
     slotsLoading,
     pricingData,
-    pricingLoading,
     pricingError,
     refetchPricing,
     gridFor,
     cartTotal,
-    canProceedToStudio,
     canConfirmBooking,
     bookingFieldIssues,
     submitError,
+    allowCash,
+    cashNotAllowed,
     clearSubmitError,
     clientUser,
     clientUserLoading,
@@ -76,6 +70,7 @@ export function Reservation({ step }: ReservationProps) {
     clearDuplicateError,
     addAnotherBooking,
     goToCoordonnees,
+    goToOptions,
     goToPaymentFromCoordonnees,
     goToCart,
     removeFromCart,
@@ -143,6 +138,26 @@ export function Reservation({ step }: ReservationProps) {
       })())
     : 0;
 
+  // Live total for the creneau → options CTA: studio price from the grid plus
+  // any equipment already chosen (equipment survives an options → creneau
+  // back-navigation). null while the pricing grid is unavailable.
+  const selectionComplete = !!(state.selectedDate && state.startTime && state.endTime && state.studioId);
+  const creneauTotal = (() => {
+    // Date-effective grid (issue #47): a session dated after a scheduled rate
+    // change must be quoted with the grid in force on that date, not today's.
+    const grid = state.selectedDate ? gridFor(state.selectedDate) : null;
+    if (!selectionComplete || !grid) return null;
+    const studioTotal = calculatePrice(
+      grid,
+      state.studioId as StudioId,
+      (state.groupType || "group") as GroupType,
+      state.selectedDate!,
+      state.startTime!,
+      state.endTime!
+    ).total;
+    return studioTotal + calculateEquipmentPrice(state.equipment, durationHours, availableEquipment);
+  })();
+
   /**
    * Recompute a cart item's time-based price from the pricing grid.
    * Falls back to the stored price when grid is not loaded.
@@ -168,232 +183,19 @@ export function Reservation({ step }: ReservationProps) {
     [state.cart, recomputeCartItemPrice],
   );
 
-  // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau)
+  // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau;
+  // options shows its own in-column cart chip, and goToCart would wipe the in-progress selection there)
   const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "groupe" || state.step === "creneau");
 
-  // Inline recap + options block, shown after studio is selected (within the same step)
-  const renderRecapSection = () => {
-    if (!state.selectedDate || !state.startTime || !state.endTime || !state.studioId) return null;
+  // Selection pills: bright primary on creneau (where the selection is being
+  // made), muted context chips on options (where they only remind the user
+  // what was picked).
+  const pillClass =
+    state.step === "options"
+      ? "rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/60"
+      : "rounded-full bg-primary/20 px-3 py-1 font-medium text-primary";
 
-    const grid = gridFor(state.selectedDate);
-    const studio = STUDIOS[state.studioId as StudioId];
-    const gt = (state.groupType || "group") as GroupType;
-    const priceResult = grid
-      ? calculatePrice(grid, state.studioId as StudioId, gt, state.selectedDate, state.startTime, state.endTime)
-      : { total: 0, breakdown: [] };
-    const total = priceResult.total;
-    const duration = formatDuration(state.startTime, state.endTime);
-    const startIdx = TIME_SLOTS.indexOf(state.startTime);
-    let endIdx = TIME_SLOTS.indexOf(state.endTime);
-    if (endIdx === -1 && state.endTime === "00:00") endIdx = TIME_SLOTS.length;
-    const durationH = (endIdx - startIdx) * 0.5;
-    const equipmentPrice = calculateEquipmentPrice(state.equipment, durationH, availableEquipment);
-    const grandTotal = total + equipmentPrice;
 
-    // Price breakdown: off-peak vs peak hours
-    const offPeakSlots = priceResult.breakdown.filter((s) => !s.isPeak);
-    const peakSlots = priceResult.breakdown.filter((s) => s.isPeak);
-    const offPeakHours = offPeakSlots.length * 0.5;
-    const peakHours = peakSlots.length * 0.5;
-    const offPeakRate = offPeakSlots.length > 0 ? offPeakSlots[0].rate : 0;
-    const peakRate = peakSlots.length > 0 ? peakSlots[0].rate : 0;
-    const anyRate = priceResult.breakdown.length > 0 ? priceResult.breakdown[0].rate : 0;
-    const offPeakSubtotal = offPeakHours * offPeakRate;
-    const peakSubtotal = peakHours * peakRate;
-    // Two-band view when both off-peak and peak slots exist with differing rates.
-    const hasPeakPricing = offPeakSlots.length > 0 && peakSlots.length > 0 && offPeakRate !== peakRate;
-    // Whether this studio/group-type distinguishes peak vs off-peak AT ALL
-    // (grid-driven) — when it does but the booking spans a single band, the
-    // flat line still names the band. When rates are equal, naming the band
-    // would be meaningless.
-    const bandRates = grid?.[state.studioId as StudioId]?.[gt];
-    const hasBandDistinction = bandRates ? bandRates.peak !== bandRates.offPeak : false;
-    // French-style compact durations: 2 → "2h", 1.5 → "1h30", 0.5 → "30min".
-    const formatBandDuration = (hours: number): string => {
-      const h = Math.floor(hours);
-      const m = Math.round((hours - h) * 60);
-      if (m === 0) return `${h}h`;
-      if (h === 0) return `${m}min`;
-      return `${h}h${String(m).padStart(2, "0")}`;
-    };
-
-    const handleConfirmRecap = () => {
-      confirmBooking();
-    };
-
-    return (
-      <div className="flex flex-col gap-5 pb-24 lg:pb-0">
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20">
-              <PackageCheck className="h-4 w-4 text-primary" />
-            </div>
-            <span className="text-sm font-semibold text-primary">Inclus dans votre réservation</span>
-            <span className="ml-auto rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-primary uppercase">Sans surcoût</span>
-          </div>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 lg:grid-cols-2">
-            {["Batterie (sans crash)", "Sono", "Amplis guitare", "Amplis basse", "4 micros", "Pupitres", "Pied synthé"].map((item) => (
-              <div key={item} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-white/85">{item}</span>
-                <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary/80">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15">
-                    <Check className="h-2.5 w-2.5 text-primary" />
-                  </span>
-                  Inclus
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-2 border-t border-white/10 pt-5">
-          <h4 className="mb-3 text-sm font-semibold text-white/80">Options supplémentaires</h4>
-          <EquipmentSelector
-            equipment={state.equipment}
-            onChange={updateEquipment}
-            durationHours={durationH}
-            availableEquipment={availableEquipment}
-            loading={equipmentLoading}
-            availability={equipmentAvailability}
-            clampMessage={equipmentClampMessage}
-          />
-        </div>
-
-        <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-4">
-          <h4 className="mb-3 text-sm font-semibold text-white/80">Récapitulatif</h4>
-
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-white/60">Formule</span>
-              <span className="font-medium">{RECAP_GROUP_LABELS[gt]}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-white/60">Studio</span>
-              <span className="font-medium">{studio.name}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-white/60">Date</span>
-              <span className="font-medium capitalize">{formatDate(state.selectedDate!, "short")}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-white/60">Horaire</span>
-              <span className="font-medium">{state.startTime} - {state.endTime} ({duration})</span>
-            </div>
-          </div>
-
-          <div className="mt-3 border-t border-white/10 pt-3 space-y-1.5 text-sm">
-            {pricingError ? (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5">
-                <span className="text-sm text-red-300">Impossible de charger les tarifs.</span>
-                <button
-                  type="button"
-                  onClick={refetchPricing}
-                  className="shrink-0 rounded-md border border-red-400/40 px-2.5 py-1 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
-                >
-                  Réessayer
-                </button>
-              </div>
-            ) : !grid ? (
-              <div className="space-y-2" aria-busy="true" aria-label="Chargement des tarifs">
-                <div className="h-4 w-2/3 animate-pulse rounded bg-white/10" />
-                <div className="h-4 w-1/2 animate-pulse rounded bg-white/10" />
-                <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
-                  <div className="h-5 w-16 animate-pulse rounded bg-white/10" />
-                  <div className="h-6 w-20 animate-pulse rounded bg-white/10" />
-                </div>
-              </div>
-            ) : (
-              <>
-                {hasPeakPricing ? (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-white/60">Heure creuse — {formatBandDuration(offPeakHours)} x {offPeakRate}€ TTC/h</span>
-                      <span>{formatPrice(offPeakSubtotal)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-white/60">Heure pleine — {formatBandDuration(peakHours)} x {peakRate}€ TTC/h</span>
-                      <span>{formatPrice(peakSubtotal)}</span>
-                    </div>
-                  </>
-                ) : hasBandDistinction ? (
-                  <div className="flex items-center justify-between">
-                    {peakSlots.length > 0 ? (
-                      <>
-                        <span className="text-white/60">Heure pleine — {formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
-                        <span>{formatPrice(total)}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-white/60">Heure creuse — {formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
-                        <span>{formatPrice(total)}</span>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <span className="text-white/60">{formatBandDuration(durationH)} x {anyRate}€ TTC/h</span>
-                    <span>{formatPrice(total)}</span>
-                  </div>
-                )}
-
-                {state.equipment.filter(e => e.quantity > 0).map(e => (
-                  <div key={e.id} className="flex items-center justify-between">
-                    <span className="text-white/60">
-                      {getEquipmentName(e.id)} x{e.quantity}
-                    </span>
-                    <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH, availableEquipment))}</span>
-                  </div>
-                ))}
-
-                <div className="border-t border-white/10 pt-2 mt-1">
-                  <TaxBreakdown ttc={grandTotal} />
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">Total TTC</span>
-                    <span className="text-lg font-bold text-primary">{formatPrice(grandTotal)}</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {state.cart.length > 0 && (
-          <div className="rounded-xl border border-white/10 bg-white/15 p-3">
-            <div className="mb-2 flex items-center gap-2 text-sm">
-              <ShoppingCart className="h-4 w-4 text-primary" />
-              <span className="font-medium text-white/80">
-                {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""} déjà dans le panier ({formatPrice(cartTotal)})
-              </span>
-            </div>
-          </div>
-        )}
-
-        {state.duplicateError && (
-          <div className="flex items-center gap-3 rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-3">
-            <X className="h-5 w-5 text-red-400" />
-            <span className="text-sm font-medium text-red-300">{state.duplicateError}</span>
-          </div>
-        )}
-
-        <button
-          onClick={handleConfirmRecap}
-          disabled={!grid}
-          className="hidden w-full rounded-lg bg-primary py-4 text-lg font-semibold text-black transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 lg:block"
-        >
-          {grid ? `Ajouter au panier - ${formatPrice(grandTotal)}` : pricingError ? "Tarifs indisponibles" : "Chargement des tarifs…"}
-        </button>
-
-        <StickyBookingCTA
-          studioPrice={total}
-          equipmentPrice={equipmentPrice}
-          onConfirm={handleConfirmRecap}
-          disabled={!grid}
-          buttonText="Ajouter au panier"
-          priceLoading={!grid && !pricingError}
-        />
-      </div>
-    );
-  };
 
   if (maintenanceMode) {
     return (
@@ -411,7 +213,7 @@ export function Reservation({ step }: ReservationProps) {
   }
 
   return (
-    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-16 pt-32">
+    <div className="flex min-h-fit grow flex-col items-center gap-8 pb-24 pt-32 lg:pb-16">
       <div className={`mb-12 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
         <h1 className="font-blanka text-4xl lg:text-6xl">
           RESERVATION
@@ -452,25 +254,30 @@ export function Reservation({ step }: ReservationProps) {
                   canNavigateToStep={canNavigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {state.step === "creneau" && state.groupType && (
-                    <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
+                  {state.step === "options" && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                      Votre sélection
+                    </span>
+                  )}
+                  {(state.step === "creneau" || state.step === "options") && state.groupType && (
+                    <span className={pillClass}>
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
                   {/* Studio pill: show on booking step only */}
-                  {state.studioId && state.step === "creneau" && state.groupType === "group" && (
-                    <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
+                  {state.studioId && (state.step === "creneau" || state.step === "options") && state.groupType === "group" && (
+                    <span className={pillClass}>
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
                   {/* Date + time pills */}
-                  {state.selectedDate && state.step === "creneau" && (
-                    <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
+                  {state.selectedDate && (state.step === "creneau" || state.step === "options") && (
+                    <span className={pillClass}>
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && state.step === "creneau" && (
-                    <span className="rounded-full bg-primary/20 px-3 py-1 font-medium text-primary">
+                  {state.startTime && state.endTime && (state.step === "creneau" || state.step === "options") && (
+                    <span className={pillClass}>
                       {state.startTime} - {state.endTime}
                     </span>
                   )}
@@ -504,7 +311,7 @@ export function Reservation({ step }: ReservationProps) {
                       ? "Choisissez une date"
                       : !state.startTime
                         ? "Choisissez votre créneau horaire"
-                        : "Récapitulatif de votre réservation"}
+                        : "Créneau sélectionné — passez aux options"}
                   </p>
                 </div>
 
@@ -541,13 +348,45 @@ export function Reservation({ step }: ReservationProps) {
                   </div>
                 )}
 
-                {/* Recap — appears after time selection (studio is implicit from slot) */}
-                {state.studioId && state.startTime && state.endTime && (
-                  <div>
-                    {renderRecapSection()}
+                {state.selectedDate && state.startTime && state.endTime && state.studioId && (
+                  <div className="border-t border-white/10 pt-6">
+                    <button
+                      type="button"
+                      onClick={goToOptions}
+                      className="hidden w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-black shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99] lg:flex"
+                    >
+                      {creneauTotal !== null ? `Continuer – ${formatPrice(creneauTotal)}` : "Continuer"}
+                      <ArrowRight className="h-5 w-5" />
+                    </button>
+                    <StickyBookingCTA
+                      studioPrice={creneauTotal ?? 0}
+                      equipmentPrice={0}
+                      onConfirm={goToOptions}
+                      buttonText="Continuer"
+                      showPrice={creneauTotal !== null}
+                      priceLoading={creneauTotal === null && !pricingError}
+                    />
                   </div>
                 )}
               </div>
+            )}
+
+            {state.step === "options" && (
+              <BookingOptionsStep
+                state={state}
+                grid={state.selectedDate ? gridFor(state.selectedDate) : null}
+                pricingError={pricingError}
+                refetchPricing={refetchPricing}
+                availableEquipment={availableEquipment}
+                equipmentLoading={equipmentLoading}
+                equipmentAvailability={equipmentAvailability}
+                equipmentClampMessage={equipmentClampMessage}
+                cartTotal={cartTotal}
+                updateEquipment={updateEquipment}
+                getEquipmentName={getEquipmentName}
+                onConfirm={confirmBooking}
+                onBack={goBack}
+              />
             )}
 
             {/* Step coordonnees: Coordonnées (after cart, before payment) */}
@@ -746,7 +585,8 @@ export function Reservation({ step }: ReservationProps) {
                 promoDiscount={state.promoDiscount}
                 acceptedCgv={state.acceptedCgv}
                 onAcceptedCgvChange={setAcceptedCgv}
-                isFree={liveNet === 0}
+                allowOnSitePayment={allowCash}
+                isFree={liveNet === 0 && !cashNotAllowed}
                 isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
                 onConfirmFree={confirmFreeBooking}
@@ -775,7 +615,8 @@ export function Reservation({ step }: ReservationProps) {
                 promoDiscount={state.promoDiscount}
                 acceptedCgv={state.acceptedCgv}
                 onAcceptedCgvChange={setAcceptedCgv}
-                isFree={liveNet === 0}
+                allowOnSitePayment={allowCash}
+                isFree={liveNet === 0 && !cashNotAllowed}
                 isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
                 onConfirmFree={confirmFreeBooking}

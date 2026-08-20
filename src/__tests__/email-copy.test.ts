@@ -25,6 +25,9 @@ describe("buildEmailHtml copy", () => {
     expect(output).toContain("toute annulation effectuée moins de 24 heures avant le début de la réservation est non remboursable");
     expect(output).toContain("Si vous avez choisi le paiement sur place, le montant de la réservation reste intégralement dû");
     expect(output).toContain("06.13.44.08.75");
+    expect(output).toContain("https://search.google.com/local/writereview?placeid=ChIJi9IayzcL5kcRKCQIsydm0kA");
+    expect(output).toContain("Laisser un avis Google");
+    expect(output).toContain("Après votre séance");
   });
 
   it("mentions the remaining amount only when keepBalanceDue", () => {
@@ -57,5 +60,7 @@ describe("buildEmailHtml copy", () => {
     });
     expect(waived).toContain("Aucun montant n'est dû");
     expect(waived).not.toContain("reste intégralement dû");
+    expect(due).not.toContain("writereview");
+    expect(waived).not.toContain("writereview");
   });
 });

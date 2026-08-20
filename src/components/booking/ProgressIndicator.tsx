@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, CircleCheckBig, CreditCard, IdCard, ShoppingCart, Users } from "lucide-react";
+import { Calendar, CircleCheckBig, CreditCard, IdCard, ShoppingCart, Users, Package } from "lucide-react";
 import { type BookingStep, stepIndex } from "@/lib/booking";
 
 interface ProgressIndicatorProps {
@@ -18,11 +18,12 @@ type StepDef = {
 
 /**
  * Step flow (traversal order):
- *   Type → Créneaux → Panier → Coordonnées → Paiement → Terminé
+ *   Type → Créneaux → Options → Panier → Coordonnées → Paiement → Terminé
  */
 const STEP_DEFS: StepDef[] = [
   { icon: Users, step: "groupe", label: "Type" },
   { icon: Calendar, step: "creneau", label: "Créneaux" },
+  { icon: Package, step: "options", label: "Options" },
   { icon: ShoppingCart, step: "panier", label: "Panier" },
   { icon: IdCard, step: "coordonnees", label: "Coordonnées" },
   { icon: CreditCard, step: "paiement", label: "Paiement" },
@@ -39,7 +40,7 @@ export function ProgressIndicator({
 
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-center gap-0">
+      <div className="mx-auto flex w-full max-w-sm items-center justify-center gap-0 lg:max-w-none">
         {STEP_DEFS.map(({ icon: Icon, step, label }, index) => {
           const thisIdx = index;
           const isCompleted = currentIdx > thisIdx;
@@ -50,36 +51,37 @@ export function ProgressIndicator({
             !!canNavigateToStep?.(step);
 
           return (
-            <div key={step} className="flex items-center">
-              <div className="flex flex-col items-center">
+            <div key={step} className="flex min-w-0 flex-1 items-center last:flex-none lg:flex-none">
+              <div className="flex shrink-0 flex-col items-center">
                 <button
                   type="button"
                   disabled={!isClickable}
+                  aria-current={isCurrent ? "step" : undefined}
                   onClick={() => {
                     if (isClickable) {
                       onStepClick(step);
                     }
                   }}
                   className={`
-                    relative flex h-8 w-8 lg:h-10 lg:w-10 items-center justify-center rounded-full
+                    relative flex h-7 w-7 lg:h-10 lg:w-10 items-center justify-center rounded-full
                     transition-all duration-300
                     ${
                       isCompleted
                         ? "bg-primary/20 ring-2 ring-primary"
                         : isCurrent
-                          ? "bg-primary/30 ring-2 ring-primary"
+                          ? "scale-110 bg-primary ring-2 ring-primary shadow-lg shadow-primary/30"
                           : "bg-white/15 ring-1 ring-white/20"
                     }
                     ${isClickable ? "hover:bg-primary/40 hover:scale-110" : ""}
                   `}
                 >
                   {isCurrent && (
-                    <span className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+                    <span className="absolute inset-0 animate-ping rounded-full bg-primary/50" />
                   )}
                 <Icon
                   className={`
-                    relative h-4 w-4 lg:h-5 lg:w-5 transition-colors duration-300
-                    ${isCompleted || isCurrent ? "text-primary" : "text-white/30"}
+                    relative h-3.5 w-3.5 lg:h-5 lg:w-5 transition-colors duration-300
+                    ${isCurrent ? "text-black" : isCompleted ? "text-primary" : "text-white/30"}
                   `}
                 />
                 </button>
@@ -96,7 +98,7 @@ export function ProgressIndicator({
               {index < STEP_DEFS.length - 1 && (
                 <div
                   className={`
-                    mx-1 lg:mx-2 h-0.5 w-3 lg:w-10 transition-colors duration-300
+                    mx-1 lg:mx-2 h-0.5 min-w-1 flex-1 rounded-full lg:w-10 lg:flex-none transition-colors duration-300
                     ${currentIdx > thisIdx ? "bg-primary" : "bg-white/20"}
                   `}
                 />
@@ -104,6 +106,13 @@ export function ProgressIndicator({
             </div>
           );
         })}
+      </div>
+
+      {/* Current step label — mobile only. At 7 steps the 14px icons alone
+          are not self-explanatory (Package, IdCard…); desktop keeps the
+          numeric captions under each circle instead. */}
+      <div className="mt-2 text-center text-xs font-medium text-primary lg:hidden">
+        {STEP_DEFS[currentIdx]?.label}
       </div>
 
       <div className="mt-4 flex gap-1">

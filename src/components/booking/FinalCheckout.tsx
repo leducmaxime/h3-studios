@@ -197,7 +197,7 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
 
       <button
         onClick={onNewBooking}
-        className="w-full rounded-lg bg-primary py-3 font-semibold text-black transition-colors hover:bg-primary/90"
+        className="w-full rounded-xl bg-primary py-3 font-semibold text-black shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99]"
       >
         Nouvelle réservation
       </button>

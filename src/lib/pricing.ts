@@ -30,6 +30,7 @@ export interface PricingData {
   minMaxByGroupType: MinMaxByGroupType;
   maxAdvanceDays: number;
   openingHours?: Record<string, Record<number, { open: string; close: string }>>;
+  allowCash?: boolean;
 }
 
 export interface PriceSlot {
@@ -83,6 +84,44 @@ export function buildPricingGridAsOf(rows: DbPricing[], sessionDateISO: string):
 /** Liste les dates d'effet futures, distinctes et triées. */
 export function listScheduledEffectiveDates(rows: DbPricing[], todayParisISO: string): string[] {
   return [...new Set(rows.map((row) => row.effective_from).filter((date) => date > todayParisISO))].sort();
+}
+
+/** Une version de grille servie par GET /api/pricing. */
+export interface PricingVersion {
+  effectiveFrom: string;
+  grid: PricingGrid;
+}
+
+/**
+ * Résout la grille en vigueur à la date de séance (miroir client de
+ * `selectPriceCentsAsOf`) : la version au `effectiveFrom` le plus grand parmi
+ * celles <= sessionDateISO.
+ *
+ * Volontairement indépendant de l'ordre du tableau : ne jamais se reposer sur
+ * l'ordre d'émission de l'API, sinon un réordonnancement ferait silencieusement
+ * retomber toute séance future sur la grille la plus ancienne.
+ *
+ * Repli : la version la plus ancienne, pour une séance antérieure à toute
+ * version connue (dates passées autorisées côté admin).
+ */
+export function resolveGridForDate(
+  versions: PricingVersion[],
+  sessionDateISO: string,
+): PricingGrid | null {
+  let effective: PricingVersion | null = null;
+  let earliest: PricingVersion | null = null;
+  for (const version of versions) {
+    if (
+      version.effectiveFrom <= sessionDateISO &&
+      (!effective || version.effectiveFrom > effective.effectiveFrom)
+    ) {
+      effective = version;
+    }
+    if (!earliest || version.effectiveFrom < earliest.effectiveFrom) {
+      earliest = version;
+    }
+  }
+  return (effective ?? earliest)?.grid ?? null;
 }
 
 /**

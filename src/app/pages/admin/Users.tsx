@@ -12,6 +12,7 @@ import {
   Eye,
   UserPlus,
   Plus,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -39,6 +40,7 @@ import { formatPrice } from "@/lib/booking";
 import { type DbUser } from "@/lib/db-types";
 import { exportUsersCSV } from "@/lib/export";
 import { resolveUserClientIdentity } from "@/lib/client-identity";
+import { CLIENT_TYPES, CLIENT_TYPE_RULES } from "@/lib/booking-fields";
 
 interface UsersApiResponse {
   data: DbUser[];
@@ -53,6 +55,7 @@ export function AdminUsers() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [blockedFilter, setBlockedFilter] = useState<"all" | "blocked" | "active">("all");
+  const [clientTypeFilter, setClientTypeFilter] = useState<"all" | "particulier" | "association" | "entreprise">("all");
   const [sortBy, setSortBy] = useState<"created_at" | "name" | "total_bookings" | "total_spent">("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -75,18 +78,26 @@ export function AdminUsers() {
   });
   const perPage = 20;
 
+  const buildUserQuery = useCallback((overrides?: { all?: boolean }) => {
+    const params = new URLSearchParams();
+    if (overrides?.all) {
+      params.set("all", "true");
+    } else {
+      params.set("page", String(page));
+      params.set("limit", String(perPage));
+    }
+    if (search) params.set("search", search);
+    if (blockedFilter !== "all") params.set("blocked", blockedFilter === "blocked" ? "true" : "false");
+    if (clientTypeFilter !== "all") params.set("clientType", clientTypeFilter);
+    params.set("sortBy", sortBy);
+    params.set("sortOrder", sortOrder);
+    return params;
+  }, [page, perPage, search, blockedFilter, clientTypeFilter, sortBy, sortOrder]);
+
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(perPage),
-      });
-      if (search) params.set("search", search);
-
-      if (blockedFilter !== "all") params.set("blocked", blockedFilter === "blocked" ? "true" : "false");
-      params.set("sortBy", sortBy);
-      params.set("sortOrder", sortOrder);
+      const params = buildUserQuery();
 
       const res = await fetch(`/api/admin/users?${params}`);
       const json = (await res.json()) as { success: boolean; data: UsersApiResponse };
@@ -100,7 +111,7 @@ export function AdminUsers() {
     } finally {
       setLoading(false);
     }
-  }, [page, perPage, search, blockedFilter, sortBy, sortOrder]);
+  }, [buildUserQuery]);
 
   useEffect(() => {
     fetchUsers();
@@ -110,6 +121,7 @@ export function AdminUsers() {
     const timer = setTimeout(() => {
       setSearch(searchInput);
       setPage(1);
+      setSelectedIds(new Set());
     }, 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
@@ -227,12 +239,7 @@ export function AdminUsers() {
   }, [users, selectedIds]);
 
   const handleExportCSV = async () => {
-    const params = new URLSearchParams();
-    params.set("all", "true");
-    if (search) params.set("search", search);
-    if (blockedFilter !== "all") params.set("blocked", blockedFilter === "blocked" ? "true" : "false");
-    params.set("sortBy", sortBy);
-    params.set("sortOrder", sortOrder);
+    const params = buildUserQuery({ all: true });
 
     try {
       const res = await fetch(`/api/admin/users?${params}`);
@@ -259,6 +266,7 @@ export function AdminUsers() {
 
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            <Download className="mr-2 h-4 w-4" />
             Exporter CSV
           </Button>
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -348,39 +356,60 @@ export function AdminUsers() {
             <input
               type="text"
               placeholder="Rechercher..."
+              aria-label="Rechercher un client"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
             />
           </div>
-          <select
-            value={blockedFilter}
-            onChange={(e) => { setBlockedFilter(e.target.value as typeof blockedFilter); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
-          >
-            <option value="all">Tous</option>
-            <option value="active">Actifs</option>
-            <option value="blocked">Bloqués</option>
-          </select>
-          <div className="ml-auto flex items-center gap-1">
-            <span className="text-[10px] text-zinc-500">Tri</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-400">Statut</span>
             <select
-              value={sortBy}
-              onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
+              value={blockedFilter}
+              onChange={(e) => { setBlockedFilter(e.target.value as typeof blockedFilter); setPage(1); setSelectedIds(new Set()); }}
+              aria-label="Filtrer par statut"
               className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
             >
-              <option value="created_at">Création</option>
+              <option value="all">Tous</option>
+              <option value="active">Actifs</option>
+              <option value="blocked">Bloqués</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-400">Type de client</span>
+            <select
+              value={clientTypeFilter}
+              onChange={(e) => { setClientTypeFilter(e.target.value as typeof clientTypeFilter); setPage(1); setSelectedIds(new Set()); }}
+              aria-label="Filtrer par type de client"
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="all">Tous</option>
+              {CLIENT_TYPES.map((t) => (
+                <option key={t} value={t}>{CLIENT_TYPE_RULES[t].label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-400">Tri</span>
+            <select
+              value={sortBy}
+              onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); setSelectedIds(new Set()); }}
+              aria-label="Trier par"
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="created_at">Date de création</option>
               <option value="name">Nom</option>
-              <option value="total_bookings">Résas</option>
-              <option value="total_spent">€</option>
+              <option value="total_bookings">Nb de réservations</option>
+              <option value="total_spent">Total dépensé</option>
             </select>
             <select
               value={sortOrder}
-              onChange={(e) => { setSortOrder(e.target.value as typeof sortOrder); setPage(1); }}
+              onChange={(e) => { setSortOrder(e.target.value as typeof sortOrder); setPage(1); setSelectedIds(new Set()); }}
+              aria-label="Ordre de tri"
               className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
             >
-              <option value="desc">↓</option>
-              <option value="asc">↑</option>
+              <option value="desc">Décroissant</option>
+              <option value="asc">Croissant</option>
             </select>
           </div>
         </div>

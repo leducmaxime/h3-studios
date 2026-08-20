@@ -5,7 +5,9 @@ import {
   selectPriceCentsAsOf,
   buildPricingGridAsOf,
   listScheduledEffectiveDates,
+  resolveGridForDate,
   type PricingGrid,
+  type PricingVersion,
 } from "../lib/pricing";
 import type { DbPricing } from "../lib/db-types";
 import {
@@ -308,5 +310,46 @@ describe("calculatePromoDiscount", () => {
     const promo = { code: "TEST", type: "fixed" as const, value: 50, description: "" };
     const discount = calculatePromoDiscount(promo, 30);
     expect(discount).toBe(30);
+  });
+});
+
+describe("resolveGridForDate", () => {
+  const gridWith = (rate: number): PricingGrid => ({
+    "la-scene": { solo: { peak: rate, offPeak: rate } },
+  });
+  const base = { effectiveFrom: "1970-01-01", grid: gridWith(30) };
+  const autumn = { effectiveFrom: "2026-09-01", grid: gridWith(40) };
+  const winter = { effectiveFrom: "2026-12-01", grid: gridWith(50) };
+  const rate = (versions: PricingVersion[], date: string) =>
+    resolveGridForDate(versions, date)?.["la-scene"].solo.peak;
+
+  it("resolves the version in force on the session date", () => {
+    expect(rate([base, autumn, winter], "2026-08-20")).toBe(30);
+    expect(rate([base, autumn, winter], "2026-10-15")).toBe(40);
+    expect(rate([base, autumn, winter], "2026-12-25")).toBe(50);
+  });
+
+  it("treats effective_from as inclusive on the activation day", () => {
+    expect(rate([base, autumn], "2026-08-31")).toBe(30);
+    expect(rate([base, autumn], "2026-09-01")).toBe(40);
+  });
+
+  // Regression: the resolver must pick the greatest matching effectiveFrom,
+  // never the last matching array element. Emission order from GET /api/pricing
+  // is not a contract — if it ever changed, an order-dependent resolver would
+  // silently quote every future session at the oldest grid.
+  it("is independent of the order of the versions array", () => {
+    const shuffled = [winter, base, autumn];
+    expect(rate(shuffled, "2026-08-20")).toBe(30);
+    expect(rate(shuffled, "2026-10-15")).toBe(40);
+    expect(rate(shuffled, "2026-12-25")).toBe(50);
+  });
+
+  it("falls back to the earliest version for a session before any version", () => {
+    expect(rate([winter, autumn], "2026-01-01")).toBe(40);
+  });
+
+  it("returns null when there is no version at all", () => {
+    expect(resolveGridForDate([], "2026-08-20")).toBeNull();
   });
 });

@@ -5,10 +5,10 @@ import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, User } from "lucide-react";
 import { getParisDateISO } from "@/lib/utils";
-import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue, type DisplayPaymentStatus } from "@/lib/booking-totals";
+import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue, shouldShowDisplayPaymentStatus, type DisplayPaymentStatus } from "@/lib/booking-totals";
 import { formatPrice } from "@/lib/booking";
 import { logout, useClientAuth } from "@/lib/client-auth-store";
-import { BOOKING_STATUS_LABELS, bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, studioLabel } from "@/lib/labels";
+import { BOOKING_STATUS_LABELS, bookingStatusLabel, clientDisplayPaymentStatusLabel, groupTypeLabel, PAYMENT_STATUS_FAQ_HREF, studioLabel } from "@/lib/labels";
 
 interface BookingRow {
   id: string;
@@ -228,8 +228,7 @@ function BookingCard({ booking }: { booking: BookingRow }) {
     { keepBalanceDue: isKeepBalanceDue(booking), remaining: booking.remaining ?? 0 },
   );
   const paymentTone = PAYMENT_TONES[displayPaymentStatus];
-  // L’espace client nomme explicitement le lieu de paiement pour ce statut.
-  const payment = { label: displayPaymentStatus === "pay-on-site" && booking.status !== "cancelled" ? "À payer sur place" : displayPaymentStatus === "pay-on-site" ? "Reste à payer" : displayPaymentStatusLabel(displayPaymentStatus), ...paymentTone };
+  const payment = { label: clientDisplayPaymentStatusLabel(displayPaymentStatus), ...paymentTone };
   const studio = studioLabel(booking.studio_id);
   const group = groupTypeLabel(booking.group_type);
   const isPast = booking.date < getParisDateISO() || ["cancelled", "completed", "no-show"].includes(booking.status);
@@ -282,12 +281,16 @@ function BookingCard({ booking }: { booking: BookingRow }) {
           <span className={`text-xs font-medium px-3 py-1.5 rounded-full border ${status.bg} ${status.text} ${status.border}`}>
             {status.label}
           </span>
-          <span className={`text-xs font-medium px-3 py-1.5 rounded-full border ${payment.bg} ${payment.text} ${payment.border}`}>
-            {payment.label}
-          </span>
-          <span className="text-white font-bold text-sm ml-1">
-            {amount === null ? "—" : formatPrice(amount)}
-          </span>
+          {shouldShowDisplayPaymentStatus(displayPaymentStatus) && (displayPaymentStatus === "paid-before-cancel" ? (
+            <a href={PAYMENT_STATUS_FAQ_HREF} className={`text-xs font-medium px-3 py-1.5 rounded-full border underline decoration-dotted underline-offset-2 transition-opacity hover:opacity-80 ${payment.bg} ${payment.text} ${payment.border}`}>
+              {payment.label}
+            </a>
+          ) : (
+            <span className={`text-xs font-medium px-3 py-1.5 rounded-full border ${payment.bg} ${payment.text} ${payment.border}`}>
+              {payment.label}
+            </span>
+          ))}
+          {amount !== null && <span className="text-white font-bold text-sm ml-1">{formatPrice(amount)}</span>}
         </div>
       </div>
     </div>

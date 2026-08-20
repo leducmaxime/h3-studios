@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { formatDateISO } from "@/lib/utils";
+import { formatDateISO, getParisDateISO } from "@/lib/utils";
 import type { PricingData } from "@/lib/pricing";
 import type { ClientUser } from "@/lib/client-user";
 import { calculatePrice } from "@/lib/pricing";
@@ -152,11 +152,12 @@ export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile, 
 
 /**
  * Slug-based step flow:
- *   groupe → creneau → panier → coordonnees → paiement → termine
+ *   groupe → creneau → options → panier → coordonnees → paiement → termine
  *
  * Guards:
- *   - Cart lock:   cart.length > 0 && !isAddingNew → groupe/creneau → panier
+ *   - Cart lock:   cart.length > 0 && !isAddingNew → groupe/creneau/options → panier
  *   - creneau:     requires groupType, else → groupe
+ *   - options:     requires groupType and a complete slot selection
  *   - panier/coordonnees/paiement: require cart.length > 0, else → groupe
  *   - termine:     terminal (direct nav → groupe)
  */
@@ -194,21 +195,26 @@ function navigateToUrl(step: BookingStep, replace = false) {
 // ---------------------------------------------------------------------------
 // Guard logic — pure function, no side-effects
 // ---------------------------------------------------------------------------
-function applyStepGuards(
-  cart: CompletedBooking[],
-  isAddingNew: boolean,
-  groupType: GroupType | null,
-  targetStep: BookingStep,
-): { step: BookingStep; isRedirect: boolean } {
-  // Cart lock: groupe or creneau → panier
-  if (cart.length > 0 && !isAddingNew && (targetStep === "groupe" || targetStep === "creneau")) {
+export function hasSlotSelection(s: { selectedDate: Date | null; startTime: string | null; endTime: string | null; studioId: StudioId | null }): boolean {
+  return !!(s.selectedDate && s.startTime && s.endTime && s.studioId);
+}
+
+export function applyStepGuards(args: {
+  cart: CompletedBooking[];
+  isAddingNew: boolean;
+  groupType: GroupType | null;
+  hasSlotSelection: boolean;
+  targetStep: BookingStep;
+}): { step: BookingStep; isRedirect: boolean } {
+  const { cart, isAddingNew, groupType, hasSlotSelection: selected, targetStep } = args;
+  if (cart.length > 0 && !isAddingNew && (targetStep === "groupe" || targetStep === "creneau" || targetStep === "options")) {
     return { step: "panier", isRedirect: true };
   }
-  // Creneau: needs groupType
   if (targetStep === "creneau" && !groupType) {
     return { step: "groupe", isRedirect: true };
   }
-  // Panier, coordonnees, paiement: need cart items
+  if (targetStep === "options" && !groupType) return { step: "groupe", isRedirect: true };
+  if (targetStep === "options" && !selected) return { step: "creneau", isRedirect: true };
   if ((targetStep === "panier" || targetStep === "coordonnees" || targetStep === "paiement") && cart.length === 0) {
     return { step: "groupe", isRedirect: true };
   }
@@ -217,6 +223,53 @@ function applyStepGuards(
     return { step: "groupe", isRedirect: true };
   }
   return { step: targetStep, isRedirect: false };
+}
+
+export function applyGoBack<T extends {
+  step: BookingStep; selectedDate: Date | null; startTime: string | null; endTime: string | null;
+  studioId: StudioId | null; groupType: GroupType | null; equipment: EquipmentSelection[];
+  cart: CompletedBooking[]; isAddingNew: boolean; bookingRef: string | null; paymentMethod: PaymentMethod | null;
+}>(s: T): T {
+  if (s.step === "groupe") {
+    if (s.isAddingNew && s.cart.length > 0) return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null, groupType: null, bookingRef: null, equipment: [], step: "panier", isAddingNew: false };
+    return s;
+  }
+  if (s.step === "options") return { ...s, step: "creneau" };
+  if (s.step === "creneau") {
+    if (s.selectedDate) return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
+    return { ...s, step: "groupe", groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
+  }
+  if (s.step === "coordonnees") return { ...s, step: "panier" };
+  if (s.step === "panier") return s;
+  if (s.step === "paiement") return { ...s, step: "coordonnees", paymentMethod: null };
+  if (s.step === "termine") return { ...s, step: "paiement" };
+  return s;
+}
+
+export function applySelectDate<T extends {
+  selectedDate: Date | null; startTime: string | null; endTime: string | null;
+  equipment: EquipmentSelection[];
+}>(s: T, date: Date): T {
+  if (s.selectedDate && getParisDateISO(s.selectedDate) === getParisDateISO(date)) return s;
+  return { ...s, selectedDate: date, startTime: null, endTime: null };
+}
+
+export function applyClearTimeRange<T extends {
+  startTime: string | null; endTime: string | null; studioId: StudioId | null;
+  equipment: EquipmentSelection[];
+}>(s: T): T {
+  return { ...s, startTime: null, endTime: null, studioId: null };
+}
+
+export function applySetGroupType<T extends {
+  groupType: GroupType | null; step: BookingStep; selectedDate: Date | null;
+  startTime: string | null; endTime: string | null; studioId: StudioId | null;
+  equipment: EquipmentSelection[];
+}>(s: T, groupType: GroupType | null): T {
+  if (groupType === "solo" || groupType === "duo" || groupType === "group") {
+    return { ...s, groupType, step: "creneau", selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
+  }
+  return { ...s, groupType };
 }
 
 // ---------------------------------------------------------------------------
@@ -241,7 +294,7 @@ function serializeState(state: ExtendedBookingState): SerializedBookingState {
   };
 }
 
-function deserializeState(serialized: SerializedBookingState): ExtendedBookingState {
+export function deserializeState(serialized: SerializedBookingState): ExtendedBookingState {
   // Defensive: drop any credential fields that a previous version may have
   // persisted — they must never round-trip through localStorage.
   const { accountPassword, accountPasswordConfirm, ...safe } = serialized as SerializedBookingState & {
@@ -371,7 +424,7 @@ export function useBookingWithRouter(urlStep?: string) {
     ...initialState,
     // Guard the URL-derived step even for the very first render (SSR included):
     // a fresh visitor has no cart/groupType, so deep links land on groupe.
-    step: applyStepGuards([], false, null, initialStep).step,
+    step: applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: false, targetStep: initialStep }).step,
   });
   const [isHydrated, setIsHydrated] = useState(false);
   const isInitialMount = useRef(true);
@@ -386,7 +439,9 @@ export function useBookingWithRouter(urlStep?: string) {
   const [todayFullyBlocked, setTodayFullyBlocked] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [cashNotAllowed, setCashNotAllowed] = useState(false);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing, gridFor } = usePricing();
+  const allowCash = pricingLoading ? false : (pricingData?.allowCash ?? true);
   const { equipment: availableEquipment } = useEquipment();
   const auth = useClientAuth();
   const clientUser = auth.user;
@@ -593,12 +648,7 @@ export function useBookingWithRouter(urlStep?: string) {
       }
 
       // Apply guards
-      const { step: guardedStep, isRedirect } = applyStepGuards(
-        restoredState.cart,
-        restoredState.isAddingNew,
-        restoredState.groupType,
-        restoredState.step,
-      );
+      const { step: guardedStep, isRedirect } = applyStepGuards({ cart: restoredState.cart, isAddingNew: restoredState.isAddingNew, groupType: restoredState.groupType, hasSlotSelection: hasSlotSelection(restoredState), targetStep: restoredState.step });
       restoredState.step = guardedStep;
 
       setState(restoredState);
@@ -611,7 +661,7 @@ export function useBookingWithRouter(urlStep?: string) {
       // panier/coordonnees/paiement/termine redirect to groupe) and replace
       // the URL so it never points at an unreachable step.
       const urlStepSlug = resolveStepFromUrl(urlStep);
-      const { step: guardedStep, isRedirect } = applyStepGuards([], false, null, urlStepSlug);
+      const { step: guardedStep, isRedirect } = applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: false, targetStep: urlStepSlug });
       setState((s) => ({
         ...s,
         step: guardedStep,
@@ -676,12 +726,7 @@ export function useBookingWithRouter(urlStep?: string) {
       return;
     }
 
-    const { step: guardedStep, isRedirect } = applyStepGuards(
-      state.cart,
-      state.isAddingNew,
-      state.groupType,
-      state.step,
-    );
+    const { step: guardedStep, isRedirect } = applyStepGuards({ cart: state.cart, isAddingNew: state.isAddingNew, groupType: state.groupType, hasSlotSelection: hasSlotSelection(state), targetStep: state.step });
 
     if (guardedStep !== state.step) {
       setState((s) => ({ ...s, step: guardedStep }));
@@ -690,7 +735,7 @@ export function useBookingWithRouter(urlStep?: string) {
     }
 
     navigateToUrl(state.step);
-  }, [state.step, isHydrated, state.cart.length, state.isAddingNew, state.groupType]);
+  }, [state.step, isHydrated, state.cart.length, state.isAddingNew, state.groupType, state.selectedDate, state.startTime, state.endTime, state.studioId]);
 
   // Scroll to top on step change
   useEffect(() => {
@@ -718,12 +763,7 @@ export function useBookingWithRouter(urlStep?: string) {
           return { ...initialState };
         }
 
-        const { step: guardedStep, isRedirect } = applyStepGuards(
-          s.cart,
-          s.isAddingNew,
-          s.groupType,
-          urlStep,
-        );
+        const { step: guardedStep, isRedirect } = applyStepGuards({ cart: s.cart, isAddingNew: s.isAddingNew, groupType: s.groupType, hasSlotSelection: hasSlotSelection(s), targetStep: urlStep });
 
         if (isRedirect && guardedStep !== urlStep) {
           window.history.replaceState({}, "", `/reservation/${guardedStep}`);
@@ -747,16 +787,14 @@ export function useBookingWithRouter(urlStep?: string) {
   const navigateToStep = useCallback((targetStep: BookingStep) => {
     setState((s) => {
       // Apply guards
-      const { step: guardedStep } = applyStepGuards(
-        s.cart, s.isAddingNew, s.groupType, targetStep,
-      );
+      const { step: guardedStep } = applyStepGuards({ cart: s.cart, isAddingNew: s.isAddingNew, groupType: s.groupType, hasSlotSelection: hasSlotSelection(s), targetStep });
 
       // Preserve reset behavior for groupe when switching group type —
       // only apply when the guard allowed the navigation (no redirect).
       if (targetStep === "groupe" && guardedStep === targetStep && (s.groupType === "solo" || s.groupType === "duo")) {
         return {
           ...s, step: "groupe", groupType: null,
-          selectedDate: null, startTime: null, endTime: null, studioId: null,
+          selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [],
         };
       }
 
@@ -765,12 +803,7 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const selectDate = useCallback((date: Date) => {
-    setState((s) => ({
-      ...s,
-      selectedDate: date,
-      startTime: null,
-      endTime: null,
-    }));
+    setState((s) => applySelectDate(s, date));
   }, []);
 
   const selectTimeRange = useCallback((startTime: string, endTime: string, studioId: StudioId) => {
@@ -778,16 +811,11 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const clearTimeRange = useCallback(() => {
-    setState((s) => ({ ...s, startTime: null, endTime: null, studioId: null }));
+    setState((s) => applyClearTimeRange(s));
   }, []);
 
   const setGroupType = useCallback((groupType: GroupType | null) => {
-    setState((s) => {
-      if (groupType === "solo" || groupType === "duo" || groupType === "group") {
-        return { ...s, groupType, step: "creneau", selectedDate: null, startTime: null, endTime: null, studioId: null };
-      }
-      return { ...s, groupType };
-    });
+    setState((s) => applySetGroupType(s, groupType));
   }, []);
 
   const selectStudio = useCallback((studioId: StudioId) => {
@@ -827,6 +855,10 @@ export function useBookingWithRouter(urlStep?: string) {
   /** From cart page: go to coordonnées */
   const goToCoordonnees = useCallback(() => {
     setState((s) => ({ ...s, step: "coordonnees" }));
+  }, []);
+
+  const goToOptions = useCallback(() => {
+    setState((s) => ({ ...s, step: "options" }));
   }, []);
 
   const isDuplicateBooking = useCallback((
@@ -962,6 +994,7 @@ export function useBookingWithRouter(urlStep?: string) {
     }
     setIsSubmitting(true);
     setSubmitError(null);
+    setCashNotAllowed(false);
 
     try {
       const promoCodeToApply = appliedPromoRef.current?.code ?? null;
@@ -1034,6 +1067,10 @@ export function useBookingWithRouter(urlStep?: string) {
         });
         const json = await res.json() as { success: boolean; data?: { accountStatus?: string; promoCode?: string | null; promoDiscount?: number; netTotal?: number }; error?: string; code?: string };
         if (!json.success) {
+          if (json.code === "cash-not-allowed") {
+            setCashNotAllowed(true);
+            setState((s) => s.paymentMethod === "cash" ? { ...s, paymentMethod: null } : s);
+          }
           if (json.code === "account-exists" && clientUser) {
             await prefillFromClientProfile();
             throw new Error("Votre session a expiré. Reconnectez-vous pour finaliser votre réservation.");
@@ -1118,13 +1155,21 @@ export function useBookingWithRouter(urlStep?: string) {
 
   /** Select payment method → POST bookings, then termine (cash) or stay paiement (card) */
   const selectPaymentMethod = useCallback(async (method: PaymentMethod) => {
+    if (method === "cash" && !allowCash) return;
+    if (method === "card") setCashNotAllowed(false);
     await submitCart(method);
-  }, [submitCart]);
+  }, [allowCash, submitCart]);
 
-  /** 0 € cart: same POST path as cash, after CGV acceptance. */
+  /**
+   * 0 € cart: same POST path as cash, after CGV acceptance.
+   * Le code promo n'est envoyé que sur la dernière requête du panier : sur un
+   * panier multi-créneaux, les requêtes précédentes ont un net > 0 et seraient
+   * refusées si le paiement sur place est désactivé. On soumet donc en "card",
+   * qui aboutit au même résultat (le serveur force "paid" à 0 €, sans Stripe).
+   */
   const confirmFreeBooking = useCallback(async () => {
-    await submitCart(null);
-  }, [submitCart]);
+    await submitCart(allowCash ? null : "card");
+  }, [allowCash, submitCart]);
 
   const setAcceptedCgv = useCallback((accepted: boolean) => {
     setState((s) => ({ ...s, acceptedCgv: accepted }));
@@ -1143,6 +1188,8 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const removeFromCart = useCallback((bookingId: string) => {
+    // Le refus serveur portait sur l'ancien panier : il ne vaut plus rien ici.
+    setCashNotAllowed(false);
     setState((s) => {
       const newCart = s.cart.filter((b) => b.id !== bookingId);
       return { ...s, cart: newCart, appliedPromo: null, promoDiscount: 0 };
@@ -1185,36 +1232,7 @@ export function useBookingWithRouter(urlStep?: string) {
   }, []);
 
   const goBack = useCallback(() => {
-    setState((s) => {
-      if (s.step === "groupe") {
-        if (s.isAddingNew && s.cart.length > 0) {
-          return {
-            ...s,
-            selectedDate: null,
-            startTime: null,
-            endTime: null,
-            studioId: null,
-            groupType: null,
-            bookingRef: null,
-            equipment: [],
-            step: "panier",
-            isAddingNew: false,
-          };
-        }
-        return s;
-      }
-      if (s.step === "creneau") {
-        if (s.selectedDate) {
-          return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null };
-        }
-        return { ...s, step: "groupe", groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null };
-      }
-      if (s.step === "coordonnees") return { ...s, step: "panier" };
-      if (s.step === "panier") return s;
-      if (s.step === "paiement") return { ...s, step: "coordonnees", paymentMethod: null };
-      if (s.step === "termine") return { ...s, step: "paiement" };
-      return s;
-    });
+    setState((s) => applyGoBack(s));
   }, []);
 
   // -------------------------------------------------------------------------
@@ -1291,11 +1309,9 @@ export function useBookingWithRouter(urlStep?: string) {
   /** Exposed for ProgressIndicator — checks if a slug step is reachable via user click */
   const canNavigateToStep = useCallback((targetStep: BookingStep): boolean => {
     if (targetStep === "paiement" || targetStep === "termine") return false;
-    const { isRedirect } = applyStepGuards(
-      state.cart, state.isAddingNew, state.groupType, targetStep,
-    );
+    const { isRedirect } = applyStepGuards({ cart: state.cart, isAddingNew: state.isAddingNew, groupType: state.groupType, hasSlotSelection: hasSlotSelection(state), targetStep });
     return !isRedirect;
-  }, [state.cart, state.isAddingNew, state.groupType]);
+  }, [state.cart, state.isAddingNew, state.groupType, state.selectedDate, state.startTime, state.endTime, state.studioId]);
 
   return {
     state,
@@ -1308,6 +1324,7 @@ export function useBookingWithRouter(urlStep?: string) {
     pricingData,
     maxAdvanceDays: pricingData?.maxAdvanceDays ?? 90,
     pricingLoading,
+    allowCash,
     pricingError,
     refetchPricing,
     gridFor,
@@ -1316,6 +1333,7 @@ export function useBookingWithRouter(urlStep?: string) {
     canConfirmBooking,
     bookingFieldIssues,
     submitError,
+    cashNotAllowed,
     clearSubmitError,
     clientUser,
     clientUserLoading,
@@ -1334,6 +1352,7 @@ export function useBookingWithRouter(urlStep?: string) {
     applyPromo,
     removePromo,
     goToCoordonnees,
+    goToOptions,
     confirmBooking,
     clearDuplicateError,
     addAnotherBooking,
