@@ -12,7 +12,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, PiggyBank, WrenchIcon, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, BadgePercent, WrenchIcon, AlertTriangle } from "lucide-react";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { BookingOptionsStep } from "@/components/booking/BookingOptionsStep";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -643,18 +643,18 @@ export function Reservation({ step }: ReservationProps) {
 
       {state.step === "creneau" && state.groupType === "group" && !state.studioId && (
         <div className="-mx-2 mt-4 self-stretch border-y-2 border-primary/70 bg-primary text-primary-foreground shadow-lg shadow-primary/20 lg:mx-0 lg:rounded-xl lg:border-2">
-          <div className="flex items-center gap-3 px-4 py-3 sm:mx-auto sm:max-w-[640px] lg:max-w-none lg:px-8">
-            <PiggyBank className="h-6 w-6 shrink-0" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-sm font-bold sm:text-base">
-                Jusqu'à 20% d'économie
-              </p>
-              <p className="text-xs leading-snug opacity-80 sm:text-sm">
-                Les tarifs varient selon l'heure (après 18h) et le jour
-                (weekend et jour férié) : réservez avant 18h en semaine pour en
-                profiter.
-              </p>
-            </div>
+          <div className="flex flex-col items-center px-4 py-3 text-center sm:mx-auto sm:max-w-[640px] lg:max-w-none lg:px-8">
+            <p className="flex items-center gap-2 text-sm font-bold sm:text-base">
+              <BadgePercent
+                className="h-5 w-5 shrink-0 sm:h-6 sm:w-6"
+                aria-hidden="true"
+              />
+              Jusqu'à 20% d'économie
+            </p>
+            <p className="mt-1 max-w-prose text-xs leading-snug opacity-80 sm:text-sm">
+              Les tarifs varient selon l'heure (après 18h) et le jour (weekend
+              et jour férié) : réservez avant 18h en semaine pour en profiter.
+            </p>
           </div>
         </div>
       )}
