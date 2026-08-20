@@ -2008,12 +2008,7 @@ export function AdminDashboard() {
 
             <div className="h-full rounded-xl border border-zinc-800 bg-zinc-900 p-4">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-medium text-zinc-400">Top 5 des meilleurs clients</h3>
-                {stats && (
-                  <p className="mt-0.5 text-xs text-zinc-500">Du {formatDate(stats.rangeFrom)} au {formatDate(stats.rangeTo)}</p>
-                )}
-              </div>
+              <h3 className="text-sm font-medium text-zinc-400">Top 5 des meilleurs clients</h3>
               <div className="inline-flex shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
                 {([
                   ["revenue", "CA"],
