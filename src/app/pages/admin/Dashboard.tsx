@@ -80,6 +80,13 @@ interface PaymentPoint {
   revenue: number;
 }
 
+interface DurationPoint {
+  slots: number;
+  label: string;
+  count: number;
+  hours: number;
+}
+
 interface UpcomingBooking {
   id: string;
   booking_ref: string;
@@ -918,6 +925,33 @@ function PaymentPieTooltip({
   );
 }
 
+function DurationTooltip({
+  active,
+  payload,
+  total,
+}: {
+  active?: boolean;
+  payload?: TooltipPayload<DurationPoint>;
+  total: number;
+}) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0]?.payload;
+  if (!p) return null;
+  const pct = total > 0 ? Math.round((p.count / total) * 100) : 0;
+
+  return (
+    <div className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 shadow-xl">
+      <p className="mb-1 text-sm font-medium text-zinc-100">{p.label}</p>
+      <p className="text-xs text-zinc-400">
+        Réservations : <span className="text-zinc-100">{p.count} · {pct}%</span>
+      </p>
+      <p className="text-xs text-zinc-400">
+        Heures réservées : <span className="text-zinc-100">{formatHours(Math.round(p.hours * 60))}</span>
+      </p>
+    </div>
+  );
+}
+
 export function AdminDashboard() {
   const nowISO = getISOWeekYearAndNumber(new Date());
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -937,6 +971,8 @@ export function AdminDashboard() {
   const [studioData, setStudioData] = useState<StudioPoint[]>([]);
   const [groupTypeData, setGroupTypeData] = useState<GroupTypePoint[]>([]);
   const [paymentData, setPaymentData] = useState<PaymentPoint[]>([]);
+  const [durationData, setDurationData] = useState<DurationPoint[]>([]);
+  const [avgDurationMinutes, setAvgDurationMinutes] = useState(0);
 
   // Dérivation locale du graphique « Méthodes de paiement » selon le mode
   // choisi : "all" = une part par méthode, "channel" = deux parts agrégées
@@ -1217,6 +1253,8 @@ export function AdminDashboard() {
           studios: StudioPoint[];
           groupTypes: GroupTypePoint[];
           payments: PaymentPoint[];
+          durations?: DurationPoint[];
+          avgDurationMinutes?: number;
         };
       };
       if (chartsJson.success && chartsJson.data) {
@@ -1224,6 +1262,10 @@ export function AdminDashboard() {
         setStudioData(chartsJson.data.studios);
         setGroupTypeData(chartsJson.data.groupTypes);
         setPaymentData(chartsJson.data.payments);
+        // Clés optionnelles : l'API peut ne pas encore les renvoyer.
+        setDurationData(Array.isArray(chartsJson.data.durations) ? chartsJson.data.durations : []);
+        const avg = chartsJson.data.avgDurationMinutes;
+        setAvgDurationMinutes(typeof avg === "number" && Number.isFinite(avg) ? avg : 0);
       }
     } catch (err) {
       console.error("Failed to fetch chart data:", err);
@@ -1874,6 +1916,72 @@ export function AdminDashboard() {
                 </div>
               </div>
             </ChartCard>
+
+            {/* Histogramme des durées de réservation : pleine largeur pour
+                rester proche du graphique d'occupation tout en gardant deux
+                lignes équilibrées (Studio / Type client, Paiements / Top 5)
+                en dessous. */}
+            {(() => {
+              const totalDurationCount = durationData.reduce((acc, d) => acc + d.count, 0);
+
+              return (
+                <ChartCard
+                  title="Durée des sessions"
+                  className="lg:col-span-2"
+                  action={
+                    totalDurationCount > 0 ? (
+                      <p className="text-xs text-zinc-500">
+                        Durée moyenne : <span className="font-medium text-primary">{formatHours(Math.round(avgDurationMinutes))}</span>
+                      </p>
+                    ) : undefined
+                  }
+                >
+                  {totalDurationCount === 0 ? (
+                    <div className="flex h-[280px] items-center justify-center rounded-lg border border-dashed border-zinc-800 text-sm text-zinc-500">
+                      Aucune réservation sur cette période.
+                    </div>
+                  ) : (
+                    <div className="h-[280px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        {/* mêmes marges que les autres graphiques : headroom
+                            pour le tick Y le plus haut. */}
+                        <BarChart data={durationData} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.zinc800} />
+                          <XAxis
+                            dataKey="label"
+                            stroke={CHART_COLORS.zinc400}
+                            tick={{ fontSize: 11 }}
+                            axisLine={{ stroke: CHART_COLORS.zinc700 }}
+                          />
+                          <YAxis
+                            stroke={CHART_COLORS.zinc400}
+                            tick={{ fontSize: 11 }}
+                            axisLine={{ stroke: CHART_COLORS.zinc700 }}
+                            allowDecimals={false}
+                          />
+                          <Tooltip
+                            content={<DurationTooltip total={totalDurationCount} />}
+                            contentStyle={{
+                              backgroundColor: CHART_COLORS.zinc900,
+                              border: `1px solid ${CHART_COLORS.zinc700}`,
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                            }}
+                            labelStyle={{ color: CHART_COLORS.zinc400 }}
+                          />
+                          <Bar
+                            dataKey="count"
+                            name="Réservations"
+                            fill={CHART_COLORS.primary}
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </ChartCard>
+              );
+            })()}
 
             <ChartCard title="Répartition par studio">
               {(() => {

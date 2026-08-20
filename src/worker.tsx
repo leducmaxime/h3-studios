@@ -4324,8 +4324,20 @@ const app = defineApp([
          WHERE date >= ? AND date <= ? AND status != 'cancelled'
          ORDER BY date ASC, start_time ASC`,
       ).bind(fromStr, toStr);
+      const durationExpression = `(CASE WHEN b.end_time = '00:00' THEN 1440 ELSE (CAST(substr(b.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.end_time, 4, 2) AS INTEGER)) END) - (CASE WHEN b.start_time = '00:00' THEN 1440 ELSE (CAST(substr(b.start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.start_time, 4, 2) AS INTEGER)) END)`;
+      const durationRowsStmt = env.DB.prepare(
+        `SELECT CASE WHEN duration_minutes >= 270 THEN 9 ELSE CAST((duration_minutes + 29) / 30 AS INTEGER) END as slots, COUNT(*) as count, SUM(duration_minutes) as total_minutes
+         FROM (SELECT ${durationExpression} as duration_minutes FROM bookings b WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled')
+         WHERE duration_minutes > 0
+         GROUP BY CASE WHEN duration_minutes >= 270 THEN 9 ELSE CAST((duration_minutes + 29) / 30 AS INTEGER) END`,
+      ).bind(fromStr, toStr);
+      const avgDurationStmt = env.DB.prepare(
+        `SELECT COALESCE(AVG(duration_minutes), 0) as average_minutes
+         FROM (SELECT ${durationExpression} as duration_minutes FROM bookings b WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled')
+         WHERE duration_minutes > 0`,
+      ).bind(fromStr, toStr);
 
-       const [occupancyResult, studioResult, groupTypeResult, onSitePaidResult, onlineCardResult, upcomingResult] = await env.DB.batch([
+       const [occupancyResult, studioResult, groupTypeResult, onSitePaidResult, onlineCardResult, upcomingResult, durationRowsResult, avgDurationResult] = await env.DB.batch([
          occupancyStmt,
         // Studio distribution
         env.DB.prepare(
@@ -4389,6 +4401,8 @@ const app = defineApp([
             ORDER BY b.date DESC, b.start_time DESC
             LIMIT 10`,
          ).bind(fromStr, toStr),
+         durationRowsStmt,
+         avgDurationStmt,
        ]);
 
       type BookingSlotRow = { date: string; studio_id: string; start_time: string; end_time: string };
@@ -4396,6 +4410,7 @@ const app = defineApp([
       type GroupTypeRow = { group_type: string; count: number; revenue: number };
       type PaymentRow = { method: string; count: number; revenue: number };
       type OnlineCardRow = { count: number; revenue: number };
+      type DurationRow = { slots: number; count: number; total_minutes: number };
 
       function parseDateISOToUTCNoon(dateISO: string): Date {
         const [y, m, d] = dateISO.split("-").map(Number);
@@ -4544,12 +4559,32 @@ const app = defineApp([
         revenue: merged[method]?.revenue ?? 0,
       }));
 
+      const durationLabels = ["30min", "1h", "1h30", "2h", "2h30", "3h", "3h30", "4h", "4h30+"];
+      const durationRows = durationRowsResult.results as unknown as DurationRow[];
+      const durations = Array.from({ length: 9 }, (_, index) => {
+        const slots = index + 1;
+        const row = durationRows.find((candidate) => candidate.slots === slots);
+        const count = Number(row?.count ?? 0);
+        const totalMinutes = Number(row?.total_minutes ?? 0);
+        return {
+          slots,
+          label: durationLabels[index],
+          count,
+          hours: slots === 9 ? totalMinutes / 60 : count * slots * 0.5,
+        };
+      });
+      const avgDurationMinutes = Math.round(Number(
+        (avgDurationResult.results as unknown as Array<{ average_minutes: number }>)[0]?.average_minutes ?? 0,
+      ));
+
       return jsonSuccess({
         occupancy: occupancyData,
         studios: studioData,
         groupTypes: groupTypeData,
         payments: paymentData,
         upcomingBookings: upcomingResult.results,
+        durations,
+        avgDurationMinutes,
       });
     } catch (error) {
       console.error("GET /api/admin/stats/charts error:", error);
