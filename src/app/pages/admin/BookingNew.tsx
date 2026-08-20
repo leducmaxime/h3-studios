@@ -28,11 +28,13 @@ import { STUDIOS, generateBookingRef, formatPrice, slotDurationSlots, type Studi
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 import { parseAmountInput } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
-import { GROUP_TYPE_LABELS, groupTypeLabel } from "@/lib/labels";
+import { groupTypeLabel } from "@/lib/labels";
+import type { MinMaxByGroupType } from "@/lib/pricing";
 import { formatSessionPriceDisplay, isQuantityOffered, ordinalFr } from "@/lib/equipment-pricing";
 
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
 
+import { GroupTypeToggle } from "@/components/booking/GroupTypeToggle";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { type PromoCode } from "@/lib/booking";
 
@@ -50,13 +52,6 @@ interface EquipmentSelection {
   sessionPricing: number[] | null;
   pricePerHour: number;
 }
-
-const GROUP_TYPES: { value: GroupType; label: string }[] = [
-  { value: "solo", label: GROUP_TYPE_LABELS.solo },
-  { value: "duo", label: GROUP_TYPE_LABELS.duo },
-  { value: "group", label: GROUP_TYPE_LABELS.group },
-];
-
 
 
 export function AdminBookingNew() {
@@ -96,7 +91,7 @@ export function AdminBookingNew() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [groupType, setGroupType] = useState<GroupType | undefined>(undefined);
+  const [groupType, setGroupType] = useState<GroupType | null>(null);
   const [notes, setNotes] = useState("");
 
   // Ordre du créneau — via slotDurationSlots pour traiter "00:00" comme fin de
@@ -113,6 +108,8 @@ export function AdminBookingNew() {
   const [basePrice, setBasePrice] = useState<number | null>(null);
   const [equipmentPrices, setEquipmentPrices] = useState<{name: string; price: number}[]>([]);
   const [pricingLoading, setPricingLoading] = useState(false);
+  // Price ranges per group type (for the group type cards) — same data as public
+  const [minMaxByGroupType, setMinMaxByGroupType] = useState<MinMaxByGroupType | null>(null);
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
@@ -152,6 +149,16 @@ export function AdminBookingNew() {
       .then((r) => r.json() as Promise<{ success: boolean; equipment?: ApiEquipment[] }>)
       .then((json) => {
         if (json.success && json.equipment) setAvailableEquipment(json.equipment);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch price ranges per group type (same endpoint as the public flow)
+  useEffect(() => {
+    fetch("/api/pricing")
+      .then((r) => r.json() as Promise<{ success: boolean; data?: { minMaxByGroupType?: MinMaxByGroupType } }>)
+      .then((json) => {
+        if (json.success && json.data?.minMaxByGroupType) setMinMaxByGroupType(json.data.minMaxByGroupType);
       })
       .catch(() => {});
   }, []);
@@ -382,452 +389,442 @@ export function AdminBookingNew() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          {/* Client */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Client</h2>
+      <div className="space-y-6">
+        {/* Client */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+          <h2 className="mb-4 font-semibold">Client</h2>
 
-            {selectedUser ? (
-              <div className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-800 p-4">
-                <div>
-                  <p className="font-medium">{selectedUser.name}</p>
-                  <p className="text-sm text-zinc-400">{selectedUser.email || "—"} · {selectedUser.phone || "—"}</p>
-                  {selectedUser.band_name && <p className="text-sm text-zinc-400">{selectedUser.band_name}</p>}
-                </div>
-                <Button variant="outline" size="sm" onClick={() => setSelectedUser(null)}>
-                  Changer
-                </Button>
+          {selectedUser ? (
+            <div className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-800 p-4">
+              <div>
+                <p className="font-medium">{selectedUser.name}</p>
+                <p className="text-sm text-zinc-400">{selectedUser.email || "—"} · {selectedUser.phone || "—"}</p>
+                {selectedUser.band_name && <p className="text-sm text-zinc-400">{selectedUser.band_name}</p>}
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    type="text"
-                    placeholder="Rechercher un client existant..."
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 pl-10 pr-4 text-sm focus:border-primary focus:outline-none"
-                  />
+              <Button variant="outline" size="sm" onClick={() => setSelectedUser(null)}>
+                Changer
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher un client existant..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 pl-10 pr-4 text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {userResults.length > 0 && (
+                <div className="divide-y divide-zinc-800 rounded-lg border border-zinc-700 bg-zinc-800">
+                  {userResults.map((u) => (
+                    <button
+                      type="button"
+                      key={u.id}
+                      onClick={() => { setSelectedUser(u); setUserSearch(""); setUserResults([]); }}
+                      className="flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-zinc-700"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{u.name}</p>
+                        <p className="text-xs text-zinc-400">
+                          {u.band_name ? `${u.band_name}` : (u.email || "—")}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">{u.total_bookings} résa</Badge>
+                    </button>
+                  ))}
                 </div>
+              )}
 
-                {userResults.length > 0 && (
-                  <div className="divide-y divide-zinc-800 rounded-lg border border-zinc-700 bg-zinc-800">
-                    {userResults.map((u) => (
-                      <button
-                        type="button"
-                        key={u.id}
-                        onClick={() => { setSelectedUser(u); setUserSearch(""); setUserResults([]); }}
-                        className="flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-zinc-700"
-                      >
-                        <div>
-                          <p className="text-sm font-medium">{u.name}</p>
-                          <p className="text-xs text-zinc-400">
-                            {u.band_name ? `${u.band_name}` : (u.email || "—")}
-                          </p>
-                        </div>
-                        <Badge variant="secondary" className="text-xs">{u.total_bookings} résa</Badge>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {!showNewUser ? (
-                  <Button variant="outline" size="sm" onClick={() => setShowNewUser(true)} className="w-full">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Nouveau client
-                  </Button>
-                ) : (
-                  <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-800 p-4">
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      <div className="lg:col-span-2">
-                        <label htmlFor="newUserName" className="mb-1 block text-xs text-zinc-400">Prénom et Nom <span className="text-primary">*</span></label>
-                        <input
-                          id="newUserName"
-                          type="text"
-                          value={newUserFirstName && newUserLastName ? `${newUserFirstName} ${newUserLastName}` : newUserFirstName || newUserLastName}
-                          onChange={(e) => {
-                            const parts = e.target.value.split(" ");
-                            setNewUserFirstName(parts[0] || "");
-                            setNewUserLastName(parts.slice(1).join(" ") || "");
-                          }}
-                          placeholder="Jean Dupont"
-                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="newUserEmail" className="mb-1 block text-xs text-zinc-400">Email <span className="text-primary">*</span></label>
-                        <input
-                          id="newUserEmail"
-                          type="email"
-                          value={newUserEmail}
-                          onChange={(e) => setNewUserEmail(e.target.value)}
-                          placeholder="jean@exemple.fr"
-                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="newUserPhone" className="mb-1 block text-xs text-zinc-400">Téléphone <span className="text-primary">*</span></label>
-                        <input
-                          id="newUserPhone"
-                          type="tel"
-                          value={newUserPhone}
-                          onChange={(e) => setNewUserPhone(e.target.value.replace(/\D/g, ""))}
-                          placeholder="0612345678"
-                          maxLength={10}
-                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                        />
-                      </div>
-                      <div className="lg:col-span-2">
-                        <label htmlFor="newUserBand" className="mb-1 block text-xs text-zinc-400">Nom du groupe <span className="text-zinc-500">(optionnel)</span></label>
-                        <input
-                          id="newUserBand"
-                          type="text"
-                          value={newUserBand}
-                          onChange={(e) => setNewUserBand(e.target.value)}
-                          placeholder="Les Rockers"
-                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                        />
-                      </div>
+              {!showNewUser ? (
+                <Button variant="outline" size="sm" onClick={() => setShowNewUser(true)} className="w-full">
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Nouveau client
+                </Button>
+              ) : (
+                <div className="space-y-3 rounded-lg border border-zinc-700 bg-zinc-800 p-4">
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="lg:col-span-2">
+                      <label htmlFor="newUserName" className="mb-1 block text-xs text-zinc-400">Prénom et Nom <span className="text-primary">*</span></label>
+                      <input
+                        id="newUserName"
+                        type="text"
+                        value={newUserFirstName && newUserLastName ? `${newUserFirstName} ${newUserLastName}` : newUserFirstName || newUserLastName}
+                        onChange={(e) => {
+                          const parts = e.target.value.split(" ");
+                          setNewUserFirstName(parts[0] || "");
+                          setNewUserLastName(parts.slice(1).join(" ") || "");
+                        }}
+                        placeholder="Jean Dupont"
+                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
                     </div>
+                    <div>
+                      <label htmlFor="newUserEmail" className="mb-1 block text-xs text-zinc-400">Email <span className="text-primary">*</span></label>
+                      <input
+                        id="newUserEmail"
+                        type="email"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        placeholder="jean@exemple.fr"
+                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="newUserPhone" className="mb-1 block text-xs text-zinc-400">Téléphone <span className="text-primary">*</span></label>
+                      <input
+                        id="newUserPhone"
+                        type="tel"
+                        value={newUserPhone}
+                        onChange={(e) => setNewUserPhone(e.target.value.replace(/\D/g, ""))}
+                        placeholder="0612345678"
+                        maxLength={10}
+                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div className="lg:col-span-2">
+                      <label htmlFor="newUserBand" className="mb-1 block text-xs text-zinc-400">Nom du groupe <span className="text-zinc-500">(optionnel)</span></label>
+                      <input
+                        id="newUserBand"
+                        type="text"
+                        value={newUserBand}
+                        onChange={(e) => setNewUserBand(e.target.value)}
+                        placeholder="Les Rockers"
+                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  </div>
 
-                    <div className="border-t border-zinc-700 pt-3">
-                      <p className="mb-2 text-xs font-medium text-zinc-400">Adresse de facturation</p>
-                      <div className="grid gap-3">
+                  <div className="border-t border-zinc-700 pt-3">
+                    <p className="mb-2 text-xs font-medium text-zinc-400">Adresse de facturation</p>
+                    <div className="grid gap-3">
+                      <div>
+                        <label htmlFor="newUserAddressLine1" className="mb-1 block text-xs text-zinc-500">Nom et numéro de rue <span className="text-primary">*</span></label>
+                        <input
+                          id="newUserAddressLine1"
+                          type="text"
+                          value={newUserAddressLine1}
+                          onChange={(e) => setNewUserAddressLine1(e.target.value)}
+                          placeholder="12 Rue de la Musique"
+                          className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label htmlFor="newUserAddressLine1" className="mb-1 block text-xs text-zinc-500">Nom et numéro de rue <span className="text-primary">*</span></label>
+                          <label htmlFor="newUserPostalCode" className="mb-1 block text-xs text-zinc-500">Code postal <span className="text-primary">*</span></label>
                           <input
-                            id="newUserAddressLine1"
+                            id="newUserPostalCode"
                             type="text"
-                            value={newUserAddressLine1}
-                            onChange={(e) => setNewUserAddressLine1(e.target.value)}
-                            placeholder="12 Rue de la Musique"
+                            inputMode="numeric"
+                            value={newUserPostalCode}
+                            onChange={(e) => setNewUserPostalCode(e.target.value.replace(/\D/g, ""))}
+                            placeholder="94370"
+                            maxLength={5}
                             className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label htmlFor="newUserPostalCode" className="mb-1 block text-xs text-zinc-500">Code postal <span className="text-primary">*</span></label>
-                            <input
-                              id="newUserPostalCode"
-                              type="text"
-                              inputMode="numeric"
-                              value={newUserPostalCode}
-                              onChange={(e) => setNewUserPostalCode(e.target.value.replace(/\D/g, ""))}
-                              placeholder="94370"
-                              maxLength={5}
-                              className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label htmlFor="newUserCity" className="mb-1 block text-xs text-zinc-500">Ville <span className="text-primary">*</span></label>
-                            <input
-                              id="newUserCity"
-                              type="text"
-                              value={newUserCity}
-                              onChange={(e) => setNewUserCity(e.target.value)}
-                              placeholder="Sucy-en-Brie"
-                              className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                            />
-                          </div>
+                        <div>
+                          <label htmlFor="newUserCity" className="mb-1 block text-xs text-zinc-500">Ville <span className="text-primary">*</span></label>
+                          <input
+                            id="newUserCity"
+                            type="text"
+                            value={newUserCity}
+                            onChange={(e) => setNewUserCity(e.target.value)}
+                            placeholder="Sucy-en-Brie"
+                            className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                          />
                         </div>
-                       </div>
+                      </div>
                      </div>
+                   </div>
 
-                    <div>
-                      <label htmlFor="newUserNotes" className="mb-1 block text-xs text-zinc-400">Informations supplémentaires</label>
-                      <textarea
-                        id="newUserNotes"
-                        value={newUserNotes}
-                        onChange={(e) => setNewUserNotes(e.target.value)}
-                        placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
-                        rows={2}
-                        className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
-                      />
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleCreateUser} disabled={creatingUser}>
-                        {creatingUser ? "Création..." : "Créer le client"}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => setShowNewUser(false)}>
-                        Annuler
-                      </Button>
-                    </div>
+                  <div>
+                    <label htmlFor="newUserNotes" className="mb-1 block text-xs text-zinc-400">Informations supplémentaires</label>
+                    <textarea
+                      id="newUserNotes"
+                      value={newUserNotes}
+                      onChange={(e) => setNewUserNotes(e.target.value)}
+                      placeholder="Quels instruments ? Nombre de chanteurs ? besoin de matériel ? autres infos utiles..."
+                      rows={2}
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
+                    />
                   </div>
-                )}
-              </div>
-            )}
-          </div>
 
-          {/* Studio + Date + Time */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Créneau</h2>
-            <div className="mb-4 max-w-xs">
-              <label htmlFor="groupType" className="mb-1 block text-sm text-zinc-400">Type de groupe *</label>
-              <select
-                id="groupType"
-                value={groupType}
-                onChange={(e) => setGroupType(e.target.value as GroupType)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                required
-              >
-                <option value="">Sélectionner...</option>
-                {GROUP_TYPES.map((g) => (
-                  <option key={g.value} value={g.value}>{g.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <AdminSlotPicker
-              date={date}
-              startTime={startTime}
-              endTime={endTime}
-              studioId={studioId ?? null}
-              groupType={groupType ?? null}
-              onChange={({ date: d, startTime: s, endTime: e, studioId: st }) => {
-                setDate(d);
-                setStartTime(s);
-                setEndTime(e);
-                setStudioId(st ?? undefined);
-              }}
-            />
-
-            {invalidRange && (
-              <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                L'heure de fin doit être supérieure à l'heure de début.
-              </div>
-            )}
-          </div>
-
-          {/* Notes */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <div>
-              <label htmlFor="bookingNotes" className="mb-1 block text-sm text-zinc-400">Notes (optionnel)</label>
-              <textarea
-                id="bookingNotes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
-              />
-            </div>
-          </div>
-
-          {/* Equipment */}
-          {availableEquipment.length > 0 && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-              <h2 className="mb-4 font-semibold">Équipements optionnels</h2>
-              <div className="flex flex-col gap-3">
-                {availableEquipment.map((eq) => {
-                  const quantity = getQuantity(eq.id);
-                  const subtotal =
-                    quantity > 0 && eq.pricingType === "session" && eq.sessionPricing
-                      ? eq.sessionPricing[quantity - 1] || 0
-                      : 0;
-                  const priceDisplay = formatSessionPriceDisplay(eq, quantity, subtotal);
-
-                  const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
-
-                  return (
-                    <div
-                      key={eq.id}
-                      className="flex items-center justify-between gap-3"
-                    >
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-white">
-                          {eq.name}
-                        </span>
-                        <span className="text-xs text-zinc-400">
-                          {priceDisplay}
-                        </span>
-                        {equipmentAvailability[eq.id] && equipmentAvailability[eq.id].available < eq.maxPerSession && <span className="text-xs text-amber-400">{equipmentAvailability[eq.id].reserved} déjà réservée(s) — stock restant {equipmentAvailability[eq.id].available}. Vous pouvez forcer.</span>}
-                        {isSelectedUnitOffered && (
-                          <span className="flex items-center gap-1 text-xs text-green-400">
-                            <Gift className="h-3 w-3" />
-                            Cadeau ! La {ordinalFr(quantity, { feminine: true })} unité est offerte
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {quantity > 0 && subtotal > 0 && (
-                          <span className="text-xs text-primary">
-                            {formatPrice(subtotal)}
-                          </span>
-                        )}
-
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleDecrement(eq)}
-                            disabled={quantity === 0}
-                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
-                            aria-label={`Retirer ${eq.name}`}
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-
-                          <span className="w-6 text-center text-sm font-medium tabular-nums">
-                            {quantity}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => handleIncrement(eq)}
-                            disabled={quantity >= eq.maxPerSession}
-                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
-                            aria-label={`Ajouter ${eq.name}`}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleCreateUser} disabled={creatingUser}>
+                      {creatingUser ? "Création..." : "Créer le client"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowNewUser(false)}>
+                      Annuler
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Sidebar - Price summary */}
-        <div>
-          <div className="sticky top-24 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 font-semibold">Récapitulatif</h2>
-            <div className="space-y-3">
+        {/* Studio + Date + Time */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+          <h2 className="mb-4 font-semibold">Créneau</h2>
+          <div className="mb-4 max-w-md">
+            <GroupTypeToggle
+              value={groupType}
+              onChange={setGroupType}
+              minMaxByGroupType={minMaxByGroupType}
+              label="Type de groupe *"
+              variant="admin"
+            />
+          </div>
+
+          <AdminSlotPicker
+            date={date}
+            startTime={startTime}
+            endTime={endTime}
+            studioId={studioId ?? null}
+            groupType={groupType}
+            onChange={({ date: d, startTime: s, endTime: e, studioId: st }) => {
+              setDate(d);
+              setStartTime(s);
+              setEndTime(e);
+              setStudioId(st ?? undefined);
+            }}
+          />
+
+          {invalidRange && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              L'heure de fin doit être supérieure à l'heure de début.
+            </div>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+          <div>
+            <label htmlFor="bookingNotes" className="mb-1 block text-sm text-zinc-400">Notes (optionnel)</label>
+            <textarea
+              id="bookingNotes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
+            />
+          </div>
+        </div>
+
+        {/* Equipment */}
+        {availableEquipment.length > 0 && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+            <h2 className="mb-4 font-semibold">Équipements optionnels</h2>
+            <div className="flex flex-col gap-3">
+              {availableEquipment.map((eq) => {
+                const quantity = getQuantity(eq.id);
+                const subtotal =
+                  quantity > 0 && eq.pricingType === "session" && eq.sessionPricing
+                    ? eq.sessionPricing[quantity - 1] || 0
+                    : 0;
+                const priceDisplay = formatSessionPriceDisplay(eq, quantity, subtotal);
+
+                const isSelectedUnitOffered = eq.pricingType === "session" && isQuantityOffered(eq.sessionPricing, quantity) && quantity > 0;
+
+                return (
+                  <div
+                    key={eq.id}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-white">
+                        {eq.name}
+                      </span>
+                      <span className="text-xs text-zinc-400">
+                        {priceDisplay}
+                      </span>
+                      {equipmentAvailability[eq.id] && equipmentAvailability[eq.id].available < eq.maxPerSession && <span className="text-xs text-amber-400">{equipmentAvailability[eq.id].reserved} déjà réservée(s) — stock restant {equipmentAvailability[eq.id].available}. Vous pouvez forcer.</span>}
+                      {isSelectedUnitOffered && (
+                        <span className="flex items-center gap-1 text-xs text-green-400">
+                          <Gift className="h-3 w-3" />
+                          Cadeau ! La {ordinalFr(quantity, { feminine: true })} unité est offerte
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {quantity > 0 && subtotal > 0 && (
+                        <span className="text-xs text-primary">
+                          {formatPrice(subtotal)}
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDecrement(eq)}
+                          disabled={quantity === 0}
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
+                          aria-label={`Retirer ${eq.name}`}
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+
+                        <span className="w-6 text-center text-sm font-medium tabular-nums">
+                          {quantity}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleIncrement(eq)}
+                          disabled={quantity >= eq.maxPerSession}
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-white/15 transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/15"
+                          aria-label={`Ajouter ${eq.name}`}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Récapitulatif */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+          <h2 className="mb-4 font-semibold">Récapitulatif</h2>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-400">Studio</span>
+              <span>{studioId ? STUDIOS[studioId].name : "—"}</span>
+            </div>
+            {date && (
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-400">Studio</span>
-                <span>{studioId ? STUDIOS[studioId].name : "—"}</span>
+                <span className="text-zinc-400">Date</span>
+                <span>{new Date(date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
               </div>
-              {date && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-400">Date</span>
-                  <span>{new Date(date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
-                </div>
-              )}
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-400">Créneau</span>
+              <span>{startTime} - {endTime}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-400">Type</span>
+              <span>{groupTypeLabel(groupType)}</span>
+            </div>
+            {selectedUser && (
               <div className="flex justify-between text-sm">
-                <span className="text-zinc-400">Créneau</span>
-                <span>{startTime} - {endTime}</span>
+                <span className="text-zinc-400">Client</span>
+                <span className="truncate ml-2">{selectedUser.name}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-zinc-400">Type</span>
-                <span>{groupTypeLabel(groupType)}</span>
+            )}
+            {(basePrice !== null || equipmentPrices.length > 0) && (
+              <div className="border-t border-zinc-800 pt-3 space-y-1">
+                {basePrice !== null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-zinc-400">Studio</span>
+                    <span>{formatPrice(basePrice)}</span>
+                  </div>
+                )}
+                {equipmentPrices.map((eq) => (
+                  <div key={eq.name} className="flex justify-between text-sm">
+                    <span className="text-zinc-400">{eq.name}</span>
+                    <span>{formatPrice(eq.price)}</span>
+                  </div>
+                ))}
               </div>
-              {selectedUser && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-400">Client</span>
-                  <span className="truncate ml-2">{selectedUser.name}</span>
-                </div>
-              )}
-              {(basePrice !== null || equipmentPrices.length > 0) && (
-                <div className="border-t border-zinc-800 pt-3 space-y-1">
-                  {basePrice !== null && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-zinc-400">Studio</span>
-                      <span>{formatPrice(basePrice)}</span>
+            )}
+            {estimatedPrice !== null && estimatedPrice > 0 && (
+              <div className="border-t border-zinc-800 pt-3">
+                <PromoCodeInput
+                  total={estimatedPrice + promoDiscount}
+                  appliedPromo={appliedPromo}
+                  onApply={(promo, discount) => {
+                    setAppliedPromo(promo);
+                    setPromoDiscount(discount);
+                    setManualDiscount("");
+                  }}
+                  onRemove={() => {
+                    setAppliedPromo(null);
+                    setPromoDiscount(0);
+                  }}
+                />
+              </div>
+            )}
+            {promoDiscount > 0 && (
+              <div className="flex justify-between text-sm text-green-400">
+                <span>Réduction (promo)</span>
+                <span>-{formatPrice(promoDiscount)}</span>
+              </div>
+            )}
+            {(() => {
+              const manualDiscountValue = parseAmountInput(manualDiscount);
+              const validManual = Number.isFinite(manualDiscountValue) && manualDiscountValue > 0;
+              return (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-400">Remise manuelle</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
+                      value={manualDiscount}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setManualDiscount(next);
+                        const parsed = parseAmountInput(next);
+                        if (Number.isFinite(parsed) && parsed > 0 && appliedPromo) {
+                          setAppliedPromo(null);
+                          setPromoDiscount(0);
+                        }
+                      }}
+                      className="w-20 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-right text-xs focus:border-primary focus:outline-none"
+                      aria-label="Remise manuelle en euros"
+                    />
+                  </div>
+                  {validManual && (
+                    <div className="flex justify-between text-sm text-green-400">
+                      <span>Remise</span>
+                      <span>-{formatPrice(manualDiscountValue)}</span>
                     </div>
                   )}
-                  {equipmentPrices.map((eq) => (
-                    <div key={eq.name} className="flex justify-between text-sm">
-                      <span className="text-zinc-400">{eq.name}</span>
-                      <span>{formatPrice(eq.price)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {estimatedPrice !== null && estimatedPrice > 0 && (
-                <div className="border-t border-zinc-800 pt-3">
-                  <PromoCodeInput
-                    total={estimatedPrice + promoDiscount}
-                    appliedPromo={appliedPromo}
-                    onApply={(promo, discount) => {
-                      setAppliedPromo(promo);
-                      setPromoDiscount(discount);
-                      setManualDiscount("");
-                    }}
-                    onRemove={() => {
-                      setAppliedPromo(null);
-                      setPromoDiscount(0);
-                    }}
-                  />
-                </div>
-              )}
-              {promoDiscount > 0 && (
-                <div className="flex justify-between text-sm text-green-400">
-                  <span>Réduction (promo)</span>
-                  <span>-{formatPrice(promoDiscount)}</span>
-                </div>
-              )}
-              {(() => {
-                const manualDiscountValue = parseAmountInput(manualDiscount);
-                const validManual = Number.isFinite(manualDiscountValue) && manualDiscountValue > 0;
-                return (
-                  <>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-zinc-400">Remise manuelle</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0"
-                        value={manualDiscount}
-                        onChange={(e) => {
-                          const next = e.target.value;
-                          setManualDiscount(next);
-                          const parsed = parseAmountInput(next);
-                          if (Number.isFinite(parsed) && parsed > 0 && appliedPromo) {
-                            setAppliedPromo(null);
-                            setPromoDiscount(0);
-                          }
-                        }}
-                        className="w-20 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-right text-xs focus:border-primary focus:outline-none"
-                        aria-label="Remise manuelle en euros"
-                      />
-                    </div>
-                    {validManual && (
-                      <div className="flex justify-between text-sm text-green-400">
-                        <span>Remise</span>
-                        <span>-{formatPrice(manualDiscountValue)}</span>
-                      </div>
-                    )}
-                  </>
-                );
+                </>
+              );
+            })()}
+            <div className="border-t border-zinc-800 pt-3">
+              {typeof estimatedPrice === "number" && (() => {
+                const tax = formatTaxBreakdown(estimatedPrice);
+                return <div className="mb-2 space-y-1 text-xs text-zinc-500">
+                  <div className="flex justify-between"><span>Total HT</span><span>{tax.ht}</span></div>
+                  <div className="flex justify-between"><span>TVA 20%</span><span>{tax.vat}</span></div>
+                </div>;
               })()}
-              <div className="border-t border-zinc-800 pt-3">
-                {typeof estimatedPrice === "number" && (() => {
-                  const tax = formatTaxBreakdown(estimatedPrice);
-                  return <div className="mb-2 space-y-1 text-xs text-zinc-500">
-                    <div className="flex justify-between"><span>Total HT</span><span>{tax.ht}</span></div>
-                    <div className="flex justify-between"><span>TVA 20%</span><span>{tax.vat}</span></div>
-                  </div>;
-                })()}
-                <div className="flex items-center justify-between text-lg font-semibold">
-                  <span>Total TTC</span>
-                  <span className="text-primary">
-                    {pricingLoading ? "..." : estimatedPrice !== null ? formatPrice(estimatedPrice) : "—"}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between text-lg font-semibold">
+                <span>Total TTC</span>
+                <span className="text-primary">
+                  {pricingLoading ? "..." : estimatedPrice !== null ? formatPrice(estimatedPrice) : "—"}
+                </span>
               </div>
             </div>
-
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting || !selectedUser || !date || !studioId || !startTime || !endTime || !groupType || invalidRange}
-              className="mt-6 w-full"
-              size="lg"
-            >
-              {submitting ? "Création..." : "Créer la réservation"}
-            </Button>
-
-            {(!selectedUser || !studioId || !date || !startTime || !endTime || !groupType || invalidRange) && (
-              <p className="mt-2 text-center text-xs text-red-400">
-                Saisir les champs obligatoire correctement
-              </p>
-            )}
           </div>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || !selectedUser || !date || !studioId || !startTime || !endTime || !groupType || invalidRange}
+            className="mt-6 w-full"
+            size="lg"
+          >
+            {submitting ? "Création..." : "Créer la réservation"}
+          </Button>
+
+          {(!selectedUser || !studioId || !date || !startTime || !endTime || !groupType || invalidRange) && (
+            <p className="mt-2 text-center text-xs text-red-400">
+              Saisir les champs obligatoire correctement
+            </p>
+          )}
         </div>
       </div>
     </div>
