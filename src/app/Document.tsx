@@ -1,4 +1,5 @@
 import styles from "@/styles/globals.css?url";
+import { COMPANY } from "@/lib/company";
 import { SITE_URL, SITE_NAME, pageSEO, generateJsonLd, type PageSEO } from "./seo";
 
 const BREADCRUMB_NAMES: Record<string, string> = {
@@ -170,8 +171,8 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce 
         
         <meta name="geo.region" content="FR-94" />
         <meta name="geo.placename" content="Sucy-en-Brie" />
-        <meta name="geo.position" content="48.7697;2.5178" />
-        <meta name="ICBM" content="48.7697, 2.5178" />
+        <meta name="geo.position" content={`${COMPANY.geo.latitude};${COMPANY.geo.longitude}`} />
+        <meta name="ICBM" content={`${COMPANY.geo.latitude}, ${COMPANY.geo.longitude}`} />
         
         {jsonLdScripts.map((json, i) => (
           <script

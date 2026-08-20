@@ -1,11 +1,12 @@
 import { type DbBooking, type DbUser, type DbPayment } from "./db-types";
-import { formatPrice, resolveEquipmentDisplay } from "./booking";
+import { formatPrice, resolveEquipmentDisplay, timeToMinutes } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
 import { bookingPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
-import { splitTtc } from "@/lib/tax";
+import { roundCents, splitTtc } from "@/lib/tax";
 import type { ReportChartsPngs } from "@/lib/report-charts";
+import { COMPANY, companyRcs } from "@/lib/company";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function escapeCSV(value: string | number | null | undefined): string {
@@ -18,7 +19,7 @@ function escapeCSV(value: string | number | null | undefined): string {
 }
 
 function downloadCSV(filename: string, csvContent: string): void {
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -39,15 +40,18 @@ function formatDateForCSV(dateStr: string): string {
   });
 }
 
+/** Arrondi au centime avant formatage, pour que toutes les colonnes de montants
+ *  se réconcilient (Montant total − Remise = Montant dû), y compris celles qui
+ *  ne passent pas par `splitTtc`. */
 function formatPriceForCSV(amount: number): string {
-  return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+  return Number.isFinite(amount) ? roundCents(amount).toFixed(2) : "0.00";
 }
 
 // ─── Bookings Export ─────────────────────────────────────────────────────────
 
 interface BookingWithUser extends DbBooking {}
 
-export function exportBookingsCSV(bookings: BookingWithUser[]): void {
+export function buildBookingsCSV(bookings: BookingWithUser[]): string {
   const headers = [
     "Référence",
     "Client",
@@ -62,8 +66,12 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
     "Heure début",
     "Heure fin",
     "Durée (h)",
-    "Groupe",
+    "Nom du groupe",
+    "Type de groupe",
     "Statut",
+    "Options",
+    "Montant options TTC (EUR)",
+    "Montant total TTC (EUR)",
     "Montant dû TTC (EUR)",
     "Montant dû HT (EUR)",
     "TVA 20% (EUR)",
@@ -75,12 +83,9 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
     const clientIdentity = resolveBookingClientIdentity(booking, undefined);
     const studioName = studioLabel(booking.studio_id);
     
-    // Calculate duration in hours
-    const startParts = booking.start_time.split(":");
-    const endParts = booking.end_time.split(":");
-    const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
-    const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
-    const durationHours = ((endMinutes - startMinutes) / 60).toFixed(1);
+    const durationHours = ((timeToMinutes(booking.end_time) - timeToMinutes(booking.start_time)) / 60).toFixed(1);
+    const equipmentDisplay = resolveEquipmentDisplay(booking.equipment, booking.equipment_price);
+    const options = equipmentDisplay.lines.map((line) => `${line.name || line.id} ×${line.quantity}`).join(" ; ") || "—";
 
     const due = splitTtc(getBookingAmountDue(booking));
     return [
@@ -97,8 +102,12 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
       escapeCSV(booking.start_time),
       escapeCSV(booking.end_time),
       escapeCSV(durationHours),
+      escapeCSV(booking.band_name || booking.user_band_name || "—"),
       escapeCSV(groupTypeLabel(booking.group_type)),
       escapeCSV(bookingStatusLabel(booking.status)),
+      escapeCSV(options),
+      escapeCSV(formatPriceForCSV(Number(booking.equipment_price) || 0)),
+      escapeCSV(formatPriceForCSV(Number(booking.total_price) || 0)),
       escapeCSV(formatPriceForCSV(due.ttc)),
       escapeCSV(formatPriceForCSV(due.ht)),
       escapeCSV(formatPriceForCSV(due.vat)),
@@ -107,14 +116,33 @@ export function exportBookingsCSV(bookings: BookingWithUser[]): void {
     ].join(",");
   });
 
-  const csv = [headers.join(","), ...rows].join("\n");
+  return [headers.join(","), ...rows].join("\n");
+}
+
+export function exportBookingsCSV(bookings: BookingWithUser[]): void {
+  const csv = buildBookingsCSV(bookings);
   const timestamp = formatDateISO(new Date());
   downloadCSV(`h3-reservations-${timestamp}.csv`, csv);
 }
 
 // ─── Users Export ────────────────────────────────────────────────────────────
 
-export function exportUsersCSV(users: DbUser[]): void {
+function formatPhoneForCSV(phone: string | null | undefined): string {
+  const trimmed = phone?.trim() || "";
+  if (!trimmed) return "—";
+  const hasPlus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 10 && digits.startsWith("0")) return digits.replace(/(\d{2})(?=\d)/g, "$1 ").trim();
+  if (hasPlus && digits.startsWith("33") && digits.length === 11) {
+    const rest = digits.slice(2);
+    return `+33 ${rest[0]} ${rest.slice(1).replace(/(\d{2})(?=\d)/g, "$1 ").trim()}`;
+  }
+  if (/[^\d+]/.test(trimmed.replace(/^\+/, ""))) return trimmed;
+  const grouped = digits.replace(/(\d{2})(?=\d)/g, "$1 ").trim();
+  return hasPlus ? `+${grouped}` : grouped;
+}
+
+export function buildUsersCSV(users: DbUser[]): string {
   const headers = [
     "Nom",
     "Type de client",
@@ -126,6 +154,13 @@ export function exportUsersCSV(users: DbUser[]): void {
     "Téléphone",
     "Groupe",
     "Réservations",
+    "Annulations",
+    "Heures réservées",
+    "% La Scène",
+    "% Le Podium",
+    "Panier moyen TTC (EUR)",
+    "Total options TTC (EUR)",
+    "Total remises TTC (EUR)",
     "Total dépensé TTC (EUR)",
     "Total dépensé HT (EUR)",
     "TVA 20% (EUR)",
@@ -135,6 +170,7 @@ export function exportUsersCSV(users: DbUser[]): void {
   const rows = users.map((user) => {
     const clientIdentity = resolveUserClientIdentity(user);
     const spent = splitTtc(user.total_spent);
+    const sceneDenominator = (user.total_bookings_la_scene ?? 0) + (user.total_bookings_le_podium ?? 0);
     return [
       escapeCSV(user.name),
       escapeCSV(clientIdentity.clientTypeLabel),
@@ -143,9 +179,16 @@ export function exportUsersCSV(users: DbUser[]): void {
       escapeCSV(clientIdentity.rna || "—"),
       escapeCSV(clientIdentity.instagramAccounts || "—"),
       escapeCSV(user.email || "—"),
-      escapeCSV(user.phone || "—"),
+      escapeCSV(formatPhoneForCSV(user.phone)),
       escapeCSV(user.band_name || "—"),
       escapeCSV(user.total_bookings),
+      escapeCSV(user.total_cancellations ?? 0),
+      escapeCSV(((user.total_minutes ?? 0) / 60).toFixed(1)),
+      escapeCSV((sceneDenominator > 0 ? 100 * (user.total_bookings_la_scene ?? 0) / sceneDenominator : 0).toFixed(1)),
+      escapeCSV((sceneDenominator > 0 ? 100 * (user.total_bookings_le_podium ?? 0) / sceneDenominator : 0).toFixed(1)),
+      escapeCSV(formatPriceForCSV(user.total_bookings > 0 ? user.total_spent / user.total_bookings : 0)),
+      escapeCSV(formatPriceForCSV(user.total_equipment ?? 0)),
+      escapeCSV(formatPriceForCSV(user.total_discounts ?? 0)),
       escapeCSV(formatPriceForCSV(spent.ttc)),
       escapeCSV(formatPriceForCSV(spent.ht)),
       escapeCSV(formatPriceForCSV(spent.vat)),
@@ -153,7 +196,11 @@ export function exportUsersCSV(users: DbUser[]): void {
     ].join(",");
   });
 
-  const csv = [headers.join(","), ...rows].join("\n");
+  return [headers.join(","), ...rows].join("\n");
+}
+
+export function exportUsersCSV(users: DbUser[]): void {
+  const csv = buildUsersCSV(users);
   const timestamp = formatDateISO(new Date());
   downloadCSV(`h3-clients-${timestamp}.csv`, csv);
 }
@@ -239,13 +286,19 @@ export async function generateInvoicePDF(
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("16 Rue de la Liberté", 20, y);
+  doc.text(COMPANY.address.street, 20, y);
   y += 5;
-  doc.text("94370 Sucy-en-Brie", 20, y);
+  doc.text(`${COMPANY.address.postalCode} ${COMPANY.address.city}`, 20, y);
   y += 5;
-  doc.text("Tél: 01 45 90 00 00", 20, y);
+  doc.text(`Tél: ${COMPANY.phoneDisplay}`, 20, y);
   y += 5;
-  doc.text("Email: contact@h3studios.fr", 20, y);
+  doc.text(`Email: ${COMPANY.email}`, 20, y);
+  y += 5;
+  doc.text(`${COMPANY.legalForm} au capital de ${COMPANY.shareCapital} — ${companyRcs()}`, 20, y);
+  y += 5;
+  doc.text(`SIRET: ${COMPANY.siret}`, 20, y);
+  y += 5;
+  doc.text(`TVA intracommunautaire: ${COMPANY.vatNumber}`, 20, y);
   y += 15;
 
   // Invoice title
@@ -439,7 +492,7 @@ export async function generateInvoicePDF(
   doc.setTextColor(120);
   doc.text("Merci de votre confiance !", pageWidth / 2, y, { align: "center" });
   y += 5;
-  doc.text("H3 Studios - SIRET: 944 221 753 00014", pageWidth / 2, y, { align: "center" });
+  doc.text(`${COMPANY.brandName} - SIRET: ${COMPANY.siret} - TVA: ${COMPANY.vatNumber}`, pageWidth / 2, y, { align: "center" });
 
   // Download
   doc.save(`h3-facture-${booking.booking_ref}.pdf`);

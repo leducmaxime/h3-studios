@@ -29,6 +29,7 @@ export interface PricingData {
   minMaxByGroupType: MinMaxByGroupType;
   maxAdvanceDays: number;
   openingHours?: Record<string, Record<number, { open: string; close: string }>>;
+  allowCash?: boolean;
 }
 
 export interface PriceSlot {

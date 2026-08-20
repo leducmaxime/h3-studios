@@ -41,13 +41,13 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
-import { getBookingAmountDue } from "@/lib/booking-totals";
-import { studioLabel, studioLabelShort } from "@/lib/labels";
+import { getBookingAmountDue, getDisplayStatus } from "@/lib/booking-totals";
+import { BOOKING_STATUS_LABELS, studioLabel, studioLabelShort } from "@/lib/labels";
 import { generateMonthlyReportPDF } from "@/lib/export";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import type { DashboardStats } from "@/lib/db-types";
+import type { BookingStatus, DashboardStats } from "@/lib/db-types";
 
 interface RevenuePoint {
   date: string;
@@ -115,6 +115,19 @@ interface NowBooking {
   end_time: string;
   payment_status: string;
   remaining: number;
+}
+
+// Mêmes couleurs que la page Réservations (Bookings.tsx)
+const OVERDUE_STATUS_CLASSES: Record<BookingStatus, string> = {
+  confirmed: "bg-green-500/15 text-green-400 border-green-500/30",
+  completed: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  cancelled: "bg-red-500/15 text-red-400 border-red-500/30",
+  "no-show": "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+};
+
+function formatOverdueDate(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
 type Period = "week" | "month" | "quarter" | "year";
@@ -770,7 +783,7 @@ function StatCard({
 }: {
   title: string;
   value: string | number;
-  subValue?: string;
+  subValue?: React.ReactNode;
   icon: React.ElementType;
   trend?: string;
   color?: "primary" | "green" | "red" | "blue" | "zinc";
@@ -929,20 +942,13 @@ export function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/admin/bookings?dateDirection=upcoming&limit=20&sortBy=date&sortOrder=asc")
+    fetch("/api/admin/bookings?dateDirection=upcoming&limit=3&sortBy=date&sortOrder=asc")
       .then((res) => res.json())
       .then((json: any) => {
         if (json?.success && json?.data?.data) {
-          const now = new Date();
-          const todayISO = now.toLocaleDateString("en-CA");
-          const nowTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-          // Exclure les réservations passées (aujourd'hui avec end_time déjà passée)
-          const filtered = json.data.data.filter((b: any) => {
-            if (b.date < todayISO) return false;
-            if (b.date === todayISO && b.end_time <= nowTimeStr) return false;
-            return true;
-          });
-          setUpcomingBookings(filtered.slice(0, 3));
+          // Le serveur exclut déjà les réservations du jour dont l'heure de fin
+          // est dépassée (filtre sur date + heure, Europe/Paris).
+          setUpcomingBookings(json.data.data);
         }
       })
       .catch((err) => console.error("Failed to fetch upcoming bookings:", err));
@@ -1452,7 +1458,18 @@ export function AdminDashboard() {
         <StatCard
           title="Remises accordées"
           value={formatPrice(stats?.rangeDiscounts ?? 0)}
-          subValue="Déjà déduites du CA réservé"
+          subValue={
+            stats ? (
+              <>
+                <span className="block">
+                  dont {formatPrice(stats.rangePromoDiscounts)} code promo · {formatPrice(stats.rangeManualDiscounts)} remise manuelle
+                </span>
+                <span className="mt-0.5 block text-xs">Déjà déduites du CA réservé</span>
+              </>
+            ) : (
+              "Déjà déduites du CA réservé"
+            )
+          }
           icon={Euro}
           color="zinc"
           className="lg:col-span-2"
@@ -1465,16 +1482,78 @@ export function AdminDashboard() {
           color="green"
           className="lg:col-span-3"
         />
+        <StatCard
+          title="Annulations"
+          value={stats?.rangeCancellations ?? 0}
+          subValue="Sur la période (date de séance)"
+          icon={Ban}
+          color="zinc"
+          className="lg:col-span-3"
+        />
         <a href="/admin/bookings?payment=remaining" className="block sm:col-span-2 lg:col-span-3">
           <StatCard
             title="Sur place à encaisser"
             value={stats?.rangePendingPayments ?? 0}
-            subValue={formatPrice(stats?.rangePendingAmount ?? 0)}
+            subValue={`${formatPrice(stats?.rangePendingAmount ?? 0)} · Séances à venir`}
             icon={CreditCard}
             color={(stats?.rangePendingPayments ?? 0) > 0 ? "red" : "blue"}
           />
         </a>
+        <StatCard
+          title="Au recouvrement"
+          value={stats?.rangeOverduePayments ?? 0}
+          subValue={`${formatPrice(stats?.rangeOverdueAmount ?? 0)} · Séances terminées, solde dû`}
+          icon={AlertCircle}
+          color={(stats?.rangeOverduePayments ?? 0) > 0 ? "red" : "blue"}
+          className="sm:col-span-2 lg:col-span-3"
+        />
       </div>
+
+      {/* Liste Au recouvrement */}
+      {stats && stats.rangeOverdueBookings.length > 0 && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-zinc-300">Au recouvrement — par réservation</h2>
+            <span className="text-sm font-medium text-red-400">{formatPrice(stats.rangeOverdueAmount)}</span>
+          </div>
+          <div className="space-y-2">
+            {stats.rangeOverdueBookings.map((booking) => {
+              const displayStatus = getDisplayStatus({
+                status: booking.status as BookingStatus,
+                date: booking.date,
+                end_time: booking.end_time,
+              }) as BookingStatus;
+              return (
+                <a
+                  key={booking.id}
+                  href={`/admin/bookings/${booking.id}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 transition-colors hover:border-zinc-700"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {booking.band_name || booking.user_name || "—"}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {formatOverdueDate(booking.date)} · {booking.start_time} – {booking.end_time} · {studioLabel(booking.studio_id)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge variant="outline" className={OVERDUE_STATUS_CLASSES[displayStatus] ?? ""}>
+                      {BOOKING_STATUS_LABELS[displayStatus] ?? displayStatus}
+                    </Badge>
+                    <span className="text-sm font-semibold text-red-400">{formatPrice(booking.remaining)}</span>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+          {stats.rangeOverduePayments > stats.rangeOverdueBookings.length && (
+            <p className="mt-3 text-center text-xs text-zinc-500">
+              Les {stats.rangeOverdueBookings.length} plus anciennes sur {stats.rangeOverduePayments}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Widget En cours maintenant */}
       {nowBookings.length > 0 && (

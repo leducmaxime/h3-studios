@@ -74,7 +74,7 @@ export function parseBookingEquipmentLines(raw: string | null | undefined | unkn
   });
 }
 
-function timeToMinutes(time: string): number {
+export function timeToMinutes(time: string): number {
   if (time === "00:00") return 24 * 60;
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
@@ -807,6 +807,18 @@ export function parseMinAdvanceHours(
 ): number {
   const parsed = Number.parseInt(rawValue || String(defaultValue), 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultValue;
+}
+
+export function parseAllowCash(rawValue: string | null | undefined): boolean {
+  return rawValue !== "false";
+}
+
+export function isCashPaymentForbidden(
+  paymentMethod: string,
+  allowCash: boolean,
+  netTotal: number,
+): boolean {
+  return paymentMethod === "cash" && !allowCash && netTotal > 0;
 }
 
 /** Return whether a same-day start time violates the minimum-advance cutoff. */

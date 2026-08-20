@@ -3,6 +3,7 @@ import { offeredUnitsSuffix } from "@/lib/equipment-pricing";
 import { CLIENT_TYPE_RULES, isClientType } from "@/lib/booking-fields";
 import { groupTypeLabel, paymentMethodLabel, studioLabel } from "@/lib/labels";
 import { formatEuro, splitTtc } from "@/lib/tax";
+import { COMPANY } from "@/lib/company";
 
 export interface BookingSlot {
   bookingRef: string;
@@ -380,7 +381,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:40px 30px;text-align:center;border-bottom:2px solid #facc15;">
-              <img src="https://staging.h3-studios.fr/images/logo-email.png" alt="H3 Studios" width="180" style="display:block;margin:0 auto 12px;" />
+              <img src="${COMPANY.siteUrl}/images/logo-email.png" alt="H3 Studios" width="180" style="display:block;margin:0 auto 12px;" />
 
             </td>
           </tr>
@@ -469,7 +470,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                 </a>
               </p>
               <p style="margin:0;color:#444444;font-size:11px;">
-                <a href="https://staging.h3-studios.fr" style="color:#888888;text-decoration:none;">h3-studios.fr</a> &nbsp;|&nbsp;
+                <a href="${COMPANY.siteUrl}" style="color:#888888;text-decoration:none;">${COMPANY.siteHost}</a> &nbsp;|&nbsp;
                 <a href="mailto:contact@h3-studios.fr" style="color:#888888;text-decoration:none;">contact@h3-studios.fr</a>
               </p>
             </td>

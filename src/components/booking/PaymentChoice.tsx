@@ -19,6 +19,7 @@ interface PaymentChoiceProps {
   isFree: boolean;
   isSubmitting?: boolean;
   onConfirmFree: () => void;
+  allowOnSitePayment?: boolean;
 }
 
 export function PaymentChoice({
@@ -33,6 +34,7 @@ export function PaymentChoice({
   isFree,
   isSubmitting = false,
   onConfirmFree,
+  allowOnSitePayment = true,
 }: PaymentChoiceProps) {
   const actionsDisabled = !acceptedCgv || isSubmitting;
 
@@ -108,7 +110,7 @@ export function PaymentChoice({
           Confirmer la réservation
         </button>
       ) : (
-        <div className="grid gap-3 lg:gap-4 lg:grid-cols-2">
+        <div className={`grid gap-3 lg:gap-4${allowOnSitePayment ? " lg:grid-cols-2" : ""}`}>
           <button
             onClick={() => onSelectMethod("card")}
             disabled={actionsDisabled}
@@ -118,9 +120,11 @@ export function PaymentChoice({
                 : "hover:border-primary hover:bg-primary/20"
             }`}
           >
-            <div className="absolute -top-2 right-3 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-black lg:-top-3 lg:right-4 lg:px-3 lg:py-1 lg:text-xs">
-              Recommandé
-            </div>
+            {allowOnSitePayment && (
+              <div className="absolute -top-2 right-3 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-black lg:-top-3 lg:right-4 lg:px-3 lg:py-1 lg:text-xs">
+                Recommandé
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 lg:h-12 lg:w-12">
@@ -141,33 +145,35 @@ export function PaymentChoice({
             </div>
           </button>
 
-          <button
-            onClick={() => onSelectMethod("cash")}
-            disabled={actionsDisabled}
-            className={`group flex flex-col gap-3 rounded-xl border-2 border-white/20 bg-white/15 p-4 text-left transition-all lg:gap-4 lg:p-6 ${
-              actionsDisabled
-                ? "cursor-not-allowed opacity-40"
-                : "hover:border-white/40 hover:bg-white/15"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 lg:h-12 lg:w-12">
-                <Banknote className="h-5 w-5 text-white/70 lg:h-6 lg:w-6" />
+          {allowOnSitePayment && (
+            <button
+              onClick={() => onSelectMethod("cash")}
+              disabled={actionsDisabled}
+              className={`group flex flex-col gap-3 rounded-xl border-2 border-white/20 bg-white/15 p-4 text-left transition-all lg:gap-4 lg:p-6 ${
+                actionsDisabled
+                  ? "cursor-not-allowed opacity-40"
+                  : "hover:border-white/40 hover:bg-white/15"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 lg:h-12 lg:w-12">
+                  <Banknote className="h-5 w-5 text-white/70 lg:h-6 lg:w-6" />
+                </div>
+                <div>
+                  <h4 className="text-base font-semibold lg:text-lg">Payer sur place</h4>
+                  <p className="text-xs text-white/50 lg:text-sm">Espèces ou CB</p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-base font-semibold lg:text-lg">Payer sur place</h4>
-                <p className="text-xs text-white/50 lg:text-sm">Espèces ou CB</p>
-              </div>
-            </div>
 
-            <div className="mt-auto pt-3 lg:pt-4">
-              <span className={`inline-block rounded-lg border border-white/30 px-3 py-1.5 text-sm font-medium text-white/70 transition-all lg:px-4 lg:py-2 lg:text-base ${
-                actionsDisabled ? "" : "group-hover:border-white/50 group-hover:text-white"
-              }`}>
-                Réserver sans payer
-              </span>
-            </div>
-          </button>
+              <div className="mt-auto pt-3 lg:pt-4">
+                <span className={`inline-block rounded-lg border border-white/30 px-3 py-1.5 text-sm font-medium text-white/70 transition-all lg:px-4 lg:py-2 lg:text-base ${
+                  actionsDisabled ? "" : "group-hover:border-white/50 group-hover:text-white"
+                }`}>
+                  Réserver sans payer
+                </span>
+              </div>
+            </button>
+          )}
         </div>
       )}
     </div>
