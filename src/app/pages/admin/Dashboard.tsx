@@ -838,9 +838,9 @@ function StatCard({
   );
 }
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+    <div className={`rounded-xl border border-zinc-800 bg-zinc-900 p-4 ${className}`}>
       <h3 className="mb-4 text-sm font-medium text-zinc-400">{title}</h3>
       {children}
     </div>
@@ -1947,11 +1947,10 @@ export function AdminDashboard() {
               })()}
             </ChartCard>
 
-            {/* 5 cartes dans une grille 2 colonnes : "Méthodes de paiement"
-                occupe toute la largeur de la dernière ligne pour éviter un
-                vide à droite. */}
-            <div className="lg:col-span-2">
-              <ChartCard title="Méthodes de paiement">
+            {/* Dernière ligne de la grille 2 colonnes : "Méthodes de paiement"
+                à gauche, "Top 5 des meilleurs clients" à droite. */}
+            <div>
+              <ChartCard title="Méthodes de paiement" className="h-full">
                 {(() => {
                   const totalCount = paymentData.reduce((acc, p) => acc + p.count, 0);
                   const labels = paymentData.map((p) => {
@@ -2006,8 +2005,8 @@ export function AdminDashboard() {
                   })()}
               </ChartCard>
             </div>
-          </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+
+            <div className="h-full rounded-xl border border-zinc-800 bg-zinc-900 p-4">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-medium text-zinc-400">Top 5 des meilleurs clients</h3>
@@ -2073,6 +2072,7 @@ export function AdminDashboard() {
                 </div>
               );
             })()}
+            </div>
           </div>
       </div>
     </div>
