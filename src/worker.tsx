@@ -4326,10 +4326,12 @@ const app = defineApp([
       ).bind(fromStr, toStr);
       const durationExpression = `(CASE WHEN b.end_time = '00:00' THEN 1440 ELSE (CAST(substr(b.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.end_time, 4, 2) AS INTEGER)) END) - (CASE WHEN b.start_time = '00:00' THEN 1440 ELSE (CAST(substr(b.start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.start_time, 4, 2) AS INTEGER)) END)`;
       const durationRowsStmt = env.DB.prepare(
-        `SELECT CASE WHEN duration_minutes >= 270 THEN 9 ELSE CAST((duration_minutes + 29) / 30 AS INTEGER) END as slots, COUNT(*) as count, SUM(duration_minutes) as total_minutes
+        // La durée minimale d'une réservation est 1h (2 créneaux) : tout ce qui
+        // serait plus court est ramené au bucket 1h, et 4h30+ agrège la queue.
+        `SELECT CASE WHEN duration_minutes >= 270 THEN 9 WHEN duration_minutes <= 60 THEN 2 ELSE CAST((duration_minutes + 29) / 30 AS INTEGER) END as slots, COUNT(*) as count, SUM(duration_minutes) as total_minutes
          FROM (SELECT ${durationExpression} as duration_minutes FROM bookings b WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled')
          WHERE duration_minutes > 0
-         GROUP BY CASE WHEN duration_minutes >= 270 THEN 9 ELSE CAST((duration_minutes + 29) / 30 AS INTEGER) END`,
+         GROUP BY CASE WHEN duration_minutes >= 270 THEN 9 WHEN duration_minutes <= 60 THEN 2 ELSE CAST((duration_minutes + 29) / 30 AS INTEGER) END`,
       ).bind(fromStr, toStr);
       const avgDurationStmt = env.DB.prepare(
         `SELECT COALESCE(AVG(duration_minutes), 0) as average_minutes
@@ -4559,18 +4561,17 @@ const app = defineApp([
         revenue: merged[method]?.revenue ?? 0,
       }));
 
-      const durationLabels = ["30min", "1h", "1h30", "2h", "2h30", "3h", "3h30", "4h", "4h30+"];
+      // Buckets de 30 min à partir de la durée minimale réservable (1h).
+      const durationLabels = ["1h", "1h30", "2h", "2h30", "3h", "3h30", "4h", "4h30+"];
       const durationRows = durationRowsResult.results as unknown as DurationRow[];
-      const durations = Array.from({ length: 9 }, (_, index) => {
-        const slots = index + 1;
+      const durations = durationLabels.map((label, index) => {
+        const slots = index + 2;
         const row = durationRows.find((candidate) => candidate.slots === slots);
-        const count = Number(row?.count ?? 0);
-        const totalMinutes = Number(row?.total_minutes ?? 0);
         return {
           slots,
-          label: durationLabels[index],
-          count,
-          hours: slots === 9 ? totalMinutes / 60 : count * slots * 0.5,
+          label,
+          count: Number(row?.count ?? 0),
+          hours: Number(row?.total_minutes ?? 0) / 60,
         };
       });
       const avgDurationMinutes = Math.round(Number(
