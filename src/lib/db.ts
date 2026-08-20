@@ -36,7 +36,31 @@ function normEnd(time: string): string {
 }
 
 /** Clause SQL pour comparer end_time en traitant "00:00" comme "24:00" */
-const END_CMP = "CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END";
+function endCmp(alias: string): string {
+  return `CASE WHEN ${alias}.end_time = '00:00' THEN '24:00' ELSE ${alias}.end_time END`;
+}
+
+/**
+ * Prédicat SQL « À venir » / « Passées » basé sur l'instant de fin (Europe/Paris).
+ * Une réservation du jour dont l'heure de fin est dépassée est « passée »,
+ * jamais « à venir ». end_time = "00:00" compte comme une fin en fin de journée.
+ */
+export function dateDirectionCondition(
+  direction: "upcoming" | "past",
+  now: { dateISO: string; hours: number; minutes: number },
+): { sql: string; params: unknown[] } {
+  const nowTimeStr = `${String(now.hours).padStart(2, "0")}:${String(now.minutes).padStart(2, "0")}`;
+  if (direction === "upcoming") {
+    return {
+      sql: `(b.date > ? OR (b.date = ? AND ${endCmp("b")} > ?))`,
+      params: [now.dateISO, now.dateISO, nowTimeStr],
+    };
+  }
+  return {
+    sql: `(b.date < ? OR (b.date = ? AND ${endCmp("b")} <= ?))`,
+    params: [now.dateISO, now.dateISO, nowTimeStr],
+  };
+}
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -88,18 +112,20 @@ export async function getBookings(
   }
 
   if (filters.dateDirection && filters.dateDirection !== "all") {
-    const today = getParisDateISO();
+    // Une seule lecture d'horloge : éviter de chevaucher minuit entre les branches.
+    const parisNow = getParisNow();
     if (filters.dateDirection === "upcoming") {
-      conditions.push("b.date >= ?");
-      params.push(today);
+      const { sql, params: dirParams } = dateDirectionCondition("upcoming", parisNow);
+      conditions.push(sql);
+      params.push(...dirParams);
       conditions.push("b.status != 'cancelled'");
     } else if (filters.dateDirection === "past") {
-      conditions.push("b.date < ?");
-      params.push(today);
+      const { sql, params: dirParams } = dateDirectionCondition("past", parisNow);
+      conditions.push(sql);
+      params.push(...dirParams);
     } else if (filters.dateDirection === "now") {
       conditions.push("b.date = ?");
-      params.push(today);
-      const parisNow = getParisNow();
+      params.push(parisNow.dateISO);
       const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
       // Disparaît 15 min après la fin : end_time + 15min > now → end_time > now - 15min
       const nowMinus15 = parisNow.hours * 60 + parisNow.minutes - 15;

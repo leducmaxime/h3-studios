@@ -340,7 +340,7 @@ export interface BookingFilters {
   search?: string; // booking_ref or user name
   sortBy?: BookingSortField;
   sortOrder?: BookingSortOrder;
-  dateDirection?: "past" | "upcoming" | "all";
+  dateDirection?: "past" | "upcoming" | "now" | "all";
 }
 
 export interface UserFilters {
