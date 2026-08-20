@@ -3,6 +3,7 @@ import { offeredUnitsSuffix } from "@/lib/equipment-pricing";
 import { CLIENT_TYPE_RULES, isClientType } from "@/lib/booking-fields";
 import { groupTypeLabel, paymentMethodLabel, studioLabel } from "@/lib/labels";
 import { formatEuro, splitTtc } from "@/lib/tax";
+import { COMPANY } from "@/lib/company";
 
 export interface BookingSlot {
   bookingRef: string;
@@ -380,7 +381,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:40px 30px;text-align:center;border-bottom:2px solid #facc15;">
-              <img src="https://staging.h3-studios.fr/images/logo-email.png" alt="H3 Studios" width="180" style="display:block;margin:0 auto 12px;" />
+              <img src="${COMPANY.siteUrl}/images/logo-email.png" alt="H3 Studios" width="180" style="display:block;margin:0 auto 12px;" />
 
             </td>
           </tr>
@@ -461,6 +462,21 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                   </td>
                 </tr>
               </table>
+              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
+                <tr>
+                  <td style="background-color:#111111;border:1px solid #facc15;border-radius:10px;padding:16px 24px;text-align:center;">
+                    <p style="margin:0 0 4px 0;color:#facc15;font-size:15px;font-weight:700;">Après votre séance</p>
+                    <p style="margin:0 0 12px 0;color:#aaaaaa;font-size:12px;">Votre avis Google aide d'autres musiciens à nous trouver.</p>
+                    <table border="0" cellspacing="0" cellpadding="0" style="margin:0 auto;">
+                      <tr>
+                        <td align="center" bgcolor="#facc15" style="border-radius:8px;padding:10px 18px;">
+                          <a href="https://search.google.com/local/writereview?placeid=ChIJi9IayzcL5kcRKCQIsydm0kA" target="_blank" rel="noopener noreferrer" style="display:block;font-size:13px;font-weight:700;color:#0a0a0a;text-decoration:none;">Laisser un avis Google</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
               <p style="margin:0 0 16px 0;">
                 <a href="https://www.facebook.com/profile.php?id=100089893392179" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:0 8px;text-decoration:none;">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
@@ -469,7 +485,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                 </a>
               </p>
               <p style="margin:0;color:#444444;font-size:11px;">
-                <a href="https://staging.h3-studios.fr" style="color:#888888;text-decoration:none;">h3-studios.fr</a> &nbsp;|&nbsp;
+                <a href="${COMPANY.siteUrl}" style="color:#888888;text-decoration:none;">${COMPANY.siteHost}</a> &nbsp;|&nbsp;
                 <a href="mailto:contact@h3-studios.fr" style="color:#888888;text-decoration:none;">contact@h3-studios.fr</a>
               </p>
             </td>

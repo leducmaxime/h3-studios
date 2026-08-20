@@ -137,7 +137,7 @@ import {
 import { refundCardPayment, refundPayments } from "@/lib/refunds";
 import { type BookingFilters, type AuditLogFilters, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
 import { getOfferedUnits } from "@/lib/equipment-pricing";
 import {
@@ -262,6 +262,10 @@ function validateAdminSettingValue(key: string, rawValue: string): { ok: true; v
       return parseIntSetting({ label: "Délai minimum de réservation", min: 0, max: 72 });
     case "booking.max_advance_days":
       return parseIntSetting({ label: "Délai maximum de réservation", min: 1, max: 365 });
+    case "booking.allow_cash":
+      return parseBooleanSetting({ label: "Paiement sur place" });
+    case "booking.require_phone":
+      return { ok: false, error: "Ce réglage n'existe plus : le téléphone est toujours obligatoire." };
     case "promo_codes.enabled":
       return parseBooleanSetting({ label: "Activation des codes promo" });
     case "maintenance.enabled":
@@ -922,6 +926,18 @@ const app = defineApp([
       const validGroupTypes = ["solo", "duo", "group"];
       if (!validStudios.includes(body.studioId)) return jsonError("Studio invalide", 400);
       if (!validGroupTypes.includes(body.groupType)) return jsonError("Type de groupe invalide", 400);
+      if (body.paymentMethod !== "card" && body.paymentMethod !== "cash") return jsonError("Moyen de paiement invalide", 400);
+      // Lu uniquement pour un paiement sur place : une réservation par carte
+      // n'a pas besoin de ce réglage (isCashPaymentForbidden teste le mode
+      // avant tout le reste).
+      const allowCash = body.paymentMethod === "cash"
+        ? parseAllowCash(await getSetting(env.DB, "booking.allow_cash"))
+        : true;
+      // Sans code promo, le net ne peut pas tomber à 0 : on refuse avant toute
+      // écriture. Avec un code promo, seul le net calculé côté serveur tranche.
+      if (body.paymentMethod === "cash" && !allowCash && !body.promoCode) {
+        return jsonResponse({ success: false, error: "Le paiement sur place n'est plus disponible, réglez en ligne par carte.", code: "cash-not-allowed" }, 400);
+      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) return jsonError("Format de date invalide", 400);
       if (!/^\d{2}:\d{2}$/.test(body.startTime) || !/^\d{2}:\d{2}$/.test(body.endTime)) return jsonError("Format d'heure invalide", 400);
       // "00:00" = minuit/fin de journée, toujours après n'importe quelle heure
@@ -1313,6 +1329,9 @@ const app = defineApp([
 
       const serverNetTotal = serverTotalPrice - serverPromoDiscount;
       const isZeroTotal = serverNetTotal <= 0;
+      if (isCashPaymentForbidden(body.paymentMethod, allowCash, serverNetTotal)) {
+        return jsonResponse({ success: false, error: "Le paiement sur place n'est plus disponible, réglez en ligne par carte.", code: "cash-not-allowed" }, 400);
+      }
       const bookingPaymentStatus = isZeroTotal ? "paid" : body.paymentStatus;
 
       // Log price mismatch (telemetry)
@@ -1481,6 +1500,7 @@ const app = defineApp([
     try {
       const rows = await getPricing(env.DB);
       const maxAdvanceDays = parseInt(await getSetting(env.DB, "booking.max_advance_days") || "90", 10);
+      const allowCash = parseAllowCash(await getSetting(env.DB, "booking.allow_cash"));
 
       // Build grid: studio_id × group_type × { peak, offPeak } in €/hour
       // DB stores price_per_half_hour in cents → €/h = cents * 2 / 100 = cents / 50
@@ -1522,7 +1542,7 @@ const app = defineApp([
       const openingHours = buildOpeningHoursMap(await getOpeningHours(env.DB));
 
       // Admin pricing edits must be visible on next page load — never cache.
-      const res = jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays, openingHours });
+      const res = jsonSuccess({ grid, minMaxByGroupType, maxAdvanceDays, openingHours, allowCash });
       res.headers.set("Cache-Control", "no-store");
       return res;
     } catch (error) {
@@ -2736,6 +2756,9 @@ const app = defineApp([
         const hasBookingsParam = url.searchParams.get("hasBookings");
         const hasBookings = hasBookingsParam === "true" ? true : hasBookingsParam === "false" ? false : undefined;
 
+        const clientTypeRaw = url.searchParams.get("clientType");
+        const clientType = isClientType(clientTypeRaw) ? clientTypeRaw : undefined;
+
         const sortByRaw = url.searchParams.get("sortBy") || undefined;
         const sortOrderRaw = url.searchParams.get("sortOrder") || undefined;
 
@@ -2751,7 +2774,7 @@ const app = defineApp([
 
         const result = await getUsers(
           env.DB,
-          { search, isBlocked, hasBookings, sortBy, sortOrder },
+          { search, isBlocked, hasBookings, clientType, sortBy, sortOrder },
           all ? 1 : page,
           all ? 9999 : limit,
         );

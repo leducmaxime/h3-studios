@@ -1,6 +1,19 @@
 // TypeScript types matching D1 database tables (migrations/0001_initial_schema.sql)
 // All dates stored as ISO TEXT in SQLite, booleans as INTEGER (0/1)
 
+export interface DashboardOverdueBooking {
+  id: string;
+  booking_ref: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  studio_id: string;
+  status: string;
+  user_name: string | null;
+  band_name: string | null;
+  remaining: number;
+}
+
 export interface DashboardStats {
   todayBookings: number;
   todayRevenue: number;
@@ -17,6 +30,12 @@ export interface DashboardStats {
   rangeBookings: number;
   rangeRevenue: number;
   rangeDiscounts: number;
+  rangePromoDiscounts: number;
+  rangeManualDiscounts: number;
+  rangeCancellations: number;
+  rangeOverduePayments: number;
+  rangeOverdueAmount: number;
+  rangeOverdueBookings: DashboardOverdueBooking[];
   rangeBookedMinutes: number;
   rangePendingPayments: number;
   rangePendingAmount: number;
@@ -95,6 +114,20 @@ export interface DbUser {
   is_blocked: number;
   total_bookings: number;
   total_spent: number;
+  /**
+   * Agrégats d'export calculés côté serveur par `getUsers` (issue #61).
+   * Optionnels : `getUserById` / `getUserByEmail` ne les renvoient pas.
+   * Toujours hors réservations annulées, sauf `total_cancellations`.
+   */
+  total_cancellations?: number;
+  /** Somme des remises accordées (TTC). */
+  total_discounts?: number;
+  /** Somme des options/équipements facturés (TTC). */
+  total_equipment?: number;
+  /** Durée totale réservée, en minutes (00:00 = fin de journée). */
+  total_minutes?: number;
+  total_bookings_la_scene?: number;
+  total_bookings_le_podium?: number;
   created_at: string;
   updated_at: string;
 }
@@ -340,13 +373,14 @@ export interface BookingFilters {
   search?: string; // booking_ref or user name
   sortBy?: BookingSortField;
   sortOrder?: BookingSortOrder;
-  dateDirection?: "past" | "upcoming" | "all";
+  dateDirection?: "past" | "upcoming" | "now" | "all";
 }
 
 export interface UserFilters {
   search?: string; // name, email, band_name
   isBlocked?: boolean;
   hasBookings?: boolean;
+  clientType?: "particulier" | "association" | "entreprise";
   sortBy?: UserSortField;
   sortOrder?: UserSortOrder;
 }

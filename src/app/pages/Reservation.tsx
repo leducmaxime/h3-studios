@@ -58,6 +58,8 @@ export function Reservation({ step }: ReservationProps) {
     canConfirmBooking,
     bookingFieldIssues,
     submitError,
+    allowCash,
+    cashNotAllowed,
     clearSubmitError,
     clientUser,
     clientUserLoading,
@@ -745,7 +747,8 @@ export function Reservation({ step }: ReservationProps) {
                 promoDiscount={state.promoDiscount}
                 acceptedCgv={state.acceptedCgv}
                 onAcceptedCgvChange={setAcceptedCgv}
-                isFree={liveNet === 0}
+                allowOnSitePayment={allowCash}
+                isFree={liveNet === 0 && !cashNotAllowed}
                 isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
                 onConfirmFree={confirmFreeBooking}
@@ -774,7 +777,8 @@ export function Reservation({ step }: ReservationProps) {
                 promoDiscount={state.promoDiscount}
                 acceptedCgv={state.acceptedCgv}
                 onAcceptedCgvChange={setAcceptedCgv}
-                isFree={liveNet === 0}
+                allowOnSitePayment={allowCash}
+                isFree={liveNet === 0 && !cashNotAllowed}
                 isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
                 onConfirmFree={confirmFreeBooking}

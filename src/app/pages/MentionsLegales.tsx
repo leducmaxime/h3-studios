@@ -1,3 +1,5 @@
+import { COMPANY, HOSTING, LEGAL_UPDATED_AT, companyFullAddress, companyRcs } from "@/lib/company";
+
 export function MentionsLegales() {
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
@@ -11,27 +13,42 @@ export function MentionsLegales() {
           <section>
             <h2 className="mb-3 text-xl font-semibold text-primary">Éditeur du site</h2>
             <p className="text-sm leading-relaxed">
-              Le site <strong className="text-white">h3-studios.fr</strong> est édité par Marcel Hamon,
-              auto-entrepreneur immatriculé sous le numéro SIRET 499 465 721 00026.
+              Le site <strong className="text-white">{COMPANY.siteHost}</strong> est édité par{" "}
+              <strong className="text-white">{COMPANY.legalName}</strong>, {COMPANY.legalForm} ({COMPANY.legalFormLong}) au capital de {COMPANY.shareCapital}, immatriculée au R.C.S. de {COMPANY.rcsCity} sous le numéro {COMPANY.siren}.
             </p>
             <p className="mt-2 text-sm leading-relaxed">
-              <strong className="text-white">Siège social :</strong> 3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie
+              <strong className="text-white">SIRET :</strong> {COMPANY.siret}
             </p>
             <p className="mt-2 text-sm leading-relaxed">
-              <strong className="text-white">Téléphone :</strong> 06 13 44 08 75
+              <strong className="text-white">N° TVA intracommunautaire :</strong> {COMPANY.vatNumber}
             </p>
             <p className="mt-2 text-sm leading-relaxed">
-              <strong className="text-white">Email :</strong> contact@h3-studios.fr
+              <strong className="text-white">RCS :</strong> {companyRcs()}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed">
+              <strong className="text-white">Siège social :</strong> {companyFullAddress()}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed">
+              <strong className="text-white">Téléphone :</strong> {COMPANY.phoneDisplay}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed">
+              <strong className="text-white">Email :</strong> {COMPANY.email}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed">
+              <strong className="text-white">Directeur de la publication :</strong> {COMPANY.publicationDirector}
             </p>
           </section>
 
           <section>
             <h2 className="mb-3 text-xl font-semibold text-primary">Hébergement</h2>
             <p className="text-sm leading-relaxed">
-              Le site est hébergé par <strong className="text-white">Cloudflare, Inc.</strong>
+              Le site est hébergé par <strong className="text-white">{HOSTING.name}</strong>
             </p>
             <p className="mt-2 text-sm leading-relaxed">
-              101 Townsend Street, San Francisco, CA 94107, États-Unis
+              {HOSTING.address}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed">
+              <strong className="text-white">Téléphone :</strong> {HOSTING.phone}
             </p>
           </section>
 
@@ -39,7 +56,7 @@ export function MentionsLegales() {
             <h2 className="mb-3 text-xl font-semibold text-primary">Propriété intellectuelle</h2>
             <p className="text-sm leading-relaxed">
               L'ensemble du contenu de ce site (textes, images, graphismes, logo, icônes, etc.)
-              est la propriété exclusive de Marcel Hamon ou de ses partenaires. Toute reproduction,
+              est la propriété exclusive de {COMPANY.legalName} ou de ses partenaires. Toute reproduction,
               représentation, modification, publication, adaptation de tout ou partie des éléments du site,
               quel que soit le moyen ou le procédé utilisé, est interdite, sauf autorisation écrite préalable.
             </p>
@@ -48,10 +65,10 @@ export function MentionsLegales() {
           <section>
             <h2 className="mb-3 text-xl font-semibold text-primary">Limitation de responsabilité</h2>
             <p className="text-sm leading-relaxed">
-              Marcel Hamon ne pourra être tenu responsable des dommages directs et indirects causés au
-              matériel de l'utilisateur, lors de l'accès au site. Marcel Hamon décline toute responsabilité
+              {COMPANY.legalName} ne pourra être tenu responsable des dommages directs et indirects causés au
+              matériel de l'utilisateur, lors de l'accès au site. {COMPANY.legalName} décline toute responsabilité
               quant à l'utilisation qui pourrait être faite des informations et contenus présents sur
-              <strong className="text-white"> h3-studios.fr</strong>.
+              <strong className="text-white"> {COMPANY.siteHost}</strong>.
             </p>
           </section>
 
@@ -62,6 +79,10 @@ export function MentionsLegales() {
               réservation). Aucun cookie de traçage publicitaire n'est utilisé.
             </p>
           </section>
+
+          <p className="text-xs text-white/40">
+            Dernière mise à jour : {LEGAL_UPDATED_AT}
+          </p>
         </div>
       </div>
     </div>
