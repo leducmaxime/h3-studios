@@ -386,7 +386,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const [todayFullyBlocked, setTodayFullyBlocked] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing } = usePricing();
+  const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing, gridFor } = usePricing();
   const { equipment: availableEquipment } = useEquipment();
   const auth = useClientAuth();
   const clientUser = auth.user;
@@ -873,7 +873,7 @@ export function useBookingWithRouter(urlStep?: string) {
 
       // Never add a booking without a loaded pricing grid — a 0€ fallback
       // price would desync the displayed total from the server charge.
-      const grid = pricingData?.grid;
+      const grid = gridFor(s.selectedDate);
       if (!grid) {
         return s;
       }
@@ -924,7 +924,7 @@ export function useBookingWithRouter(urlStep?: string) {
       };
     });
     return success;
-  }, [isDuplicateBooking, pricingData]);
+  }, [isDuplicateBooking, gridFor]);
 
   const clearDuplicateError = useCallback(() => {
     setState((s) => ({ ...s, duplicateError: null }));
@@ -1224,7 +1224,7 @@ export function useBookingWithRouter(urlStep?: string) {
     if (!state.studioId || !state.selectedDate || !state.startTime || !state.endTime || !state.groupType) {
       return null;
     }
-    const grid = pricingData?.grid;
+    const grid = gridFor(state.selectedDate);
     if (!grid) return null;
 
     const basePrice = calculatePrice(
@@ -1247,16 +1247,14 @@ export function useBookingWithRouter(urlStep?: string) {
       equipmentPrice,
       grandTotal: basePrice.total + equipmentPrice,
     };
-  }, [pricingData, state.studioId, state.groupType, state.selectedDate, state.startTime, state.endTime, state.equipment, availableEquipment]);
+  }, [gridFor, state.studioId, state.groupType, state.selectedDate, state.startTime, state.endTime, state.equipment, availableEquipment]);
 
   const cartTotal = useMemo(() => {
-    const grid = pricingData?.grid;
-    if (!grid) {
-      return state.cart.reduce((sum, booking) => sum + booking.price, 0);
-    }
     return state.cart.reduce((sum, booking) => {
+      const bookingGrid = gridFor(booking.date);
+      if (!bookingGrid) return sum + booking.price;
       const timePrice = calculatePrice(
-        grid,
+        bookingGrid,
         booking.studioId,
         booking.groupType,
         booking.date,
@@ -1265,7 +1263,7 @@ export function useBookingWithRouter(urlStep?: string) {
       ).total;
       return sum + timePrice + (booking.equipmentPrice || 0);
     }, 0);
-  }, [state.cart, pricingData]);
+  }, [state.cart, gridFor]);
 
   const clearSubmitError = useCallback(() => setSubmitError(null), []);
 
@@ -1312,6 +1310,7 @@ export function useBookingWithRouter(urlStep?: string) {
     pricingLoading,
     pricingError,
     refetchPricing,
+    gridFor,
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,

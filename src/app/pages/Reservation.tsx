@@ -53,6 +53,7 @@ export function Reservation({ step }: ReservationProps) {
     pricingLoading,
     pricingError,
     refetchPricing,
+    gridFor,
     cartTotal,
     canProceedToStudio,
     canConfirmBooking,
@@ -147,7 +148,7 @@ export function Reservation({ step }: ReservationProps) {
    * Falls back to the stored price when grid is not loaded.
    */
   const recomputeCartItemPrice = useCallback((booking: CompletedBooking): number => {
-    const grid = pricingData?.grid;
+    const grid = gridFor(booking.date);
     if (!grid) return booking.price;
     const timePrice = calculatePrice(
       grid,
@@ -158,7 +159,7 @@ export function Reservation({ step }: ReservationProps) {
       booking.endTime
     ).total;
     return timePrice + (booking.equipmentPrice || 0);
-  }, [pricingData]);
+  }, [gridFor]);
 
   const liveNet = Math.max(0, cartTotal - state.promoDiscount);
   const confirmedNet = state.confirmedNetTotal ?? liveNet;
@@ -174,7 +175,7 @@ export function Reservation({ step }: ReservationProps) {
   const renderRecapSection = () => {
     if (!state.selectedDate || !state.startTime || !state.endTime || !state.studioId) return null;
 
-    const grid = pricingData?.grid;
+    const grid = gridFor(state.selectedDate);
     const studio = STUDIOS[state.studioId as StudioId];
     const gt = (state.groupType || "group") as GroupType;
     const priceResult = grid
@@ -533,7 +534,7 @@ export function Reservation({ step }: ReservationProps) {
                       hideHeader
                       groupType={state.groupType || "group"}
                       todayFullyBlocked={todayFullyBlocked}
-                      pricingGrid={pricingData?.grid}
+                      pricingGrid={gridFor(state.selectedDate)}
                       pricingError={pricingError}
                       refetchPricing={refetchPricing}
                     />
