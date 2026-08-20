@@ -30,6 +30,20 @@ import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
 import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
 
+export function buildLoyaltyCountsQuery(userId: string, nowValue: { dateISO: string; hours: number; minutes: number }): { sql: string; params: unknown[] } {
+  const direction = dateDirectionCondition("past", nowValue);
+  return { sql: `SELECT COUNT(CASE WHEN ${direction.sql} AND b.status IN ('confirmed','completed') THEN 1 END) as past_eligible, COUNT(DISTINCT CASE WHEN b.status != 'cancelled' THEN b.loyalty_award_id END) as awards_granted FROM bookings b WHERE b.user_id = ?`, params: [...direction.params, userId] };
+}
+export async function getUserLoyaltyCounts(db: D1Database, userId: string): Promise<{ pastEligibleBookings: number; awardsGranted: number }> {
+  const q = buildLoyaltyCountsQuery(userId, getParisNow());
+  const row = await db.prepare(q.sql).bind(...q.params).first<{ past_eligible: number; awards_granted: number }>();
+  return { pastEligibleBookings: Number(row?.past_eligible) || 0, awardsGranted: Number(row?.awards_granted) || 0 };
+}
+export async function claimLoyaltyAward(db: D1Database, args: { bookingId: string; userId: string; awardId: string; discount: number; expectedAwardsGranted: number }): Promise<boolean> {
+  const result = await db.prepare(`UPDATE bookings SET promo_discount = ?, loyalty_award_id = ?, updated_at = ? WHERE id = ? AND user_id = ? AND (SELECT COUNT(DISTINCT loyalty_award_id) FROM bookings WHERE user_id = ? AND status != 'cancelled') = ?`).bind(args.discount, args.awardId, now(), args.bookingId, args.userId, args.userId, args.expectedAwardsGranted).run();
+  return result.meta.changes === 1;
+}
+
 /** Normalise "00:00" en "24:00" pour les comparaisons de strings SQL.
  *  "00:00" est plus petit que toutes les heures en string compare,
  *  ce qui casse les gardes start_time < ? AND end_time > ?. */
@@ -239,7 +253,7 @@ export async function createBooking(
 export async function updateBooking(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "studio_id" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "keep_balance_due" | "promo_discount" | "promo_code" | "promo_type">>,
+  data: Partial<Pick<DbBooking, "status" | "payment_status" | "notes" | "date" | "start_time" | "end_time" | "studio_id" | "base_price" | "equipment_price" | "total_price" | "equipment" | "cancelled_at" | "cancel_reason" | "keep_balance_due" | "promo_discount" | "promo_code" | "promo_type" | "loyalty_award_id">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -478,6 +492,10 @@ export async function getUsers(
         u.city,
         u.country,
         u.is_blocked,
+        u.loyalty_enabled,
+        u.loyalty_discount_type,
+        u.loyalty_discount_value,
+        u.loyalty_threshold,
         COALESCE(s.total_bookings, 0) as total_bookings,
         COALESCE(s.total_spent, 0) as total_spent,
         COALESCE(s.total_cancellations, 0) as total_cancellations,
@@ -526,6 +544,10 @@ export async function getUserById(
         u.city,
         u.country,
         u.is_blocked,
+        u.loyalty_enabled,
+        u.loyalty_discount_type,
+        u.loyalty_discount_value,
+        u.loyalty_threshold,
         COALESCE(s.total_bookings, 0) as total_bookings,
         COALESCE(s.total_spent, 0) as total_spent,
         u.created_at,
@@ -694,7 +716,7 @@ export async function createUser(
 export async function updateUser(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbUser, "email" | "name" | "first_name" | "last_name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country" | "password_hash" | "client_type" | "legal_name" | "siret" | "rna" | "instagram_accounts">>,
+  data: Partial<Pick<DbUser, "email" | "name" | "first_name" | "last_name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country" | "password_hash" | "client_type" | "legal_name" | "siret" | "rna" | "instagram_accounts" | "loyalty_enabled" | "loyalty_discount_type" | "loyalty_discount_value" | "loyalty_threshold">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -750,6 +772,8 @@ export async function mergeUsers(
   statements.push(
     db.prepare(`UPDATE bookings SET user_id = ?, updated_at = ? WHERE user_id IN (${placeholders})`).bind(primaryId, now(), ...uniqueDuplicateIds),
   );
+  const loyaltySource = primary.loyalty_enabled === 0 ? duplicates.results.find((d) => d.loyalty_enabled === 1) : undefined;
+  if (loyaltySource) statements.push(db.prepare("UPDATE users SET loyalty_enabled = ?, loyalty_discount_type = ?, loyalty_discount_value = ?, loyalty_threshold = ?, updated_at = ? WHERE id = ?").bind(loyaltySource.loyalty_enabled, loyaltySource.loyalty_discount_type, loyaltySource.loyalty_discount_value, loyaltySource.loyalty_threshold, now(), primaryId));
 
   const mergedEmails = duplicates.results.map((d) => d.email).filter(Boolean).join(", ") || "(sans email)";
   const newNotes = primary.notes
@@ -1949,8 +1973,9 @@ export async function getDashboardStats(
     ).bind(rangeFrom, rangeTo),
     db.prepare(
       `SELECT
-        COALESCE(SUM(CASE WHEN promo_code IS NOT NULL AND TRIM(promo_code) != '' THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as promo_discounts,
-        COALESCE(SUM(CASE WHEN promo_code IS NULL OR TRIM(promo_code) = '' THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as manual_discounts
+        COALESCE(SUM(CASE WHEN loyalty_award_id IS NOT NULL THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as loyalty_discounts,
+        COALESCE(SUM(CASE WHEN loyalty_award_id IS NULL AND promo_code IS NOT NULL AND TRIM(promo_code) != '' THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as promo_discounts,
+        COALESCE(SUM(CASE WHEN loyalty_award_id IS NULL AND (promo_code IS NULL OR TRIM(promo_code) = '') THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as manual_discounts
       FROM bookings
       WHERE date >= ? AND date <= ? AND status != 'cancelled'`,
     ).bind(rangeFrom, rangeTo),
@@ -1999,7 +2024,7 @@ export async function getDashboardStats(
   const rangePendingRow = (rangePendingResult.results as unknown as CountTotal[])[0] ?? { count: 0, total: 0 };
   const rangeEquipmentRow = (rangeEquipmentResult.results as unknown as Array<{ total: number }>)[0] ?? { total: 0 };
   const rangeMinMaxRow = (rangeMinMaxResult.results as unknown as Array<{ min_price: number; max_price: number }>)[0] ?? { min_price: 0, max_price: 0 };
-  const rangeDiscountsRow = (rangeDiscountsResult.results as unknown as Array<{ promo_discounts: number; manual_discounts: number }>)[0] ?? { promo_discounts: 0, manual_discounts: 0 };
+  const rangeDiscountsRow = (rangeDiscountsResult.results as unknown as Array<{ promo_discounts: number; manual_discounts: number; loyalty_discounts: number }>)[0] ?? { promo_discounts: 0, manual_discounts: 0, loyalty_discounts: 0 };
   const rangeCancellationsRow = (rangeCancellationsResult.results as unknown as Array<{ count: number }>)[0] ?? { count: 0 };
   const rangeOverdueRow = (rangeOverdueAggregateResult.results as unknown as Array<{ count: number; total: number }>)[0] ?? { count: 0, total: 0 };
   const rangeOverdueBookings = (rangeOverdueListResult.results as unknown as Array<Record<string, unknown>>).map((row) => ({
@@ -2049,7 +2074,8 @@ export async function getDashboardStats(
     rangeRevenue: rangeRow.revenue,
     rangePromoDiscounts: rangeDiscountsRow.promo_discounts,
     rangeManualDiscounts: rangeDiscountsRow.manual_discounts,
-    rangeDiscounts: rangeDiscountsRow.promo_discounts + rangeDiscountsRow.manual_discounts,
+    rangeLoyaltyDiscounts: rangeDiscountsRow.loyalty_discounts,
+    rangeDiscounts: rangeDiscountsRow.promo_discounts + rangeDiscountsRow.manual_discounts + rangeDiscountsRow.loyalty_discounts,
     rangeCancellations: rangeCancellationsRow.count,
     rangeOverduePayments: rangeOverdueRow.count,
     rangeOverdueAmount: rangeOverdueRow.total,

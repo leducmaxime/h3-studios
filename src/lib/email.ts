@@ -54,6 +54,7 @@ export interface BookingConfirmationData {
   promoDiscount?: number;
   promoType?: string | null;
   promoValue?: number; // Valeur brute du code promo (pourcentage ou montant fixe)
+  loyaltyDiscount?: number;
   // Multi-booking: all slots in the cart
   allSlots?: BookingSlot[];
 }
@@ -171,7 +172,7 @@ export function buildEmailHtml(data: BookingConfirmationData): string {
 
   const isMultiSlot = data.allSlots && data.allSlots.length > 1;
   const multiSlotTotal = isMultiSlot ? data.allSlots!.reduce((sum, s) => sum + s.totalPrice, 0) : 0;
-  const multiNetTotal = multiSlotTotal - (data.promoDiscount || 0);
+  const multiNetTotal = Math.max(0, multiSlotTotal - (data.promoDiscount || 0) - (data.loyaltyDiscount || 0));
   const multiTax = splitTtc(multiNetTotal);
   const singleTax = splitTtc(data.totalPrice);
 
@@ -316,6 +317,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
           <td colspan="2" style="border-top:1px solid #333333;padding-top:8px;"></td>
         </tr>
         ` : ""}
+        ${(data.loyaltyDiscount || 0) > 0 ? `<tr><td style="padding:6px 0;color:#facc15;font-size:14px;">Ristourne fidélité</td><td align="right">-${formatPrice(data.loyaltyDiscount || 0)}</td></tr>` : ""}
         ${multiNetTotal === 0 ? "" : `<tr><td style="padding:3px 0;color:#aaaaaa;font-size:13px;">HT</td><td align="right" style="padding:3px 0;color:#aaaaaa;font-size:13px;">${formatEuro(multiTax.ht)}</td></tr>
         <tr><td style="padding:3px 0;color:#aaaaaa;font-size:13px;">TVA 20%</td><td align="right" style="padding:3px 0;color:#aaaaaa;font-size:13px;">${formatEuro(multiTax.vat)}</td></tr>`}
         <tr>
@@ -333,7 +335,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td style="padding:6px 0;color:#aaaaaa;font-size:14px;">Répétition (${studioName})</td>
-          <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.totalPrice - data.equipmentPrice + (data.promoDiscount || 0))}</td>
+          <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.totalPrice - data.equipmentPrice + (data.promoDiscount || 0) + (data.loyaltyDiscount || 0))}</td>
         </tr>
         ${equipmentBreakdown}
         ${hasPromo ? `
@@ -344,6 +346,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
           <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
         </tr>
         ` : ""}
+        ${(data.loyaltyDiscount || 0) > 0 ? `<tr><td style="padding:6px 0;color:#facc15;font-size:14px;">Ristourne fidélité</td><td align="right">-${formatPrice(data.loyaltyDiscount || 0)}</td></tr>` : ""}
         <tr>
           <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
         </tr>

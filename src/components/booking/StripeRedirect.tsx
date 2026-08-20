@@ -12,13 +12,14 @@ interface StripeRedirectProps {
   subtotal: number;
   promoCode?: string | null;
   promoDiscount: number;
+  loyaltyDiscount?: number;
   displayPrices: Record<string, number>;
   userName: string;
   userEmail: string;
   onBack: () => void;
 }
 
-export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount, displayPrices, userName, userEmail, onBack }: StripeRedirectProps) {
+export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount, loyaltyDiscount = 0, displayPrices, userName, userEmail, onBack }: StripeRedirectProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -173,17 +174,25 @@ export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount
             </div>
 
             <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-              {promoDiscount > 0 && (
+              {(promoDiscount > 0 || loyaltyDiscount > 0) && (
                 <>
                   <div className="flex items-center justify-between text-sm text-white/70">
                     <span>Sous-total</span>
                     <span><Price amount={subtotal} /></span>
                   </div>
-                  <div className="flex items-center justify-between text-sm text-green-400">
-                    <span>Réduction ({promoCode})</span>
-                    <span>-<Price amount={promoDiscount} /></span>
-                  </div>
+                  {promoDiscount > 0 && (
+                    <div className="flex items-center justify-between text-sm text-green-400">
+                      <span>Réduction ({promoCode})</span>
+                      <span>-<Price amount={promoDiscount} /></span>
+                    </div>
+                  )}
                 </>
+              )}
+              {loyaltyDiscount > 0 && (
+                <div className="flex items-center justify-between text-sm text-green-400">
+                  <span>Ristourne fidélité</span>
+                  <span>-<Price amount={loyaltyDiscount} /></span>
+                </div>
               )}
               <TaxBreakdown ttc={total} />
               <div className="flex justify-between">

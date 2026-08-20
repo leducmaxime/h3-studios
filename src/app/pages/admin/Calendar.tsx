@@ -79,6 +79,7 @@ interface CalendarBooking {
   equipment_price: number;
   total_price: number;
   promo_discount?: number;
+  loyalty_award_id?: string | null;
   equipment: string | null;
   payment_method: string | null;
   payment_status: string | null;
@@ -1397,7 +1398,7 @@ export function AdminCalendar() {
                   <div className="flex items-baseline gap-2">
                     <p className="text-sm font-bold text-primary">{formatPrice(finalTotal, { bare: true })}</p>
                     {(b.promo_discount || 0) > 0 && (
-                      <p className="text-[10px] text-emerald-500 font-medium">(Promo: -{formatPrice(b.promo_discount || 0)})</p>
+                      <p className="text-[10px] text-emerald-500 font-medium">({b.loyalty_award_id ? "Ristourne fidélité" : "Promo"}: -{formatPrice(b.promo_discount || 0)})</p>
                     )}
                     {totalPaid > 0 && totalPaid < finalTotal && (
                       <p className="text-[10px] text-emerald-500 font-medium">(Déjà payé: {formatPrice(totalPaid)})</p>

@@ -86,6 +86,7 @@ export interface PaidConfirmationEmailInput {
 export function buildPaidConfirmationEmailPayload(input: PaidConfirmationEmailInput): BookingConfirmationData {
   const primary = input.bookings[0];
   const aggregatePromo = input.bookings.reduce((sum, b) => sum + (Number(b.promo_discount) || 0), 0);
+  const aggregateLoyalty = input.bookings.reduce((sum, b) => sum + (b.loyalty_award_id ? (Number(b.promo_discount) || 0) : 0), 0);
   const grossTotal = input.bookings.reduce((sum, b) => sum + (Number(b.total_price) || 0), 0);
   const netTotal = Math.max(0, grossTotal - aggregatePromo);
   const promoCode = input.bookings.find((b) => b.promo_code)?.promo_code ?? null;
@@ -121,7 +122,8 @@ export function buildPaidConfirmationEmailPayload(input: PaidConfirmationEmailIn
     userEmail: input.user.email,
     userPhone: input.user.phone || "",
     promoCode,
-    promoDiscount: aggregatePromo,
+    promoDiscount: aggregatePromo - aggregateLoyalty,
+    loyaltyDiscount: aggregateLoyalty,
     promoType,
     allSlots: allSlots.length > 1 ? allSlots : undefined,
   };

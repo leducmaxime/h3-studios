@@ -115,12 +115,49 @@ function StudioPieChart({ sceneCount, podiumCount }: { sceneCount: number; podiu
   );
 }
 
+// ─── Ristourne de fidélité (issue #48) ────────────────────────────────────
+// `loyalty` est calculé par GET /api/admin/users/:id et n'appartient pas à
+// la ligne users : il reste donc typé ici, à côté de DbUser.
+type LoyaltyDiscountType = "percentage" | "fixed";
+
+interface LoyaltyProgress {
+  pastEligibleBookings: number;
+  awardsGranted: number;
+  counter: number;
+  remainingToNextAward: number;
+  isDue: boolean;
+  threshold: number;
+}
+
+type UserWithLoyalty = DbUser & {
+  loyalty?: LoyaltyProgress | null;
+};
+
+interface LoyaltyFormState {
+  enabled: boolean;
+  discountType: LoyaltyDiscountType;
+  value: string;
+  threshold: string;
+}
+
+function loyaltyFormFromUser(u: UserWithLoyalty): LoyaltyFormState {
+  return {
+    enabled: u.loyalty_enabled === 1,
+    discountType: u.loyalty_discount_type === "fixed" ? "fixed" : "percentage",
+    value: u.loyalty_discount_value ? String(u.loyalty_discount_value) : "",
+    threshold: u.loyalty_threshold ? String(u.loyalty_threshold) : "",
+  };
+}
+
 interface UserDetailProps {
   userId: string;
 }
 
 export function AdminUserDetail({ userId }: UserDetailProps) {
-  const [user, setUser] = useState<DbUser | null>(null);
+  const [user, setUser] = useState<UserWithLoyalty | null>(null);
+  // La ristourne est un levier tarifaire : réservée au super-admin, comme la
+  // grille de tarifs. Le serveur refuse de toute façon (403) pour un opérateur.
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [bookings, setBookings] = useState<BookingWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -143,6 +180,17 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     instagram_accounts: "",
   });
 
+  // Ristourne de fidélité
+  const [loyaltyEditing, setLoyaltyEditing] = useState(false);
+  const [loyaltySaving, setLoyaltySaving] = useState(false);
+  const [loyaltyError, setLoyaltyError] = useState<string | null>(null);
+  const [loyaltyForm, setLoyaltyForm] = useState<LoyaltyFormState>({
+    enabled: false,
+    discountType: "percentage",
+    value: "",
+    threshold: "",
+  });
+
   // Filters (like /admin/bookings)
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -158,9 +206,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
   const fetchUser = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/users/${userId}`);
-      const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
+      const json = (await res.json()) as { success: boolean; data?: UserWithLoyalty; error?: string };
       if (json.success && json.data) {
         setUser(json.data);
+        setLoyaltyForm(loyaltyFormFromUser(json.data));
         setEditForm({
           name: json.data.name,
           email: json.data.email || "",
@@ -209,6 +258,15 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     };
     load();
   }, [fetchUser, fetchBookings]);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/me")
+      .then((r) => r.json() as Promise<{ success: boolean; data?: { role?: string } }>)
+      .then((json) => { if (active && json.success) setIsSuperAdmin(json.data?.role === "super-admin"); })
+      .catch(() => { /* rôle inconnu : le panneau reste masqué */ });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -281,6 +339,69 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const parseLoyaltyNumber = (raw: string): number => Number(raw.trim().replace(",", "."));
+
+  const validateLoyaltyForm = (): string | null => {
+    if (!loyaltyForm.enabled) return null;
+    const value = parseLoyaltyNumber(loyaltyForm.value);
+    const threshold = parseLoyaltyNumber(loyaltyForm.threshold);
+    if (!loyaltyForm.value.trim() || !Number.isFinite(value) || value <= 0) {
+      return "La valeur de la remise doit être un nombre strictement positif.";
+    }
+    if (loyaltyForm.discountType === "percentage" && value > 100) {
+      return "Le pourcentage doit être compris entre 0 et 100.";
+    }
+    if (!Number.isInteger(threshold) || threshold < 1) {
+      return "Le seuil doit être un nombre entier d'au moins 1.";
+    }
+    return null;
+  };
+
+  const handleSaveLoyalty = async () => {
+    if (!user) return;
+    const validationError = validateLoyaltyForm();
+    if (validationError) {
+      setLoyaltyError(validationError);
+      return;
+    }
+    setLoyaltyError(null);
+    setLoyaltySaving(true);
+
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          loyalty_enabled: loyaltyForm.enabled ? 1 : 0,
+          loyalty_discount_type: loyaltyForm.enabled ? loyaltyForm.discountType : (user.loyalty_discount_type ?? null),
+          loyalty_discount_value: loyaltyForm.enabled ? parseLoyaltyNumber(loyaltyForm.value) : (user.loyalty_discount_value ?? 0),
+          loyalty_threshold: loyaltyForm.enabled ? parseLoyaltyNumber(loyaltyForm.threshold) : (user.loyalty_threshold ?? 0),
+        }),
+      });
+      const json = (await res.json()) as { success: boolean; data?: UserWithLoyalty; error?: string };
+      if (json.success) {
+        toast.success(loyaltyForm.enabled ? "Ristourne de fidélité enregistrée" : "Ristourne de fidélité désactivée");
+        setLoyaltyEditing(false);
+        // Refetch to get the refreshed loyalty progress object
+        await fetchUser();
+      } else {
+        setLoyaltyError(json.error || "Erreur lors de la sauvegarde");
+        toast.error(json.error || "Erreur lors de la sauvegarde");
+      }
+    } catch (error) {
+      console.error("Loyalty save error:", error);
+      toast.error("Erreur lors de la sauvegarde");
+    } finally {
+      setLoyaltySaving(false);
+    }
+  };
+
+  const handleCancelLoyalty = () => {
+    if (user) setLoyaltyForm(loyaltyFormFromUser(user));
+    setLoyaltyError(null);
+    setLoyaltyEditing(false);
   };
 
   if (loading || !user) {
@@ -395,6 +516,19 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     || user.name?.trim()
     || user.email
     || "—";
+
+  // Ristourne de fidélité — derived display values
+  const loyaltyEnabled = user.loyalty_enabled === 1;
+  const loyaltyDiscountLabel = user.loyalty_discount_type === "fixed"
+    ? formatPrice(user.loyalty_discount_value ?? 0)
+    : `${(user.loyalty_discount_value ?? 0).toLocaleString("fr-FR")} %`;
+  const loyaltyThreshold = user.loyalty_threshold ?? 0;
+  const loyaltyProgress = user.loyalty ?? null;
+  const loyaltyProgressPct = loyaltyProgress && loyaltyProgress.threshold > 0
+    ? loyaltyProgress.isDue
+      ? 100
+      : Math.min(100, Math.round((loyaltyProgress.counter / loyaltyProgress.threshold) * 100))
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -643,6 +777,199 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   </div>
                 )}
               </div>
+
+              {/* Ristourne de fidélité — super-admin uniquement */}
+              {isSuperAdmin && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <h2 className="font-semibold">Ristourne de fidélité</h2>
+                    {loyaltyEnabled ? (
+                      <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Activée</Badge>
+                    ) : (
+                      <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">Désactivée</Badge>
+                    )}
+                  </div>
+                  {loyaltyEditing ? (
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSaveLoyalty} disabled={loyaltySaving} className="gap-1">
+                        <Save className="h-4 w-4" />
+                        {loyaltySaving ? "Sauvegarde..." : "Enregistrer"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCancelLoyalty}
+                        disabled={loyaltySaving}
+                      >
+                        Annuler
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setLoyaltyEditing(true)}
+                      className="gap-1"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Modifier
+                    </Button>
+                  )}
+                </div>
+
+                {loyaltyEditing ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+                      <div>
+                        <p className="font-medium text-sm">Activer la ristourne de fidélité</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                          Le client bénéficie d'une remise automatique après un nombre défini de réservations.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={loyaltyForm.enabled}
+                        aria-label="Activer la ristourne de fidélité"
+                        onClick={() => setLoyaltyForm({ ...loyaltyForm, enabled: !loyaltyForm.enabled })}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${loyaltyForm.enabled ? "bg-primary" : "bg-zinc-700"}`}
+                      >
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${loyaltyForm.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+
+                    {loyaltyForm.enabled && (
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="grid gap-2">
+                          <Label htmlFor="loyalty-discount-type">Type de remise</Label>
+                          <Select
+                            value={loyaltyForm.discountType}
+                            onValueChange={(value) => setLoyaltyForm({ ...loyaltyForm, discountType: value as LoyaltyDiscountType })}
+                          >
+                            <SelectTrigger id="loyalty-discount-type"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="percentage">Pourcentage</SelectItem>
+                              <SelectItem value="fixed">Montant fixe</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="loyalty-value">
+                            Valeur de la remise ({loyaltyForm.discountType === "percentage" ? "%" : "€"})
+                          </Label>
+                          <Input
+                            id="loyalty-value"
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={loyaltyForm.discountType === "percentage" ? 100 : undefined}
+                            step={loyaltyForm.discountType === "percentage" ? 1 : 0.5}
+                            value={loyaltyForm.value}
+                            onChange={(e) => setLoyaltyForm({ ...loyaltyForm, value: e.target.value })}
+                            placeholder={loyaltyForm.discountType === "percentage" ? "Ex. 10" : "Ex. 15"}
+                          />
+                        </div>
+                        <div className="grid gap-2 lg:col-span-2">
+                          <Label htmlFor="loyalty-threshold">Seuil (nombre de réservations)</Label>
+                          <Input
+                            id="loyalty-threshold"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            step={1}
+                            value={loyaltyForm.threshold}
+                            onChange={(e) => setLoyaltyForm({ ...loyaltyForm, threshold: e.target.value })}
+                            placeholder="Ex. 10"
+                          />
+                          <p className="text-xs text-zinc-500">
+                            Une ristourne est accordée chaque fois que ce nombre de réservations comptabilisées est atteint, puis le compteur repart à zéro.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loyaltyError && (
+                      <p className="text-sm text-red-400">{loyaltyError}</p>
+                    )}
+                  </div>
+                ) : loyaltyEnabled ? (
+                  <div className="space-y-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400 text-sm">Remise accordée</span>
+                        <span className="font-semibold text-primary">{loyaltyDiscountLabel}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400 text-sm">Fréquence</span>
+                        <span className="font-semibold">
+                          {loyaltyThreshold > 1 ? `Toutes les ${loyaltyThreshold} réservations` : "À chaque réservation"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-zinc-800 pt-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-zinc-400">Progression</p>
+                        {loyaltyProgress?.isDue && (
+                          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
+                            Ristourne à appliquer
+                          </Badge>
+                        )}
+                      </div>
+                      {loyaltyProgress ? (
+                        <>
+                          <div className="space-y-1.5">
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                              <div
+                                className="h-full rounded-full bg-primary transition-all"
+                                style={{ width: `${loyaltyProgressPct}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-zinc-500">
+                              <span>{loyaltyProgress.counter} / {loyaltyProgress.threshold} réservations</span>
+                              {loyaltyProgress.isDue ? (
+                                <span className="text-emerald-400">Seuil atteint</span>
+                              ) : (
+                                <span>
+                                  Encore {loyaltyProgress.remainingToNextAward} réservation{loyaltyProgress.remainingToNextAward > 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-zinc-400 text-sm">Réservations comptabilisées</span>
+                              <span className="font-semibold">{loyaltyProgress.pastEligibleBookings}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-zinc-400 text-sm">Ristournes déjà accordées</span>
+                              <span className="font-semibold">{loyaltyProgress.awardsGranted}</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-zinc-500">Données de progression indisponibles.</p>
+                      )}
+                    </div>
+
+                    <div className="border-t border-zinc-800 pt-4">
+                      <p className="text-xs text-zinc-500">
+                        Seules les réservations passées, confirmées ou terminées, sont comptées ; les annulations et les absences sont exclues.
+                        La ristourne n'est pas cumulable : une remise manuelle ou un code promo sur une réservation est prioritaire.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-zinc-700 p-4">
+                    <p className="text-sm text-zinc-400">Aucune ristourne n'est configurée pour ce client.</p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      La ristourne de fidélité est inactive par défaut. Elle ne s'applique qu'aux clients pour lesquels elle est explicitement activée.
+                    </p>
+                  </div>
+                )}
+              </div>
+              )}
             </div>
 
             <div className="space-y-6">
