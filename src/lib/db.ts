@@ -379,16 +379,12 @@ export const USER_BOOKING_STATS_SQL = `
   GROUP BY user_id
 `;
 
-export async function getUsers(
-  db: D1Database,
-  filters: UserFilters = {},
-  page = 1,
-  limit = 20,
-): Promise<PaginatedResult<DbUser>> {
+export function buildUserFilterConditions(filters: UserFilters = {}): {
+  conditions: string[];
+  params: unknown[];
+} {
   const conditions: string[] = [];
   const params: unknown[] = [];
-
-  const hasBookings = filters.hasBookings;
 
   if (filters.search) {
     conditions.push("(u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.band_name LIKE ?)");
@@ -399,10 +395,25 @@ export async function getUsers(
     conditions.push("u.is_blocked = ?");
     params.push(filters.isBlocked ? 1 : 0);
   }
-
-  if (hasBookings !== undefined) {
-    conditions.push(hasBookings ? "COALESCE(s.total_bookings, 0) > 0" : "COALESCE(s.total_bookings, 0) = 0");
+  if (filters.clientType) {
+    conditions.push("u.client_type = ?");
+    params.push(filters.clientType);
   }
+
+  if (filters.hasBookings !== undefined) {
+    conditions.push(filters.hasBookings ? "COALESCE(s.total_bookings, 0) > 0" : "COALESCE(s.total_bookings, 0) = 0");
+  }
+
+  return { conditions, params };
+}
+
+export async function getUsers(
+  db: D1Database,
+  filters: UserFilters = {},
+  page = 1,
+  limit = 20,
+): Promise<PaginatedResult<DbUser>> {
+  const { conditions, params } = buildUserFilterConditions(filters);
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 

@@ -380,6 +380,7 @@ export interface UserFilters {
   search?: string; // name, email, band_name
   isBlocked?: boolean;
   hasBookings?: boolean;
+  clientType?: "particulier" | "association" | "entreprise";
   sortBy?: UserSortField;
   sortOrder?: UserSortOrder;
 }
