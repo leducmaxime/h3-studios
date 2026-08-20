@@ -9,13 +9,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  ReservationBannerIcon,
+  RESERVATION_BANNER_ICON_COMPONENTS,
+} from "@/components/common/ReservationBannerIcon";
+import {
   DEFAULT_RESERVATION_BANNER,
   RESERVATION_BANNER_DESCRIPTION_MAX_LENGTH,
   RESERVATION_BANNER_GROUP_KEYS,
   RESERVATION_BANNER_GROUP_LABELS,
+  RESERVATION_BANNER_ICON_KEYS,
+  RESERVATION_BANNER_ICON_LABELS,
   RESERVATION_BANNER_TITLE_MAX_LENGTH,
+  isReservationBannerIconKey,
   reservationBannerSettingKey,
   type ReservationBannerGroupKey,
+  type ReservationBannerIconKey,
 } from "@/lib/reservation-banner";
 
 async function saveSetting(key: string, value: string): Promise<boolean> {
@@ -59,20 +67,30 @@ function BannerGroupCard({
 }) {
   const titleKey = reservationBannerSettingKey(group, "title");
   const descriptionKey = reservationBannerSettingKey(group, "description");
+  const iconKey = reservationBannerSettingKey(group, "icon");
+
+  const defaults = DEFAULT_RESERVATION_BANNER[group];
 
   const savedTitle = settings[titleKey] ?? "";
   const savedDescription = settings[descriptionKey] ?? "";
+  const savedIconRaw = settings[iconKey] ?? "";
+  const savedIcon: ReservationBannerIconKey = isReservationBannerIconKey(
+    savedIconRaw,
+  )
+    ? savedIconRaw
+    : defaults.icon;
 
   const [title, setTitle] = useState(savedTitle);
   const [description, setDescription] = useState(savedDescription);
+  const [icon, setIcon] = useState<ReservationBannerIconKey>(savedIcon);
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     setTitle(savedTitle);
     setDescription(savedDescription);
-  }, [savedTitle, savedDescription]);
+    setIcon(savedIcon);
+  }, [savedTitle, savedDescription, savedIcon]);
 
-  const defaults = DEFAULT_RESERVATION_BANNER[group];
   const previewTitle = title.trim() || defaults.title;
   const previewDescription = description.trim() || defaults.description;
 
@@ -81,7 +99,8 @@ function BannerGroupCard({
     description.trim().length > RESERVATION_BANNER_DESCRIPTION_MAX_LENGTH;
   const unchanged =
     title.trim() === savedTitle.trim() &&
-    description.trim() === savedDescription.trim();
+    description.trim() === savedDescription.trim() &&
+    icon === savedIcon;
 
   const isSaving = saving !== null;
 
@@ -108,6 +127,15 @@ function BannerGroupCard({
       onUpdate(descriptionKey, nextDescription);
     }
 
+    if (icon !== savedIcon) {
+      const ok = await saveSetting(iconKey, icon);
+      if (!ok) {
+        setSaving(null);
+        return;
+      }
+      onUpdate(iconKey, icon);
+    }
+
     setSaving(null);
     toast.success("Paramètre enregistré");
   };
@@ -123,7 +151,7 @@ function BannerGroupCard({
             {RESERVATION_BANNER_GROUP_LABELS[group]}
           </h3>
           <p className="text-xs text-zinc-500">
-            Texte affiché quand le client choisit ce type de groupe
+            Contenu affiché quand le client choisit ce type de groupe
           </p>
         </div>
       </div>
@@ -169,10 +197,42 @@ function BannerGroupCard({
         </div>
 
         <div className="space-y-2">
+          <Label className="text-xs text-zinc-400">Icône</Label>
+          <div
+            role="radiogroup"
+            aria-label={`Icône du bandeau ${RESERVATION_BANNER_GROUP_LABELS[group]}`}
+            className="grid max-h-32 grid-cols-8 gap-1 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800 p-2 xl:grid-cols-7"
+          >
+            {RESERVATION_BANNER_ICON_KEYS.map((key) => {
+              const Icon = RESERVATION_BANNER_ICON_COMPONENTS[key];
+              const selected = icon === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={RESERVATION_BANNER_ICON_LABELS[key]}
+                  title={RESERVATION_BANNER_ICON_LABELS[key]}
+                  onClick={() => setIcon(key)}
+                  className={`flex aspect-square items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-800 ${
+                    selected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-transparent text-zinc-400 hover:border-zinc-600 hover:bg-zinc-700 hover:text-zinc-100"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
           <p className="text-xs text-zinc-500">Aperçu</p>
           <div className="rounded-lg bg-primary px-4 py-3 text-center text-primary-foreground">
             <p className="flex items-center justify-center gap-2 text-sm font-bold">
-              <BadgePercent className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <ReservationBannerIcon name={icon} className="h-5 w-5 shrink-0" />
               {previewTitle}
             </p>
             <p className="mt-1 text-xs leading-snug opacity-80">

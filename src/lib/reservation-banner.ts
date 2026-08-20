@@ -9,11 +9,94 @@
 
 export type ReservationBannerGroupKey = "solo" | "duo" | "group";
 
-export type ReservationBannerField = "title" | "description";
+export type ReservationBannerField = "title" | "description" | "icon";
+
+/**
+ * Liste blanche d'icones selectionnables depuis l'admin.
+ * Chaque cle correspond a une icone lucide-react mappee dans
+ * `src/components/common/ReservationBannerIcon.tsx`. Une liste fermee
+ * evite d'embarquer toute la librairie lucide dans le bundle.
+ */
+export const RESERVATION_BANNER_ICON_KEYS = [
+  "badge-percent",
+  "percent",
+  "tag",
+  "ticket",
+  "gift",
+  "piggy-bank",
+  "wallet",
+  "banknote",
+  "euro",
+  "trending-down",
+  "sparkles",
+  "star",
+  "flame",
+  "zap",
+  "party-popper",
+  "crown",
+  "heart",
+  "thumbs-up",
+  "clock",
+  "calendar-days",
+  "calendar-clock",
+  "music",
+  "mic-vocal",
+  "headphones",
+  "info",
+  "bell",
+] as const;
+
+export type ReservationBannerIconKey =
+  (typeof RESERVATION_BANNER_ICON_KEYS)[number];
+
+export const RESERVATION_BANNER_ICON_LABELS: Record<
+  ReservationBannerIconKey,
+  string
+> = {
+  "badge-percent": "Badge pourcentage",
+  percent: "Pourcentage",
+  tag: "\u00c9tiquette",
+  ticket: "Ticket",
+  gift: "Cadeau",
+  "piggy-bank": "Tirelire",
+  wallet: "Portefeuille",
+  banknote: "Billet",
+  euro: "Euro",
+  "trending-down": "Courbe descendante",
+  sparkles: "\u00c9tincelles",
+  star: "\u00c9toile",
+  flame: "Flamme",
+  zap: "\u00c9clair",
+  "party-popper": "Confettis",
+  crown: "Couronne",
+  heart: "C\u0153ur",
+  "thumbs-up": "Pouce lev\u00e9",
+  clock: "Horloge",
+  "calendar-days": "Calendrier",
+  "calendar-clock": "Calendrier horaire",
+  music: "Note de musique",
+  "mic-vocal": "Micro",
+  headphones: "Casque",
+  info: "Information",
+  bell: "Cloche",
+};
+
+export const DEFAULT_RESERVATION_BANNER_ICON: ReservationBannerIconKey =
+  "badge-percent";
+
+export function isReservationBannerIconKey(
+  value: unknown,
+): value is ReservationBannerIconKey {
+  return (
+    typeof value === "string" &&
+    (RESERVATION_BANNER_ICON_KEYS as readonly string[]).includes(value)
+  );
+}
 
 export interface ReservationBannerEntry {
   title: string;
   description: string;
+  icon: ReservationBannerIconKey;
 }
 
 export type ReservationBanner = Record<
@@ -46,14 +129,17 @@ export const DEFAULT_RESERVATION_BANNER: ReservationBanner = {
   solo: {
     title: "Plus de 70% de r\u00e9duction",
     description: DEFAULT_DESCRIPTION,
+    icon: DEFAULT_RESERVATION_BANNER_ICON,
   },
   duo: {
     title: "Plus de 45% de r\u00e9duction",
     description: DEFAULT_DESCRIPTION,
+    icon: DEFAULT_RESERVATION_BANNER_ICON,
   },
   group: {
     title: "Jusqu'\u00e0 20% d'\u00e9conomie",
     description: DEFAULT_DESCRIPTION,
+    icon: DEFAULT_RESERVATION_BANNER_ICON,
   },
 };
 
@@ -70,6 +156,7 @@ export const RESERVATION_BANNER_SETTING_KEYS: string[] =
   RESERVATION_BANNER_GROUP_KEYS.flatMap((group) => [
     reservationBannerSettingKey(group, "title"),
     reservationBannerSettingKey(group, "description"),
+    reservationBannerSettingKey(group, "icon"),
   ]);
 
 /**
@@ -80,27 +167,36 @@ export const RESERVATION_BANNER_SETTING_KEYS: string[] =
 export function resolveReservationBanner(
   values: Partial<Record<string, string | null | undefined>>,
 ): ReservationBanner {
-  const resolveField = (
+  const resolveText = (
     group: ReservationBannerGroupKey,
-    field: ReservationBannerField,
+    field: "title" | "description",
   ): string => {
     const raw = values[reservationBannerSettingKey(group, field)];
     const trimmed = typeof raw === "string" ? raw.trim() : "";
     return trimmed || DEFAULT_RESERVATION_BANNER[group][field];
   };
 
+  const resolveIcon = (
+    group: ReservationBannerGroupKey,
+  ): ReservationBannerIconKey => {
+    const raw = values[reservationBannerSettingKey(group, "icon")];
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    return isReservationBannerIconKey(trimmed)
+      ? trimmed
+      : DEFAULT_RESERVATION_BANNER[group].icon;
+  };
+
+  const resolveEntry = (
+    group: ReservationBannerGroupKey,
+  ): ReservationBannerEntry => ({
+    title: resolveText(group, "title"),
+    description: resolveText(group, "description"),
+    icon: resolveIcon(group),
+  });
+
   return {
-    solo: {
-      title: resolveField("solo", "title"),
-      description: resolveField("solo", "description"),
-    },
-    duo: {
-      title: resolveField("duo", "title"),
-      description: resolveField("duo", "description"),
-    },
-    group: {
-      title: resolveField("group", "title"),
-      description: resolveField("group", "description"),
-    },
+    solo: resolveEntry("solo"),
+    duo: resolveEntry("duo"),
+    group: resolveEntry("group"),
   };
 }

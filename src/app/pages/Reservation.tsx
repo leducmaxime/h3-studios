@@ -21,6 +21,7 @@ import { calculatePrice } from "@/lib/pricing";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 import { DEFAULT_RESERVATION_BANNER, type ReservationBanner } from "@/lib/reservation-banner";
+import { ReservationBannerIcon } from "@/components/common/ReservationBannerIcon";
 
 const GROUP_LABELS: Record<GroupType, string> = {
   solo: "Solo/Prof particulier",
@@ -651,9 +652,9 @@ export function Reservation({ step }: ReservationProps) {
         <div className="-mx-2 mt-4 self-stretch border-y-2 border-primary/70 bg-primary text-primary-foreground shadow-lg shadow-primary/20 lg:mx-0 lg:rounded-xl lg:border-2">
           <div className="flex flex-col items-center px-4 py-3 text-center sm:mx-auto sm:max-w-[640px] lg:max-w-none lg:px-8">
             <p className="flex items-center gap-2 text-sm font-bold sm:text-base">
-              <BadgePercent
+              <ReservationBannerIcon
+                name={banner[state.groupType].icon}
                 className="h-5 w-5 shrink-0 sm:h-6 sm:w-6"
-                aria-hidden="true"
               />
               {banner[state.groupType].title}
             </p>

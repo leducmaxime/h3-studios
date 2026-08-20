@@ -172,6 +172,7 @@ import {
   RESERVATION_BANNER_DESCRIPTION_MAX_LENGTH,
   RESERVATION_BANNER_SETTING_KEYS,
   RESERVATION_BANNER_TITLE_MAX_LENGTH,
+  isReservationBannerIconKey,
   resolveReservationBanner,
 } from "@/lib/reservation-banner";
 
@@ -287,6 +288,12 @@ function validateAdminSettingValue(key: string, rawValue: string): { ok: true; v
       return { ok: true, value };
     default:
       if (RESERVATION_BANNER_SETTING_KEYS.includes(key)) {
+        if (key.endsWith(".icon")) {
+          if (value !== "" && !isReservationBannerIconKey(value)) {
+            return { ok: false, error: "Icône du bandeau : valeur non autorisée" };
+          }
+          return { ok: true, value };
+        }
         const isTitle = key.endsWith(".title");
         const maxLength = isTitle
           ? RESERVATION_BANNER_TITLE_MAX_LENGTH
