@@ -872,10 +872,12 @@ export async function getPayments(
         COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
         COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
         COUNT(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN 1 END) as paidCount,
-        COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paidAmount
+        COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paidAmount,
+        COUNT(CASE WHEN COALESCE(refunded_amount, 0) > 0 THEN 1 END) as refundedCount,
+        COALESCE(SUM(COALESCE(refunded_amount, 0)), 0) as refundedAmount
       FROM payments_enriched ${where}
     `,
-  ).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number }>();
+  ).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number; refundedCount: number; refundedAmount: number }>();
 
   const offset = (page - 1) * limit;
   const result = await db.prepare(
@@ -896,6 +898,8 @@ export async function getPayments(
       pendingAmount: statsResult?.pendingAmount ?? 0,
       paidCount: statsResult?.paidCount ?? 0,
       paidAmount: statsResult?.paidAmount ?? 0,
+      refundedCount: statsResult?.refundedCount ?? 0,
+      refundedAmount: statsResult?.refundedAmount ?? 0,
     },
   };
 }

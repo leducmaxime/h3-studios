@@ -88,6 +88,8 @@ interface PaymentsResponse {
       pendingAmount: number;
       paidCount: number;
       paidAmount: number;
+      refundedCount: number;
+      refundedAmount: number;
     };
   };
 }
@@ -456,7 +458,7 @@ export function AdminPayments() {
   const [discountInput, setDiscountInput] = useState("");
   const [discountSaving, setDiscountSaving] = useState(false);
 
-  const [serverStats, setServerStats] = useState<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number } | null>(null);
+  const [serverStats, setServerStats] = useState<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number; refundedCount: number; refundedAmount: number } | null>(null);
 
   const collectTotals = useMemo(() => {
     const entries = collectEntries.map((e) => {
@@ -540,11 +542,14 @@ export function AdminPayments() {
     // Fallback sur page courante si pas encore chargé
     const pending = payments.filter((p) => p.status === "pending");
     const paid = payments.filter((p) => p.status === "paid");
+    const refunded = payments.filter((p) => (p.refunded_amount ?? 0) > 0);
     return {
       pendingCount: pending.length,
       pendingAmount: pending.reduce((acc, p) => acc + p.amount, 0),
       paidCount: paid.length,
       paidAmount: paid.reduce((acc, p) => acc + p.amount, 0),
+      refundedCount: refunded.length,
+      refundedAmount: refunded.reduce((acc, p) => acc + (p.refunded_amount ?? 0), 0),
     };
   }, [serverStats, payments]);
 
@@ -846,6 +851,15 @@ export function AdminPayments() {
           </p>
           <p className="text-sm text-zinc-500">
             {formatPrice(stats.paidAmount)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+          <p className="text-sm text-zinc-400">Remboursés</p>
+          <p className="mt-1 text-2xl font-bold text-orange-400">
+            {stats.refundedCount}
+          </p>
+          <p className="text-sm text-zinc-500">
+            {formatPrice(stats.refundedAmount)}
           </p>
         </div>
       </div>
