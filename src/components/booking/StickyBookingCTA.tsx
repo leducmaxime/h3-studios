@@ -1,6 +1,6 @@
 "use client";
 
-import { formatPrice } from "@/lib/booking";
+import { Price } from "@/components/common/Price";
 
 interface StickyBookingCTAProps {
   studioPrice: number;
@@ -69,7 +69,7 @@ export function StickyBookingCTA({
               </span>
             </span>
           ) : (
-            showPrice ? `${buttonText} – ${formatPrice(total)}` : buttonText
+            showPrice ? <>{buttonText} – <Price amount={total} /></> : buttonText
           )}
         </button>
       </div>

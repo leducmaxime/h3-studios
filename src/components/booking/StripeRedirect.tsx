@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { CreditCard, Lock, ShieldCheck, ChevronLeft, Loader2, ExternalLink } from "lucide-react";
-import { formatPrice, type CompletedBooking, STUDIOS, formatDate, sortBookingsByStart } from "@/lib/booking";
+import { type CompletedBooking, STUDIOS, formatDate, sortBookingsByStart } from "@/lib/booking";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
+import { Price } from "@/components/common/Price";
 
 interface StripeRedirectProps {
   cart: CompletedBooking[];
@@ -138,7 +139,8 @@ export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount
               ) : (
                 <>
                   <Lock className="h-5 w-5" />
-                  Payer {formatPrice(total)}
+                  {/* Un seul item flex : sinon le gap-2 du bouton s'insère entre « Payer » et le montant. */}
+                  <span>Payer <Price amount={total} /></span>
                 </>
               )}
             </button>
@@ -165,7 +167,7 @@ export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount
                       {formatDate(booking.date, "short")} - {booking.startTime}-{booking.endTime}
                     </p>
                   </div>
-                  <span className="font-medium">{formatPrice(displayPrices[booking.id] ?? booking.price)}</span>
+                  <span className="font-medium"><Price amount={displayPrices[booking.id] ?? booking.price} /></span>
                 </div>
               ))}
             </div>
@@ -175,18 +177,19 @@ export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount
                 <>
                   <div className="flex items-center justify-between text-sm text-white/70">
                     <span>Sous-total</span>
-                    <span>{formatPrice(subtotal)}</span>
+                    <span><Price amount={subtotal} /></span>
                   </div>
                   <div className="flex items-center justify-between text-sm text-green-400">
                     <span>Réduction ({promoCode})</span>
-                    <span>-{formatPrice(promoDiscount)}</span>
+                    <span>-<Price amount={promoDiscount} /></span>
                   </div>
                 </>
               )}
               <TaxBreakdown ttc={total} />
               <div className="flex justify-between">
                 <span className="font-semibold">Total TTC</span>
-                <span className="text-xl font-bold text-primary">{formatPrice(total)}</span>
+                {/* Mention portée par le libellé « Total TTC » : montant nu (pas de doublon). */}
+                <span className="text-xl font-bold text-primary"><Price amount={total} bare /></span>
               </div>
             </div>
 

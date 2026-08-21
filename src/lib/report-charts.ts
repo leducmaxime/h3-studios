@@ -125,9 +125,9 @@ export function barGeometry(
   });
 }
 
-/** Format monétaire français compact, ex. « 1 234 € ». */
+/** Format monétaire français compact, ex. « 1 234 € TTC ». */
 export function formatChartEuro(n: number): string {
-  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(Math.round(n)) + " €";
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(Math.round(n)) + " € TTC";
 }
 
 /** Libellé d'axe semaine : « sem. du 11/08 » depuis un lundi ISO. */
@@ -155,10 +155,10 @@ function setFont(ctx: CanvasRenderingContext2D, size: number, weight: number | s
   ctx.font = `${weight} ${size}px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
 }
 
-function drawTitle(ctx: CanvasRenderingContext2D, title: string): void {
+function drawTitle(ctx: CanvasRenderingContext2D, title: string, x = MARGIN.left): void {
   setFont(ctx, 14, 700);
   ctx.fillStyle = "#e4e4e7";
-  ctx.fillText(title, MARGIN.left, MARGIN.top - 12);
+  ctx.fillText(title, x, MARGIN.top - 12);
 }
 
 function drawEmptyState(ctx: CanvasRenderingContext2D): void {
@@ -180,7 +180,8 @@ function niceAxisMax(max: number): number {
 }
 
 function drawLineChart(ctx: CanvasRenderingContext2D, input: RevenuePoint[]): void {
-  drawTitle(ctx, "CA réservé");
+  const LINE_MARGIN = { ...MARGIN, left: 92 };
+  drawTitle(ctx, "CA réservé", LINE_MARGIN.left);
   if (input.length === 0) {
     drawEmptyState(ctx);
     return;
@@ -189,11 +190,11 @@ function drawLineChart(ctx: CanvasRenderingContext2D, input: RevenuePoint[]): vo
   const sorted = [...input].sort((a, b) => a.date.localeCompare(b.date));
   const max = Math.max(...sorted.map((p) => p.revenue), 1);
   const yMax = niceAxisMax(max);
-  const plotW = W - MARGIN.left - MARGIN.right;
-  const plotH = H - MARGIN.top - MARGIN.bottom;
+  const plotW = W - LINE_MARGIN.left - LINE_MARGIN.right;
+  const plotH = H - LINE_MARGIN.top - LINE_MARGIN.bottom;
   // Un seul point : i/(n-1) donnerait NaN et le tracé disparaîtrait.
-  const xAt = (i: number) => (sorted.length === 1 ? MARGIN.left + plotW / 2 : MARGIN.left + (i / (sorted.length - 1)) * plotW);
-  const yAt = (v: number) => MARGIN.top + plotH - (v / yMax) * plotH;
+  const xAt = (i: number) => (sorted.length === 1 ? LINE_MARGIN.left + plotW / 2 : LINE_MARGIN.left + (i / (sorted.length - 1)) * plotW);
+  const yAt = (v: number) => LINE_MARGIN.top + plotH - (v / yMax) * plotH;
 
   // Grille + axe Y
   ctx.strokeStyle = CHART_COLORS.zinc800;
@@ -203,13 +204,13 @@ function drawLineChart(ctx: CanvasRenderingContext2D, input: RevenuePoint[]): vo
     const value = (yMax / ticks) * i;
     const y = yAt(value);
     ctx.beginPath();
-    ctx.moveTo(MARGIN.left, y + 0.5);
-    ctx.lineTo(W - MARGIN.right, y + 0.5);
+    ctx.moveTo(LINE_MARGIN.left, y + 0.5);
+    ctx.lineTo(W - LINE_MARGIN.right, y + 0.5);
     ctx.stroke();
     setFont(ctx, 11, 400);
     ctx.fillStyle = CHART_COLORS.zinc400;
     ctx.textAlign = "right";
-    ctx.fillText(formatChartEuro(value), MARGIN.left - 8, y + 4);
+    ctx.fillText(formatChartEuro(value), LINE_MARGIN.left - 8, y + 4);
   }
 
   // Ligne
@@ -237,7 +238,7 @@ function drawLineChart(ctx: CanvasRenderingContext2D, input: RevenuePoint[]): vo
       setFont(ctx, 11, 400);
       ctx.fillStyle = CHART_COLORS.zinc400;
       ctx.textAlign = "center";
-      ctx.fillText(p.date.slice(8) + "/" + p.date.slice(5, 7), x, H - MARGIN.bottom + 16);
+      ctx.fillText(p.date.slice(8) + "/" + p.date.slice(5, 7), x, H - LINE_MARGIN.bottom + 16);
     }
   });
   ctx.textAlign = "left";

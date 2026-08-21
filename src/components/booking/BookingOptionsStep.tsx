@@ -4,7 +4,8 @@ import { ChevronLeft, PackageCheck, Package, Check, ShoppingCart, X } from "luci
 import { EquipmentSelector, type EquipmentAvailability } from "@/components/booking/EquipmentSelector";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
-import { calculateEquipmentPrice, formatDate, formatDuration, formatPrice, TIME_SLOTS, STUDIOS, type CompletedBooking, type EquipmentSelection, type GroupType, type StudioId } from "@/lib/booking";
+import { Price } from "@/components/common/Price";
+import { calculateEquipmentPrice, formatDate, formatDuration, TIME_SLOTS, STUDIOS, type CompletedBooking, type EquipmentSelection, type GroupType, type StudioId } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
 import type { PricingGrid } from "@/lib/pricing";
 
@@ -201,41 +202,41 @@ export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, 
                     {hasPeakPricing ? (
                       <>
                         <div className="flex items-center justify-between">
-                          <span className="text-white/60">Heure creuse — {formatBandDuration(offPeakHours)} × {offPeakRate}€ TTC/h</span>
-                          <span>{formatPrice(offPeakSubtotal)}</span>
+                          <span className="text-white/70">Heure creuse — {formatBandDuration(offPeakHours)} × <Price amount={offPeakRate} unit="/h" /></span>
+                          <span><Price amount={offPeakSubtotal} /></span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-white/60">Heure pleine — {formatBandDuration(peakHours)} × {peakRate}€ TTC/h</span>
-                          <span>{formatPrice(peakSubtotal)}</span>
+                          <span className="text-white/70">Heure pleine — {formatBandDuration(peakHours)} × <Price amount={peakRate} unit="/h" /></span>
+                          <span><Price amount={peakSubtotal} /></span>
                         </div>
                       </>
                     ) : hasBandDistinction ? (
                       <div className="flex items-center justify-between">
                         {peakSlots.length > 0 ? (
                           <>
-                            <span className="text-white/60">Heure pleine — {formatBandDuration(durationH)} × {anyRate}€ TTC/h</span>
-                            <span>{formatPrice(total)}</span>
+                            <span className="text-white/70">Heure pleine — {formatBandDuration(durationH)} × <Price amount={anyRate} unit="/h" /></span>
+                            <span><Price amount={total} /></span>
                           </>
                         ) : (
                           <>
-                            <span className="text-white/60">Heure creuse — {formatBandDuration(durationH)} × {anyRate}€ TTC/h</span>
-                            <span>{formatPrice(total)}</span>
+                            <span className="text-white/70">Heure creuse — {formatBandDuration(durationH)} × <Price amount={anyRate} unit="/h" /></span>
+                            <span><Price amount={total} /></span>
                           </>
                         )}
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <span className="text-white/60">{formatBandDuration(durationH)} × {anyRate}€ TTC/h</span>
-                        <span>{formatPrice(total)}</span>
+                        <span className="text-white/70">{formatBandDuration(durationH)} × <Price amount={anyRate} unit="/h" /></span>
+                        <span><Price amount={total} /></span>
                       </div>
                     )}
 
                     {state.equipment.filter(e => e.quantity > 0).map(e => (
                       <div key={e.id} className="flex items-center justify-between">
-                        <span className="text-white/60">
+                        <span className="text-white/70">
                           {getEquipmentName(e.id)} ×{e.quantity}
                         </span>
-                        <span>{formatPrice(calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH, availableEquipment))}</span>
+                        <span><Price amount={calculateEquipmentPrice([{id: e.id, quantity: e.quantity}], durationH, availableEquipment)} /></span>
                       </div>
                     ))}
 
@@ -244,7 +245,8 @@ export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, 
                     </div>
                     <div className="flex items-baseline justify-between rounded-lg border border-primary/25 bg-primary/10 px-3 py-3">
                       <span className="font-semibold">Total TTC</span>
-                      <span className="text-2xl font-bold tabular-nums text-primary">{formatPrice(grandTotal)}</span>
+                      {/* Mention portée par le libellé « Total TTC » : montant nu (pas de doublon). */}
+                      <span className="text-2xl font-bold tabular-nums text-primary"><Price amount={grandTotal} bare /></span>
                     </div>
                   </>
                 )}
@@ -256,7 +258,7 @@ export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, 
                 <ShoppingCart className="h-4 w-4 shrink-0 text-primary" />
                 <span className="text-white/70">
                   {state.cart.length} réservation{state.cart.length > 1 ? "s" : ""} déjà dans le panier ·{" "}
-                  <span className="font-semibold text-white">{formatPrice(cartTotal)}</span>
+                  <span className="font-semibold text-white"><Price amount={cartTotal} /></span>
                 </span>
               </div>
             )}
@@ -273,7 +275,7 @@ export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, 
               disabled={!grid}
               className="hidden w-full rounded-xl bg-primary py-4 text-lg font-semibold text-black shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none lg:block"
             >
-              {grid ? `Ajouter au panier – ${formatPrice(grandTotal)}` : pricingError ? "Tarifs indisponibles" : "Chargement des tarifs…"}
+              {grid ? <>Ajouter au panier – <Price amount={grandTotal} /></> : pricingError ? "Tarifs indisponibles" : "Chargement des tarifs…"}
             </button>
           </div>
         </div>

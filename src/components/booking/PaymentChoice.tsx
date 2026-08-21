@@ -1,8 +1,9 @@
 "use client";
 
 import { CreditCard, Banknote } from "lucide-react";
-import { formatPrice, type CompletedBooking, type PaymentMethod } from "@/lib/booking";
+import { type CompletedBooking, type PaymentMethod } from "@/lib/booking";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
+import { Price } from "@/components/common/Price";
 
 export type { PaymentMethod };
 
@@ -44,8 +45,8 @@ export function PaymentChoice({
         <h3 className="text-xl font-bold lg:text-2xl">
           {isFree ? "Confirmer la réservation" : "Comment souhaitez-vous payer ?"}
         </h3>
-        <p className="mt-2 text-sm text-white/60 lg:text-base">
-          {cart.length} réservation{cart.length > 1 ? "s" : ""} • Total : {formatPrice(total)}
+        <p className="mt-2 text-sm text-white/70 lg:text-base">
+          {cart.length} réservation{cart.length > 1 ? "s" : ""} • Total : <Price amount={total} />
           {isFree && " — aucun paiement n'est requis"}
         </p>
       </div>
@@ -55,18 +56,19 @@ export function PaymentChoice({
           <>
             <div className="flex items-center justify-between text-sm text-white/70">
               <span>Sous-total</span>
-              <span>{formatPrice(subtotal)}</span>
+              <span><Price amount={subtotal} /></span>
             </div>
             <div className="flex items-center justify-between text-sm text-green-400">
               <span>Réduction ({promoCode})</span>
-              <span>-{formatPrice(promoDiscount)}</span>
+              <span>-<Price amount={promoDiscount} /></span>
             </div>
           </>
         )}
         <TaxBreakdown ttc={total} />
         <div className="flex items-center justify-between">
           <span className="text-lg font-semibold">Total TTC</span>
-          <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
+          {/* Mention portée par le libellé « Total TTC » : montant nu (pas de doublon). */}
+          <span className="text-2xl font-bold text-primary"><Price amount={total} bare /></span>
         </div>
       </div>
 
@@ -140,7 +142,7 @@ export function PaymentChoice({
               <span className={`inline-block rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-black transition-all lg:px-4 lg:py-2 lg:text-base ${
                 actionsDisabled ? "" : "group-hover:bg-primary/90"
               }`}>
-                Payer {formatPrice(total)} →
+                Payer <Price amount={total} /> →
               </span>
             </div>
           </button>

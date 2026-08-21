@@ -5,7 +5,6 @@ import { ChevronLeft, Clock, ArrowRight } from "lucide-react";
 import {
   getStudioTimeSlots,
   formatDate,
-  formatPrice,
   STUDIOS,
   ALL_TIME_SLOTS,
   canBeStartTime,
@@ -19,6 +18,7 @@ import {
 import { calculatePrice } from "@/lib/pricing";
 import type { PricingGrid } from "@/lib/pricing";
 import { ImageCarousel } from "@/components/common/ImageCarousel";
+import { Price } from "@/components/common/Price";
 
 type SlotData = { time: string; available: boolean; groupType?: string; bookingId?: string };
 
@@ -560,7 +560,9 @@ export function TimeSlotPicker({
       start: selectedStart.replace(":00", "h").replace(":30", "h30"),
       end: selectedEnd.replace(":00", "h").replace(":30", "h30"),
       duration: durationLabel,
-      price: formatPrice(price),
+      // Montant brut (number) : le rendu compose la mention « TTC »
+      // en nœud subordonné via <Price> au moment de l'affichage.
+      price,
     };
   }, [selectedStart, selectedEnd, activeStudio, groupType, date, pricingGrid]);
 
@@ -737,8 +739,11 @@ export function TimeSlotPicker({
         </div>
         )}
 
-        {/* Per-studio price legend — exact DB rates via the pricing grid */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/50">
+        {/* Per-studio price legend — exact DB rates via the pricing grid.
+            text-white/70 (pas /50) : l'opacité 0.6 de la mention « TTC/h » se
+            compose avec l'alpha du parent — à /50 elle tombait à 0.30
+            effectif, sous le plancher de lisibilité. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/70">
           {rates === null ? (
             <>
               <span className="h-3.5 w-28 animate-pulse rounded bg-white/10" />
@@ -749,18 +754,18 @@ export function TimeSlotPicker({
               {hasOffPeakSlot && (
                 <span className="flex items-center gap-1.5">
                   <span className="inline-block h-3.5 w-3.5 rounded border border-white/10 bg-white/5" />
-                  Heure creuse — {formatPrice(rates.offPeak)}/h
+                  <span>Heure creuse — <Price amount={rates.offPeak} unit="/h" /></span>
                 </span>
               )}
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-3.5 w-3.5 rounded border border-amber-400/50 bg-white/5" />
-                Heure pleine — {formatPrice(rates.peak)}/h
+                <span>Heure pleine — <Price amount={rates.peak} unit="/h" /></span>
               </span>
             </>
           ) : (
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-3.5 w-3.5 rounded border border-white/10 bg-white/5" />
-              Tarif — {formatPrice(rates.offPeak)}/h
+              <span>Tarif — <Price amount={rates.offPeak} unit="/h" /></span>
             </span>
           )}
         </div>
@@ -832,8 +837,8 @@ export function TimeSlotPicker({
                 <div className="text-lg font-semibold">
                   {priceInfo.start} <ArrowRight className="inline w-4 h-4 mx-1" /> {priceInfo.end}
                 </div>
-                <div className="text-sm text-white/50">
-                  {priceInfo.duration} · {priceInfo.price}
+                <div className="text-sm text-white/70">
+                  {priceInfo.duration} · <Price amount={priceInfo.price} />
                   {activeStudio && (
                     <span className="ml-2 text-primary/70">· {STUDIO_LABELS[activeStudio]}</span>
                   )}

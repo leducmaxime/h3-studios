@@ -1187,7 +1187,7 @@ export async function updatePayment(
     if (booking) {
       const maxAmount = getBookingAmountDue(booking);
       if (data.amount > maxAmount) {
-        return { success: false, error: `Le montant ne peut pas dépasser le prix de la réservation (${maxAmount}€)` };
+        return { success: false, error: `Le montant ne peut pas dépasser le prix de la réservation (${maxAmount}€ TTC)` };
       }
     }
   }

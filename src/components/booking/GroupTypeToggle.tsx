@@ -4,7 +4,9 @@ import type { ComponentType } from "react";
 import { User, Users } from "lucide-react";
 
 import { type GroupType } from "@/lib/booking";
+import { formatEuro } from "@/lib/tax";
 import type { MinMaxByGroupType } from "@/lib/pricing";
+import { Price, PriceMention } from "@/components/common/Price";
 
 /** 3-person group icon matching lucide style (24x24, stroke-based) */
 function UsersGroup({ className }: { className?: string }) {
@@ -50,10 +52,18 @@ const OPTIONS: { type: GroupType; label: string; sublabel: string; icon: Compone
   { type: "group", label: "Groupe", sublabel: "3+ pers.", icon: UsersGroup },
 ];
 
-function getPriceRange(groupType: GroupType, minMaxByGroupType?: MinMaxByGroupType | null): string {
-  if (!minMaxByGroupType || !minMaxByGroupType[groupType]) return "…";
+function PriceRange({ groupType, minMaxByGroupType }: { groupType: GroupType; minMaxByGroupType?: MinMaxByGroupType | null }) {
+  if (!minMaxByGroupType || !minMaxByGroupType[groupType]) return <>…</>;
   const { min, max } = minMaxByGroupType[groupType];
-  return min === max ? `${min}€ TTC/h` : `${min}€ – ${max}€ TTC/h`;
+  if (min === max) return <Price amount={min} unit="/h" />;
+  // Deux montants, une seule mention partagée — le « TTC/h » entier reste
+  // subordonné, la plage « 18€ – 22€ » garde sa taille normale.
+  return (
+    <span className="whitespace-nowrap">
+      <span>{formatEuro(min)} – {formatEuro(max)}</span>
+      <PriceMention unit="/h" />
+    </span>
+  );
 }
 
 export function GroupTypeToggle({ value, onChange, minMaxByGroupType, label = "Combien êtes-vous ?", variant = "public" }: GroupTypeToggleProps) {
@@ -72,7 +82,6 @@ export function GroupTypeToggle({ value, onChange, minMaxByGroupType, label = "C
       <div className="grid grid-cols-3 gap-1 lg:gap-2">
         {OPTIONS.map(({ type, label, sublabel, icon: Icon }) => {
           const selected = value === type;
-          const priceRange = getPriceRange(type, minMaxByGroupType);
           return (
             <button
               key={type}
@@ -92,8 +101,10 @@ export function GroupTypeToggle({ value, onChange, minMaxByGroupType, label = "C
               <span className={`text-[10px] lg:text-xs ${selected ? "text-black/70" : isAdmin ? "text-zinc-400" : "text-white/60"}`}>
                 {sublabel}
               </span>
-              <span className={`mt-0.5 lg:mt-1 text-[10px] lg:text-xs font-medium ${selected ? "text-black/80" : "text-primary"}`}>
-                {priceRange}
+              {/* 11px (pas 10px) sur mobile : la mention, planchée à 10px,
+                  reste ainsi strictement plus petite que le montant. */}
+              <span className={`mt-0.5 lg:mt-1 text-[11px] lg:text-xs font-medium ${selected ? "text-black/80" : "text-primary"}`}>
+                <PriceRange groupType={type} minMaxByGroupType={minMaxByGroupType} />
               </span>
             </button>
           );

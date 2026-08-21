@@ -65,8 +65,8 @@ describe("barGeometry", () => {
 
 describe("formatChartEuro / formatWeekLabel", () => {
   it("formate l'euro à la française", () => {
-    expect(formatChartEuro(1234)).toContain("€");
-    expect(formatChartEuro(0)).toBe("0 €");
+    expect(formatChartEuro(1234)).toMatch(/€ TTC$/);
+    expect(formatChartEuro(0)).toBe("0 € TTC");
   });
 
   it("libellé semaine français", () => {

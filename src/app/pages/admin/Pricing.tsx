@@ -1611,7 +1611,7 @@ function PromoCodesTab() {
                       {/* Min achat */}
                       <td className="px-6 py-4">
                         <span className="text-sm text-zinc-400 tabular-nums">
-                          {promo.min_total > 0 ? `${promo.min_total}€` : "—"}
+                          {promo.min_total > 0 ? `${promo.min_total}€ TTC` : "—"}
                         </span>
                       </td>
 
