@@ -45,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { STUDIOS, formatPrice, TIME_SLOTS, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
+import { STUDIOS, formatPrice, slotDurationHours, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import { formatDbTimestamp } from "@/lib/utils";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus, shouldShowDisplayPaymentStatus } from "@/lib/booking-totals";
@@ -76,11 +76,7 @@ function formatDate(dateStr: string): string {
 }
 
 function formatDuration(startTime: string, endTime: string): string {
-  const startIdx = TIME_SLOTS.indexOf(startTime);
-  let endIdx = TIME_SLOTS.indexOf(endTime);
-  if (endIdx === -1) endIdx = TIME_SLOTS.length;
-  const slots = endIdx - startIdx;
-  const hours = slots * 0.5;
+  const hours = slotDurationHours(startTime, endTime);
   if (hours === 1) return "1 heure";
   return `${hours} heures`;
 }
@@ -248,10 +244,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         const equipmentJson = await equipmentRes.json() as { success: boolean; equipment?: Array<{ id: string; name: string; maxPerSession: number; pricingType: "session" | "per_hour"; sessionPricing: number[] | null; pricePerHour: number }> };
         if (equipmentJson.success && equipmentJson.equipment) {
           setEquipmentCatalogue(equipmentJson.equipment);
-          const startIdx = TIME_SLOTS.indexOf(json.data.start_time);
-          let endIdx = TIME_SLOTS.indexOf(json.data.end_time);
-          if (endIdx === -1) endIdx = TIME_SLOTS.length;
-          const durHours = (endIdx - startIdx) * 0.5;
+          const durHours = slotDurationHours(json.data.start_time, json.data.end_time);
           setDurationHours(durHours);
 
           if (json.data.equipment) {
