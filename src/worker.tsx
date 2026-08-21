@@ -140,12 +140,12 @@ import {
   claimLoyaltyAward,
 } from "@/lib/db";
 import { getLoyaltyProgress, readLoyaltyConfig, isLoyaltyConfigured, validateLoyaltySettings, computeLoyaltyDiscount } from "@/lib/loyalty";
+import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
 import { refundCardPayment, refundPayments } from "@/lib/refunds";
 import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
-import { getOfferedUnits } from "@/lib/equipment-pricing";
 import { buildPricingGridAsOf, listScheduledEffectiveDates } from "@/lib/pricing";
 import {
   getParisDateISO,
@@ -2437,38 +2437,70 @@ const app = defineApp([
           return jsonError("Studio invalide", 400);
         }
 
-        if (body.equipment !== undefined) {
-          const catalogue = await getEquipment(env.DB);
-          const ex = existing!;
-          const start = body.start_time || ex.start_time;
-          const end = body.end_time || ex.end_time;
-          const slots = parseBookingEquipmentLines(body.equipment);
-          const startIdx = ALL_TIME_SLOTS.indexOf(start);
-          const endIdx = bookingEndMinutes(start, end) / 30;
-          const hours = Math.max(0, endIdx - startIdx) * 0.5;
-          const lines = slots.flatMap(line => {
-            const item = catalogue.find(e => e.equipment_id === line.id);
-            if (!item) return [];
-            const sessionPricing = item.session_pricing ? (JSON.parse(item.session_pricing) as number[]) : null;
-            const lineTotal = item.pricing_type === "session"
-              ? (sessionPricing?.[line.quantity - 1] || 0)
-              : (Number(item.price_per_hour) || 0) * line.quantity * hours;
-            const offeredUnits = item.pricing_type === "session"
-              ? getOfferedUnits(sessionPricing, line.quantity)
-              : [];
-            return [{ id: item.equipment_id, name: item.name, quantity: line.quantity, lineTotal, ...(offeredUnits.length ? { offeredUnits } : {}) }];
-          });
-          body.equipment = JSON.stringify(lines);
-          body.equipment_price = lines.reduce((sum, line) => sum + (Number(line.lineTotal) || 0), 0);
-        }
-
         // Admin may force overlapping / blocked / off-hours / sub-1h slots
         // when rescheduling. Public booking creation still rejects those.
 
+        // A move is server-quoted, not a blind date/time update. This deliberately
+        // uses computeBookingQuote as the validity criterion: #77 makes a non-00:00
+        // end before its start an overnight session, so string comparisons would
+        // reject valid ranges. We intentionally do not add public-only conflict,
+        // opening-hours, or one-hour-minimum checks here: admin force remains valid.
+        const isReschedule = body.date !== undefined || body.start_time !== undefined ||
+          body.end_time !== undefined || body.studio_id !== undefined;
+        if (isReschedule || body.equipment !== undefined) {
+          const ex = existing!;
+          const date = body.date ?? ex.date;
+          const startTime = body.start_time ?? ex.start_time;
+          const endTime = body.end_time ?? ex.end_time;
+          const studioId = body.studio_id ?? ex.studio_id;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return jsonError("Format de date invalide", 400);
+
+          const equipment = body.equipment !== undefined
+            ? parseBookingEquipmentLines(body.equipment)
+            : parseBookingEquipmentLines(ex.equipment);
+          const peakStartHour = parseInt(await getSetting(env.DB, "peak_start_hour") || "18", 10);
+          const publicHolidays = JSON.parse(await getSetting(env.DB, "public_holidays") || "[]") as string[];
+          const [peakRate, offPeakRate, allEquipment] = await Promise.all([
+            getPricingForBooking(env.DB, studioId, ex.group_type, true, date),
+            getPricingForBooking(env.DB, studioId, ex.group_type, false, date),
+            getEquipment(env.DB),
+          ]);
+          const equipmentCatalogue: QuoteEquipmentCatalogueItem[] = allEquipment.map((item) => ({
+            id: item.equipment_id,
+            name: item.name,
+            pricingType: item.pricing_type,
+            sessionPricing: item.session_pricing ? JSON.parse(item.session_pricing) as number[] : null,
+            pricePerHour: item.price_per_hour,
+          }));
+          const quote = computeBookingQuote({
+            studioId: studioId as StudioId,
+            groupType: ex.group_type as GroupType,
+            date,
+            startTime,
+            endTime,
+            equipment,
+            peakStartHour,
+            publicHolidays,
+            peakRatePerHalfHour: peakRate,
+            offPeakRatePerHalfHour: offPeakRate,
+            equipmentCatalogue,
+          });
+          const repricedAmounts = deriveRescheduledAmounts(ex, quote);
+          if (!repricedAmounts) {
+            return jsonError("Créneau invalide — le devis serveur refuse cette plage", 400);
+          }
+
+          // Equipment is always recalculated from the same quote as a moved slot,
+          // including hourly equipment on a changed duration. A pure equipment edit
+          // keeps the historical base rate, as before.
+          body.equipment = JSON.stringify(quote.equipmentLines.filter((line) => line.quantity > 0));
+          body.equipment_price = repricedAmounts.equipment_price;
+          if (isReschedule) body.base_price = repricedAmounts.base_price;
+        }
+
         // Invariant de stockage : total_price = base_price + equipment_price (brut),
-        // promo_discount séparé. Toute modification de base/équipement recalcule
-        // le brut côté serveur. Un simple déplacement conserve le prix historique
-        // (aucune mise à jour de base_price/equipment_price → pas de recalcul).
+        // promo_discount séparé. Le devis d'un déplacement est toujours la source
+        // des prix persistés, y compris pour une durée identique à une autre heure.
         if (body.base_price !== undefined || body.equipment_price !== undefined) {
           body.total_price = getBookingGrossTotal({
             base_price: Number(body.base_price ?? existing!.base_price) || 0,
@@ -2521,10 +2553,22 @@ const app = defineApp([
         // Recalcule payment_status après modification de prix/remise (idempotent).
         await recomputeBookingPaymentStatus(env.DB, id);
 
-        await addAuditLog(env.DB, "booking", id, "update", body, request.headers.get("X-Admin-User-Id") || "admin");
-
         const updated = await getBookingById(env.DB, id);
-        return jsonSuccess(updated);
+        const auditChanges = isReschedule && updated ? {
+          ...body,
+          amounts: buildRescheduleAmountAudit(existing!, updated),
+        } : body;
+        await addAuditLog(env.DB, "booking", id, "update", auditChanges, request.headers.get("X-Admin-User-Id") || "admin");
+
+        // Refund policy for a lower online-paid reschedule: operator-proposed.
+        // PUT never calls Stripe; it exposes the credit, which the operator can
+        // settle through the existing partial-refund endpoint after review.
+        const payments = updated && isReschedule ? await getPaymentsByBookingId(env.DB, id) : [];
+        const refundProposal = updated ? getOperatorProposedRescheduleRefund(updated, payments) : null;
+        return jsonSuccess({
+          ...updated,
+          ...(isReschedule ? { reschedule_refund_proposal: refundProposal } : {}),
+        });
       } catch (error) {
         console.error("PUT /api/admin/bookings/:id error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to update booking", 500);
