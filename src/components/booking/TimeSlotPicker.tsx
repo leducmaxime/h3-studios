@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef, useId } from "react";
 import { ChevronLeft, Clock, ArrowRight } from "lucide-react";
 import {
   getStudioTimeSlots,
@@ -99,6 +99,12 @@ export function TimeSlotPicker({
   const [selectedEnd, setSelectedEnd] = useState<string | null>(endTime);
   const [activeStudio, setActiveStudio] = useState<StudioId | null>(initialStudioId);
   const [hoveredSlot, setHoveredSlot] = useState<{ slot: string; studioId: StudioId } | null>(null);
+  // Slot hint (« Hors horaires », min-duration) currently disclosed by
+  // hover/focus. Rendered in ONE shared line per studio below the grid —
+  // never inside a 44px cell — so the text stays fully legible with zero
+  // per-cell overflow or neighbor overlap.
+  const [activeHint, setActiveHint] = useState<{ studioId: StudioId; text: string } | null>(null);
+  const hintIdBase = useId();
   // Set when the parent is cleared as part of an internal transition that
   // immediately rebuilds local selection state — the resulting prop sync
   // must not wipe it.
@@ -687,10 +693,24 @@ export function TimeSlotPicker({
                 type="button"
                 className={`group/slot relative box-border h-10 min-w-0 rounded-lg border transition-all duration-150 ${style}`}
                 onClick={() => handleSlotClick(slot, studioId)}
-                onMouseEnter={() => handleSlotMouseEnter(slot, studioId)}
-                onMouseLeave={handleSlotMouseLeave}
-                title={hint ?? undefined}
+                onMouseEnter={() => {
+                  handleSlotMouseEnter(slot, studioId);
+                  setActiveHint(hint ? { studioId, text: hint } : null);
+                }}
+                onMouseLeave={() => {
+                  handleSlotMouseLeave();
+                  setActiveHint(null);
+                }}
+                onFocus={() => {
+                  if (hint) setActiveHint({ studioId, text: hint });
+                }}
+                onBlur={() => setActiveHint(null)}
                 aria-disabled={!allowOverride && hint ? true : undefined}
+                aria-describedby={
+                  hint && activeHint?.studioId === studioId && activeHint.text === hint
+                    ? `${hintIdBase}-${studioId}`
+                    : undefined
+                }
               >
                 <div className="flex h-full items-center justify-center">
                   <span className="text-[11px] font-semibold leading-none lg:text-xs">
@@ -720,6 +740,18 @@ export function TimeSlotPicker({
           })}
         </div>
         )}
+
+        {/* Shared slot-hint line — the visible disclosure for « Hors horaires »
+            and the min-duration hint. In normal flow, outside the grid, with a
+            reserved line height: it can't overflow a cell, can't overlap the
+            row above/below, and shows nothing (but keeps its height) when no
+            hinted slot is hovered/focused. */}
+        <p
+          id={`${hintIdBase}-${studioId}`}
+          className="min-h-4 text-center text-[11px] leading-4 text-amber-200/80"
+        >
+          {activeHint?.studioId === studioId ? activeHint.text : ""}
+        </p>
 
         {/* Per-studio price legend — exact DB rates via the pricing grid.
             text-white/70 (pas /50) : l'opacité 0.6 de la mention « TTC/h » se
