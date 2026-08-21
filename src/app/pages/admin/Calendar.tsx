@@ -44,12 +44,13 @@ import {
 import { toast } from "sonner";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
-import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, parseBookingEquipmentLines, type StudioId, type GroupType } from "@/lib/booking";
+import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, parseBookingEquipmentLines, type StudioId, type GroupType } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, isKeepBalanceDue } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel, bookingStatusLabel } from "@/lib/labels";
+import { layoutBookingBlockOnDate } from "@/lib/calendar-export";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -131,15 +132,14 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 const VISIBLE_HOURS = [
-  "09:00", "10:00", "11:00", "12:00", "13:00", "14:00",
-  "15:00", "16:00", "17:00", "18:00", "19:00", "20:00",
-  "21:00", "22:00", "23:00",
+  "00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00", "08:00",
+  "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00",
+  "18:00", "19:00", "20:00", "21:00", "22:00", "23:00",
 ];
 
-function getNextHour(hour: string): string {
-  const idx = VISIBLE_HOURS.indexOf(hour);
-  if (idx === -1 || idx === VISIBLE_HOURS.length - 1) return "00:00";
-  return VISIBLE_HOURS[idx + 1];
+function rectOccupiesHour(rect: { top: number; height: number }, hourIdx: number): boolean {
+  const hourTop = hourIdx * 60;
+  return rect.top < hourTop + 60 && rect.top + rect.height > hourTop;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -172,8 +172,7 @@ function computeDayOccupancyRate(dayBookings: CalendarBooking[], date: Date): nu
     for (const b of dayBookings) {
       if (b.studio_id !== studioId) continue;
       const startIdx = ALL_TIME_SLOTS.indexOf(b.start_time);
-      let endIdx = ALL_TIME_SLOTS.indexOf(b.end_time);
-      if (endIdx === -1 && b.end_time === "00:00") endIdx = ALL_TIME_SLOTS.length;
+      const endIdx = bookingEndMinutes(b.start_time, b.end_time) / 30;
       if (startIdx === -1 || endIdx <= startIdx) continue;
       totalBooked += endIdx - startIdx;
     }
@@ -437,16 +436,26 @@ export function AdminCalendar() {
     try {
       let data: { bookings: CalendarBooking[]; blockedSlots: CalendarBlockedSlot[] };
       if (view === "week") {
+        const weekStart = new Date(weekDates[0]);
+        weekStart.setDate(weekStart.getDate() - 1);
         data = await fetchCalendar({
-          startDate: toDateStr(weekDates[0]),
+          startDate: toDateStr(weekStart),
           endDate: toDateStr(weekDates[6]),
         });
       } else if (view === "day") {
+        const previous = new Date(currentDate);
+        previous.setDate(previous.getDate() - 1);
         data = await fetchCalendar({
-          date: toDateStr(currentDate),
+          startDate: toDateStr(previous),
+          endDate: toDateStr(currentDate),
         });
       } else {
-        data = await fetchCalendar(monthRange);
+        const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+        monthStart.setDate(monthStart.getDate() - 1);
+        data = await fetchCalendar({
+          startDate: toDateStr(monthStart),
+          endDate: monthRange.endDate,
+        });
       }
       setBookings(data.bookings);
       setBlockedSlots(data.blockedSlots);
@@ -653,16 +662,12 @@ export function AdminCalendar() {
     const studios: StudioId[] = ["la-scene", "le-podium"];
     const today = new Date();
 
-    const blockedByDate = new Map<string, CalendarBlockedSlot[]>();
-    for (const b of blockedSlots) {
-      const existing = blockedByDate.get(b.date) || [];
-      existing.push(b);
-      blockedByDate.set(b.date, existing);
-    }
-
     const expandedBlocked = (dateStr: string, studioId: StudioId) => {
-      const day = blockedByDate.get(dateStr) || [];
-      return day.filter((s) => s.studio_id === null || s.studio_id === studioId);
+      return blockedSlots.filter(
+        (s) =>
+          (s.studio_id === null || s.studio_id === studioId) &&
+          layoutBookingBlockOnDate(s.date, dateStr, s.start_time, s.end_time),
+      );
     };
 
     const BLOCKED_COLORS = {
@@ -733,13 +738,16 @@ export function AdminCalendar() {
                       const leftPos = studioId === "la-scene" ? "0" : "50%";
                       const width = "50%";
                       return VISIBLE_HOURS.map((hour, hourIdx) => {
-                        const nextHour = getNextHour(hour);
-                        const hasBooking = bookings.some(
-                          (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.start_time < nextHour && b.end_time > hour
-                        );
-                        const hasBlocked = blockedSlots.some(
-                          (s) => s.date === dateStr && (s.studio_id === null || s.studio_id === studioId) && s.start_time < nextHour && s.end_time > hour
-                        );
+                        const hasBooking = bookings.some((b) => {
+                          if (b.studio_id !== studioId || b.status === "cancelled") return false;
+                          const rect = layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time);
+                          return rect ? rectOccupiesHour(rect, hourIdx) : false;
+                        });
+                        const hasBlocked = blockedSlots.some((s) => {
+                          if (!(s.studio_id === null || s.studio_id === studioId)) return false;
+                          const rect = layoutBookingBlockOnDate(s.date, dateStr, s.start_time, s.end_time);
+                          return rect ? rectOccupiesHour(rect, hourIdx) : false;
+                        });
                         if (hasBooking || hasBlocked) return null;
                         return (
                           <a
@@ -758,7 +766,11 @@ export function AdminCalendar() {
                     {studios.map((studioId) => {
                       const studioBlocked = expandedBlocked(dateStr, studioId);
                       const studioBookings = bookings.filter(
-                        (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
+                        (b) =>
+                          b.studio_id === studioId &&
+                          b.status !== "cancelled" &&
+                          b.group_type === "group" &&
+                          layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
                       );
 
                       const leftPos = studioId === "la-scene" ? "4px" : "50%";
@@ -767,13 +779,9 @@ export function AdminCalendar() {
                       return (
                         <div key={`${dateStr}-${studioId}`} className="contents">
                           {studioBlocked.map((slot) => {
-                            const startIdx = ALL_TIME_SLOTS.indexOf(slot.start_time);
-                            let endIdx = ALL_TIME_SLOTS.indexOf(slot.end_time);
-                            if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                            if (startIdx === -1) return null;
-
-                            const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                            const height = (endIdx - startIdx) * 30;
+                            const rect = layoutBookingBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time);
+                            if (!rect) return null;
+                            const { top, height } = rect;
 
                             return (
                               <div
@@ -798,11 +806,9 @@ export function AdminCalendar() {
                           })}
 
                           {studioBookings.map((booking) => {
-                            const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                            let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                            if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                            const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                            const height = (endIdx - startIdx) * 30;
+                            const rect = layoutBookingBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time);
+                            if (!rect) return null;
+                            const { top, height } = rect;
                             const paymentColors = getPaymentStatusColor(booking);
 
                             return (
@@ -838,15 +844,16 @@ export function AdminCalendar() {
 
                     {(() => {
                       const consultationBookings = bookings.filter(
-                        (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
+                        (b) =>
+                          (b.group_type === "solo" || b.group_type === "duo") &&
+                          b.status !== "cancelled" &&
+                          layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
                       );
 
                       return consultationBookings.map((booking) => {
-                        const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                        let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                        if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                        const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                        const height = (endIdx - startIdx) * 30;
+                        const rect = layoutBookingBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time);
+                        if (!rect) return null;
+                        const { top, height } = rect;
 
                         const studioId = booking.studio_id as StudioId;
                         const leftPos = studioId === "la-scene" ? "4px" : studioId === "le-podium" ? "50%" : "4px";
@@ -931,16 +938,12 @@ export function AdminCalendar() {
     const dateStr = toDateStr(currentDate);
     const isToday = isSameDay(currentDate, today);
 
-    const blockedByDate = new Map<string, CalendarBlockedSlot[]>();
-    for (const b of blockedSlots) {
-      const existing = blockedByDate.get(b.date) || [];
-      existing.push(b);
-      blockedByDate.set(b.date, existing);
-    }
-
     const expandedBlocked = (studioId: StudioId) => {
-      const day = blockedByDate.get(dateStr) || [];
-      return day.filter((s) => s.studio_id === null || s.studio_id === studioId);
+      return blockedSlots.filter(
+        (s) =>
+          (s.studio_id === null || s.studio_id === studioId) &&
+          layoutBookingBlockOnDate(s.date, dateStr, s.start_time, s.end_time),
+      );
     };
 
     const BLOCKED_COLORS = {
@@ -966,7 +969,11 @@ export function AdminCalendar() {
               const studio = STUDIOS[studioId];
               const studioBlocked = expandedBlocked(studioId);
               const studioBookings = bookings.filter(
-                (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
+                (b) =>
+                  b.studio_id === studioId &&
+                  b.status !== "cancelled" &&
+                  b.group_type === "group" &&
+                  layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
               );
               const studioColors = STUDIO_COLORS[studioId];
 
@@ -991,13 +998,16 @@ export function AdminCalendar() {
 
                     {/* Clickable empty slots */}
                     {VISIBLE_HOURS.map((hour, hourIdx) => {
-                      const nextHour = getNextHour(hour);
-                      const hasBooking = bookings.some(
-                        (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.start_time < nextHour && b.end_time > hour
-                      );
-                      const hasBlocked = blockedSlots.some(
-                        (s) => s.date === dateStr && (s.studio_id === null || s.studio_id === studioId) && s.start_time < nextHour && s.end_time > hour
-                      );
+                      const hasBooking = bookings.some((b) => {
+                        if (b.studio_id !== studioId || b.status === "cancelled") return false;
+                        const rect = layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time);
+                        return rect ? rectOccupiesHour(rect, hourIdx) : false;
+                      });
+                      const hasBlocked = blockedSlots.some((s) => {
+                        if (!(s.studio_id === null || s.studio_id === studioId)) return false;
+                        const rect = layoutBookingBlockOnDate(s.date, dateStr, s.start_time, s.end_time);
+                        return rect ? rectOccupiesHour(rect, hourIdx) : false;
+                      });
                       if (hasBooking || hasBlocked) return null;
                       return (
                         <a
@@ -1014,13 +1024,9 @@ export function AdminCalendar() {
 
                     {/* Blocked slots */}
                     {studioBlocked.map((slot) => {
-                      const startIdx = ALL_TIME_SLOTS.indexOf(slot.start_time);
-                      let endIdx = ALL_TIME_SLOTS.indexOf(slot.end_time);
-                      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                      if (startIdx === -1) return null;
-
-                      const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                      const height = (endIdx - startIdx) * 30;
+                      const rect = layoutBookingBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time);
+                      if (!rect) return null;
+                      const { top, height } = rect;
 
                       return (
                         <div
@@ -1044,11 +1050,9 @@ export function AdminCalendar() {
 
                     {/* Bookings */}
                     {studioBookings.map((booking) => {
-                      const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                      let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                      if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                      const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                      const height = (endIdx - startIdx) * 30;
+                      const rect = layoutBookingBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time);
+                      if (!rect) return null;
+                      const { top, height } = rect;
                       const paymentColors = getPaymentStatusColor(booking);
 
                       return (
@@ -1081,17 +1085,15 @@ export function AdminCalendar() {
                     {bookings
                       .filter(
                         (b) =>
-                          b.date === dateStr &&
                           b.studio_id === studioId &&
                           (b.group_type === "solo" || b.group_type === "duo") &&
-                          b.status !== "cancelled",
+                          b.status !== "cancelled" &&
+                          layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
                       )
                       .map((booking) => {
-                        const startIdx = ALL_TIME_SLOTS.indexOf(booking.start_time);
-                        let endIdx = ALL_TIME_SLOTS.indexOf(booking.end_time);
-                        if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-                        const top = (startIdx - ALL_TIME_SLOTS.indexOf("09:00")) * 30;
-                        const height = (endIdx - startIdx) * 30;
+                        const rect = layoutBookingBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time);
+                        if (!rect) return null;
+                        const { top, height } = rect;
                         const leftPos = "4px";
                         const width = "calc(100% - 8px)";
 

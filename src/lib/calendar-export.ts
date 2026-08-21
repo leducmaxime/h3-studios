@@ -11,7 +11,7 @@
  * du calendrier.
  */
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, type GroupType, type StudioId } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type GroupType, type StudioId } from "@/lib/booking";
 import { groupTypeLabel, studioLabelShort } from "@/lib/labels";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -86,8 +86,7 @@ export interface SlotRange {
 /** Bornes d'un créneau dans ALL_TIME_SLOTS ("00:00" = fin de journée). */
 export function computeSlotRange(startTime: string, endTime: string): SlotRange {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length; // "00:00" minuit
+  const endIdx = bookingEndMinutes(startTime, endTime) / 30;
   return { startIdx, endIdx };
 }
 
@@ -96,12 +95,52 @@ export interface BookingRect {
   height: number;
 }
 
-/** Position verticale d'un bloc, alignée sur la grille horaire (départ 09:00). */
+/** Position verticale d'un bloc, alignée sur la grille 24h (départ 00:00). */
 export function layoutBookingBlock(range: SlotRange, pitch: number = PITCH): BookingRect {
-  const startBaseline = ALL_TIME_SLOTS.indexOf("09:00");
-  const top = (range.startIdx - startBaseline) * pitch;
+  const top = range.startIdx * pitch;
   const height = Math.max((range.endIdx - range.startIdx) * pitch, MIN_BLOCK_H);
   return { top, height };
+}
+
+/** Layout convention shared by calendar renderers: 00:00 is the vertical origin. */
+export function layoutBookingBlockForTimes(startTime: string, endTime: string, pitch: number = 30): BookingRect {
+  return layoutBookingBlock(computeSlotRange(startTime, endTime), pitch);
+}
+
+function shiftDateISO(dateISO: string, days: number): string {
+  const [year, month, day] = dateISO.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * Position a booking on a given calendar date. Same-day ranges stay on the
+ * anchor date; the after-midnight remainder of an overnight session appears
+ * at the top of the following day.
+ */
+export function layoutBookingBlockOnDate(
+  bookingDate: string,
+  viewDate: string,
+  startTime: string,
+  endTime: string,
+  pitch: number = 30,
+): BookingRect | null {
+  const { startIdx, endIdx } = computeSlotRange(startTime, endTime);
+  if (startIdx === -1 || endIdx <= startIdx) return null;
+  const daySlots = ALL_TIME_SLOTS.length;
+
+  if (viewDate === bookingDate) {
+    const clippedEnd = Math.min(endIdx, daySlots);
+    const height = (clippedEnd - startIdx) * pitch;
+    if (height <= 0) return null;
+    return { top: startIdx * pitch, height: Math.max(height, MIN_BLOCK_H) };
+  }
+
+  if (viewDate === shiftDateISO(bookingDate, 1) && endIdx > daySlots) {
+    const height = (endIdx - daySlots) * pitch;
+    return { top: 0, height: Math.max(height, MIN_BLOCK_H) };
+  }
+
+  return null;
 }
 
 /**
@@ -260,7 +299,7 @@ export function dayGridWidth(opts: CalendarExportOptions): number {
 }
 
 function measureDayGrid(opts: CalendarExportOptions): GridSize {
-  const totalSlots = ALL_TIME_SLOTS.length - ALL_TIME_SLOTS.indexOf("09:00");
+  const totalSlots = ALL_TIME_SLOTS.length;
   const gridHeight = totalSlots * PITCH;
   const headerH = 44;
   const legendH = 40;
@@ -452,25 +491,36 @@ function drawBlockedSlot(
 
 function bookingsFor(dateStr: string, studioId: string, list: CalendarExportBooking[]): CalendarExportBooking[] {
   return list.filter(
-    (b) => b.date === dateStr && b.studio_id === studioId && b.status !== "cancelled" && b.group_type === "group",
+    (b) =>
+      b.studio_id === studioId &&
+      b.status !== "cancelled" &&
+      b.group_type === "group" &&
+      layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time, PITCH) !== null,
   );
 }
 
 function consultationsFor(dateStr: string, list: CalendarExportBooking[]): CalendarExportBooking[] {
   return list.filter(
-    (b) => b.date === dateStr && (b.group_type === "solo" || b.group_type === "duo") && b.status !== "cancelled",
+    (b) =>
+      (b.group_type === "solo" || b.group_type === "duo") &&
+      b.status !== "cancelled" &&
+      layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time, PITCH) !== null,
   );
 }
 
 function blockedFor(dateStr: string, studioId: string, list: CalendarExportBlockedSlot[]): CalendarExportBlockedSlot[] {
-  return list.filter((s) => s.date === dateStr && (s.studio_id === null || s.studio_id === studioId));
+  return list.filter(
+    (s) =>
+      (s.studio_id === null || s.studio_id === studioId) &&
+      layoutBookingBlockOnDate(s.date, dateStr, s.start_time, s.end_time, PITCH) !== null,
+  );
 }
 
 function renderDayGrid(ctx: CanvasRenderingContext2D, opts: CalendarExportOptions): void {
   const { bookings, blockedSlots } = opts;
   const studioCols: StudioId[] = ["la-scene", "le-podium"];
   const studioW = dayColumnWidth(opts.view);
-  const totalSlots = ALL_TIME_SLOTS.length - ALL_TIME_SLOTS.indexOf("09:00");
+  const totalSlots = ALL_TIME_SLOTS.length;
   const gridHeight = totalSlots * PITCH;
   const titleH = 56;
   const headerH = 44;
@@ -515,7 +565,7 @@ function renderDayGrid(ctx: CanvasRenderingContext2D, opts: CalendarExportOption
     ctx.lineTo(width, y + 0.5);
     ctx.stroke();
     if (i < totalSlots && i % 2 === 0) {
-      const hourLabel = ALL_TIME_SLOTS[ALL_TIME_SLOTS.indexOf("09:00") + i];
+      const hourLabel = ALL_TIME_SLOTS[i];
       setFont(ctx, 12, 400);
       ctx.fillStyle = COLORS.dim;
       ctx.fillText(hourLabel, TIME_GUTTER - 12 - ctx.measureText(hourLabel).width, y + PITCH - 8);
@@ -540,23 +590,20 @@ function renderDayGrid(ctx: CanvasRenderingContext2D, opts: CalendarExportOption
       const colW = studioW / 2;
       const x = colX + (studioId === "la-scene" ? 0 : colW);
       for (const slot of blockedFor(dateStr, studioId, blockedSlots)) {
-        const { startIdx, endIdx } = computeSlotRange(slot.start_time, slot.end_time);
-        if (startIdx === -1) continue;
-        const { top, height } = layoutBookingBlock({ startIdx, endIdx });
-        drawBlockedSlot(ctx, x + 4, gridTop + top, colW - 8, height, slot.reason);
+        const rect = layoutBookingBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time, PITCH);
+        if (!rect) continue;
+        drawBlockedSlot(ctx, x + 4, gridTop + rect.top, colW - 8, rect.height, slot.reason);
       }
       for (const b of bookingsFor(dateStr, studioId, bookings)) {
-        const { startIdx, endIdx } = computeSlotRange(b.start_time, b.end_time);
-        if (startIdx === -1) continue;
-        const { top, height } = layoutBookingBlock({ startIdx, endIdx });
-        drawBookingBlock(ctx, x + 4, gridTop + top, colW - 8, height, b);
+        const rect = layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time, PITCH);
+        if (!rect) continue;
+        drawBookingBlock(ctx, x + 4, gridTop + rect.top, colW - 8, rect.height, b);
       }
       for (const b of consultationsFor(dateStr, bookings)) {
         if (b.studio_id !== studioId) continue;
-        const { startIdx, endIdx } = computeSlotRange(b.start_time, b.end_time);
-        if (startIdx === -1) continue;
-        const { top, height } = layoutBookingBlock({ startIdx, endIdx });
-        drawBookingBlock(ctx, x + 4, gridTop + top, colW - 8, height, b);
+        const rect = layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time, PITCH);
+        if (!rect) continue;
+        drawBookingBlock(ctx, x + 4, gridTop + rect.top, colW - 8, rect.height, b);
       }
     }
     colX += studioW;

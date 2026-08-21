@@ -10,6 +10,8 @@ import {
   dayColumnWidth,
   dayGridWidth,
   layoutBookingBlock,
+  layoutBookingBlockForTimes,
+  layoutBookingBlockOnDate,
   truncateText,
 } from "@/lib/calendar-export";
 import type { CalendarExportBooking } from "@/lib/calendar-export";
@@ -35,13 +37,13 @@ const measure = (w: number) => ({ measureText: (s: string) => ({ width: s.length
 
 describe("computeSlotRange", () => {
   it("calcule les bornes dans ALL_TIME_SLOTS", () => {
-    expect(computeSlotRange("18:00", "20:00")).toEqual({ startIdx: 18, endIdx: 22 });
+    expect(computeSlotRange("18:00", "20:00")).toEqual({ startIdx: 36, endIdx: 40 });
   });
 
   it("traite 00:00 comme fin de journée", () => {
     const r = computeSlotRange("23:30", "00:00");
-    expect(r.startIdx).toBe(29);
-    expect(r.endIdx).toBe(30); // 00:00 est le 31e élément (index 30)
+    expect(r.startIdx).toBe(47);
+    expect(r.endIdx).toBe(48); // 00:00 reste une fin de journée explicite
   });
 });
 
@@ -57,6 +59,27 @@ describe("layoutBookingBlock", () => {
     // pitch 20 → 1 créneau = 20px, mais le minimum est 24px
     const r = layoutBookingBlock({ startIdx: 18, endIdx: 19 }, 20);
     expect(r.height).toBe(24);
+  });
+});
+
+describe("layoutBookingBlockForTimes", () => {
+  it("layout 03:00→05:00 sur la grille 24h", () => {
+    expect(layoutBookingBlockForTimes("03:00", "05:00")).toEqual({ top: 180, height: 120 });
+  });
+
+  it("layout 23:00→03:00 avec une hauteur positive de 4 heures", () => {
+    expect(layoutBookingBlockForTimes("23:00", "03:00")).toEqual({ top: 1380, height: 240 });
+  });
+});
+
+describe("layoutBookingBlockOnDate", () => {
+  it("layout 03:00→05:00 sur la grille 24h", () => {
+    expect(layoutBookingBlockOnDate("2026-08-25", "2026-08-25", "03:00", "05:00")).toEqual({ top: 180, height: 120 });
+  });
+
+  it("layout 23:00→03:00 avec une hauteur positive de 4 heures", () => {
+    expect(layoutBookingBlockOnDate("2026-08-25", "2026-08-25", "23:00", "03:00")).toEqual({ top: 1380, height: 60 });
+    expect(layoutBookingBlockOnDate("2026-08-25", "2026-08-26", "23:00", "03:00")).toEqual({ top: 0, height: 180 });
   });
 });
 

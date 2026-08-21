@@ -67,6 +67,20 @@ describe("computeBookingQuote (shared admin + public quote)", () => {
     expect(quote.basePrice).toBe(44);
   });
 
+  it("prices a 03:00–05:00 admin night quote at the peak rate", () => {
+    const quote = computeBookingQuote(baseInput({ startTime: "03:00", endTime: "05:00" }));
+    expect(quote.halfHours).toBe(4);
+    expect(quote.basePrice).toBe(44);
+    expect(quote.slotBreakdown.every((slot) => slot.isPeak)).toBe(true);
+  });
+
+  it("prices a 23:00–03:00 cross-midnight booking for four hours", () => {
+    const quote = computeBookingQuote(baseInput({ startTime: "23:00", endTime: "03:00" }));
+    expect(quote.halfHours).toBe(8);
+    expect(quote.durationHours).toBe(4);
+    expect(quote.basePrice).toBe(88);
+  });
+
   it("returns a zero quote for an invalid range instead of crashing", () => {
     const quote = computeBookingQuote(baseInput({ startTime: "14:00", endTime: "14:00" }));
     expect(quote.basePrice).toBe(0);

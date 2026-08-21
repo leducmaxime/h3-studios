@@ -143,7 +143,7 @@ import { getLoyaltyProgress, readLoyaltyConfig, isLoyaltyConfigured, validateLoy
 import { refundCardPayment, refundPayments } from "@/lib/refunds";
 import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
 import { getOfferedUnits } from "@/lib/equipment-pricing";
 import { buildPricingGridAsOf, listScheduledEffectiveDates } from "@/lib/pricing";
@@ -195,10 +195,11 @@ const DocumentWithPath = ({
 
 function getSlotsForBooking(start: string, end: string): string[] {
   const startIdx = ALL_TIME_SLOTS.indexOf(start);
-  let endIdx = ALL_TIME_SLOTS.indexOf(end);
-  if (endIdx === -1 && end === "00:00") endIdx = ALL_TIME_SLOTS.length;
-  if (startIdx === -1 || endIdx === -1) return [];
-  return ALL_TIME_SLOTS.slice(startIdx, endIdx);
+  if (startIdx === -1 || (end !== "00:00" && ALL_TIME_SLOTS.indexOf(end) === -1)) return [];
+  const endMinutes = end === "00:00" ? 1440 : Number(end.slice(0, 2)) * 60 + Number(end.slice(3));
+  const startMinutes = Number(start.slice(0, 2)) * 60 + Number(start.slice(3));
+  const count = ((endMinutes <= startMinutes && end !== "00:00" ? endMinutes + 1440 : endMinutes) - startMinutes) / 30;
+  return Array.from({ length: count }, (_, offset) => ALL_TIME_SLOTS[(startIdx + offset) % ALL_TIME_SLOTS.length]);
 }
 
 function buildOpeningHoursMap(dbHours: DbOpeningHours[]): Record<string, Record<number, { open: string; close: string }>> {
@@ -2443,8 +2444,7 @@ const app = defineApp([
           const end = body.end_time || ex.end_time;
           const slots = parseBookingEquipmentLines(body.equipment);
           const startIdx = ALL_TIME_SLOTS.indexOf(start);
-          let endIdx = end === "00:00" ? ALL_TIME_SLOTS.length : ALL_TIME_SLOTS.indexOf(end);
-          if (endIdx < 0) endIdx = ALL_TIME_SLOTS.length;
+          const endIdx = bookingEndMinutes(start, end) / 30;
           const hours = Math.max(0, endIdx - startIdx) * 0.5;
           const lines = slots.flatMap(line => {
             const item = catalogue.find(e => e.equipment_id === line.id);
@@ -4613,8 +4613,7 @@ const app = defineApp([
         for (const row of bookings) {
           const bucket = bucketForDate(row.date);
           const startIdx = ALL_TIME_SLOTS.indexOf(row.start_time);
-          let endIdx = ALL_TIME_SLOTS.indexOf(row.end_time);
-          if (endIdx === -1 && row.end_time === "00:00") endIdx = ALL_TIME_SLOTS.length;
+          const endIdx = bookingEndMinutes(row.start_time, row.end_time) / 30;
           if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) continue;
 
           bookedSlotsByBucket.set(bucket, (bookedSlotsByBucket.get(bucket) ?? 0) + (endIdx - startIdx));

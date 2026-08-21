@@ -7,10 +7,10 @@ interface TimeSlot {
 
 function hasConflict(existing: TimeSlot[], newSlot: TimeSlot): boolean {
   for (const slot of existing) {
-    const existingStart = timeToMinutes(slot.startTime);
-    const existingEnd = timeToMinutes(slot.endTime);
-    const newStart = timeToMinutes(newSlot.startTime);
-    const newEnd = timeToMinutes(newSlot.endTime);
+    const existingStart = clockMinutes(slot.startTime);
+    const existingEnd = bookingEndMinutes(slot.startTime, slot.endTime);
+    const newStart = clockMinutes(newSlot.startTime);
+    const newEnd = bookingEndMinutes(newSlot.startTime, newSlot.endTime);
 
     if (newStart < existingEnd && newEnd > existingStart) {
       return true;
@@ -19,10 +19,13 @@ function hasConflict(existing: TimeSlot[], newSlot: TimeSlot): boolean {
   return false;
 }
 
-function timeToMinutes(time: string): number {
-  const [hours, minutes] = time.split(":").map(Number);
-  if (time === "00:00") return 24 * 60;
-  return hours * 60 + minutes;
+function clockMinutes(time: string): number {
+  return time.split(":").map(Number).reduce((total, value, index) => total + value * (index === 0 ? 60 : 1), 0);
+}
+function bookingEndMinutes(start: string, end: string): number {
+  if (end === "00:00") return 1440;
+  const value = clockMinutes(end);
+  return value <= clockMinutes(start) ? value + 1440 : value;
 }
 
 describe("Conflict Detection", () => {
@@ -114,6 +117,11 @@ describe("Conflict Detection", () => {
     const newSlot = { startTime: "23:00", endTime: "00:00" };
 
     expect(hasConflict(existing, newSlot)).toBe(true);
+  });
+
+  it("keeps midnight adjacency free and detects next-day overlap", () => {
+    expect(hasConflict([{ startTime: "23:00", endTime: "03:00" }], { startTime: "03:00", endTime: "05:00" })).toBe(false);
+    expect(hasConflict([{ startTime: "23:00", endTime: "03:00" }], { startTime: "22:30", endTime: "23:30" })).toBe(true);
   });
 
   it("should check against multiple existing slots", () => {

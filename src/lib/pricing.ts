@@ -1,5 +1,5 @@
 import {
-  isPeakTime,
+  isPeakTime, bookingEndMinutes,
   ALL_TIME_SLOTS,
   SLOT_DURATION_MINUTES,
   type StudioId,
@@ -154,17 +154,16 @@ export function calculatePrice(
   endTime: string
 ): { total: number; breakdown: PriceSlot[] } {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
-  const endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-
-  if (startIndex === -1 || endIndex === -1 || startIndex >= endIndex) {
+  const halfHours = (bookingEndMinutes(startTime, endTime) - (startIndex * SLOT_DURATION_MINUTES)) / SLOT_DURATION_MINUTES;
+  if (startIndex === -1 || (endTime !== "00:00" && ALL_TIME_SLOTS.indexOf(endTime) === -1) || halfHours <= 0) {
     return { total: 0, breakdown: [] };
   }
 
   const breakdown: PriceSlot[] = [];
 
-  for (let i = startIndex; i < endIndex; i++) {
-    const time = ALL_TIME_SLOTS[i];
-    const peak = isPeakTime(date, time);
+  for (let offset = 0; offset < halfHours; offset++) {
+    const time = ALL_TIME_SLOTS[(startIndex + offset) % ALL_TIME_SLOTS.length];
+    const peak = isPeakTime(date, time) || Number(time.slice(0, 2)) < 9;
     const rate = grid[studioId]?.[groupType]?.[peak ? "peak" : "offPeak"] ?? 0;
     breakdown.push({ time, isPeak: peak, rate });
   }
