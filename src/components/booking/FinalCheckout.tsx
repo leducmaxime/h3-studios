@@ -26,11 +26,12 @@ interface FinalCheckoutProps {
   /** Réduction aggregée du panier confirmée par le serveur (une seule ligne). */
   promoCode?: string | null;
   promoDiscount?: number;
+  loyaltyDiscount?: number;
 }
 
 const LINE_DISPLAY_PRICES_DEFAULT: Record<string, number> = {};
 
-export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displayPrices = LINE_DISPLAY_PRICES_DEFAULT, promoCode = null, promoDiscount = 0 }: FinalCheckoutProps) {
+export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displayPrices = LINE_DISPLAY_PRICES_DEFAULT, promoCode = null, promoDiscount = 0, loyaltyDiscount = 0 }: FinalCheckoutProps) {
   const { getEquipmentName } = useEquipment();
   const isPending = cart[0]?.paymentStatus === "pending";
   const isPaid = cart[0]?.paymentStatus === "paid";
@@ -173,6 +174,12 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
             <div className="flex items-center justify-between text-sm text-green-400">
               <span>Réduction{promoCode ? ` (${promoCode})` : ""}</span>
               <span>-<Price amount={promoDiscount} /></span>
+            </div>
+          )}
+          {loyaltyDiscount > 0 && (
+            <div className="flex items-center justify-between text-sm text-green-400">
+              <span>Ristourne fidélité</span>
+              <span>-<Price amount={loyaltyDiscount} /></span>
             </div>
           )}
           <TaxBreakdown ttc={total} />

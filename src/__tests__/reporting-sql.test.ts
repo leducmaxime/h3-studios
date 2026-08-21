@@ -29,6 +29,7 @@ beforeAll(() => {
       booking_ref TEXT,
       studio_id TEXT,
       band_name TEXT
+      ,loyalty_award_id TEXT
     );
     CREATE TABLE payments (
       id TEXT PRIMARY KEY,
@@ -152,8 +153,9 @@ describe("reporting SQL — applied discounts per-row clamp (M3)", () => {
 describe("reporting SQL — dashboard discount split", () => {
   const SPLIT_SQL = `
     SELECT
-      COALESCE(SUM(CASE WHEN promo_code IS NOT NULL AND TRIM(promo_code) != '' THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as promo_discounts,
-      COALESCE(SUM(CASE WHEN promo_code IS NULL OR TRIM(promo_code) = '' THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as manual_discounts
+      COALESCE(SUM(CASE WHEN loyalty_award_id IS NOT NULL THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as loyalty_discounts,
+      COALESCE(SUM(CASE WHEN loyalty_award_id IS NULL AND promo_code IS NOT NULL AND TRIM(promo_code) != '' THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as promo_discounts,
+      COALESCE(SUM(CASE WHEN loyalty_award_id IS NULL AND (promo_code IS NULL OR TRIM(promo_code) = '') THEN MIN(COALESCE(promo_discount, 0), MAX(total_price, 0)) ELSE 0 END), 0) as manual_discounts
     FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'`;
 
   it("splits promo and manual discounts, clamps, and excludes cancelled rows", () => {
@@ -165,10 +167,12 @@ describe("reporting SQL — dashboard discount split", () => {
     insertBooking("zero", 20, 0); db.prepare("UPDATE bookings SET promo_code = 'ZERO' WHERE id = 'zero'").run();
     insertBooking("clamped", 5, 10); db.prepare("UPDATE bookings SET promo_code = 'BIG' WHERE id = 'clamped'").run();
     insertBooking("cancelled", 50, 50, { status: "cancelled" });
-    const row = db.prepare(SPLIT_SQL).get("2026-01-01", "2026-01-31") as { promo_discounts: number; manual_discounts: number };
+    insertBooking("loyalty", 20, 7); db.prepare("UPDATE bookings SET loyalty_award_id = 'award-1' WHERE id = 'loyalty'").run();
+    const row = db.prepare(SPLIT_SQL).get("2026-01-01", "2026-01-31") as { loyalty_discounts: number; promo_discounts: number; manual_discounts: number };
     expect(row.promo_discounts).toBe(9); // 4 + 0 + min(10, 5)
     expect(row.manual_discounts).toBe(6); // 3 + 2 + 1
-    expect(row.promo_discounts + row.manual_discounts).toBe(15);
+    expect(row.loyalty_discounts).toBe(7);
+    expect(row.promo_discounts + row.manual_discounts + row.loyalty_discounts).toBe(22);
   });
 });
 

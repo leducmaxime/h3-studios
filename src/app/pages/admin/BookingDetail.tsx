@@ -66,6 +66,7 @@ import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
 interface BookingWithPromo extends DbBooking {
   promo_code_type?: string | null;
   promo_code_value?: number | null;
+  loyalty_award_id?: string | null;
 }
 import { generateInvoicePDF } from "@/lib/export";
 
@@ -834,7 +835,13 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                       </span>
                     </div>
                   )}
-                  {!booking.promo_code && booking.status === "cancelled" && booking.promo_discount > 0 && !editingDiscount && (
+                  {booking.loyalty_award_id && booking.status === "cancelled" && booking.promo_discount > 0 && !editingDiscount && (
+                    <div className="flex justify-between items-center text-primary">
+                      <span className="text-sm">Ristourne fidélité</span>
+                      <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
+                    </div>
+                  )}
+                  {!booking.promo_code && !booking.loyalty_award_id && booking.status === "cancelled" && booking.promo_discount > 0 && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
                       <span className="text-sm">Remise manuelle</span>
                       <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
@@ -842,7 +849,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   )}
                   {booking.status !== "cancelled" && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
-                      <span className="text-sm">Remise manuelle</span>
+                      <span className="text-sm">{booking.loyalty_award_id ? "Ristourne fidélité" : "Remise manuelle"}</span>
                       <span className="flex items-center gap-2"><span className="font-medium">{!booking.promo_code && booking.promo_discount > 0 ? `-${formatPrice(booking.promo_discount)}` : "—"}</span><Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}><Pencil className="h-3 w-3" /></Button></span>
                     </div>
                   )}
@@ -865,9 +872,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <Button size="sm" variant="ghost" onClick={() => setEditingDiscount(false)} className="h-7 text-xs px-2">✕</Button>
                         </div>
                       </div>
-                      {booking.promo_code && (
+                      {booking.loyalty_award_id ? (
+                        <p className="text-xs text-zinc-500">Cette remise manuelle remplacera la ristourne fidélité.</p>
+                      ) : booking.promo_code ? (
                         <p className="text-xs text-zinc-500">Cette remise remplacera le code promo {booking.promo_code}.</p>
-                      )}
+                      ) : null}
                     </div>
                   )}
                   {!isCancelled && overpayment > 0 && <p className="text-xs text-amber-400">Trop-perçu : {formatPrice(overpayment)} — utiliser le remboursement ci-dessous.</p>}

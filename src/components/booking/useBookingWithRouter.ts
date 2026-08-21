@@ -5,6 +5,7 @@ import { formatDateISO, getParisDateISO } from "@/lib/utils";
 import type { PricingData } from "@/lib/pricing";
 import type { ClientUser } from "@/lib/client-user";
 import { calculatePrice } from "@/lib/pricing";
+import { computeLoyaltyDiscount, type LoyaltyDiscountType } from "@/lib/loyalty";
 import { usePricing } from "./usePricing";
 import { useEquipment } from "./useEquipment";
 import { getClientAuthState, login as authLogin, logout as authLogout, refresh as refreshClientAuth, useClientAuth } from "@/lib/client-auth-store";
@@ -109,6 +110,7 @@ interface ExtendedBookingState extends BookingState {
   /** Réduction aggregée du panier confirmée par le serveur (dernier POST). */
   confirmedPromoCode: string | null;
   confirmedPromoDiscount: number;
+  confirmedLoyaltyDiscount: number;
   confirmedNetTotal: number | null;
   acceptedCgv: boolean;
 }
@@ -386,6 +388,7 @@ const initialState: ExtendedBookingState = {
   accountStatus: null,
   confirmedPromoCode: null,
   confirmedPromoDiscount: 0,
+  confirmedLoyaltyDiscount: 0,
   confirmedNetTotal: null,
   acceptedCgv: false,
 };
@@ -440,6 +443,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [cashNotAllowed, setCashNotAllowed] = useState(false);
+  const [loyaltyPreview, setLoyaltyPreview] = useState<{ configured: boolean; type: LoyaltyDiscountType; value: number; threshold: number; isDue: boolean } | null>(null);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing, gridFor } = usePricing();
   const allowCash = pricingLoading ? false : (pricingData?.allowCash ?? true);
   const { equipment: availableEquipment } = useEquipment();
@@ -951,6 +955,7 @@ export function useBookingWithRouter(urlStep?: string) {
         step: "panier",
         appliedPromo: null,
         promoDiscount: 0,
+        confirmedLoyaltyDiscount: 0,
         isAddingNew: false,
         duplicateError: null,
       };
@@ -1006,6 +1011,7 @@ export function useBookingWithRouter(urlStep?: string) {
       // Réduction aggregée du panier confirmée par le serveur (dernier POST).
       let confirmedPromoCode: string | null = null;
       let confirmedPromoDiscount = 0;
+      let confirmedLoyaltyDiscount = 0;
       let confirmedNetTotal: number | null = null;
 
       for (let i = 0; i < state.cart.length; i++) {
@@ -1065,7 +1071,7 @@ export function useBookingWithRouter(urlStep?: string) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        const json = await res.json() as { success: boolean; data?: { accountStatus?: string; promoCode?: string | null; promoDiscount?: number; netTotal?: number }; error?: string; code?: string };
+        const json = await res.json() as { success: boolean; data?: { accountStatus?: string; promoCode?: string | null; promoDiscount?: number; loyaltyDiscount?: number; netTotal?: number }; error?: string; code?: string };
         if (!json.success) {
           if (json.code === "cash-not-allowed") {
             setCashNotAllowed(true);
@@ -1090,6 +1096,7 @@ export function useBookingWithRouter(urlStep?: string) {
         if (i === state.cart.length - 1 && json.data) {
           confirmedPromoCode = typeof json.data.promoCode === "string" ? json.data.promoCode : null;
           confirmedPromoDiscount = Number(json.data.promoDiscount) || 0;
+          confirmedLoyaltyDiscount = Number(json.data.loyaltyDiscount) || 0;
           confirmedNetTotal = typeof json.data.netTotal === "number" ? json.data.netTotal : null;
         }
       }
@@ -1102,6 +1109,7 @@ export function useBookingWithRouter(urlStep?: string) {
             accountStatus: accountStatus || s.accountStatus,
             confirmedPromoCode,
             confirmedPromoDiscount,
+            confirmedLoyaltyDiscount,
             confirmedNetTotal: confirmedNetTotal ?? s.confirmedNetTotal,
             paymentMethod: method,
             step: "paiement",
@@ -1117,6 +1125,7 @@ export function useBookingWithRouter(urlStep?: string) {
           accountStatus: accountStatus || s.accountStatus,
           confirmedPromoCode,
           confirmedPromoDiscount,
+          confirmedLoyaltyDiscount,
           confirmedNetTotal: confirmedNetTotal ?? s.confirmedNetTotal,
           paymentMethod: method,
           cart: updatedCart,
@@ -1192,7 +1201,7 @@ export function useBookingWithRouter(urlStep?: string) {
     setCashNotAllowed(false);
     setState((s) => {
       const newCart = s.cart.filter((b) => b.id !== bookingId);
-      return { ...s, cart: newCart, appliedPromo: null, promoDiscount: 0 };
+      return { ...s, cart: newCart, appliedPromo: null, promoDiscount: 0, confirmedLoyaltyDiscount: 0 };
     });
   }, []);
 
@@ -1283,6 +1292,31 @@ export function useBookingWithRouter(urlStep?: string) {
     }, 0);
   }, [state.cart, gridFor]);
 
+  useEffect(() => {
+    if (!clientUser) {
+      setLoyaltyPreview(null);
+      return;
+    }
+    let active = true;
+    fetch("/api/client/loyalty")
+      .then((res) => res.ok ? res.json() : null)
+      .then((raw) => {
+        const json = raw as { success?: boolean; data?: { configured?: boolean; type?: LoyaltyDiscountType | null; value?: number; threshold?: number; isDue?: boolean } } | null;
+        if (!active) return;
+        const data = json?.success === true ? json.data : undefined;
+        setLoyaltyPreview(data?.configured && data.isDue && (data.type === "percentage" || data.type === "fixed")
+          ? { configured: true, type: data.type, value: Number(data.value) || 0, threshold: Number(data.threshold) || 0, isDue: true }
+          : null);
+      })
+      .catch(() => { if (active) setLoyaltyPreview(null); });
+    return () => { active = false; };
+  }, [clientUser]);
+
+  const loyaltyPreviewDiscount = useMemo(() => {
+    if (!loyaltyPreview || state.promoDiscount > 0) return 0;
+    return computeLoyaltyDiscount({ enabled: true, type: loyaltyPreview.type, value: loyaltyPreview.value, threshold: loyaltyPreview.threshold }, cartTotal);
+  }, [loyaltyPreview, state.promoDiscount, cartTotal]);
+
   const clearSubmitError = useCallback(() => setSubmitError(null), []);
 
   const canProceedToStudio = state.startTime !== null && state.endTime !== null;
@@ -1329,6 +1363,7 @@ export function useBookingWithRouter(urlStep?: string) {
     refetchPricing,
     gridFor,
     cartTotal,
+    loyaltyPreviewDiscount,
     canProceedToStudio,
     canConfirmBooking,
     bookingFieldIssues,

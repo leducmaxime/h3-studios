@@ -13,6 +13,7 @@ interface PaymentChoiceProps {
   subtotal: number;
   promoCode?: string;
   promoDiscount: number;
+  loyaltyDiscount?: number;
   onSelectMethod: (method: PaymentMethod) => void;
   onBack: () => void;
   acceptedCgv: boolean;
@@ -29,6 +30,7 @@ export function PaymentChoice({
   subtotal,
   promoCode,
   promoDiscount,
+  loyaltyDiscount = 0,
   onSelectMethod,
   acceptedCgv,
   onAcceptedCgvChange,
@@ -52,17 +54,25 @@ export function PaymentChoice({
       </div>
 
       <div className="space-y-2">
-        {promoDiscount > 0 && (
+        {(promoDiscount > 0 || loyaltyDiscount > 0) && (
           <>
             <div className="flex items-center justify-between text-sm text-white/70">
               <span>Sous-total</span>
               <span><Price amount={subtotal} /></span>
             </div>
-            <div className="flex items-center justify-between text-sm text-green-400">
-              <span>Réduction ({promoCode})</span>
-              <span>-<Price amount={promoDiscount} /></span>
-            </div>
+            {promoDiscount > 0 && (
+              <div className="flex items-center justify-between text-sm text-green-400">
+                <span>Réduction ({promoCode})</span>
+                <span>-<Price amount={promoDiscount} /></span>
+              </div>
+            )}
           </>
+        )}
+        {loyaltyDiscount > 0 && (
+          <div className="flex items-center justify-between text-sm text-green-400">
+            <span>Ristourne fidélité</span>
+            <span>-<Price amount={loyaltyDiscount} /></span>
+          </div>
         )}
         <TaxBreakdown ttc={total} />
         <div className="flex items-center justify-between">

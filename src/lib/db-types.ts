@@ -31,6 +31,7 @@ export interface DashboardStats {
   rangeRevenue: number;
   rangeDiscounts: number;
   rangePromoDiscounts: number;
+  rangeLoyaltyDiscounts: number;
   rangeManualDiscounts: number;
   rangeCancellations: number;
   rangeOverduePayments: number;
@@ -132,6 +133,10 @@ export interface DbUser {
   is_blocked: number;
   total_bookings: number;
   total_spent: number;
+  loyalty_enabled: number;
+  loyalty_discount_type: string | null;
+  loyalty_discount_value: number;
+  loyalty_threshold: number;
   /**
    * Agrégats d'export calculés côté serveur par `getUsers` (issue #61).
    * Optionnels : `getUserById` / `getUserByEmail` ne les renvoient pas.
@@ -190,6 +195,7 @@ export interface DbBooking {
   updated_at: string;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  loyalty_award_id?: string | null;
   /** INTEGER 0/1 — 1 si l'annulation conserve le solde dû. Défaut SQL 0. */
   keep_balance_due?: number;
   user_name: string | null;
