@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef, useId } from "react";
 import { ChevronLeft, Clock, ArrowRight } from "lucide-react";
 import {
   getStudioTimeSlots,
@@ -53,6 +53,17 @@ const STUDIO_LABELS: Record<StudioId, string> = {
 /** Shown on hover/focus for slots usable as an end but not a start. */
 const MIN_DURATION_HINT = "Durée minimum de réservation : 1 heure";
 
+// Slot grid tracks: auto-fill with a 44px minimum cell width, instead of the
+// old fixed `ceil(slots.length / 3)` column count. That formula was unbounded
+// — in a narrow container (admin reschedule modal) 31 slots forced 11
+// columns of ~29px cells for ~33px labels, and 48 slots (#77) would be
+// worse. Auto-fill derives the column count from the actual container width,
+// so ANY slots.length wraps to as many rows as needed while cells always fit
+// their content. 44px fits a "10h30" label at lg:text-xs (~34px) plus
+// borders, and the compact DÉBUT/FIN badge (~35px). Both studio grids occupy
+// equal-width tracks, so auto-fill also keeps their column counts identical.
+const SLOT_GRID_TEMPLATE = "repeat(auto-fill, minmax(44px, 1fr))";
+
 type SlotPresentation = { className: string; hint: string | null };
 
 // Softer variant of the normal free-slot hue: the slot stays in its color
@@ -88,6 +99,12 @@ export function TimeSlotPicker({
   const [selectedEnd, setSelectedEnd] = useState<string | null>(endTime);
   const [activeStudio, setActiveStudio] = useState<StudioId | null>(initialStudioId);
   const [hoveredSlot, setHoveredSlot] = useState<{ slot: string; studioId: StudioId } | null>(null);
+  // Slot hint (« Hors horaires », min-duration) currently disclosed by
+  // hover/focus. Rendered in ONE shared line per studio below the grid —
+  // never inside a 44px cell — so the text stays fully legible with zero
+  // per-cell overflow or neighbor overlap.
+  const [activeHint, setActiveHint] = useState<{ studioId: StudioId; text: string } | null>(null);
+  const hintIdBase = useId();
   // Set when the parent is cleared as part of an internal transition that
   // immediately rebuilds local selection state — the resulting prop sync
   // must not wipe it.
@@ -566,16 +583,6 @@ export function TimeSlotPicker({
     };
   }, [selectedStart, selectedEnd, activeStudio, groupType, date, pricingGrid]);
 
-  // Shared column count across both studios (max 3 rows each), rendered as
-  // one CSS grid per studio with fixed `minmax(0,1fr)` tracks: every slot
-  // cell — every row, both studios, every state — gets the exact same
-  // width. (The old flex rows stretched the cells of a partially-filled
-  // last row, and each studio used its own column count.)
-  const gridCols = Math.max(
-    1,
-    ...(["la-scene", "le-podium"] as StudioId[]).map((id) => Math.ceil(studioSlots[id].length / 3))
-  );
-
   const renderStudioBlock = (studioId: StudioId) => {
     const slots = studioSlots[studioId];
     const isActive = activeStudio === studioId;
@@ -626,15 +633,16 @@ export function TimeSlotPicker({
           </div>
         </div>
 
-        {/* Slot grid — max 3 rows. Skeleton while availability or the
+        {/* Slot grid — wraps to as many rows as the container width needs
+            (see SLOT_GRID_TEMPLATE). Skeleton while availability or the
             pricing grid loads (C7: gating on the grid also masks the
-            opening-hours race and guarantees exact geometry — same row/col
-            shape as the real buttons, so no layout shift). Studio headers
+            opening-hours race and guarantees exact geometry — same tracks
+            as the real buttons, so no layout shift). Studio headers
             and photos stay visible. */}
         {slotsLoading || (!pricingGrid && !pricingError) ? (
           <div
             className="grid gap-1.5"
-            style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+            style={{ gridTemplateColumns: SLOT_GRID_TEMPLATE }}
             aria-busy="true"
             aria-label="Chargement des créneaux"
           >
@@ -661,28 +669,14 @@ export function TimeSlotPicker({
         ) : (
         <div
           className="grid gap-1.5"
-          style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: SLOT_GRID_TEMPLATE }}
         >
-          {slots.map((slot, idx) => {
-            const rowIdx = Math.floor(idx / gridCols);
-            const colIdx = idx % gridCols;
+          {slots.map((slot) => {
             const { className: style, hint } = allowOverride
               ? getOverrideSlotStyle(slot, studioId)
               : getSlotStyle(slot, studioId);
             const isStart = selectedStart === slot && activeStudio === studioId;
             const isEnd = selectedEnd === slot && activeStudio === studioId;
-            // Tooltip flips below the slot on the first row so it never
-            // overlays the studio photo card above the grid.
-            const hintPlacement = rowIdx === 0 ? "top-full mt-1.5" : "bottom-full mb-1.5";
-            // Column-aware horizontal alignment to prevent overflow-hidden
-            // clipping on the first/last 1-2 columns of the grid.
-            const hintHorz =
-              colIdx < 2
-                ? "left-0"
-                : colIdx >= gridCols - 2
-                  ? "right-0"
-                  : "left-1/2 -translate-x-1/2";
-            const hintId = `slot-hint-${studioId}-${slot.replace(":", "")}`;
             // Mid-selection, the other studio previews this slot as a
             // potential new start — never as an end.
             const isStartPreview =
@@ -699,37 +693,45 @@ export function TimeSlotPicker({
                 type="button"
                 className={`group/slot relative box-border h-10 min-w-0 rounded-lg border transition-all duration-150 ${style}`}
                 onClick={() => handleSlotClick(slot, studioId)}
-                onMouseEnter={() => handleSlotMouseEnter(slot, studioId)}
-                onMouseLeave={handleSlotMouseLeave}
+                onMouseEnter={() => {
+                  handleSlotMouseEnter(slot, studioId);
+                  setActiveHint(hint ? { studioId, text: hint } : null);
+                }}
+                onMouseLeave={() => {
+                  handleSlotMouseLeave();
+                  setActiveHint(null);
+                }}
+                onFocus={() => {
+                  if (hint) setActiveHint({ studioId, text: hint });
+                }}
+                onBlur={() => setActiveHint(null)}
                 aria-disabled={!allowOverride && hint ? true : undefined}
-                aria-describedby={hint ? hintId : undefined}
+                aria-describedby={
+                  hint && activeHint?.studioId === studioId && activeHint.text === hint
+                    ? `${hintIdBase}-${studioId}`
+                    : undefined
+                }
               >
                 <div className="flex h-full items-center justify-center">
                   <span className="text-[11px] font-semibold leading-none lg:text-xs">
                     {formatHourLabel(slot)}
                   </span>
                 </div>
-                {hint && (
-                  <span
-                    id={hintId}
-                    role="tooltip"
-                    className={`pointer-events-none invisible absolute ${hintHorz} z-20 ${hintPlacement} whitespace-nowrap rounded-md border border-white/15 bg-zinc-900 px-2 py-1 text-[10px] font-medium text-white/80 opacity-0 shadow-lg transition-opacity duration-150 group-hover/slot:visible group-hover/slot:opacity-100 group-focus-visible/slot:visible group-focus-visible/slot:opacity-100`}
-                  >
-                    {hint}
-                  </span>
-                )}
                 {isStart && (
-                  <div className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold text-black">
+                  // Compact badge (~35px) capped to the cell width: it stays
+                  // inside the 44px-min cell footprint and can no longer
+                  // overlap neighboring cells or inflate the cell's overflow.
+                  <div className="absolute inset-x-0 top-0 z-10 overflow-hidden truncate rounded-b bg-primary px-0.5 py-0.5 text-center text-[8px] font-bold leading-none text-black">
                     DÉBUT
                   </div>
                 )}
                 {isEnd && (
-                  <div className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold text-black">
+                  <div className="absolute inset-x-0 top-0 z-10 overflow-hidden truncate rounded-b bg-primary px-0.5 py-0.5 text-center text-[8px] font-bold leading-none text-black">
                     FIN
                   </div>
                 )}
                 {isStartPreview && (
-                  <div className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-primary/70 px-1.5 py-0.5 text-[9px] font-bold text-black">
+                  <div className="absolute inset-x-0 top-0 z-10 overflow-hidden truncate rounded-b bg-primary/70 px-0.5 py-0.5 text-center text-[8px] font-bold leading-none text-black">
                     DÉBUT
                   </div>
                 )}
@@ -738,6 +740,18 @@ export function TimeSlotPicker({
           })}
         </div>
         )}
+
+        {/* Shared slot-hint line — the visible disclosure for « Hors horaires »
+            and the min-duration hint. In normal flow, outside the grid, with a
+            reserved line height: it can't overflow a cell, can't overlap the
+            row above/below, and shows nothing (but keeps its height) when no
+            hinted slot is hovered/focused. */}
+        <p
+          id={`${hintIdBase}-${studioId}`}
+          className="min-h-4 text-center text-[11px] leading-4 text-amber-200/80"
+        >
+          {activeHint?.studioId === studioId ? activeHint.text : ""}
+        </p>
 
         {/* Per-studio price legend — exact DB rates via the pricing grid.
             text-white/70 (pas /50) : l'opacité 0.6 de la mention « TTC/h » se
