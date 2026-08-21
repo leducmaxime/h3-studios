@@ -1,5 +1,5 @@
 import { type DbBooking, type DbUser, type DbPayment } from "./db-types";
-import { formatPrice, resolveEquipmentDisplay, timeToMinutes } from "./booking";
+import { formatPrice, resolveEquipmentDisplay, bookingEndMinutes, clockMinutes } from "./booking";
 import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
@@ -83,7 +83,7 @@ export function buildBookingsCSV(bookings: BookingWithUser[]): string {
     const clientIdentity = resolveBookingClientIdentity(booking, undefined);
     const studioName = studioLabel(booking.studio_id);
     
-    const durationHours = ((timeToMinutes(booking.end_time) - timeToMinutes(booking.start_time)) / 60).toFixed(1);
+    const durationHours = ((bookingEndMinutes(booking.start_time, booking.end_time) - clockMinutes(booking.start_time)) / 60).toFixed(1);
     const equipmentDisplay = resolveEquipmentDisplay(booking.equipment, booking.equipment_price);
     const options = equipmentDisplay.lines.map((line) => `${line.name || line.id} ×${line.quantity}`).join(" ; ") || "—";
 

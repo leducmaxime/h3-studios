@@ -11,7 +11,7 @@
  * du calendrier.
  */
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, type GroupType, type StudioId } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type GroupType, type StudioId } from "@/lib/booking";
 import { groupTypeLabel, studioLabelShort } from "@/lib/labels";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -86,8 +86,7 @@ export interface SlotRange {
 /** Bornes d'un créneau dans ALL_TIME_SLOTS ("00:00" = fin de journée). */
 export function computeSlotRange(startTime: string, endTime: string): SlotRange {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endIdx === -1) endIdx = ALL_TIME_SLOTS.length; // "00:00" minuit
+  const endIdx = bookingEndMinutes(startTime, endTime) / 30;
   return { startIdx, endIdx };
 }
 
@@ -96,10 +95,9 @@ export interface BookingRect {
   height: number;
 }
 
-/** Position verticale d'un bloc, alignée sur la grille horaire (départ 09:00). */
+/** Position verticale d'un bloc, alignée sur la grille 24h (départ 00:00). */
 export function layoutBookingBlock(range: SlotRange, pitch: number = PITCH): BookingRect {
-  const startBaseline = ALL_TIME_SLOTS.indexOf("09:00");
-  const top = (range.startIdx - startBaseline) * pitch;
+  const top = range.startIdx * pitch;
   const height = Math.max((range.endIdx - range.startIdx) * pitch, MIN_BLOCK_H);
   return { top, height };
 }

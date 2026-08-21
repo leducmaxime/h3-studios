@@ -27,7 +27,7 @@ import {
   type TopClientsResult,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
-import { ALL_TIME_SLOTS, STUDIO_HOURS, type StudioId } from "./booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type StudioId } from "./booking";
 import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
 
 export function buildLoyaltyCountsQuery(userId: string, nowValue: { dateISO: string; hours: number; minutes: number }): { sql: string; params: unknown[] } {
@@ -54,6 +54,25 @@ function normEnd(time: string): string {
 /** Clause SQL pour comparer end_time en traitant "00:00" comme "24:00" */
 function endCmp(alias: string): string {
   return `CASE WHEN ${alias}.end_time = '00:00' THEN '24:00' ELSE ${alias}.end_time END`;
+}
+
+/** SQL counterpart of bookingEndMinutes: all stored ranges become instants. */
+function sqlClockMinutes(column: string): string {
+  return `(CAST(substr(${column}, 1, 2) AS INTEGER) * 60 + CAST(substr(${column}, 4, 2) AS INTEGER))`;
+}
+function sqlBookingEndMinutes(alias: string): string {
+  const start = sqlClockMinutes(`${alias}.start_time`);
+  const end = sqlClockMinutes(`${alias}.end_time`);
+  return `(CASE WHEN ${alias}.end_time = '00:00' THEN 1440 WHEN ${end} <= ${start} THEN ${end} + 1440 ELSE ${end} END)`;
+}
+function sqlBookingStartInstant(alias: string): string {
+  return `datetime(${alias}.date, '+' || ${sqlClockMinutes(`${alias}.start_time`)} || ' minutes')`;
+}
+function sqlBookingEndInstant(alias: string): string {
+  return `datetime(${alias}.date, '+' || ${sqlBookingEndMinutes(alias)} || ' minutes')`;
+}
+function candidateRange(date: string, startTime: string, endTime: string): { date: string; start: number; end: number } {
+  return { date, start: clockMinutes(startTime), end: bookingEndMinutes(startTime, endTime) };
 }
 
 /**
@@ -229,9 +248,9 @@ export async function createBooking(
     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE NOT EXISTS (
       SELECT 1 FROM bookings
-      WHERE studio_id = ? AND date = ? AND status != 'cancelled'
-        AND start_time < ?
-        AND CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END > ?
+      WHERE studio_id = ? AND date BETWEEN date(?, '-1 day') AND date(?, '+1 day') AND status != 'cancelled'
+        AND ${sqlBookingStartInstant("bookings")} < datetime(?, '+' || ? || ' minutes')
+        AND ${sqlBookingEndInstant("bookings")} > datetime(?, '+' || ? || ' minutes')
     )
   `).bind(
     id, data.booking_ref, data.user_id, data.band_name, data.client_type, data.legal_name, data.siret, data.rna, data.instagram_accounts, data.studio_id, data.date,
@@ -240,7 +259,10 @@ export async function createBooking(
     data.equipment, data.payment_method, data.payment_status,
     data.notes, data.round_mode, data.promo_code || null, data.promo_discount, data.promo_type || null, timestamp, timestamp, data.cancelled_at, data.cancel_reason,
     // Paramètres pour le WHERE NOT EXISTS
-    data.studio_id, data.date, normEnd(data.end_time), data.start_time,
+    data.studio_id,
+    data.date, data.date,
+    data.date, candidateRange(data.date, data.start_time, data.end_time).end,
+    data.date, candidateRange(data.date, data.start_time, data.end_time).start,
   ).run();
 
   if (result.meta.changes === 0) {
@@ -323,7 +345,8 @@ export async function checkConflict(
   endTime: string,
   excludeBookingId?: string,
 ): Promise<DbBooking | null> {
-  const params: unknown[] = [studioId, date, normEnd(endTime), startTime];
+  const candidate = candidateRange(date, startTime, endTime);
+  const params: unknown[] = [studioId, date, date, candidate.date, candidate.end, candidate.date, candidate.start];
   let excludeClause = "";
 
   if (excludeBookingId) {
@@ -334,9 +357,9 @@ export async function checkConflict(
   // Treat "00:00" as "24:00" for string comparison — "00:00" means midnight/end of day
   return db.prepare(`
     SELECT * FROM bookings
-    WHERE studio_id = ? AND date = ? AND status != 'cancelled'
-      AND start_time < ?
-      AND CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END > ?
+    WHERE studio_id = ? AND date BETWEEN date(?, '-1 day') AND date(?, '+1 day') AND status != 'cancelled'
+      AND ${sqlBookingStartInstant("bookings")} < datetime(?, '+' || ? || ' minutes')
+      AND ${sqlBookingEndInstant("bookings")} > datetime(?, '+' || ? || ' minutes')
       ${excludeClause}
     LIMIT 1
   `).bind(...params).first<DbBooking>();

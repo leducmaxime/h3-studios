@@ -44,7 +44,7 @@ import {
 import { toast } from "sonner";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
-import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, parseBookingEquipmentLines, type StudioId, type GroupType } from "@/lib/booking";
+import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, parseBookingEquipmentLines, type StudioId, type GroupType } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, isKeepBalanceDue } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";

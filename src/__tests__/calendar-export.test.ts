@@ -35,13 +35,13 @@ const measure = (w: number) => ({ measureText: (s: string) => ({ width: s.length
 
 describe("computeSlotRange", () => {
   it("calcule les bornes dans ALL_TIME_SLOTS", () => {
-    expect(computeSlotRange("18:00", "20:00")).toEqual({ startIdx: 18, endIdx: 22 });
+    expect(computeSlotRange("18:00", "20:00")).toEqual({ startIdx: 36, endIdx: 40 });
   });
 
   it("traite 00:00 comme fin de journée", () => {
     const r = computeSlotRange("23:30", "00:00");
-    expect(r.startIdx).toBe(29);
-    expect(r.endIdx).toBe(30); // 00:00 est le 31e élément (index 30)
+    expect(r.startIdx).toBe(47);
+    expect(r.endIdx).toBe(48); // 00:00 reste une fin de journée explicite
   });
 });
 

@@ -195,10 +195,11 @@ const DocumentWithPath = ({
 
 function getSlotsForBooking(start: string, end: string): string[] {
   const startIdx = ALL_TIME_SLOTS.indexOf(start);
-  let endIdx = ALL_TIME_SLOTS.indexOf(end);
-  if (endIdx === -1 && end === "00:00") endIdx = ALL_TIME_SLOTS.length;
-  if (startIdx === -1 || endIdx === -1) return [];
-  return ALL_TIME_SLOTS.slice(startIdx, endIdx);
+  if (startIdx === -1 || (end !== "00:00" && ALL_TIME_SLOTS.indexOf(end) === -1)) return [];
+  const endMinutes = end === "00:00" ? 1440 : Number(end.slice(0, 2)) * 60 + Number(end.slice(3));
+  const startMinutes = Number(start.slice(0, 2)) * 60 + Number(start.slice(3));
+  const count = ((endMinutes <= startMinutes && end !== "00:00" ? endMinutes + 1440 : endMinutes) - startMinutes) / 30;
+  return Array.from({ length: count }, (_, offset) => ALL_TIME_SLOTS[(startIdx + offset) % ALL_TIME_SLOTS.length]);
 }
 
 function buildOpeningHoursMap(dbHours: DbOpeningHours[]): Record<string, Record<number, { open: string; close: string }>> {

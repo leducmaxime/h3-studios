@@ -18,9 +18,9 @@ describe("isOverrideRangeValid", () => {
     expect(isOverrideRangeValid("23:00", "00:00")).toBe(true);
   });
 
-  it("rejects equal or inverted ranges", () => {
+  it("rejects equal ranges and accepts an overnight range", () => {
     expect(isOverrideRangeValid("10:00", "10:00")).toBe(false);
-    expect(isOverrideRangeValid("12:00", "10:00")).toBe(false);
+    expect(isOverrideRangeValid("23:00", "03:00")).toBe(true);
   });
 
   it("rejects unknown times", () => {

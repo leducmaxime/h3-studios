@@ -76,13 +76,12 @@ export function mergeCartIntoSlots(
     if (!studioSlots) continue;
 
     const startIdx = TIME_SLOTS.indexOf(booking.startTime);
-    let endIdx = TIME_SLOTS.indexOf(booking.endTime);
-    // End-exclusive: "00:00" maps to TIME_SLOTS.length (past index 30),
-    // so the loop never reaches the "00:00" boundary slot.
-    if (endIdx === -1 && booking.endTime === "00:00") endIdx = TIME_SLOTS.length;
+    const endMinutes = booking.endTime === "00:00" ? 1440 : Number(booking.endTime.slice(0, 2)) * 60 + Number(booking.endTime.slice(3));
+    const startMinutes = Number(booking.startTime.slice(0, 2)) * 60 + Number(booking.startTime.slice(3));
+    const endIdx = (endMinutes === 1440 ? 48 : endMinutes <= startMinutes ? endMinutes / 30 + 48 : endMinutes / 30);
 
     for (let i = startIdx; i < endIdx; i++) {
-      const time = TIME_SLOTS[i];
+      const time = TIME_SLOTS[i % TIME_SLOTS.length];
       const slotIdx = studioSlots.findIndex((s) => s.time === time);
       if (slotIdx !== -1) {
         studioSlots[slotIdx] = {

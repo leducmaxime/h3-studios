@@ -74,10 +74,28 @@ export function parseBookingEquipmentLines(raw: string | null | undefined | unkn
   });
 }
 
-export function timeToMinutes(time: string): number {
-  if (time === "00:00") return 24 * 60;
+/** Minutes on the booking's anchor date. Unlike an end boundary, 00:00 is a
+ * perfectly valid start at minute zero. */
+export function clockMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
+}
+
+/**
+ * Resolve a booking end against its start. `00:00` is the historical
+ * end-of-day sentinel; any other end not after the start is on the following
+ * calendar day. This is the sole convention for persisted booking ranges.
+ */
+export function bookingEndMinutes(startTime: string, endTime: string): number {
+  const start = clockMinutes(startTime);
+  if (endTime === "00:00") return 24 * 60;
+  const end = clockMinutes(endTime);
+  return end < start ? end + 24 * 60 : end;
+}
+
+/** Legacy end-boundary helper. Do not use this for a booking start. */
+export function timeToMinutes(time: string): number {
+  return time === "00:00" ? 24 * 60 : clockMinutes(time);
 }
 
 /** Whether two half-open time ranges overlap (midnight is treated as 24:00). */
@@ -85,10 +103,10 @@ export function timeRangesOverlap(
   aStart: string, aEnd: string,
   bStart: string, bEnd: string,
 ): boolean {
-  const aStartMinutes = timeToMinutes(aStart);
-  const aEndMinutes = timeToMinutes(aEnd);
-  const bStartMinutes = timeToMinutes(bStart);
-  const bEndMinutes = timeToMinutes(bEnd);
+  const aStartMinutes = clockMinutes(aStart);
+  const aEndMinutes = bookingEndMinutes(aStart, aEnd);
+  const bStartMinutes = clockMinutes(bStart);
+  const bEndMinutes = bookingEndMinutes(bStart, bEnd);
   return aStartMinutes < bEndMinutes && aEndMinutes > bStartMinutes;
 }
 
@@ -303,13 +321,11 @@ export const STUDIOS: Record<StudioId, Studio> = {
 };
 
 // All possible 30-min slots across all studios (superset)
-export const ALL_TIME_SLOTS = [
-  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
-  "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
-  "18:00", "18:30", "19:00", "19:30", "20:00", "20:30",
-  "21:00", "21:30", "22:00", "22:30", "23:00", "23:30", "00:00",
-];
+/** Every half-hour start in a calendar day. 00:00 is a start, not an end. */
+export const ALL_TIME_SLOTS = Array.from({ length: 48 }, (_, index) => {
+  const minutes = index * 30;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+});
 
 // Per-studio, per-day opening hours
 // Day index: 0 = Sunday, 1 = Monday, ... 6 = Saturday
@@ -367,9 +383,16 @@ export function getStudioTimeSlots(studioId: StudioId, date: Date): string[] {
   const dayOfWeek = date.getDay();
   const hours = getOpeningHoursForStudio(studioId)[dayOfWeek];
   const openIdx = ALL_TIME_SLOTS.indexOf(hours.open);
-  const closeIdx = ALL_TIME_SLOTS.indexOf(hours.close);
+  const closeIdx = hours.close === "00:00" ? ALL_TIME_SLOTS.length : ALL_TIME_SLOTS.indexOf(hours.close);
   if (openIdx === -1 || closeIdx === -1) return [];
-  return ALL_TIME_SLOTS.slice(openIdx, closeIdx + 1);
+  // A configured close before open is an overnight opening window. Keep both
+  // portions rather than silently reporting the studio closed all day.
+  if (closeIdx < openIdx) {
+    return [...ALL_TIME_SLOTS.slice(0, closeIdx + 1), ...ALL_TIME_SLOTS.slice(openIdx)];
+  }
+  // Keep a non-midnight closing boundary for the existing picker; 00:00 is
+  // represented by the legacy end-time value and is never a grid boundary.
+  return ALL_TIME_SLOTS.slice(openIdx, Math.min(closeIdx + 1, ALL_TIME_SLOTS.length));
 }
 
 /** Get the union of time slots across all studios for a given date (used when no studio is selected yet) */
@@ -418,10 +441,8 @@ export function hasBookableRun(
 /** Nombre de créneaux entre deux heures (demi-heures), avec gestion de "00:00" = fin de journée */
 export function slotDurationSlots(startTime: string, endTime: string): number {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00" && endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-  if (startIdx === -1 || endIdx === -1) return 0;
-  return endIdx - startIdx;
+  if (startIdx === -1 || (endTime !== "00:00" && ALL_TIME_SLOTS.indexOf(endTime) === -1)) return 0;
+  return (bookingEndMinutes(startTime, endTime) - clockMinutes(startTime)) / SLOT_DURATION_MINUTES;
 }
 
 /** Durée en heures entre deux créneaux horaires */
@@ -601,7 +622,7 @@ export function isRangeBookable(
 ): { bookable: boolean; studioId?: StudioId } {
   const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
   let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.indexOf("00:00");
+  if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
 
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
     return { bookable: false };
@@ -729,19 +750,14 @@ export function isPeakTime(date: Date, time: string): boolean {
   const dayOfWeek = date.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
   const isHoliday = _publicHolidays.has(dateToParisISO(date));
-  if (hour === 0) return true;
-  return hour >= _peakStartHour || isWeekend || isHoliday;
+  // Late-night sessions (including 03:00→05:00) use the peak/night tariff.
+  return hour < 9 || hour >= _peakStartHour || isWeekend || isHoliday;
 }
 
 export function formatDuration(startTime: string, endTime: string): string {
   const startIndex = ALL_TIME_SLOTS.indexOf(startTime);
-  let endIndex = ALL_TIME_SLOTS.indexOf(endTime);
-  if (endTime === "00:00") endIndex = ALL_TIME_SLOTS.indexOf("00:00");
-
-  if (startIndex === -1 || endIndex === -1) return "";
-
-  const slots = endIndex - startIndex;
-  const totalMinutes = slots * SLOT_DURATION_MINUTES;
+  if (startIndex === -1 || (endTime !== "00:00" && ALL_TIME_SLOTS.indexOf(endTime) === -1)) return "";
+  const totalMinutes = bookingEndMinutes(startTime, endTime) - clockMinutes(startTime);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   
@@ -1157,9 +1173,8 @@ export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
   const durationHours = halfHours * 0.5;
 
   const startIdx = ALL_TIME_SLOTS.indexOf(input.startTime);
-  let endIdx = ALL_TIME_SLOTS.indexOf(input.endTime);
-  if (input.endTime === "00:00" && endIdx === -1) endIdx = ALL_TIME_SLOTS.length;
-  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+  const endMinutes = bookingEndMinutes(input.startTime, input.endTime);
+  if (startIdx === -1 || (input.endTime !== "00:00" && ALL_TIME_SLOTS.indexOf(input.endTime) === -1) || endMinutes <= clockMinutes(input.startTime)) {
     return { basePrice: 0, equipmentPrice: 0, totalPrice: 0, durationHours: 0, halfHours: 0, slotBreakdown: [], equipmentLines: [] };
   }
 
@@ -1169,10 +1184,11 @@ export function computeBookingQuote(input: BookingQuoteInput): BookingQuote {
 
   let basePrice = 0;
   const slotBreakdown: BookingQuote["slotBreakdown"] = [];
-  for (let i = startIdx; i < endIdx; i++) {
-    const slot = ALL_TIME_SLOTS[i];
+  for (let offset = 0; offset < halfHours; offset++) {
+    const slot = ALL_TIME_SLOTS[(startIdx + offset) % ALL_TIME_SLOTS.length];
     const hour = parseInt(slot.split(":")[0], 10);
-    const isPeak = hour >= input.peakStartHour || isWeekend || isHoliday;
+    // Product decision: every night hour is peak, regardless of peak_start_hour.
+    const isPeak = hour < 9 || hour >= input.peakStartHour || isWeekend || isHoliday;
     basePrice += isPeak ? input.peakRatePerHalfHour : input.offPeakRatePerHalfHour;
     slotBreakdown.push({ time: slot, isPeak });
   }
