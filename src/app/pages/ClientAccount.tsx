@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { navigate } from "rwsdk/client";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, User } from "lucide-react";
+import { CalendarDays, Clock, MapPin, Users, Music, ArrowRight, History, Plus, User, Gift } from "lucide-react";
 import { getParisDateISO } from "@/lib/utils";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue, shouldShowDisplayPaymentStatus, type DisplayPaymentStatus } from "@/lib/booking-totals";
 import { Price } from "@/components/common/Price";
@@ -28,6 +28,16 @@ interface BookingRow {
   total_refunded?: number;
   keep_balance_due?: number;
   remaining?: number;
+}
+
+interface LoyaltyData {
+  configured: boolean;
+  type: "percentage" | "fixed" | null;
+  value: number;
+  threshold: number;
+  counter: number;
+  remainingToNextAward: number;
+  isDue: boolean;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon?: React.ElementType }> = {
@@ -66,6 +76,7 @@ export function ClientAccount() {
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [loyalty, setLoyalty] = useState<LoyaltyData | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -80,6 +91,16 @@ export function ClientAccount() {
     }).catch(() => {
       window.location.href = "/mon-compte/connexion";
     });
+  }, [status, user?.id]);
+
+  useEffect(() => {
+    if (status === "loading" || !user) return;
+    fetch("/api/client/loyalty")
+      .then((response) => response.json() as Promise<{ success?: boolean; data?: LoyaltyData }>)
+      .then((result) => {
+        setLoyalty(result.success === true && result.data?.configured === true ? result.data : null);
+      })
+      .catch(() => setLoyalty(null));
   }, [status, user?.id]);
 
   const handleLogout = async () => {
@@ -151,6 +172,48 @@ export function ClientAccount() {
             </Button>
           </div>
         </div>
+
+        {loyalty && (
+          <section className="mb-10">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Gift className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="text-lg font-semibold text-white">Fidélité</h2>
+            </div>
+            <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-6">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400 text-sm">Remise fidélité</span>
+                {loyalty.type === "fixed" ? (
+                  <span className="font-semibold text-white"><Price amount={loyalty.value} /></span>
+                ) : loyalty.type === "percentage" ? (
+                  <span className="font-semibold text-white">{loyalty.value.toLocaleString("fr-FR")} %</span>
+                ) : null}
+              </div>
+              <div className="mt-5">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${loyalty.isDue ? 100 : Math.min(100, Math.round((loyalty.counter / loyalty.threshold) * 100))}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+                  <span>{loyalty.counter} / {loyalty.threshold} réservations</span>
+                  {loyalty.isDue ? (
+                    <span className="text-emerald-400">Seuil atteint</span>
+                  ) : (
+                    <span>Encore {loyalty.remainingToNextAward} réservation{loyalty.remainingToNextAward > 1 ? "s" : ""}</span>
+                  )}
+                </div>
+              </div>
+              {loyalty.isDue && (
+                <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
+                  Votre remise fidélité est disponible : elle s'appliquera automatiquement à votre prochaine réservation.
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="mb-10">
           <div className="flex items-center gap-3 mb-5">
