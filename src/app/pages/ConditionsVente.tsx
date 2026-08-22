@@ -3,7 +3,7 @@ import { COMPANY, LEGAL_UPDATED_AT, companyFullAddress } from "@/lib/company";
 export function ConditionsVente() {
   return (
     <div className="flex min-h-fit grow flex-col items-center pb-16 pt-32">
-      <div className="w-full max-w-3xl px-2 lg:px-4">
+      <div className="w-full max-w-5xl px-2 lg:px-4">
         <h1 className="mb-8 text-center font-blanka text-4xl lg:text-5xl">
           CONDITIONS DE VENTE
         </h1>
