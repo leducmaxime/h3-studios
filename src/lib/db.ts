@@ -442,6 +442,10 @@ export function buildUserFilterConditions(filters: UserFilters = {}): {
     conditions.push("u.client_type = ?");
     params.push(filters.clientType);
   }
+  if (filters.loyaltyEnabled !== undefined) {
+    conditions.push("u.loyalty_enabled = ?");
+    params.push(filters.loyaltyEnabled ? 1 : 0);
+  }
 
   if (filters.hasBookings !== undefined) {
     conditions.push(filters.hasBookings ? "COALESCE(s.total_bookings, 0) > 0" : "COALESCE(s.total_bookings, 0) = 0");

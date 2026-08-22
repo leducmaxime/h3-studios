@@ -23,4 +23,24 @@ describe("buildUserFilterConditions", () => {
     expect(result.conditions).toEqual(["u.is_blocked = ?", "u.client_type = ?"]);
     expect(result.params).toEqual([0, "association"]);
   });
+
+  it("filters by loyalty enabled", () => {
+    const result = buildUserFilterConditions({ loyaltyEnabled: true });
+
+    expect(result.conditions).toContain("u.loyalty_enabled = ?");
+    expect(result.params).toEqual([1]);
+  });
+
+  it("filters by loyalty disabled", () => {
+    const result = buildUserFilterConditions({ loyaltyEnabled: false });
+
+    expect(result.conditions).toContain("u.loyalty_enabled = ?");
+    expect(result.params).toEqual([0]);
+  });
+
+  it("does not add a loyalty condition when omitted", () => {
+    const result = buildUserFilterConditions({ isBlocked: true });
+
+    expect(result.conditions).not.toContain("u.loyalty_enabled = ?");
+  });
 });

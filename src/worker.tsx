@@ -2966,6 +2966,9 @@ const app = defineApp([
         const clientTypeRaw = url.searchParams.get("clientType");
         const clientType = isClientType(clientTypeRaw) ? clientTypeRaw : undefined;
 
+        const loyaltyParam = url.searchParams.get("loyalty");
+        const loyaltyEnabled = loyaltyParam === "true" ? true : loyaltyParam === "false" ? false : undefined;
+
         const sortByRaw = url.searchParams.get("sortBy") || undefined;
         const sortOrderRaw = url.searchParams.get("sortOrder") || undefined;
 
@@ -2981,7 +2984,7 @@ const app = defineApp([
 
         const result = await getUsers(
           env.DB,
-          { search, isBlocked, hasBookings, clientType, sortBy, sortOrder },
+          { search, isBlocked, hasBookings, clientType, loyaltyEnabled, sortBy, sortOrder },
           all ? 1 : page,
           all ? 9999 : limit,
         );

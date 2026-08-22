@@ -56,6 +56,7 @@ export function AdminUsers() {
   const [search, setSearch] = useState("");
   const [blockedFilter, setBlockedFilter] = useState<"all" | "blocked" | "active">("all");
   const [clientTypeFilter, setClientTypeFilter] = useState<"all" | "particulier" | "association" | "entreprise">("all");
+  const [loyaltyFilter, setLoyaltyFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [sortBy, setSortBy] = useState<"created_at" | "name" | "total_bookings" | "total_spent">("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -89,10 +90,11 @@ export function AdminUsers() {
     if (search) params.set("search", search);
     if (blockedFilter !== "all") params.set("blocked", blockedFilter === "blocked" ? "true" : "false");
     if (clientTypeFilter !== "all") params.set("clientType", clientTypeFilter);
+    if (loyaltyFilter !== "all") params.set("loyalty", loyaltyFilter === "enabled" ? "true" : "false");
     params.set("sortBy", sortBy);
     params.set("sortOrder", sortOrder);
     return params;
-  }, [page, perPage, search, blockedFilter, clientTypeFilter, sortBy, sortOrder]);
+  }, [page, perPage, search, blockedFilter, clientTypeFilter, loyaltyFilter, sortBy, sortOrder]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -387,6 +389,19 @@ export function AdminUsers() {
               {CLIENT_TYPES.map((t) => (
                 <option key={t} value={t}>{CLIENT_TYPE_RULES[t].label}</option>
               ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-400">Fidélité</span>
+            <select
+              value={loyaltyFilter}
+              onChange={(e) => { setLoyaltyFilter(e.target.value as typeof loyaltyFilter); setPage(1); setSelectedIds(new Set()); }}
+              aria-label="Filtrer par remise de fidélité"
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="all">Tous</option>
+              <option value="enabled">Activée</option>
+              <option value="disabled">Désactivée</option>
             </select>
           </div>
           <div className="flex items-center gap-1.5">

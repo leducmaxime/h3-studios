@@ -407,6 +407,7 @@ export interface UserFilters {
   isBlocked?: boolean;
   hasBookings?: boolean;
   clientType?: "particulier" | "association" | "entreprise";
+  loyaltyEnabled?: boolean;
   sortBy?: UserSortField;
   sortOrder?: UserSortOrder;
 }
