@@ -51,6 +51,14 @@ import { formatTaxBreakdown } from "@/lib/tax";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel, bookingStatusLabel } from "@/lib/labels";
 import { layoutBookingBlockOnDate } from "@/lib/calendar-export";
+import {
+  buildHourScale,
+  closedBandLabel,
+  hourBands,
+  isAnyStudioOpenDuringHour,
+  layoutScaledBlockOnDate,
+  minutesToY,
+} from "@/lib/calendar-scale";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -676,6 +684,9 @@ export function AdminCalendar() {
       border: "border-zinc-700/70",
     };
 
+    const scale = buildHourScale(weekDates);
+    const bands = hourBands(scale);
+
     return (
       <div className="overflow-x-auto">
         <div className="min-w-[900px] lg:min-w-[1100px]">
@@ -699,9 +710,17 @@ export function AdminCalendar() {
           <div className="grid grid-cols-[80px_repeat(7,_minmax(0,1fr))] lg:grid-cols-[100px_repeat(7,_minmax(0,1fr))]">
             <div className="border-r border-zinc-800 bg-zinc-950/30">
               <div className="border-b border-zinc-800" style={{ height: '23px' }} />
-              {VISIBLE_HOURS.map((hour) => (
-                <div key={hour} className="h-[60px] border-b border-zinc-800 pr-3 pt-1 text-right text-xs text-zinc-500">
-                  {hour}
+              {bands.map((band) => (
+                <div
+                  key={band.startHour}
+                  className={`border-b border-zinc-800 pr-2 pt-0.5 text-right ${
+                    band.open ? "text-xs text-zinc-500" : "bg-zinc-950/80 text-[10px] leading-tight text-zinc-600"
+                  }`}
+                  style={{ height: band.height }}
+                >
+                  {band.open
+                    ? `${String(band.startHour).padStart(2, "0")}:00`
+                    : closedBandLabel(band.startHour, band.endHour)}
                 </div>
               ))}
             </div>
@@ -728,10 +747,30 @@ export function AdminCalendar() {
                     </div>
                   </div>
 
-                  <div className="relative">
-                    {VISIBLE_HOURS.map((hour) => (
-                      <div key={hour} className="h-[60px] border-b border-zinc-800" />
+                  <div className="relative" style={{ height: scale.totalHeight }}>
+                    {bands.map((band) => (
+                      <div
+                        key={band.startHour}
+                        className={`border-b border-zinc-800 ${band.open ? "" : "bg-zinc-950/50"}`}
+                        style={{ height: band.height }}
+                      />
                     ))}
+
+                    {VISIBLE_HOURS.map((hour, hourIdx) => {
+                      if (isAnyStudioOpenDuringHour(date, hourIdx)) return null;
+                      return (
+                        <div
+                          key={`closed-${dateStr}-${hour}`}
+                          className="pointer-events-none absolute left-0 right-0"
+                          style={{
+                            top: scale.tops[hourIdx],
+                            height: scale.heights[hourIdx],
+                            backgroundImage:
+                              "repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 6px, transparent 6px, transparent 12px)",
+                          }}
+                        />
+                      );
+                    })}
 
                     {/* Clickable empty slots */}
                     {studios.map((studioId) => {
@@ -753,8 +792,15 @@ export function AdminCalendar() {
                           <a
                             key={`empty-${dateStr}-${studioId}-${hour}`}
                             href={`/admin/bookings/new?date=${dateStr}&studio=${studioId}&startTime=${hour}`}
-                            className="absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 hover:bg-primary/5"
-                            style={{ top: `${hourIdx * 60}px`, height: "60px", left: leftPos, width }}
+                            className={`absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 ${
+                              isAnyStudioOpenDuringHour(date, hourIdx) ? "hover:bg-primary/5" : "hover:bg-zinc-800/40"
+                            }`}
+                            style={{
+                              top: `${scale.tops[hourIdx]}px`,
+                              height: `${scale.heights[hourIdx]}px`,
+                              left: leftPos,
+                              width,
+                            }}
                             title={`Nouvelle réservation - ${studioLabel(studioId)} ${hour}`}
                           >
                             <Plus className="h-4 w-4 text-primary/40" />
@@ -779,7 +825,7 @@ export function AdminCalendar() {
                       return (
                         <div key={`${dateStr}-${studioId}`} className="contents">
                           {studioBlocked.map((slot) => {
-                            const rect = layoutBookingBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time);
+                            const rect = layoutScaledBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time, scale);
                             if (!rect) return null;
                             const { top, height } = rect;
 
@@ -806,7 +852,7 @@ export function AdminCalendar() {
                           })}
 
                           {studioBookings.map((booking) => {
-                            const rect = layoutBookingBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time);
+                            const rect = layoutScaledBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time, scale);
                             if (!rect) return null;
                             const { top, height } = rect;
                             const paymentColors = getPaymentStatusColor(booking);
@@ -851,7 +897,7 @@ export function AdminCalendar() {
                       );
 
                       return consultationBookings.map((booking) => {
-                        const rect = layoutBookingBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time);
+                        const rect = layoutScaledBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time, scale);
                         if (!rect) return null;
                         const { top, height } = rect;
 
@@ -870,33 +916,30 @@ export function AdminCalendar() {
                             className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
                             style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
                           >
-                            <p className="truncate text-[11px] font-medium leading-tight">
-                              {booking.start_time} · {groupTypeLabel(booking.group_type)}
-                            </p>
-                             <p className="truncate text-[10px] leading-tight opacity-90">
-                               {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                             <p className="truncate text-[11px] font-medium leading-tight">
+                               {booking.start_time} · {groupTypeLabel(booking.group_type)}
                              </p>
-                             {hasOptions(booking.equipment) && (
-                               <span className="inline-block rounded bg-primary/20 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary">Options</span>
-                             )}
-                           </button>
-                         );
-                       });
-                     })()}
+                              <p className="truncate text-[10px] leading-tight opacity-90">
+                                {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
+                              </p>
+                              {hasOptions(booking.equipment) && (
+                                <span className="inline-block rounded bg-primary/20 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary">Options</span>
+                              )}
+                            </button>
+                          );
+                        });
+                      })()}
 
                     {/* Current time indicator */}
                     {isToday && (() => {
                       const [h, m] = nowTime.split(":").map(Number);
-                      const startHour = parseInt(VISIBLE_HOURS[0].split(":")[0], 10);
-                      const totalMinutes = VISIBLE_HOURS.length * 60;
-                      const nowMinutes = (h - startHour) * 60 + m;
-                      if (nowMinutes < 0 || nowMinutes > totalMinutes) return null;
-                      const topPercent = (nowMinutes / totalMinutes) * 100;
+                      const nowMinutes = h * 60 + m;
+                      if (nowMinutes < 0 || nowMinutes > 24 * 60) return null;
                       return (
                         <div
                           key="now-line"
                           className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
-                          style={{ top: `${topPercent}%` }}
+                          style={{ top: `${minutesToY(nowMinutes, scale)}px` }}
                         >
                           <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
                           <div className="h-px flex-1 bg-red-500 opacity-80" />
@@ -952,6 +995,9 @@ export function AdminCalendar() {
       border: "border-zinc-700/70",
     };
 
+    const scale = buildHourScale([currentDate]);
+    const bands = hourBands(scale);
+
     return (
       <div className="overflow-x-auto">
         <div className="min-w-[350px]">
@@ -986,13 +1032,18 @@ export function AdminCalendar() {
                   </div>
 
                   {/* Time grid */}
-                  <div className="relative">
-                    {VISIBLE_HOURS.map((hour) => (
+                  <div className="relative" style={{ height: scale.totalHeight }}>
+                    {bands.map((band) => (
                       <div
-                        key={hour}
-                        className="h-[60px] border-b border-zinc-800/50 px-3 pt-1 text-xs text-zinc-600"
+                        key={band.startHour}
+                        className={`border-b border-zinc-800/50 px-3 pt-0.5 ${
+                          band.open ? "text-xs text-zinc-600" : "bg-zinc-950/50 text-[10px] leading-tight text-zinc-600"
+                        }`}
+                        style={{ height: band.height }}
                       >
-                        {hour}
+                        {band.open
+                          ? `${String(band.startHour).padStart(2, "0")}:00`
+                          : closedBandLabel(band.startHour, band.endHour)}
                       </div>
                     ))}
 
@@ -1013,8 +1064,15 @@ export function AdminCalendar() {
                         <a
                           key={`empty-${dateStr}-${studioId}-${hour}`}
                           href={`/admin/bookings/new?date=${dateStr}&studio=${studioId}&startTime=${hour}`}
-                          className="absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 hover:bg-primary/5"
-                          style={{ top: `${hourIdx * 60}px`, height: "60px", left: 0, width: "100%" }}
+                          className={`absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 ${
+                            isAnyStudioOpenDuringHour(currentDate, hourIdx) ? "hover:bg-primary/5" : "hover:bg-zinc-800/40"
+                          }`}
+                          style={{
+                            top: `${scale.tops[hourIdx]}px`,
+                            height: `${scale.heights[hourIdx]}px`,
+                            left: 0,
+                            width: "100%",
+                          }}
                           title={`Nouvelle réservation - ${studioLabel(studioId)} ${hour}`}
                         >
                           <Plus className="h-4 w-4 text-primary/40" />
@@ -1024,7 +1082,7 @@ export function AdminCalendar() {
 
                     {/* Blocked slots */}
                     {studioBlocked.map((slot) => {
-                      const rect = layoutBookingBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time);
+                      const rect = layoutScaledBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time, scale);
                       if (!rect) return null;
                       const { top, height } = rect;
 
@@ -1050,7 +1108,7 @@ export function AdminCalendar() {
 
                     {/* Bookings */}
                     {studioBookings.map((booking) => {
-                      const rect = layoutBookingBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time);
+                      const rect = layoutScaledBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time, scale);
                       if (!rect) return null;
                       const { top, height } = rect;
                       const paymentColors = getPaymentStatusColor(booking);
@@ -1091,7 +1149,7 @@ export function AdminCalendar() {
                           layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
                       )
                       .map((booking) => {
-                        const rect = layoutBookingBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time);
+                        const rect = layoutScaledBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time, scale);
                         if (!rect) return null;
                         const { top, height } = rect;
                         const leftPos = "4px";
@@ -1129,16 +1187,13 @@ export function AdminCalendar() {
                     {/* Current time indicator */}
                     {isToday && (() => {
                       const [h, m] = nowTime.split(":").map(Number);
-                      const startHour = parseInt(VISIBLE_HOURS[0].split(":")[0], 10);
-                      const totalMinutes = VISIBLE_HOURS.length * 60;
-                      const nowMinutes = (h - startHour) * 60 + m;
-                      if (nowMinutes < 0 || nowMinutes > totalMinutes) return null;
-                      const topPercent = (nowMinutes / totalMinutes) * 100;
+                      const nowMinutes = h * 60 + m;
+                      if (nowMinutes < 0 || nowMinutes > 24 * 60) return null;
                       return (
                         <div
                           key="now-line"
                           className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
-                          style={{ top: `${topPercent}%` }}
+                          style={{ top: `${minutesToY(nowMinutes, scale)}px` }}
                         >
                           <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
                           <div className="h-px flex-1 bg-red-500 opacity-80" />

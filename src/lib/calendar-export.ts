@@ -13,6 +13,15 @@
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type GroupType, type StudioId } from "@/lib/booking";
 import { groupTypeLabel, studioLabelShort } from "@/lib/labels";
+import {
+  buildHourScale,
+  closedBandLabel,
+  hourBands,
+  layoutScaledBlockOnDate,
+  CAL_EXPORT_CLOSED_HOUR_H,
+  CAL_EXPORT_OPEN_HOUR_H,
+  type HourScale,
+} from "@/lib/calendar-scale";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -298,9 +307,16 @@ export function dayGridWidth(opts: CalendarExportOptions): number {
   return TIME_GUTTER + cols * dayColumnWidth(opts.view);
 }
 
+function exportDates(opts: CalendarExportOptions): Date[] {
+  return opts.view === "day" ? [opts.currentDate] : opts.weekDates.slice(0, 7);
+}
+
+function exportHourScale(opts: CalendarExportOptions): HourScale {
+  return buildHourScale(exportDates(opts), CAL_EXPORT_OPEN_HOUR_H, CAL_EXPORT_CLOSED_HOUR_H);
+}
+
 function measureDayGrid(opts: CalendarExportOptions): GridSize {
-  const totalSlots = ALL_TIME_SLOTS.length;
-  const gridHeight = totalSlots * PITCH;
+  const gridHeight = exportHourScale(opts).totalHeight;
   const headerH = 44;
   const legendH = 40;
   const titleH = 56;
@@ -520,8 +536,9 @@ function renderDayGrid(ctx: CanvasRenderingContext2D, opts: CalendarExportOption
   const { bookings, blockedSlots } = opts;
   const studioCols: StudioId[] = ["la-scene", "le-podium"];
   const studioW = dayColumnWidth(opts.view);
-  const totalSlots = ALL_TIME_SLOTS.length;
-  const gridHeight = totalSlots * PITCH;
+  const scale = exportHourScale(opts);
+  const bands = hourBands(scale);
+  const gridHeight = scale.totalHeight;
   const titleH = 56;
   const headerH = 44;
   const gridTop = titleH + headerH;
@@ -529,7 +546,7 @@ function renderDayGrid(ctx: CanvasRenderingContext2D, opts: CalendarExportOption
 
   drawTitle(ctx, buildExportTitle(opts), width);
 
-  const dates = opts.view === "day" ? [opts.currentDate] : opts.weekDates.slice(0, 7);
+  const dates = exportDates(opts);
   const today = new Date();
 
   // En-têtes de colonnes (jours × studios)
@@ -558,19 +575,27 @@ function renderDayGrid(ctx: CanvasRenderingContext2D, opts: CalendarExportOption
   // Lignes horaires + labels
   ctx.strokeStyle = COLORS.borderSoft;
   ctx.lineWidth = 1;
-  for (let i = 0; i <= totalSlots; i++) {
-    const y = gridTop + i * PITCH;
+  for (const band of bands) {
+    const y = gridTop + band.top;
+    if (!band.open) {
+      ctx.fillStyle = "rgba(9,9,11,0.45)";
+      ctx.fillRect(TIME_GUTTER, y, width - TIME_GUTTER, band.height);
+    }
     ctx.beginPath();
     ctx.moveTo(TIME_GUTTER, y + 0.5);
     ctx.lineTo(width, y + 0.5);
     ctx.stroke();
-    if (i < totalSlots && i % 2 === 0) {
-      const hourLabel = ALL_TIME_SLOTS[i];
-      setFont(ctx, 12, 400);
-      ctx.fillStyle = COLORS.dim;
-      ctx.fillText(hourLabel, TIME_GUTTER - 12 - ctx.measureText(hourLabel).width, y + PITCH - 8);
-    }
+    const label = band.open
+      ? `${String(band.startHour).padStart(2, "0")}:00`
+      : closedBandLabel(band.startHour, band.endHour);
+    setFont(ctx, band.open ? 12 : 10, 400);
+    ctx.fillStyle = COLORS.dim;
+    ctx.fillText(label, TIME_GUTTER - 12 - ctx.measureText(label).width, y + Math.min(band.height, 16) - 2);
   }
+  ctx.beginPath();
+  ctx.moveTo(TIME_GUTTER, gridTop + gridHeight + 0.5);
+  ctx.lineTo(width, gridTop + gridHeight + 0.5);
+  ctx.stroke();
 
   // Séparateurs verticaux entre jours
   for (let i = 1; i < dates.length; i++) {
@@ -590,18 +615,18 @@ function renderDayGrid(ctx: CanvasRenderingContext2D, opts: CalendarExportOption
       const colW = studioW / 2;
       const x = colX + (studioId === "la-scene" ? 0 : colW);
       for (const slot of blockedFor(dateStr, studioId, blockedSlots)) {
-        const rect = layoutBookingBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time, PITCH);
+        const rect = layoutScaledBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time, scale);
         if (!rect) continue;
         drawBlockedSlot(ctx, x + 4, gridTop + rect.top, colW - 8, rect.height, slot.reason);
       }
       for (const b of bookingsFor(dateStr, studioId, bookings)) {
-        const rect = layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time, PITCH);
+        const rect = layoutScaledBlockOnDate(b.date, dateStr, b.start_time, b.end_time, scale);
         if (!rect) continue;
         drawBookingBlock(ctx, x + 4, gridTop + rect.top, colW - 8, rect.height, b);
       }
       for (const b of consultationsFor(dateStr, bookings)) {
         if (b.studio_id !== studioId) continue;
-        const rect = layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time, PITCH);
+        const rect = layoutScaledBlockOnDate(b.date, dateStr, b.start_time, b.end_time, scale);
         if (!rect) continue;
         drawBookingBlock(ctx, x + 4, gridTop + rect.top, colW - 8, rect.height, b);
       }
