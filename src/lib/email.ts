@@ -81,7 +81,7 @@ export function reminderWhenPhrase(days: number): string | null {
 export function reminderHeading(whenPhrase: string): string {
   if (whenPhrase === "aujourd'hui") return "C'est aujourd'hui !";
   if (whenPhrase === "demain") return "C'est demain !";
-  return whenPhrase.charAt(0).toUpperCase() + whenPhrase.slice(1);
+  return "Tic, Tac... Votre session approche !";
 }
 
 function formatDateFrench(dateStr: string): string {

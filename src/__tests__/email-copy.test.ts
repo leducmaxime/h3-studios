@@ -103,7 +103,7 @@ describe("booking reminder copy", () => {
     expect(reminderWhenPhrase(-1)).toBeNull();
     expect(reminderHeading("aujourd'hui")).toBe("C'est aujourd'hui !");
     expect(reminderHeading("demain")).toBe("C'est demain !");
-    expect(reminderHeading("dans 5 jours")).toBe("Dans 5 jours");
+    expect(reminderHeading("dans 5 jours")).toBe("Tic, Tac... Votre session approche !");
   });
 
   it("announces today / tomorrow / in X days and keeps the booking details", () => {
@@ -128,7 +128,7 @@ describe("booking reminder copy", () => {
       ...baseEmail,
       reminder: { whenPhrase: "dans 5 jours", remainingDue: 0 },
     });
-    expect(later).toContain("Dans 5 jours");
+    expect(later).toContain("Tic, Tac... Votre session approche !");
     expect(later).toContain("<strong>dans 5 jours</strong>");
   });
 
