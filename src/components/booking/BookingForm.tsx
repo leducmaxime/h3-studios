@@ -561,7 +561,7 @@ export function BookingForm({
     const showInvalidAccountHint = options?.invalidAccountValue === true && !error && !currentValueUsable;
     const required = requiredFields.includes(field.key);
     return (
-      <div key={field.key} className="flex flex-col gap-1.5">
+      <div key={field.key} className={`flex flex-col gap-1.5${field.key === "legalName" ? " lg:col-span-2" : ""}`}>
         <label htmlFor={field.key} className="text-sm font-medium text-white/70">
           {options?.label ?? bookingFieldLabel(field.key, clientType)}{" "}
           {required ? (
@@ -697,7 +697,7 @@ export function BookingForm({
               </div>
               <dl className="grid gap-x-6 gap-y-3 lg:grid-cols-2 lg:gap-y-4">
                 {filledAccountFieldDefinitions.map((field) => (
-                  <div key={field.key} className="min-w-0">
+                  <div key={field.key} className={`min-w-0${field.key === "legalName" ? " lg:col-span-2" : ""}`}>
                     <dt className="text-xs font-medium uppercase tracking-wide text-white/40">
                       {bookingFieldLabel(field.key, clientType)}
                     </dt>
