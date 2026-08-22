@@ -199,10 +199,8 @@ export function ClientAccount() {
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
                   <span>{loyalty.counter} / {loyalty.threshold} réservations</span>
-                  {loyalty.isDue ? (
+                  {loyalty.isDue && (
                     <span className="text-emerald-400">Seuil atteint</span>
-                  ) : (
-                    <span>En cours</span>
                   )}
                 </div>
               </div>
