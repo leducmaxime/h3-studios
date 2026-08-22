@@ -724,6 +724,7 @@ const app = defineApp([
           totalPrice: b.total_price,
           promoCode: b.promo_code,
           promoDiscount: b.promo_discount,
+          loyaltyAwardId: b.loyalty_award_id ?? null,
         })),
       };
       if (email) {

@@ -24,6 +24,7 @@ interface SessionBooking {
   totalPrice: number;
   promoCode: string | null;
   promoDiscount: number;
+  loyaltyAwardId: string | null;
 }
 
 interface SessionData {
@@ -128,11 +129,15 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
     ? [...session.bookings].sort((a, b) => `${a.date}T${a.startTime}`.localeCompare(`${b.date}T${b.startTime}`))
     : [];
 
-  // Réduction aggregée du panier (une seule ligne à côté du total) : le code
-  // promo est partagé par toutes les lignes du panier côté serveur.
-  const aggregatePromoDiscount = session
+  // Promo et fidélité partagent `promo_discount` ; le discriminateur est
+  // `loyaltyAwardId` (même split que payment-confirmation / FinalCheckout).
+  const aggregateDiscount = session
     ? session.bookings.reduce((sum, b) => sum + (Number(b.promoDiscount) || 0), 0)
     : 0;
+  const aggregateLoyaltyDiscount = session
+    ? session.bookings.reduce((sum, b) => sum + (b.loyaltyAwardId ? (Number(b.promoDiscount) || 0) : 0), 0)
+    : 0;
+  const aggregatePromoDiscount = aggregateDiscount - aggregateLoyaltyDiscount;
   const promoCode = session?.bookings.find((b) => b.promoCode)?.promoCode ?? null;
 
   return (
@@ -229,6 +234,12 @@ export function PaymentSuccess({ paymentId }: PaymentSuccessProps) {
                     <div className="flex items-center justify-between text-sm text-green-400">
                       <span>Réduction{promoCode ? ` (${promoCode})` : ""}</span>
                       <span>-<Price amount={aggregatePromoDiscount} /></span>
+                    </div>
+                  )}
+                  {aggregateLoyaltyDiscount > 0 && (
+                    <div className="flex items-center justify-between text-sm text-green-400">
+                      <span>Remise fidélité</span>
+                      <span>-<Price amount={aggregateLoyaltyDiscount} /></span>
                     </div>
                   )}
                   <TaxBreakdown ttc={session.amountTotal / 100} />
