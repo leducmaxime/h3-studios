@@ -4,6 +4,8 @@ import {
   isSlotOutsideOpeningHours,
   getAdminSlotWarnings,
   slotDurationSlots,
+  slotDurationHours,
+  slotsInBookingRange,
 } from "@/lib/booking";
 
 const tuesday = new Date(2026, 0, 6); // Jan 6, 2026 = Tuesday — la-scene 10:00–00:00
@@ -25,6 +27,14 @@ describe("isOverrideRangeValid", () => {
 
   it("rejects unknown times", () => {
     expect(isOverrideRangeValid("10:15", "11:00")).toBe(false);
+  });
+
+  it("calculates and lists overnight ranges", () => {
+    expect(slotDurationHours("23:00", "02:00")).toBe(3);
+    expect(slotsInBookingRange("23:00", "02:00")).toEqual([
+      "23:00", "23:30", "00:00", "00:30", "01:00", "01:30",
+    ]);
+    expect(slotsInBookingRange("23:00", "00:00")).toEqual(["23:00", "23:30"]);
   });
 });
 
@@ -60,5 +70,27 @@ describe("getAdminSlotWarnings", () => {
       occupiedTimes: [],
       todayISO: "2026-01-06",
     })).toEqual([]);
+  });
+
+  it("flags occupied and closed-hour slots in an overnight range", () => {
+    const occupiedWarnings = getAdminSlotWarnings({
+      date: tuesday,
+      startTime: "23:00",
+      endTime: "02:00",
+      studioId: "la-scene",
+      occupiedTimes: ["00:30"],
+      todayISO: "2026-01-01",
+    });
+    expect(occupiedWarnings).toContain("Chevauche une réservation ou un blocage existant");
+
+    const closedWarnings = getAdminSlotWarnings({
+      date: tuesday,
+      startTime: "23:00",
+      endTime: "02:00",
+      studioId: "la-scene",
+      occupiedTimes: [],
+      todayISO: "2026-01-01",
+    });
+    expect(closedWarnings).toContain("Hors horaires d'ouverture");
   });
 });

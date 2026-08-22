@@ -7,8 +7,8 @@ import { WeekCalendar } from "@/components/booking/WeekCalendar";
 import { TimeSlotPicker } from "@/components/booking/TimeSlotPicker";
 import { usePricing } from "@/components/booking/usePricing";
 import {
-  ALL_TIME_SLOTS,
   getAdminSlotWarnings,
+  slotsInBookingRange,
   type GroupType,
   type StudioId,
 } from "@/lib/booking";
@@ -100,13 +100,7 @@ export function AdminSlotPicker({
   // Warnings only — never blocking. Occupied times inside the selected range.
   const warnings = useMemo(() => {
     if (!selectedDate || !startTime || !endTime || !studioId) return [];
-    const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
-    let endIdx = ALL_TIME_SLOTS.indexOf(endTime);
-    if (endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
-    const inRange =
-      startIdx !== -1 && endIdx > startIdx
-        ? new Set(ALL_TIME_SLOTS.slice(startIdx, endIdx))
-        : new Set<string>();
+    const inRange = new Set(slotsInBookingRange(startTime, endTime));
     const occupiedTimes = (slotsByStudio[studioId] ?? [])
       .filter((s) => s.available === false && inRange.has(s.time))
       .map((s) => s.time);

@@ -445,6 +445,15 @@ export function slotDurationSlots(startTime: string, endTime: string): number {
   return (bookingEndMinutes(startTime, endTime) - clockMinutes(startTime)) / SLOT_DURATION_MINUTES;
 }
 
+/** Half-open slot list from start (inclusive) to end (exclusive), wrapping midnight. */
+export function slotsInBookingRange(startTime: string, endTime: string): string[] {
+  const startIdx = ALL_TIME_SLOTS.indexOf(startTime);
+  if (startIdx === -1 || (endTime !== "00:00" && ALL_TIME_SLOTS.indexOf(endTime) === -1)) return [];
+  const count = slotDurationSlots(startTime, endTime);
+  if (count < 1) return [];
+  return Array.from({ length: count }, (_, offset) => ALL_TIME_SLOTS[(startIdx + offset) % ALL_TIME_SLOTS.length]);
+}
+
 /** Durée en heures entre deux créneaux horaires */
 export function slotDurationHours(startTime: string, endTime: string): number {
   return slotDurationSlots(startTime, endTime) * 0.5;
@@ -484,11 +493,8 @@ export function getAdminSlotWarnings(input: {
   if (slotDurationSlots(input.startTime, input.endTime) < MIN_BOOKING_SLOTS) {
     warnings.push("Durée inférieure à 1 heure");
   }
-  const startIdx = ALL_TIME_SLOTS.indexOf(input.startTime);
-  let endIdx = ALL_TIME_SLOTS.indexOf(input.endTime);
-  if (input.endTime === "00:00") endIdx = ALL_TIME_SLOTS.length;
-  if (startIdx !== -1 && endIdx > startIdx) {
-    const selected = ALL_TIME_SLOTS.slice(startIdx, endIdx);
+  const selected = slotsInBookingRange(input.startTime, input.endTime);
+  if (selected.length > 0) {
     if (selected.some((time) => input.occupiedTimes.includes(time))) {
       warnings.push("Chevauche une réservation ou un blocage existant");
     }

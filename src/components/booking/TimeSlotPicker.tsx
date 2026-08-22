@@ -12,6 +12,8 @@ import {
   isPeakTime,
   isOverrideRangeValid,
   isSlotOutsideOpeningHours,
+  slotDurationHours,
+  slotsInBookingRange,
   type GroupType,
   type StudioId,
 } from "@/lib/booking";
@@ -524,29 +526,28 @@ export function TimeSlotPicker({
       const isSelectedStart = selectedStart === slot && isSameStudio;
       const isSelectedEnd = selectedEnd === slot && isSameStudio;
       const isPeak = studioHasPeakPricing(studioId) && isPeakTime(date, slot);
-      const visibleSlots = studioSlots[studioId];
-      const slotIdx = visibleSlots.indexOf(slot);
       const ok = (className: string, hint: string | null = null): SlotPresentation => ({ className, hint });
 
       if (isSelectedStart || isSelectedEnd) {
         return ok(isPeak ? "bg-primary/50 border-amber-400 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer" : "bg-primary/40 border-primary/60 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer");
       }
       if (selectionMode === "done" && isSameStudio && selectedStart && selectedEnd) {
-        const startIdx = visibleSlots.indexOf(selectedStart);
-        let endIdx = visibleSlots.indexOf(selectedEnd);
-        if (selectedEnd === "00:00") endIdx = visibleSlots.length;
-        if (slotIdx > startIdx && slotIdx < endIdx) return ok(isPeak ? "bg-primary/25 border-amber-400/50 cursor-pointer" : "bg-primary/20 border-primary/30 cursor-pointer");
+        const range = slotsInBookingRange(selectedStart, selectedEnd);
+        if (range.includes(slot) && slot !== selectedStart) return ok(isPeak ? "bg-primary/25 border-amber-400/50 cursor-pointer" : "bg-primary/20 border-primary/30 cursor-pointer");
       }
-      if (selectionMode === "end" && isSameStudio && selectedStart && slotIdx > visibleSlots.indexOf(selectedStart) && isOverrideRangeValid(selectedStart, slot)) {
-        const hoveredIdx = hoveredSlot?.studioId === studioId ? visibleSlots.indexOf(hoveredSlot.slot) : -1;
-        if (hoveredIdx > visibleSlots.indexOf(selectedStart) && slotIdx < hoveredIdx) return ok("bg-primary/30 border-primary/50 cursor-pointer");
+      if (selectionMode === "end" && isSameStudio && selectedStart && isOverrideRangeValid(selectedStart, slot)) {
+        const hoveredSlotOnStudio = hoveredSlot?.studioId === studioId ? hoveredSlot.slot : null;
+        if (hoveredSlotOnStudio && isOverrideRangeValid(selectedStart, hoveredSlotOnStudio)) {
+          const hoverRange = slotsInBookingRange(selectedStart, hoveredSlotOnStudio);
+          if (hoverRange.includes(slot) && slot !== selectedStart) return ok("bg-primary/30 border-primary/50 cursor-pointer");
+        }
         return ok(isPeak ? "bg-white/10 hover:bg-white/20 border-amber-400/50 hover:border-amber-400/80 cursor-pointer" : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer");
       }
       if (isBooked) return ok("bg-red-500/30 border-red-500/50 cursor-pointer hover:bg-red-500/45");
       if (isOutside) return ok("bg-white/[0.02] border-dashed border-white/15 text-white/40 cursor-pointer", "Hors horaires");
       return ok(isPeak ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 cursor-pointer" : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer");
     },
-    [checkSlotBooked, date, activeStudio, selectedStart, selectedEnd, studioHasPeakPricing, studioSlots, selectionMode, hoveredSlot]
+    [checkSlotBooked, date, activeStudio, selectedStart, selectedEnd, studioHasPeakPricing, selectionMode, hoveredSlot]
   );
 
   const formatHourLabel = (slot: string) => {
@@ -564,11 +565,7 @@ export function TimeSlotPicker({
   // Price info for active studio
   const priceInfo = useMemo(() => {
     if (!selectedStart || !selectedEnd || !activeStudio || !pricingGrid) return null;
-    const startIdx = ALL_TIME_SLOTS.indexOf(selectedStart);
-    let endIdx = ALL_TIME_SLOTS.indexOf(selectedEnd);
-    if (selectedEnd === "00:00") endIdx = ALL_TIME_SLOTS.length;
-    const durationSlots = endIdx - startIdx;
-    const durationHours = durationSlots * 0.5;
+    const durationHours = slotDurationHours(selectedStart, selectedEnd);
     const durationLabel = durationHours % 1 === 0 ? `${durationHours}h` : `${Math.floor(durationHours)}h30`;
 
     const price = calculatePrice(pricingGrid, activeStudio, groupType, date, selectedStart, selectedEnd).total;
