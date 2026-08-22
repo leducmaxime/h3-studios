@@ -17,7 +17,6 @@ import {
   LogOut,
   ArrowLeft,
   Ban,
-  CircleHelp,
 } from "lucide-react";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -28,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { subscribe } from "@/lib/navigation-events";
-import { HelpPanel } from "@/components/admin/HelpPanel";
 
 function usePathname() {
   return useSyncExternalStore(
@@ -66,8 +64,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [user, setUser] = useState<AdminUser | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const helpTriggerRef = useRef<HTMLButtonElement>(null);
   const currentPath = usePathname();
 
   useEffect(() => {
@@ -191,21 +187,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
-          <button
-            ref={helpTriggerRef}
-            type="button"
-            onClick={() => setHelpOpen((open) => !open)}
-            aria-expanded={helpOpen}
-            aria-controls="admin-help-panel"
-            aria-label="Aide"
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-zinc-800 hover:text-zinc-300 ${
-              helpOpen ? "bg-zinc-800 text-zinc-200" : "text-zinc-500"
-            }`}
-          >
-            <CircleHelp className="h-5 w-5" />
-            <span className="hidden sm:inline">Aide</span>
-          </button>
-          {user && (
+{user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -238,13 +220,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </DropdownMenu>
           )}
         </header>
-
-        <HelpPanel
-          open={helpOpen}
-          onOpenChange={setHelpOpen}
-          pathname={currentPath}
-          triggerRef={helpTriggerRef}
-        />
 
         {/* No overflow here: the body is the scroller, which keeps the sticky
             header anchored to the viewport and lets sticky bars inside admin
