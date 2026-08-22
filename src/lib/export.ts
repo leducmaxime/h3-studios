@@ -165,6 +165,7 @@ export function buildUsersCSV(users: DbUser[]): string {
     "Total dépensé HT (EUR)",
     "TVA 20% (EUR)",
     "Bloqué",
+    "Notes internes",
   ];
 
   const rows = users.map((user) => {
@@ -193,6 +194,7 @@ export function buildUsersCSV(users: DbUser[]): string {
       escapeCSV(formatPriceForCSV(spent.ht)),
       escapeCSV(formatPriceForCSV(spent.vat)),
       escapeCSV(user.is_blocked === 1 ? "Oui" : "Non"),
+      escapeCSV(user.notes || "—"),
     ].join(",");
   });
 

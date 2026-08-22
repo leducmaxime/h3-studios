@@ -121,4 +121,36 @@ describe("CSV builders", () => {
     expect(zero[header.indexOf("% La Scène")]).toBe("0.0");
     expect(zero[header.indexOf("% Le Podium")]).toBe("0.0");
   });
+
+  it("exports internal notes without shifting columns", () => {
+    const csv = buildUsersCSV([
+      user(),
+      user({ notes: 'VIP, "prioritaire"\nrappel: appeler' }),
+    ]);
+    const rows: string[][] = [];
+    let cells: string[] = [];
+    let cell = "";
+    let quoted = false;
+    for (let i = 0; i < csv.length; i++) {
+      const char = csv[i];
+      if (quoted) {
+        if (char === '"') {
+          if (csv[i + 1] === '"') { cell += '"'; i++; } else { quoted = false; }
+        } else cell += char;
+      } else if (char === '"') quoted = true;
+      else if (char === ",") { cells.push(cell); cell = ""; }
+      else if (char === "\n") { cells.push(cell); rows.push(cells); cells = []; cell = ""; }
+      else cell += char;
+    }
+    cells.push(cell);
+    if (cells.length > 1 || cells[0] !== "") rows.push(cells);
+
+    const [header, emptyNotes, withNotes] = rows;
+    const notesIndex = header.indexOf("Notes internes");
+    expect(notesIndex).toBeGreaterThan(-1);
+    expect(emptyNotes).toHaveLength(header.length);
+    expect(withNotes).toHaveLength(header.length);
+    expect(emptyNotes[notesIndex]).toBe("—");
+    expect(withNotes[notesIndex]).toBe('VIP, "prioritaire"\nrappel: appeler');
+  });
 });
