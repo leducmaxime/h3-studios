@@ -382,7 +382,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
       });
       const json = (await res.json()) as { success: boolean; data?: UserWithLoyalty; error?: string };
       if (json.success) {
-        toast.success(loyaltyForm.enabled ? "Ristourne de fidélité enregistrée" : "Ristourne de fidélité désactivée");
+        toast.success(loyaltyForm.enabled ? "Remise de fidélité enregistrée" : "Remise de fidélité désactivée");
         setLoyaltyEditing(false);
         // Refetch to get the refreshed loyalty progress object
         await fetchUser();
@@ -783,7 +783,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h2 className="font-semibold">Ristourne de fidélité</h2>
+                    <h2 className="font-semibold">Remise de fidélité</h2>
                     {loyaltyEnabled ? (
                       <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Activée</Badge>
                     ) : (
