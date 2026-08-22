@@ -13,14 +13,15 @@ export function readLoyaltyConfig(row: { loyalty_enabled?: number | null; loyalt
 export function isLoyaltyConfigured(config: LoyaltyConfig): boolean {
   return config.enabled && config.threshold >= 1 && config.value > 0 && (config.type === "percentage" || config.type === "fixed");
 }
-export function getLoyaltyProgress(config: LoyaltyConfig, pastEligibleBookings: number, awardsGranted: number): LoyaltyProgress {
+export function getLoyaltyProgress(config: LoyaltyConfig, pastEligibleBookings: number, awardsGranted: number, pastSinceLastAward?: number): LoyaltyProgress {
   const past = Math.max(0, Math.floor(pastEligibleBookings));
   const granted = Math.max(0, Math.floor(awardsGranted));
   const configured = isLoyaltyConfigured(config);
   const threshold = config.threshold;
-  const counter = configured ? Math.max(0, past - granted * threshold) : 0;
+  const cycle = Math.max(0, Math.floor(pastSinceLastAward ?? (past - granted * threshold)));
+  const counter = configured ? Math.min(threshold, cycle) : 0;
   const earnedAwards = configured ? Math.floor(past / threshold) : 0;
-  return { configured, threshold, pastEligibleBookings: past, awardsGranted: granted, earnedAwards, counter, remainingToNextAward: configured ? Math.max(0, threshold - counter) : 0, isDue: configured && earnedAwards > granted };
+  return { configured, threshold, pastEligibleBookings: past, awardsGranted: granted, earnedAwards, counter, remainingToNextAward: configured ? Math.max(0, threshold - counter) : 0, isDue: configured && cycle >= threshold };
 }
 export function computeLoyaltyDiscount(config: LoyaltyConfig, subtotal: number): number {
   const gross = Math.max(0, Number(subtotal) || 0);

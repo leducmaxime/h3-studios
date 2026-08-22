@@ -32,12 +32,16 @@ import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
 
 export function buildLoyaltyCountsQuery(userId: string, nowValue: { dateISO: string; hours: number; minutes: number }): { sql: string; params: unknown[] } {
   const direction = dateDirectionCondition("past", nowValue);
-  return { sql: `SELECT COUNT(CASE WHEN ${direction.sql} AND b.status IN ('confirmed','completed') THEN 1 END) as past_eligible, COUNT(DISTINCT CASE WHEN b.status != 'cancelled' THEN b.loyalty_award_id END) as awards_granted FROM bookings b WHERE b.user_id = ?`, params: [...direction.params, userId] };
+  const lastAwardEnd = `(SELECT MAX(${sqlBookingEndInstant("a")}) FROM bookings a WHERE a.user_id = b.user_id AND a.status != 'cancelled' AND a.loyalty_award_id IS NOT NULL)`;
+  return {
+    sql: `SELECT COUNT(CASE WHEN ${direction.sql} AND b.status IN ('confirmed','completed') THEN 1 END) as past_eligible, COUNT(DISTINCT CASE WHEN b.status != 'cancelled' THEN b.loyalty_award_id END) as awards_granted, COUNT(CASE WHEN ${direction.sql} AND b.status IN ('confirmed','completed') AND (${lastAwardEnd} IS NULL OR ${sqlBookingEndInstant("b")} > ${lastAwardEnd}) THEN 1 END) as past_since_award FROM bookings b WHERE b.user_id = ?`,
+    params: [...direction.params, ...direction.params, userId],
+  };
 }
-export async function getUserLoyaltyCounts(db: D1Database, userId: string): Promise<{ pastEligibleBookings: number; awardsGranted: number }> {
+export async function getUserLoyaltyCounts(db: D1Database, userId: string): Promise<{ pastEligibleBookings: number; awardsGranted: number; pastSinceLastAward: number }> {
   const q = buildLoyaltyCountsQuery(userId, getParisNow());
-  const row = await db.prepare(q.sql).bind(...q.params).first<{ past_eligible: number; awards_granted: number }>();
-  return { pastEligibleBookings: Number(row?.past_eligible) || 0, awardsGranted: Number(row?.awards_granted) || 0 };
+  const row = await db.prepare(q.sql).bind(...q.params).first<{ past_eligible: number; awards_granted: number; past_since_award: number }>();
+  return { pastEligibleBookings: Number(row?.past_eligible) || 0, awardsGranted: Number(row?.awards_granted) || 0, pastSinceLastAward: Number(row?.past_since_award) || 0 };
 }
 export async function claimLoyaltyAward(db: D1Database, args: { bookingId: string; userId: string; awardId: string; discount: number; expectedAwardsGranted: number }): Promise<boolean> {
   const result = await db.prepare(`UPDATE bookings SET promo_discount = ?, loyalty_award_id = ?, updated_at = ? WHERE id = ? AND user_id = ? AND (SELECT COUNT(DISTINCT loyalty_award_id) FROM bookings WHERE user_id = ? AND status != 'cancelled') = ?`).bind(args.discount, args.awardId, now(), args.bookingId, args.userId, args.userId, args.expectedAwardsGranted).run();

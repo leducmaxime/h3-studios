@@ -30,9 +30,9 @@ describe("fidélité — SQL D1", () => {
     add("a", "2000-08-19", "confirmed", "award-1"); add("b", "2000-08-18", "completed", "award-1");
     add("c", "2000-08-17", "no-show"); add("d", "2000-08-16", "cancelled", "award-2"); add("e", "2999-08-21");
     const q = buildLoyaltyCountsQuery("u", now);
-    const row = sqlite.prepare(q.sql).get(...(q.params as SQLInputValue[])) as { past_eligible: number; awards_granted: number };
-    expect(row).toEqual({ past_eligible: 2, awards_granted: 1 });
-    await expect(getUserLoyaltyCounts(db as unknown as D1Database, "u")).resolves.toEqual({ pastEligibleBookings: 2, awardsGranted: 1 });
+    const row = sqlite.prepare(q.sql).get(...(q.params as SQLInputValue[])) as { past_eligible: number; awards_granted: number; past_since_award: number };
+    expect(row).toEqual({ past_eligible: 2, awards_granted: 1, past_since_award: 0 });
+    await expect(getUserLoyaltyCounts(db as unknown as D1Database, "u")).resolves.toEqual({ pastEligibleBookings: 2, awardsGranted: 1, pastSinceLastAward: 0 });
   });
 
   it("réclamation concurrente : la seconde avec expectedAwardsGranted échoue et la ligne reste inchangée", async () => {
@@ -76,6 +76,15 @@ describe("fidélité — SQL D1", () => {
     sqlite.prepare("UPDATE bookings SET total_price=5, base_price=5 WHERE id='b'").run();
     expect(await getUserLoyaltyCounts(db as unknown as D1Database, "u")).toMatchObject({ awardsGranted: 1 });
     expect((sqlite.prepare("SELECT loyalty_award_id FROM bookings WHERE id='b'").get() as { loyalty_award_id: string }).loyalty_award_id).toBe("award-1");
+  });
+
+  it("après une remise, seules les réservations postérieures comptent pour le cycle suivant", async () => {
+    add("old-1", "2000-01-01");
+    add("old-2", "2000-01-02");
+    add("old-3", "2000-01-03");
+    add("rewarded", "2000-01-04", "confirmed", "award-1");
+    add("after-1", "2000-01-05");
+    expect(await getUserLoyaltyCounts(db as unknown as D1Database, "u")).toMatchObject({ pastEligibleBookings: 5, awardsGranted: 1, pastSinceLastAward: 1 });
   });
 
   it("attribution commune : getUserLoyaltyCounts additionne les réservations passées des deux comptes", async () => {

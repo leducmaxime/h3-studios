@@ -1380,7 +1380,7 @@ const app = defineApp([
           const loyaltyConfig = loyaltyUser ? readLoyaltyConfig(loyaltyUser) : null;
           if (loyaltyConfig && isLoyaltyConfigured(loyaltyConfig)) {
             const counts = await getUserLoyaltyCounts(env.DB, userId);
-            const progress = getLoyaltyProgress(loyaltyConfig, counts.pastEligibleBookings, counts.awardsGranted);
+            const progress = getLoyaltyProgress(loyaltyConfig, counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
             if (progress.isDue) {
               const discountTotal = computeLoyaltyDiscount(loyaltyConfig, cartSubtotal);
               let remaining = discountTotal;
@@ -3113,7 +3113,7 @@ const app = defineApp([
         const user = await getUserById(env.DB, id);
         if (!user) return jsonError("Utilisateur introuvable", 404);
         const counts = await getUserLoyaltyCounts(env.DB, id);
-        const progress = getLoyaltyProgress(readLoyaltyConfig(user), counts.pastEligibleBookings, counts.awardsGranted);
+        const progress = getLoyaltyProgress(readLoyaltyConfig(user), counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
         return jsonSuccess({ ...user, loyalty: { pastEligibleBookings: progress.pastEligibleBookings, awardsGranted: progress.awardsGranted, counter: progress.counter, remainingToNextAward: progress.remainingToNextAward, isDue: progress.isDue, threshold: progress.threshold } });
       } catch (error) {
         console.error("GET /api/admin/users/:id error:", error);
@@ -5352,7 +5352,7 @@ const app = defineApp([
     const config = readLoyaltyConfig(loyaltyUser ?? {});
     if (!isLoyaltyConfigured(config)) return jsonSuccess({ configured: false, type: null, value: 0, threshold: 0, counter: 0, remainingToNextAward: 0, isDue: false });
     const counts = await getUserLoyaltyCounts(env.DB, user.id);
-    const progress = getLoyaltyProgress(config, counts.pastEligibleBookings, counts.awardsGranted);
+    const progress = getLoyaltyProgress(config, counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
     return jsonSuccess({ configured: true, type: config.type, value: config.value, threshold: config.threshold, counter: progress.counter, remainingToNextAward: progress.remainingToNextAward, isDue: progress.isDue });
   }),
 

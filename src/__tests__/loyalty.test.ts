@@ -34,7 +34,7 @@ describe("fidélité — logique pure", () => {
 
   it("seuil relevé ne révoque pas une remise, seuil abaissé la rend immédiatement due", () => {
     expect(getLoyaltyProgress(config(4), 3, 1)).toMatchObject({ counter: 0, isDue: false });
-    expect(getLoyaltyProgress(config(2), 5, 1)).toMatchObject({ counter: 3, isDue: true });
+    expect(getLoyaltyProgress(config(2), 5, 1)).toMatchObject({ counter: 2, isDue: true });
   });
 
   it("priorités strictes manual > promo > loyalty : les trois combinaisons", () => {
@@ -47,6 +47,12 @@ describe("fidélité — logique pure", () => {
     expect(getLoyaltyProgress(config(3), 3, 0)).toMatchObject({ earnedAwards: 1, counter: 3, isDue: true });
     expect(getLoyaltyProgress(config(3), 3, 1)).toMatchObject({ earnedAwards: 1, counter: 0, isDue: false });
     expect(getLoyaltyProgress(config(3), 6, 1)).toMatchObject({ earnedAwards: 2, counter: 3, isDue: true });
+  });
+
+  it("un historique long n'affiche jamais plus que le seuil, et l'usage remet le cycle à zéro", () => {
+    expect(getLoyaltyProgress(config(4), 44, 0, 44)).toMatchObject({ counter: 4, isDue: true });
+    expect(getLoyaltyProgress(config(4), 44, 1, 0)).toMatchObject({ counter: 0, isDue: false });
+    expect(getLoyaltyProgress(config(4), 45, 1, 1)).toMatchObject({ counter: 1, isDue: false });
   });
 
   it("calcule les remises fixe et pourcentage, plafonnées et arrondies", () => {
