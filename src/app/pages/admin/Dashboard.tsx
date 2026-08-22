@@ -76,6 +76,12 @@ interface GroupTypePoint {
   revenue: number;
 }
 
+interface ClientTypePoint {
+  clientType: string;
+  count: number;
+  revenue: number;
+}
+
 interface PaymentPoint {
   key: string;
   method: string;
@@ -1026,6 +1032,8 @@ export function AdminDashboard() {
   const [occupancyData, setOccupancyData] = useState<OccupancyPoint[]>([]);
   const [studioData, setStudioData] = useState<StudioPoint[]>([]);
   const [groupTypeData, setGroupTypeData] = useState<GroupTypePoint[]>([]);
+  const [clientTypeData, setClientTypeData] = useState<ClientTypePoint[]>([]);
+  const [clientBreakdown, setClientBreakdown] = useState<"group" | "type">("group");
   const [paymentData, setPaymentData] = useState<PaymentPoint[]>([]);
   const [durationData, setDurationData] = useState<DurationPoint[]>([]);
   const [avgDurationMinutes, setAvgDurationMinutes] = useState(0);
@@ -1309,6 +1317,7 @@ export function AdminDashboard() {
           occupancy: OccupancyPoint[];
           studios: StudioPoint[];
           groupTypes: GroupTypePoint[];
+          clientTypes?: ClientTypePoint[];
           payments: PaymentPoint[];
           durations?: DurationPoint[];
           avgDurationMinutes?: number;
@@ -1319,6 +1328,7 @@ export function AdminDashboard() {
         setOccupancyData(chartsJson.data.occupancy);
         setStudioData(chartsJson.data.studios);
         setGroupTypeData(chartsJson.data.groupTypes);
+        setClientTypeData(Array.isArray(chartsJson.data.clientTypes) ? chartsJson.data.clientTypes : []);
         setPaymentData(chartsJson.data.payments);
         // Clés optionnelles : l'API peut ne pas encore les renvoyer.
         setDurationData(Array.isArray(chartsJson.data.durations) ? chartsJson.data.durations : []);
@@ -2058,12 +2068,34 @@ export function AdminDashboard() {
               })()}
             </ChartCard>
 
-            <ChartCard title="Répartition par type de client">
+            <ChartCard
+              title="Répartition par type de client"
+              action={
+                <div className="inline-flex shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+                  {([
+                    ["group", "Nombre"],
+                    ["type", "Type"],
+                  ] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setClientBreakdown(mode)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${clientBreakdown === mode ? "bg-primary/15 text-primary" : "text-zinc-400 hover:text-zinc-200"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              }
+            >
               {(() => {
-                const totalGroupTypeCount = groupTypeData.reduce((acc, g) => acc + g.count, 0);
-                const labels = groupTypeData.map((g) => {
-                  const pct = totalGroupTypeCount > 0 ? Math.round((g.count / totalGroupTypeCount) * 100) : 0;
-                  return { groupType: g.groupType, count: g.count, pct };
+                const points = clientBreakdown === "type"
+                  ? clientTypeData.map((c) => ({ name: c.clientType, count: c.count, revenue: c.revenue }))
+                  : groupTypeData.map((g) => ({ name: g.groupType, count: g.count, revenue: g.revenue }));
+                const totalCount = points.reduce((acc, p) => acc + p.count, 0);
+                const labels = points.map((p) => {
+                  const pct = totalCount > 0 ? Math.round((p.count / totalCount) * 100) : 0;
+                  return { name: p.name, count: p.count, pct };
                 });
 
                 return (
@@ -2072,19 +2104,19 @@ export function AdminDashboard() {
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={groupTypeData}
+                            data={points}
                             cx="50%"
                             cy="50%"
                             innerRadius="58%"
                             outerRadius="85%"
                             paddingAngle={3}
                             dataKey="count"
-                            nameKey="groupType"
+                            nameKey="name"
                             labelLine={false}
                             label={renderPiePercentLabel}
                           >
-                            {groupTypeData.map((g, i) => (
-                              <Cell key={g.groupType} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                            {points.map((p, i) => (
+                              <Cell key={p.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                             ))}
                           </Pie>
                           <Tooltip content={<PieTooltip />} />
@@ -2095,13 +2127,13 @@ export function AdminDashboard() {
                     <div className="w-full lg:w-1/2">
                       <div className="space-y-2">
                         {labels.map((l, i) => (
-                          <div key={l.groupType} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
+                          <div key={l.name} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
                             <div className="flex items-center gap-2">
                               <span
                                 className="h-2.5 w-2.5 rounded-full"
                                 style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                               />
-                              <span className="text-sm text-zinc-300">{l.groupType}</span>
+                              <span className="text-sm text-zinc-300">{l.name}</span>
                             </div>
                             <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
                           </div>

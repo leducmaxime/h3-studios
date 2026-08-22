@@ -1,7 +1,7 @@
 import { render, route, layout } from "rwsdk/router";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
 import { groupTypeLabel, paymentMethodLabelShort, studioLabel } from "@/lib/labels";
-import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
+import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, CLIENT_TYPE_RULES, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
@@ -4549,7 +4549,7 @@ const app = defineApp([
          WHERE rn IN ((cnt + 1) / 2, (cnt + 2) / 2)`,
       ).bind(fromStr, toStr);
 
-       const [occupancyResult, studioResult, groupTypeResult, onSitePaidResult, onlineCardResult, upcomingResult, durationRowsResult, avgDurationResult, medianDurationResult] = await env.DB.batch([
+       const [occupancyResult, studioResult, groupTypeResult, clientTypeResult, onSitePaidResult, onlineCardResult, upcomingResult, durationRowsResult, avgDurationResult, medianDurationResult] = await env.DB.batch([
          occupancyStmt,
         // Studio distribution
         env.DB.prepare(
@@ -4562,6 +4562,23 @@ const app = defineApp([
           `SELECT group_type, COUNT(*) as count, SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)) as revenue
            FROM bookings WHERE date >= ? AND date <= ? AND status != 'cancelled'
            GROUP BY group_type`,
+        ).bind(fromStr, toStr),
+        // Legal client type distribution (particulier / association / entreprise)
+        // — résolution identique à resolveBookingClientIdentity : snapshot d'abord,
+        //   profil utilisateur en repli, sinon particulier.
+        env.DB.prepare(
+          `SELECT
+             CASE
+               WHEN b.client_type IN ('particulier', 'association', 'entreprise') THEN b.client_type
+               WHEN u.client_type IN ('particulier', 'association', 'entreprise') THEN u.client_type
+               ELSE 'particulier'
+             END as client_type,
+             COUNT(*) as count,
+             SUM(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0)) as revenue
+           FROM bookings b
+           LEFT JOIN users u ON b.user_id = u.id
+           WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled'
+           GROUP BY 1`,
         ).bind(fromStr, toStr),
         env.DB.prepare(
           `SELECT
@@ -4621,6 +4638,7 @@ const app = defineApp([
       type BookingSlotRow = { date: string; studio_id: string; start_time: string; end_time: string };
       type StudioRow = { studio_id: string; count: number; revenue: number };
       type GroupTypeRow = { group_type: string; count: number; revenue: number };
+      type ClientTypeRow = { client_type: string; count: number; revenue: number };
       type PaymentRow = { method: string; count: number; revenue: number };
       type OnlineCardRow = { count: number; revenue: number };
       type DurationRow = { slots: number; count: number; total_minutes: number };
@@ -4744,6 +4762,18 @@ const app = defineApp([
         revenue: groupTypeCounts[groupType]?.revenue ?? 0,
       }));
 
+      const clientTypeCounts: Record<string, { count: number; revenue: number }> = {};
+      for (const row of clientTypeResult.results as unknown as ClientTypeRow[]) {
+        clientTypeCounts[row.client_type] = { count: row.count ?? 0, revenue: row.revenue ?? 0 };
+      }
+      // Ordre fixe + entrées à zéro : le donut garde des couleurs stables même
+      // quand un type de client n'a aucune réservation sur la période.
+      const clientTypeData = (["particulier", "association", "entreprise"] as const).map((clientType) => ({
+        clientType: CLIENT_TYPE_RULES[clientType].label,
+        count: clientTypeCounts[clientType]?.count ?? 0,
+        revenue: clientTypeCounts[clientType]?.revenue ?? 0,
+      }));
+
       const onSitePayments = (onSitePaidResult.results as unknown as PaymentRow[]);
       const onlineCard = (onlineCardResult.results as unknown as OnlineCardRow[])[0] ?? { count: 0, revenue: 0 };
       const merged: Record<string, { count: number; revenue: number }> = {};
@@ -4795,6 +4825,7 @@ const app = defineApp([
         occupancy: occupancyData,
         studios: studioData,
         groupTypes: groupTypeData,
+        clientTypes: clientTypeData,
         payments: paymentData,
         upcomingBookings: upcomingResult.results,
         durations,
