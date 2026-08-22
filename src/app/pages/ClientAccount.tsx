@@ -202,7 +202,7 @@ export function ClientAccount() {
                   {loyalty.isDue ? (
                     <span className="text-emerald-400">Seuil atteint</span>
                   ) : (
-                    <span>Encore {loyalty.remainingToNextAward} réservation{loyalty.remainingToNextAward > 1 ? "s" : ""}</span>
+                    <span>Plus que {loyalty.remainingToNextAward} réservation{loyalty.remainingToNextAward > 1 ? "s" : ""} terminée{loyalty.remainingToNextAward > 1 ? "s" : ""} pour obtenir votre remise fidélité de {loyalty.type === "fixed" ? <Price amount={loyalty.value} /> : `${loyalty.value.toLocaleString("fr-FR")} %`}</span>
                   )}
                 </div>
               </div>
