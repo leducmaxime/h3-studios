@@ -26,8 +26,10 @@ describe("buildEmailHtml copy", () => {
     expect(output).toContain("Si vous avez choisi le paiement sur place, le montant de la réservation reste intégralement dû");
     expect(output).toContain("06.13.44.08.75");
     expect(output).toContain("https://search.google.com/local/writereview?placeid=ChIJi9IayzcL5kcRKCQIsydm0kA");
-    expect(output).toContain("Partager mon expérience");
-    expect(output).toContain("Votre séance vous a plu ?");
+    expect(output).toContain("Laisser un avis Google");
+    expect(output).toContain("Après votre répétition");
+    expect(output).toContain("le plus beau soutien que vous puissiez nous apporter");
+    expect(output).toContain("Cela prend moins d'une minute");
   });
 
   it("mentions the remaining amount only when keepBalanceDue", () => {

@@ -468,12 +468,13 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
                 <tr>
                   <td style="background-color:#111111;border:1px solid #facc15;border-radius:10px;padding:16px 24px;text-align:center;">
-                    <p style="margin:0 0 4px 0;color:#facc15;font-size:15px;font-weight:700;">Votre séance vous a plu ?</p>
-                    <p style="margin:0 0 12px 0;color:#aaaaaa;font-size:12px;">Partagez votre expérience : votre avis nous aide à faire connaître H3 Studios aux artistes qui cherchent leur prochain lieu de répétition.</p>
+                    <p style="margin:0 0 8px 0;color:#facc15;font-size:15px;font-weight:700;">Après votre répétition</p>
+                    <p style="margin:0 0 8px 0;color:#dddddd;font-size:13px;line-height:1.5;">Si vous avez apprécié votre expérience, le plus beau soutien que vous puissiez nous apporter est de nous laisser un avis Google ⭐</p>
+                    <p style="margin:0 0 14px 0;color:#aaaaaa;font-size:12px;line-height:1.5;">Cela prend moins d'une minute et aide énormément H3 Studios à se faire connaître auprès d'autres musiciens. Un petit rien qui fait toute la différence 💜</p>
                     <table border="0" cellspacing="0" cellpadding="0" style="margin:0 auto;">
                       <tr>
                         <td align="center" bgcolor="#facc15" style="border-radius:8px;padding:10px 18px;">
-                          <a href="https://search.google.com/local/writereview?placeid=ChIJi9IayzcL5kcRKCQIsydm0kA" target="_blank" rel="noopener noreferrer" style="display:block;font-size:13px;font-weight:700;color:#0a0a0a;text-decoration:none;">Partager mon expérience</a>
+                          <a href="https://search.google.com/local/writereview?placeid=ChIJi9IayzcL5kcRKCQIsydm0kA" target="_blank" rel="noopener noreferrer" style="display:block;font-size:13px;font-weight:700;color:#0a0a0a;text-decoration:none;">Laisser un avis Google</a>
                         </td>
                       </tr>
                     </table>
