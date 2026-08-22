@@ -23,6 +23,7 @@ import {
   Trash2,
   Undo2,
   Mail,
+  Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,7 +49,7 @@ import {
 } from "@/components/ui/select";
 import { STUDIOS, formatPrice, slotDurationHours, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
-import { formatDbTimestamp } from "@/lib/utils";
+import { formatDbTimestamp, getParisDateISO } from "@/lib/utils";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus, shouldShowDisplayPaymentStatus } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel } from "@/lib/labels";
@@ -178,6 +179,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [noShowLoading, setNoShowLoading] = useState(false);
 
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
 
   // Notes editing
   const [editingNotes, setEditingNotes] = useState(false);
@@ -324,6 +326,26 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       toast.error("Erreur réseau");
     } finally {
       setResendingEmail(false);
+    }
+  };
+
+  const handleSendReminder = async () => {
+    if (!booking) return;
+    setSendingReminder(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/send-reminder`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as { success: boolean; error?: string; data?: { to?: string } };
+      if (json.success) {
+        toast.success(json.data?.to ? `Rappel envoyé à ${json.data.to}` : "Email de rappel envoyé");
+      } else {
+        toast.error(json.error || "Erreur lors de l'envoi");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setSendingReminder(false);
     }
   };
 
@@ -579,6 +601,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   // Présentation du paiement : le statut d'affichage tient compte du solde
   // conservé sur une réservation annulée.
   const isCancelled = booking.status === "cancelled";
+  const isPastBooking = booking.date < getParisDateISO();
   const displayPaymentStatus = getDisplayPaymentStatus(booking, payments);
 
   return (
@@ -1200,6 +1223,24 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               >
                 {resendingEmail ? <Loader2 className="mr-3 h-4 w-4 animate-spin text-zinc-400" /> : <Mail className="mr-3 h-4 w-4 text-zinc-400" />}
                 Renvoyer l&apos;email de confirmation
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
+                onClick={handleSendReminder}
+                disabled={sendingReminder || isCancelled || isPastBooking || !user?.email}
+                title={
+                  isCancelled
+                    ? "Impossible d'envoyer un rappel pour une réservation annulée"
+                    : isPastBooking
+                      ? "Impossible d'envoyer un rappel pour une réservation passée"
+                      : !user?.email
+                        ? "Le client n'a pas d'adresse e-mail"
+                        : undefined
+                }
+              >
+                {sendingReminder ? <Loader2 className="mr-3 h-4 w-4 animate-spin text-zinc-400" /> : <Bell className="mr-3 h-4 w-4 text-zinc-400" />}
+                Envoyer un email de rappel
               </Button>
               <Button
                 variant="outline"

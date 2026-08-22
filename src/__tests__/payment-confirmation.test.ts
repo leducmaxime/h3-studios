@@ -6,7 +6,9 @@ import {
   partitionBookingsForFinalization,
   buildPaidConfirmationEmailPayload,
   buildBookingConfirmationEmailPayload,
+  buildBookingReminderEmailPayload,
   canResendBookingConfirmation,
+  canSendBookingReminder,
   finalizePaidCheckoutSession,
   type FinalizePaidSessionDeps,
 } from "@/lib/payment-confirmation";
@@ -250,6 +252,66 @@ describe("buildBookingConfirmationEmailPayload / canResendBookingConfirmation", 
     });
     expect(canResendBookingConfirmation(makeBooking({ status: "completed" }), USER.email)).toEqual({ ok: true });
     expect(canResendBookingConfirmation(makeBooking({ status: "no-show" }), USER.email)).toEqual({ ok: true });
+  });
+
+  it("allows upcoming reminders and blocks cancelled, past, or email-less bookings", () => {
+    expect(canSendBookingReminder(makeBooking({ date: "2026-08-22" }), USER.email, "2026-08-22")).toEqual({
+      ok: true,
+      whenPhrase: "aujourd'hui",
+    });
+    expect(canSendBookingReminder(makeBooking({ date: "2026-08-23" }), USER.email, "2026-08-22")).toEqual({
+      ok: true,
+      whenPhrase: "demain",
+    });
+    expect(canSendBookingReminder(makeBooking({ date: "2026-08-27" }), USER.email, "2026-08-22")).toEqual({
+      ok: true,
+      whenPhrase: "dans 5 jours",
+    });
+    expect(canSendBookingReminder(makeBooking({ status: "cancelled", date: "2026-08-27" }), USER.email, "2026-08-22")).toEqual({
+      ok: false,
+      error: "Impossible d'envoyer un rappel pour une réservation annulée",
+    });
+    expect(canSendBookingReminder(makeBooking({ date: "2026-08-21" }), USER.email, "2026-08-22")).toEqual({
+      ok: false,
+      error: "Impossible d'envoyer un rappel pour une réservation passée",
+    });
+    expect(canSendBookingReminder(makeBooking({ date: "2026-08-27" }), "  ", "2026-08-22")).toEqual({
+      ok: false,
+      error: "Le client n'a pas d'adresse e-mail",
+    });
+  });
+
+  it("puts only the remaining balance on the reminder payload", () => {
+    const booking = makeBooking({
+      date: "2026-08-27",
+      total_price: 80,
+      promo_discount: 10,
+      payment_method: "cash",
+      payment_status: "pay-on-site",
+    });
+    const unpaid = buildBookingReminderEmailPayload({
+      booking,
+      user: USER,
+      payments: [],
+      whenPhrase: "dans 5 jours",
+    });
+    expect(unpaid.reminder).toEqual({ whenPhrase: "dans 5 jours", remainingDue: 70 });
+
+    const partial = buildBookingReminderEmailPayload({
+      booking,
+      user: USER,
+      payments: [{ amount: 40, status: "paid", refunded_amount: 0 }],
+      whenPhrase: "demain",
+    });
+    expect(partial.reminder).toEqual({ whenPhrase: "demain", remainingDue: 30 });
+
+    const settled = buildBookingReminderEmailPayload({
+      booking,
+      user: USER,
+      payments: [{ amount: 70, status: "paid", refunded_amount: 0 }],
+      whenPhrase: "aujourd'hui",
+    });
+    expect(settled.reminder).toEqual({ whenPhrase: "aujourd'hui", remainingDue: 0 });
   });
 });
 

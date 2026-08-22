@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { buildCancellationEmailHtml, buildEmailHtml } from "@/lib/email";
+import {
+  buildCancellationEmailHtml,
+  buildEmailHtml,
+  daysUntilDate,
+  reminderEmailSubject,
+  reminderHeading,
+  reminderWhenPhrase,
+} from "@/lib/email";
+
+const baseEmail = {
+  bookingRef: "H3-88",
+  studioId: "la-scene",
+  date: "2026-08-27",
+  startTime: "18:00",
+  endTime: "20:00",
+  groupType: "group",
+  equipment: [],
+  equipmentPrice: 0,
+  totalPrice: 80,
+  paymentMethod: "cash",
+  paymentStatus: "pay-on-site",
+  userName: "Léa",
+  userEmail: "lea@example.com",
+  userPhone: "0612345678",
+};
 
 describe("buildEmailHtml copy", () => {
   it("uses the current cancellation policy", () => {
@@ -64,5 +88,79 @@ describe("buildEmailHtml copy", () => {
     expect(waived).not.toContain("reste intégralement dû");
     expect(due).not.toContain("writereview");
     expect(waived).not.toContain("writereview");
+  });
+});
+
+describe("booking reminder copy", () => {
+  it("maps calendar offsets to French timing phrases", () => {
+    expect(daysUntilDate("2026-08-22", "2026-08-22")).toBe(0);
+    expect(daysUntilDate("2026-08-22", "2026-08-23")).toBe(1);
+    expect(daysUntilDate("2026-08-22", "2026-08-27")).toBe(5);
+    expect(daysUntilDate("2026-08-22", "2026-08-21")).toBe(-1);
+    expect(reminderWhenPhrase(0)).toBe("aujourd'hui");
+    expect(reminderWhenPhrase(1)).toBe("demain");
+    expect(reminderWhenPhrase(5)).toBe("dans 5 jours");
+    expect(reminderWhenPhrase(-1)).toBeNull();
+    expect(reminderHeading("aujourd'hui")).toBe("C'est aujourd'hui !");
+    expect(reminderHeading("demain")).toBe("C'est demain !");
+    expect(reminderHeading("dans 5 jours")).toBe("Dans 5 jours");
+  });
+
+  it("announces today / tomorrow / in X days and keeps the booking details", () => {
+    const today = buildEmailHtml({
+      ...baseEmail,
+      reminder: { whenPhrase: "aujourd'hui", remainingDue: 0 },
+    });
+    expect(today).toContain("C'est aujourd'hui !");
+    expect(today).toContain("votre session à H3 Studios est <strong>aujourd'hui</strong>");
+    expect(today).toContain("H3-88");
+    expect(today).toContain("La Scène");
+    expect(today).toContain("18:00 → 20:00");
+
+    const tomorrow = buildEmailHtml({
+      ...baseEmail,
+      reminder: { whenPhrase: "demain", remainingDue: 0 },
+    });
+    expect(tomorrow).toContain("C'est demain !");
+    expect(tomorrow).toContain("<strong>demain</strong>");
+
+    const later = buildEmailHtml({
+      ...baseEmail,
+      reminder: { whenPhrase: "dans 5 jours", remainingDue: 0 },
+    });
+    expect(later).toContain("Dans 5 jours");
+    expect(later).toContain("<strong>dans 5 jours</strong>");
+  });
+
+  it("mentions money only when a balance remains", () => {
+    const paid = buildEmailHtml({
+      ...baseEmail,
+      reminder: { whenPhrase: "demain", remainingDue: 0 },
+    });
+    expect(paid).not.toContain("Reste à payer");
+    expect(paid).not.toContain("Mode de paiement");
+    expect(paid).not.toContain("Total TTC");
+    expect(paid).not.toContain("writereview");
+
+    const due = buildEmailHtml({
+      ...baseEmail,
+      reminder: { whenPhrase: "demain", remainingDue: 45 },
+    });
+    expect(due).toContain("Reste à payer");
+    expect(due).toContain("45");
+    expect(due).toContain("espèces ou CB");
+    expect(due).not.toContain("Mode de paiement");
+    expect(due).not.toContain("Total TTC");
+  });
+
+  it("builds a timing-aware subject", () => {
+    expect(reminderEmailSubject({
+      ...baseEmail,
+      reminder: { whenPhrase: "aujourd'hui", remainingDue: 0 },
+    })).toBe("Rappel — aujourd'hui · 18:00→20:00 — H3 Studios");
+    expect(reminderEmailSubject({
+      ...baseEmail,
+      reminder: { whenPhrase: "dans 5 jours", remainingDue: 0 },
+    })).toContain("dans 5 jours");
   });
 });

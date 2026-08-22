@@ -1,6 +1,6 @@
-import { getBookingAmountDue } from "./booking-totals";
-import type { DbBooking, DbUser } from "./db-types";
-import type { BookingConfirmationData, BookingSlot } from "./email";
+import { getBookingAmountDue, getBookingBalance } from "./booking-totals";
+import type { DbBooking, DbPayment, DbUser } from "./db-types";
+import { daysUntilDate, reminderWhenPhrase, type BookingConfirmationData, type BookingSlot } from "./email";
 import { parseBookingEquipmentLines } from "./booking";
 
 /**
@@ -183,6 +183,42 @@ export function canResendBookingConfirmation(
     return { ok: false, error: "Le client n'a pas d'adresse e-mail" };
   }
   return { ok: true };
+}
+
+export function canSendBookingReminder(
+  booking: Pick<DbBooking, "status" | "date"> | null | undefined,
+  userEmail: string | null | undefined,
+  todayISO: string,
+): { ok: true; whenPhrase: string } | { ok: false; error: string } {
+  if (!booking) return { ok: false, error: "Réservation introuvable" };
+  if (booking.status === "cancelled") {
+    return { ok: false, error: "Impossible d'envoyer un rappel pour une réservation annulée" };
+  }
+  if (!userEmail?.trim()) {
+    return { ok: false, error: "Le client n'a pas d'adresse e-mail" };
+  }
+  const whenPhrase = reminderWhenPhrase(daysUntilDate(todayISO, booking.date));
+  if (!whenPhrase) {
+    return { ok: false, error: "Impossible d'envoyer un rappel pour une réservation passée" };
+  }
+  return { ok: true, whenPhrase };
+}
+
+export interface BookingReminderEmailInput extends BookingConfirmationEmailInput {
+  payments: Pick<DbPayment, "amount" | "status" | "refunded_amount">[];
+  whenPhrase: string;
+}
+
+export function buildBookingReminderEmailPayload(
+  input: BookingReminderEmailInput,
+): BookingConfirmationData {
+  return {
+    ...buildBookingConfirmationEmailPayload(input),
+    reminder: {
+      whenPhrase: input.whenPhrase,
+      remainingDue: getBookingBalance(input.booking, input.payments),
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

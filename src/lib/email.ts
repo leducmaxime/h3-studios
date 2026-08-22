@@ -57,6 +57,31 @@ export interface BookingConfirmationData {
   loyaltyDiscount?: number;
   // Multi-booking: all slots in the cart
   allSlots?: BookingSlot[];
+  /** Présent uniquement pour un email de rappel admin. */
+  reminder?: {
+    whenPhrase: string;
+    remainingDue: number;
+  };
+}
+
+/** Jours calendaires entre deux dates ISO `YYYY-MM-DD` (Paris / date-only). */
+export function daysUntilDate(fromISO: string, toISO: string): number {
+  const from = Date.parse(`${fromISO}T00:00:00Z`);
+  const to = Date.parse(`${toISO}T00:00:00Z`);
+  return Math.round((to - from) / 86_400_000);
+}
+
+export function reminderWhenPhrase(days: number): string | null {
+  if (!Number.isFinite(days) || days < 0) return null;
+  if (days === 0) return "aujourd'hui";
+  if (days === 1) return "demain";
+  return `dans ${days} jours`;
+}
+
+export function reminderHeading(whenPhrase: string): string {
+  if (whenPhrase === "aujourd'hui") return "C'est aujourd'hui !";
+  if (whenPhrase === "demain") return "C'est demain !";
+  return whenPhrase.charAt(0).toUpperCase() + whenPhrase.slice(1);
 }
 
 function formatDateFrench(dateStr: string): string {
@@ -361,11 +386,33 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
   </tr>
 </table>`;
 
-  const greetingLine = isMultiSlot
+  const isReminder = Boolean(data.reminder);
+  const remainingDue = data.reminder?.remainingDue ?? 0;
+  const showReminderMoney = isReminder && remainingDue > 0.005;
+  const greetingLine = isReminder
+    ? `Bonjour ${data.userName},<br>
+Petit rappel : votre session à H3 Studios est <strong>${data.reminder!.whenPhrase}</strong>. Voici les détails :`
+    : isMultiSlot
     ? `Bonjour ${data.userName},<br>
 Nous avons bien enregistré vos <strong>${data.allSlots!.length} réservations</strong>. Voici les détails :`
     : `Bonjour ${data.userName},<br>
 Nous avons bien enregistré votre réservation. Voici les détails :`;
+  const heading = isReminder
+    ? reminderHeading(data.reminder!.whenPhrase)
+    : isMultiSlot
+      ? "Vos réservations sont confirmées !"
+      : "Votre réservation est confirmée !";
+  const reminderMoneySection = showReminderMoney
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+  <tr>
+    <td style="background-color:#1a1500;border-radius:10px;padding:16px;border-left:3px solid #facc15;">
+      <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Reste à payer</p>
+      <p style="margin:0 0 6px 0;color:#facc15;font-size:22px;font-weight:700;">${formatPrice(remainingDue)}</p>
+      <p style="margin:0;color:#aaaaaa;font-size:13px;line-height:1.5;">Merci de prévoir ce montant le jour de votre session (espèces ou CB).</p>
+    </td>
+  </tr>
+</table>`
+    : "";
 
   return `
 <!DOCTYPE html>
@@ -373,7 +420,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Confirmation de réservation - H3 Studios</title>
+  <title>${isReminder ? "Rappel de réservation" : "Confirmation de réservation"} - H3 Studios</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -392,7 +439,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
           <!-- Main Content -->
           <tr>
             <td style="padding:40px 30px 30px 30px;">
-              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;">${isMultiSlot ? "Vos réservations sont confirmées !" : "Votre réservation est confirmée !"}</h2>
+              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;">${heading}</h2>
               <p style="margin:0 0 30px 0;color:#aaaaaa;font-size:15px;line-height:1.6;">
                 ${greetingLine}
               </p>
@@ -418,17 +465,17 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
               ${equipmentSection}
 
               <!-- Price Breakdown -->
-              ${priceBreakdown}
+              ${isReminder ? reminderMoneySection : priceBreakdown}
 
               <!-- Payment Method -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+              ${isReminder ? "" : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
                 <tr>
                   <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;border-left:3px solid #facc15;">
                     <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Mode de paiement</p>
                     <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${paymentLabel}</p>
                   </td>
                 </tr>
-              </table>
+              </table>`}
 
               <!-- Important Info -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -465,7 +512,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                   </td>
                 </tr>
               </table>
-              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
+              ${isReminder ? "" : `<table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
                 <tr>
                   <td style="background-color:#111111;border:1px solid #facc15;border-radius:10px;padding:16px 24px;text-align:center;">
                     <p style="margin:0 0 8px 0;color:#facc15;font-size:15px;font-weight:700;">Après votre répétition</p>
@@ -480,7 +527,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                     </table>
                   </td>
                 </tr>
-              </table>
+              </table>`}
               <p style="margin:0 0 16px 0;">
                 <a href="https://www.facebook.com/profile.php?id=100089893392179" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:0 8px;text-decoration:none;">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
@@ -641,6 +688,49 @@ export async function sendBookingConfirmationEmail(
     return { success: true };
   } catch (error) {
     console.error("Error sending booking confirmation email:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+export function reminderEmailSubject(data: BookingConfirmationData): string {
+  const when = data.reminder?.whenPhrase ?? "rappel";
+  const time = `${data.startTime}→${data.endTime === "00:00" ? "00:00" : data.endTime}`;
+  if (when === "aujourd'hui" || when === "demain") {
+    return `Rappel — ${when} · ${time} — H3 Studios`;
+  }
+  return `Rappel — ${when} · ${formatDateShort(data.date)} · ${time} — H3 Studios`;
+}
+
+export async function sendBookingReminderEmail(
+  apiKey: string,
+  data: BookingConfirmationData,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const html = buildEmailHtml(data);
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "H3 Studios <contact@h3-studios.fr>",
+        to: data.userEmail,
+        subject: reminderEmailSubject(data),
+        html,
+        reply_to: "contact@h3-studios.fr",
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorData = await resendResponse.text();
+      console.error("Resend API error (booking reminder):", errorData);
+      return { success: false, error: errorData };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending booking reminder email:", error);
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
