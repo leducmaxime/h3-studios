@@ -20,6 +20,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -40,7 +48,34 @@ import { formatPrice } from "@/lib/booking";
 import { type DbUser } from "@/lib/db-types";
 import { exportUsersCSV } from "@/lib/export";
 import { resolveUserClientIdentity } from "@/lib/client-identity";
-import { CLIENT_TYPES, CLIENT_TYPE_RULES } from "@/lib/booking-fields";
+import {
+  CLIENT_TYPES,
+  CLIENT_TYPE_RULES,
+  bookingFieldLabel,
+  bookingFieldRequiredHint,
+  getRequiredBookingFields,
+  getVisibleBookingFields,
+  type ClientType,
+} from "@/lib/booking-fields";
+
+const EMPTY_CREATE_FORM = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  band_name: "",
+  notes: "",
+  address_line1: "",
+  address_line2: "",
+  postal_code: "",
+  city: "",
+  country: "France",
+  client_type: "particulier" as ClientType,
+  legal_name: "",
+  siret: "",
+  rna: "",
+  instagram_accounts: "",
+};
 
 interface UsersApiResponse {
   data: DbUser[];
@@ -67,16 +102,7 @@ export function AdminUsers() {
   const [merging, setMerging] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    band_name: "",
-    address_line1: "",
-    postal_code: "",
-    city: "",
-  });
+  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
   const perPage = 20;
 
   const buildUserQuery = useCallback((overrides?: { all?: boolean }) => {
@@ -201,6 +227,16 @@ export function AdminUsers() {
     if (!createForm.address_line1.trim()) { toast.error("L'adresse est obligatoire"); return; }
     if (!createForm.postal_code.trim()) { toast.error("Le code postal est obligatoire"); return; }
     if (!createForm.city.trim()) { toast.error("La ville est obligatoire"); return; }
+    const requiredFields = getRequiredBookingFields(createForm.client_type);
+    if (requiredFields.includes("legalName") && !createForm.legal_name.trim()) {
+      toast.error(bookingFieldRequiredHint("legalName", createForm.client_type));
+      return;
+    }
+    if (requiredFields.includes("siret") && !createForm.siret.trim()) {
+      toast.error(bookingFieldRequiredHint("siret", createForm.client_type));
+      return;
+    }
+    const visibleFields = getVisibleBookingFields(createForm.client_type);
     setCreating(true);
 
     try {
@@ -214,15 +250,23 @@ export function AdminUsers() {
           email: createForm.email.trim(),
           phone: createForm.phone.trim(),
           band_name: createForm.band_name.trim() || undefined,
+          notes: createForm.notes.trim() || undefined,
           address_line1: createForm.address_line1.trim(),
+          address_line2: createForm.address_line2.trim() || undefined,
           postal_code: createForm.postal_code.trim(),
           city: createForm.city.trim(),
+          country: createForm.country.trim() || undefined,
+          client_type: createForm.client_type,
+          legal_name: visibleFields.includes("legalName") ? createForm.legal_name.trim() || null : null,
+          siret: visibleFields.includes("siret") ? createForm.siret.trim() || null : null,
+          rna: visibleFields.includes("rna") ? createForm.rna.trim() || null : null,
+          instagram_accounts: visibleFields.includes("instagramAccounts") ? createForm.instagram_accounts.trim() || null : null,
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
       if (json.success) {
         toast.success(`Client "${createForm.first_name} ${createForm.last_name}" créé`);
-        setCreateForm({ first_name: "", last_name: "", email: "", phone: "", band_name: "", address_line1: "", postal_code: "", city: "" });
+        setCreateForm(EMPTY_CREATE_FORM);
         setShowCreateDialog(false);
         fetchUsers();
       } else {
@@ -278,15 +322,89 @@ export function AdminUsers() {
                 Nouveau client
               </Button>
             </DialogTrigger>
-          <DialogContent className="border-zinc-800 bg-zinc-900">
+          <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden border-zinc-800 bg-zinc-900 lg:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Nouveau client</DialogTitle>
               <DialogDescription>
                 Les champs marqués * sont obligatoires.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-2">
-              {/* Prénom + Nom */}
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto py-2 pr-1">
+              <div className="space-y-1.5">
+                <Label htmlFor="create-client-type">Type de client <span className="text-primary">*</span></Label>
+                <Select
+                  value={createForm.client_type}
+                  onValueChange={(value) => {
+                    const t = value as ClientType;
+                    const visible = getVisibleBookingFields(t);
+                    setCreateForm({
+                      ...createForm,
+                      client_type: t,
+                      legal_name: visible.includes("legalName") ? createForm.legal_name : "",
+                      siret: visible.includes("siret") ? createForm.siret : "",
+                      rna: visible.includes("rna") ? createForm.rna : "",
+                    });
+                  }}
+                >
+                  <SelectTrigger id="create-client-type" className="w-full bg-zinc-800 border-zinc-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CLIENT_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>{CLIENT_TYPE_RULES[t].label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {createForm.client_type !== "particulier" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-legal-name">
+                    {bookingFieldLabel("legalName", createForm.client_type)} <span className="text-primary">*</span>
+                  </Label>
+                  <Input
+                    id="create-legal-name"
+                    value={createForm.legal_name}
+                    onChange={(e) => setCreateForm({ ...createForm, legal_name: e.target.value })}
+                    placeholder={createForm.client_type === "association" ? "Nom de l'association" : "Nom de l'entreprise"}
+                    className="bg-zinc-800 border-zinc-700"
+                  />
+                </div>
+              )}
+
+              {(getVisibleBookingFields(createForm.client_type).includes("siret") || getVisibleBookingFields(createForm.client_type).includes("rna")) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {getVisibleBookingFields(createForm.client_type).includes("siret") && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="create-siret">
+                        SIRET {getRequiredBookingFields(createForm.client_type).includes("siret")
+                          ? <span className="text-primary">*</span>
+                          : <span className="text-zinc-500 text-xs">(optionnel)</span>}
+                      </Label>
+                      <Input
+                        id="create-siret"
+                        value={createForm.siret}
+                        onChange={(e) => setCreateForm({ ...createForm, siret: e.target.value })}
+                        placeholder="123 456 789 00012"
+                        className="bg-zinc-800 border-zinc-700"
+                      />
+                    </div>
+                  )}
+                  {getVisibleBookingFields(createForm.client_type).includes("rna") && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="create-rna">RNA <span className="text-zinc-500 text-xs">(optionnel)</span></Label>
+                      <Input
+                        id="create-rna"
+                        value={createForm.rna}
+                        onChange={(e) => setCreateForm({ ...createForm, rna: e.target.value })}
+                        placeholder="W123456789"
+                        className="bg-zinc-800 border-zinc-700"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="create-first-name">Prénom <span className="text-primary">*</span></Label>
@@ -298,7 +416,6 @@ export function AdminUsers() {
                 </div>
               </div>
 
-              {/* Email + Téléphone */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="create-email">Email <span className="text-primary">*</span></Label>
@@ -310,28 +427,53 @@ export function AdminUsers() {
                 </div>
               </div>
 
-              {/* Nom du groupe */}
-              <div className="space-y-1.5">
-                <Label htmlFor="create-band">Nom du groupe <span className="text-zinc-500 text-xs">(optionnel)</span></Label>
-                <Input id="create-band" value={createForm.band_name} onChange={(e) => setCreateForm({ ...createForm, band_name: e.target.value })} placeholder="Les Rockers" className="bg-zinc-800 border-zinc-700" />
-              </div>
-
-              {/* Adresse */}
-              <div className="space-y-1.5">
-                <Label htmlFor="create-address">Adresse <span className="text-primary">*</span></Label>
-                <Input id="create-address" value={createForm.address_line1} onChange={(e) => setCreateForm({ ...createForm, address_line1: e.target.value })} placeholder="12 Rue de la Musique" className="bg-zinc-800 border-zinc-700" />
-              </div>
-
-              {/* Code postal + Ville */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="create-postal">Code postal <span className="text-primary">*</span></Label>
-                  <Input id="create-postal" value={createForm.postal_code} onChange={(e) => setCreateForm({ ...createForm, postal_code: e.target.value })} placeholder="94370" maxLength={5} className="bg-zinc-800 border-zinc-700" />
+                  <Label htmlFor="create-band">Nom du groupe <span className="text-zinc-500 text-xs">(optionnel)</span></Label>
+                  <Input id="create-band" value={createForm.band_name} onChange={(e) => setCreateForm({ ...createForm, band_name: e.target.value })} placeholder="Les Rockers" className="bg-zinc-800 border-zinc-700" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="create-city">Ville <span className="text-primary">*</span></Label>
-                  <Input id="create-city" value={createForm.city} onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })} placeholder="Sucy-en-Brie" className="bg-zinc-800 border-zinc-700" />
+                  <Label htmlFor="create-instagram">Compte(s) Instagram <span className="text-zinc-500 text-xs">(optionnel)</span></Label>
+                  <Input id="create-instagram" value={createForm.instagram_accounts} onChange={(e) => setCreateForm({ ...createForm, instagram_accounts: e.target.value })} placeholder="@lesrockers" className="bg-zinc-800 border-zinc-700" />
                 </div>
+              </div>
+
+              <div className="space-y-3 border-t border-zinc-800 pt-3">
+                <p className="text-sm font-medium text-zinc-400">Adresse</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-address">Nom et numéro de rue <span className="text-primary">*</span></Label>
+                  <Input id="create-address" value={createForm.address_line1} onChange={(e) => setCreateForm({ ...createForm, address_line1: e.target.value })} placeholder="12 Rue de la Musique" className="bg-zinc-800 border-zinc-700" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-address2">Complément d'adresse <span className="text-zinc-500 text-xs">(optionnel)</span></Label>
+                  <Input id="create-address2" value={createForm.address_line2} onChange={(e) => setCreateForm({ ...createForm, address_line2: e.target.value })} placeholder="Bâtiment, étage, appartement..." className="bg-zinc-800 border-zinc-700" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="create-postal">Code postal <span className="text-primary">*</span></Label>
+                    <Input id="create-postal" value={createForm.postal_code} onChange={(e) => setCreateForm({ ...createForm, postal_code: e.target.value })} placeholder="94370" maxLength={5} className="bg-zinc-800 border-zinc-700" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="create-city">Ville <span className="text-primary">*</span></Label>
+                    <Input id="create-city" value={createForm.city} onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })} placeholder="Sucy-en-Brie" className="bg-zinc-800 border-zinc-700" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-country">Pays</Label>
+                  <Input id="create-country" value={createForm.country} onChange={(e) => setCreateForm({ ...createForm, country: e.target.value })} placeholder="France" className="bg-zinc-800 border-zinc-700" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="create-notes">Notes internes <span className="text-zinc-500 text-xs">(optionnel)</span></Label>
+                <Textarea
+                  id="create-notes"
+                  value={createForm.notes}
+                  onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
+                  placeholder="Infos utiles pour l'équipe..."
+                  rows={3}
+                  className="bg-zinc-800 border-zinc-700 resize-none"
+                />
               </div>
             </div>
             <DialogFooter>
