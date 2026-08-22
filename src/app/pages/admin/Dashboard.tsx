@@ -1020,6 +1020,7 @@ export function AdminDashboard() {
   const [topClientsLoading, setTopClientsLoading] = useState(false);
   const [topMetric, setTopMetric] = useState<"revenue" | "bookings" | "hours">("revenue");
   const [paymentMode, setPaymentMode] = useState<"all" | "channel">("all");
+  const [studioMetric, setStudioMetric] = useState<"bookings" | "revenue">("bookings");
   const [statsMeta, setStatsMeta] = useState<{ minYear: number | null; maxYear: number | null } | null>(null);
   const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
   const [occupancyData, setOccupancyData] = useState<OccupancyPoint[]>([]);
@@ -1976,12 +1977,33 @@ export function AdminDashboard() {
               </div>
             </ChartCard>
 
-            <ChartCard title="Répartition par studio">
+            <ChartCard
+              title="Répartition par studio"
+              action={
+                <div className="inline-flex shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+                  {([
+                    ["bookings", "Réservations"],
+                    ["revenue", "CA"],
+                  ] as const).map(([metric, label]) => (
+                    <button
+                      key={metric}
+                      type="button"
+                      onClick={() => setStudioMetric(metric)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${studioMetric === metric ? "bg-primary/15 text-primary" : "text-zinc-400 hover:text-zinc-200"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              }
+            >
               {(() => {
-                const totalStudioCount = studioData.reduce((acc, s) => acc + s.count, 0);
+                const valueKey = studioMetric === "revenue" ? "revenue" : "count";
+                const totalStudioValue = studioData.reduce((acc, s) => acc + s[valueKey], 0);
                 const labels = studioData.map((s) => {
-                  const pct = totalStudioCount > 0 ? Math.round((s.count / totalStudioCount) * 100) : 0;
-                  return { studio: s.studio, count: s.count, pct };
+                  const value = s[valueKey];
+                  const pct = totalStudioValue > 0 ? Math.round((value / totalStudioValue) * 100) : 0;
+                  return { studio: s.studio, value, pct };
                 });
 
                 return (
@@ -1999,7 +2021,7 @@ export function AdminDashboard() {
                             innerRadius="58%"
                             outerRadius="85%"
                             paddingAngle={3}
-                            dataKey="count"
+                            dataKey={valueKey}
                             nameKey="studio"
                             labelLine={false}
                             label={renderPiePercentLabel}
@@ -2024,7 +2046,9 @@ export function AdminDashboard() {
                               />
                               <span className="text-sm text-zinc-300">{l.studio}</span>
                             </div>
-                            <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
+                            <span className="text-sm text-zinc-200">
+                              {studioMetric === "revenue" ? formatPrice(l.value) : l.value} · {l.pct}%
+                            </span>
                           </div>
                         ))}
                       </div>
