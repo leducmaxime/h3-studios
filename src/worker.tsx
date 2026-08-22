@@ -575,7 +575,9 @@ const app = defineApp([
     layout(AdminLayout, [
       route("/admin", AdminDashboard),
       route("/admin/calendar", AdminCalendar),
-      route("/admin/bookings", AdminBookings),
+      route("/admin/bookings", (ctx) => {
+        return <AdminBookings initialSearch={new URL(ctx.request.url).search} />;
+      }),
       route("/admin/bookings/new", AdminBookingNew),
       route("/admin/bookings/:id", ({ params }) => <AdminBookingDetail bookingId={params.id} />),
       route("/admin/blocked-slots", AdminBlockedSlots),
@@ -1998,10 +2000,13 @@ const app = defineApp([
         const paymentStatus = url.searchParams.get("paymentStatus");
         if (paymentStatus === "on-site-due") {
           filters.paymentStatus = "pay-on-site";
+          filters.dateDirection = "upcoming";
         }
         const dateDirection = url.searchParams.get("dateDirection");
-        if (dateDirection) {
-          (filters as Record<string, unknown>).dateDirection = dateDirection;
+        if (dateDirection === "past" || dateDirection === "upcoming" || dateDirection === "now" || dateDirection === "all") {
+          if (paymentStatus !== "on-site-due") {
+            filters.dateDirection = dateDirection;
+          }
         }
         const sortBy = url.searchParams.get("sortBy");
         if (sortBy) filters.sortBy = sortBy as BookingFilters["sortBy"];

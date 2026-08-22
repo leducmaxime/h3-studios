@@ -1746,7 +1746,7 @@ export function AdminDashboard() {
           className="lg:col-span-3"
         />
         <a
-          href={stats ? `/admin/bookings?payment=on-site-due&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}` : "/admin/bookings?payment=on-site-due"}
+          href={stats ? `/admin/bookings?payment=on-site-due&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}&dateDirection=upcoming` : "/admin/bookings?payment=on-site-due&dateDirection=upcoming"}
           className="block sm:col-span-2 lg:col-span-3"
         >
           <StatCard

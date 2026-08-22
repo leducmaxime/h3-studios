@@ -42,6 +42,13 @@ import { BOOKING_STATUS_LABELS, displayPaymentStatusLabel, studioLabel } from "@
 import { formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus, type BookingWithUser, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
+import {
+  parseBookingsSearch,
+  type BookingsDateDirectionFilter,
+  type BookingsDateFilter,
+  type BookingsPaymentFilter,
+  type BookingsStatusFilter,
+} from "@/lib/admin-bookings-search";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -113,40 +120,20 @@ function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: stri
   }
 }
 
-function getUrlDateParam(name: string): string {
-  if (typeof window === "undefined") return "";
-  const value = new URLSearchParams(window.location.search).get(name);
-  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
-}
-
-function getUrlParam(name: string): string {
-  if (typeof window === "undefined") return "";
-  return new URLSearchParams(window.location.search).get(name) ?? "";
-}
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function AdminBookings() {
+export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
+  const initialFilters = parseBookingsSearch(initialSearch);
   const [bookings, setBookings] = useState<BookingWithUser[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all" | "not-cancelled">(() => {
-    const status = getUrlParam("status");
-    return status === "confirmed" || status === "completed" || status === "cancelled" || status === "no-show" || status === "not-cancelled" ? status : "all";
-  });
-  const [studioFilter, setStudioFilter] = useState<StudioId | "all">("all");
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "upcoming" | "past" | "custom">(() => {
-    return getUrlDateParam("dateFrom") ? "custom" : "all";
-  });
-  const [customDateFrom, setCustomDateFrom] = useState(() => getUrlDateParam("dateFrom"));
-  const [customDateTo, setCustomDateTo] = useState(() => {
-    return getUrlDateParam("dateFrom") ? getUrlDateParam("dateTo") : "";
-  });
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "paid" | "remaining" | "on-site-due">(() => {
-    if (typeof window === "undefined") return "all";
-    const p = new URLSearchParams(window.location.search).get("payment");
-    return p === "paid" || p === "remaining" || p === "on-site-due" ? p : "all";
-  });
+  const [statusFilter, setStatusFilter] = useState<BookingsStatusFilter>(initialFilters.statusFilter);
+  const [studioFilter, setStudioFilter] = useState<StudioId | "all">(initialFilters.studioFilter);
+  const [dateFilter, setDateFilter] = useState<BookingsDateFilter>(initialFilters.dateFilter);
+  const [customDateFrom, setCustomDateFrom] = useState(initialFilters.customDateFrom);
+  const [customDateTo, setCustomDateTo] = useState(initialFilters.customDateTo);
+  const [extraDateDirection, setExtraDateDirection] = useState<BookingsDateDirectionFilter>(initialFilters.extraDateDirection);
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<BookingsPaymentFilter>(initialFilters.paymentStatusFilter);
   const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
   const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
   const [page, setPage] = useState(1);
@@ -187,7 +174,7 @@ export function AdminBookings() {
       params.set("sortOrder", sortOrder);
 
       const dateParams = dateFilter === "custom" && customDateFrom
-        ? { dateFrom: customDateFrom, dateTo: customDateTo || undefined }
+        ? { dateFrom: customDateFrom, dateTo: customDateTo || undefined, dateDirection: extraDateDirection || undefined }
         : getDateFilterParams(dateFilter);
       if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
       if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
@@ -206,7 +193,19 @@ export function AdminBookings() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, studioFilter, dateFilter, customDateFrom, customDateTo, paymentStatusFilter, search, sortBy, sortOrder]);
+  }, [page, statusFilter, studioFilter, dateFilter, customDateFrom, customDateTo, extraDateDirection, paymentStatusFilter, search, sortBy, sortOrder]);
+
+  useEffect(() => {
+    const next = parseBookingsSearch(initialSearch);
+    setStatusFilter(next.statusFilter);
+    setStudioFilter(next.studioFilter);
+    setDateFilter(next.dateFilter);
+    setCustomDateFrom(next.customDateFrom);
+    setCustomDateTo(next.customDateTo);
+    setExtraDateDirection(next.extraDateDirection);
+    setPaymentStatusFilter(next.paymentStatusFilter);
+    setPage(1);
+  }, [initialSearch]);
 
   useEffect(() => {
     fetchBookings();
@@ -288,7 +287,7 @@ export function AdminBookings() {
     params.set("sortOrder", sortOrder);
 
     const dateParams = dateFilter === "custom" && customDateFrom
-      ? { dateFrom: customDateFrom, dateTo: customDateTo || undefined }
+      ? { dateFrom: customDateFrom, dateTo: customDateTo || undefined, dateDirection: extraDateDirection || undefined }
       : getDateFilterParams(dateFilter);
     if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
     if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
@@ -344,7 +343,7 @@ export function AdminBookings() {
           </div>
           <select
             value={dateFilter}
-            onChange={(e) => { setDateFilter(e.target.value as typeof dateFilter); setPage(1); }}
+            onChange={(e) => { setDateFilter(e.target.value as BookingsDateFilter); setExtraDateDirection(""); setPage(1); }}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
             <option value="all">Date</option>
