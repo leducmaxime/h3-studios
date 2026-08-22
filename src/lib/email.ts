@@ -317,7 +317,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
           <td colspan="2" style="border-top:1px solid #333333;padding-top:8px;"></td>
         </tr>
         ` : ""}
-        ${(data.loyaltyDiscount || 0) > 0 ? `<tr><td style="padding:6px 0;color:#facc15;font-size:14px;">Ristourne fidélité</td><td align="right">-${formatPrice(data.loyaltyDiscount || 0)}</td></tr>` : ""}
+        ${(data.loyaltyDiscount || 0) > 0 ? `<tr><td style="padding:6px 0;color:#facc15;font-size:14px;">Remise fidélité</td><td align="right">-${formatPrice(data.loyaltyDiscount || 0)}</td></tr>` : ""}
         ${multiNetTotal === 0 ? "" : `<tr><td style="padding:3px 0;color:#aaaaaa;font-size:13px;">HT</td><td align="right" style="padding:3px 0;color:#aaaaaa;font-size:13px;">${formatEuro(multiTax.ht)}</td></tr>
         <tr><td style="padding:3px 0;color:#aaaaaa;font-size:13px;">TVA 20%</td><td align="right" style="padding:3px 0;color:#aaaaaa;font-size:13px;">${formatEuro(multiTax.vat)}</td></tr>`}
         <tr>
@@ -346,7 +346,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
           <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
         </tr>
         ` : ""}
-        ${(data.loyaltyDiscount || 0) > 0 ? `<tr><td style="padding:6px 0;color:#facc15;font-size:14px;">Ristourne fidélité</td><td align="right">-${formatPrice(data.loyaltyDiscount || 0)}</td></tr>` : ""}
+        ${(data.loyaltyDiscount || 0) > 0 ? `<tr><td style="padding:6px 0;color:#facc15;font-size:14px;">Remise fidélité</td><td align="right">-${formatPrice(data.loyaltyDiscount || 0)}</td></tr>` : ""}
         <tr>
           <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
         </tr>

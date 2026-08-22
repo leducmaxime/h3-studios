@@ -70,7 +70,7 @@ export function PaymentChoice({
         )}
         {loyaltyDiscount > 0 && (
           <div className="flex items-center justify-between text-sm text-green-400">
-            <span>Ristourne fidélité</span>
+            <span>Remise fidélité</span>
             <span>-<Price amount={loyaltyDiscount} /></span>
           </div>
         )}

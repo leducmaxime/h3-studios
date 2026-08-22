@@ -830,7 +830,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   )}
                   {booking.loyalty_award_id && booking.status === "cancelled" && booking.promo_discount > 0 && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
-                      <span className="text-sm">Ristourne fidélité</span>
+                      <span className="text-sm">Remise fidélité</span>
                       <span className="font-medium">-{formatPrice(booking.promo_discount)}</span>
                     </div>
                   )}
@@ -842,7 +842,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   )}
                   {booking.status !== "cancelled" && !editingDiscount && (
                     <div className="flex justify-between items-center text-primary">
-                      <span className="text-sm">{booking.loyalty_award_id ? "Ristourne fidélité" : "Remise manuelle"}</span>
+                      <span className="text-sm">{booking.loyalty_award_id ? "Remise fidélité" : "Remise manuelle"}</span>
                       <span className="flex items-center gap-2"><span className="font-medium">{!booking.promo_code && booking.promo_discount > 0 ? `-${formatPrice(booking.promo_discount)}` : "—"}</span><Button variant="ghost" size="sm" className="h-6 px-1 text-xs text-zinc-500" onClick={() => { setDiscountValue(String(booking?.promo_discount || 0)); setEditingDiscount(true); }}><Pencil className="h-3 w-3" /></Button></span>
                     </div>
                   )}
