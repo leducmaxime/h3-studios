@@ -213,7 +213,7 @@ export function ClientAccount() {
               )}
               {!loyalty.isDue && (
                 <div className="mt-4 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
-                  Plus que {loyalty.remainingToNextAward} réservation{loyalty.remainingToNextAward > 1 ? "s" : ""} terminée{loyalty.remainingToNextAward > 1 ? "s" : ""} pour obtenir votre remise fidélité de {loyalty.type === "fixed" ? <Price amount={loyalty.value} /> : `${loyalty.value.toLocaleString("fr-FR")} %`}.
+                  Plus que {loyalty.remainingToNextAward} réservation{loyalty.remainingToNextAward > 1 ? "s" : ""} terminée{loyalty.remainingToNextAward > 1 ? "s" : ""} avant d'obtenir votre remise fidélité de {loyalty.type === "fixed" ? <Price amount={loyalty.value} /> : `${loyalty.value.toLocaleString("fr-FR")} %`}.
                 </div>
               )}
             </div>
