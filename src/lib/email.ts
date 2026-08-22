@@ -78,9 +78,7 @@ export function reminderWhenPhrase(days: number): string | null {
   return `dans ${days} jours`;
 }
 
-export function reminderHeading(whenPhrase: string): string {
-  if (whenPhrase === "aujourd'hui") return "C'est aujourd'hui !";
-  if (whenPhrase === "demain") return "C'est demain !";
+export function reminderHeading(_whenPhrase?: string): string {
   return "Tic, Tac... Votre session approche !";
 }
 
@@ -439,7 +437,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
           <!-- Main Content -->
           <tr>
             <td style="padding:40px 30px 30px 30px;">
-              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;">${heading}</h2>
+              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;${isReminder ? "text-align:center;" : ""}">${heading}</h2>
               <p style="margin:0 0 30px 0;color:#aaaaaa;font-size:15px;line-height:1.6;">
                 ${greetingLine}
               </p>
@@ -459,7 +457,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                 : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">${detailsGrid}</table>`
               }
 
-              ${clientIdentitySection}
+              ${isReminder ? "" : clientIdentitySection}
 
               <!-- Equipment -->
               ${equipmentSection}
@@ -512,7 +510,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                   </td>
                 </tr>
               </table>
-              ${isReminder ? "" : `<table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
+              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
                 <tr>
                   <td style="background-color:#111111;border:1px solid #facc15;border-radius:10px;padding:16px 24px;text-align:center;">
                     <p style="margin:0 0 8px 0;color:#facc15;font-size:15px;font-weight:700;">Après votre répétition</p>
@@ -527,7 +525,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
                     </table>
                   </td>
                 </tr>
-              </table>`}
+              </table>
               <p style="margin:0 0 16px 0;">
                 <a href="https://www.facebook.com/profile.php?id=100089893392179" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:0 8px;text-decoration:none;">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">

@@ -101,27 +101,37 @@ describe("booking reminder copy", () => {
     expect(reminderWhenPhrase(1)).toBe("demain");
     expect(reminderWhenPhrase(5)).toBe("dans 5 jours");
     expect(reminderWhenPhrase(-1)).toBeNull();
-    expect(reminderHeading("aujourd'hui")).toBe("C'est aujourd'hui !");
-    expect(reminderHeading("demain")).toBe("C'est demain !");
+    expect(reminderHeading("aujourd'hui")).toBe("Tic, Tac... Votre session approche !");
+    expect(reminderHeading("demain")).toBe("Tic, Tac... Votre session approche !");
     expect(reminderHeading("dans 5 jours")).toBe("Tic, Tac... Votre session approche !");
   });
 
-  it("announces today / tomorrow / in X days and keeps the booking details", () => {
+  it("uses the same centered heading for every reminder and keeps the booking details", () => {
     const today = buildEmailHtml({
       ...baseEmail,
       reminder: { whenPhrase: "aujourd'hui", remainingDue: 0 },
     });
-    expect(today).toContain("C'est aujourd'hui !");
+    expect(today).toContain("Tic, Tac... Votre session approche !");
+    expect(today).toContain('font-weight:600;text-align:center;');
     expect(today).toContain("votre session à H3 Studios est <strong>aujourd'hui</strong>");
     expect(today).toContain("H3-88");
     expect(today).toContain("La Scène");
     expect(today).toContain("18:00 → 20:00");
+    expect(today).toContain("Laisser un avis Google");
+    expect(today).not.toContain("Type de client");
+
+    const withClientType = buildEmailHtml({
+      ...baseEmail,
+      clientType: "particulier",
+      reminder: { whenPhrase: "demain", remainingDue: 0 },
+    });
+    expect(withClientType).not.toContain("Type de client");
 
     const tomorrow = buildEmailHtml({
       ...baseEmail,
       reminder: { whenPhrase: "demain", remainingDue: 0 },
     });
-    expect(tomorrow).toContain("C'est demain !");
+    expect(tomorrow).toContain("Tic, Tac... Votre session approche !");
     expect(tomorrow).toContain("<strong>demain</strong>");
 
     const later = buildEmailHtml({
@@ -140,7 +150,7 @@ describe("booking reminder copy", () => {
     expect(paid).not.toContain("Reste à payer");
     expect(paid).not.toContain("Mode de paiement");
     expect(paid).not.toContain("Total TTC");
-    expect(paid).not.toContain("writereview");
+    expect(paid).toContain("writereview");
 
     const due = buildEmailHtml({
       ...baseEmail,
