@@ -116,11 +116,11 @@ export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, 
                   reassurance in ~3 lines instead of 7 on mobile. Chips are
                   non-interactive (no hover, no button) so they don't read as
                   actionable next to the equipment steppers below. */}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 xl:flex-nowrap xl:gap-1.5">
                 {["Batterie (sans crash)", "Sono", "Amplis guitare", "Amplis basse", "4 micros", "Pupitres", "Pied synthé"].map((item) => (
                   <span
                     key={item}
-                    className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-white/70"
+                    className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-white/70 xl:px-2"
                   >
                     <Check className="h-3 w-3 shrink-0 text-primary" />
                     {item}
