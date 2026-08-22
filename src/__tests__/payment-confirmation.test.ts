@@ -5,6 +5,8 @@ import {
   computeAmountMismatchCents,
   partitionBookingsForFinalization,
   buildPaidConfirmationEmailPayload,
+  buildBookingConfirmationEmailPayload,
+  canResendBookingConfirmation,
   finalizePaidCheckoutSession,
   type FinalizePaidSessionDeps,
 } from "@/lib/payment-confirmation";
@@ -180,6 +182,74 @@ describe("buildPaidConfirmationEmailPayload (aggregate promo math)", () => {
     expect(payload.promoDiscount).toBe(20);
     expect(payload.totalPrice).toBe(3);
     expect(payload.allSlots).toBeUndefined();
+  });
+});
+
+describe("buildBookingConfirmationEmailPayload / canResendBookingConfirmation", () => {
+  it("uses the booking's current slot, net total and payment mode", () => {
+    const booking = makeBooking({
+      booking_ref: "H3-99",
+      studio_id: "le-podium",
+      date: "2026-08-22",
+      start_time: "14:00",
+      end_time: "16:00",
+      group_type: "duo",
+      base_price: 40,
+      equipment_price: 10,
+      total_price: 50,
+      promo_discount: 5,
+      promo_code: "ROCK",
+      promo_type: "fixed",
+      payment_method: "cash",
+      payment_status: "pay-on-site",
+      client_type: "particulier",
+      legal_name: null,
+      equipment: JSON.stringify([{ id: "amp", name: "Ampli", quantity: 1, lineTotal: 10 }]),
+    });
+    const payload = buildBookingConfirmationEmailPayload({ booking, user: USER });
+    expect(payload.bookingRef).toBe("H3-99");
+    expect(payload.studioId).toBe("le-podium");
+    expect(payload.date).toBe("2026-08-22");
+    expect(payload.startTime).toBe("14:00");
+    expect(payload.endTime).toBe("16:00");
+    expect(payload.totalPrice).toBe(45);
+    expect(payload.paymentMethod).toBe("cash");
+    expect(payload.paymentStatus).toBe("pay-on-site");
+    expect(payload.promoCode).toBe("ROCK");
+    expect(payload.promoDiscount).toBe(5);
+    expect(payload.loyaltyDiscount).toBe(0);
+    expect(payload.equipment).toEqual([{ id: "amp", name: "Ampli", quantity: 1, lineTotal: 10 }]);
+    expect(payload.allSlots).toBeUndefined();
+  });
+
+  it("treats a loyalty award as loyaltyDiscount, not promoDiscount", () => {
+    const booking = makeBooking({
+      total_price: 50,
+      promo_discount: 10,
+      loyalty_award_id: "award-1",
+      promo_code: null,
+    });
+    const payload = buildBookingConfirmationEmailPayload({ booking, user: USER });
+    expect(payload.promoDiscount).toBe(0);
+    expect(payload.loyaltyDiscount).toBe(10);
+    expect(payload.totalPrice).toBe(40);
+  });
+
+  it("blocks cancelled bookings and missing emails", () => {
+    expect(canResendBookingConfirmation(makeBooking({ status: "cancelled" }), USER.email)).toEqual({
+      ok: false,
+      error: "Impossible de renvoyer un email de confirmation pour une réservation annulée",
+    });
+    expect(canResendBookingConfirmation(makeBooking({ status: "confirmed" }), "  ")).toEqual({
+      ok: false,
+      error: "Le client n'a pas d'adresse e-mail",
+    });
+    expect(canResendBookingConfirmation(null, USER.email)).toEqual({
+      ok: false,
+      error: "Réservation introuvable",
+    });
+    expect(canResendBookingConfirmation(makeBooking({ status: "completed" }), USER.email)).toEqual({ ok: true });
+    expect(canResendBookingConfirmation(makeBooking({ status: "no-show" }), USER.email)).toEqual({ ok: true });
   });
 });
 

@@ -2,7 +2,7 @@ import { render, route, layout } from "rwsdk/router";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
 import { groupTypeLabel, paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, CLIENT_TYPE_RULES, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
-import { finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
+import { buildBookingConfirmationEmailPayload, canResendBookingConfirmation, finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
 import { env, waitUntil } from "cloudflare:workers";
@@ -2739,6 +2739,41 @@ const app = defineApp([
     } catch (error) {
       console.error("PUT /api/admin/bookings/:id/complete error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed", 500);
+    }
+  }),
+
+  route("/api/admin/bookings/:id/resend-confirmation", async ({ request, params }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const booking = await getBookingById(env.DB, params.id);
+      if (!booking) return jsonError("Réservation introuvable", 404);
+
+      const client = await getUserById(env.DB, booking.user_id);
+      const eligibility = canResendBookingConfirmation(booking, client?.email);
+      if (!eligibility.ok) return jsonError(eligibility.error, 400);
+
+      if (!env.RESEND_API_KEY) {
+        return jsonError("Envoi d'email indisponible", 503);
+      }
+
+      const payload = buildBookingConfirmationEmailPayload({
+        booking,
+        user: { name: client!.name, email: client!.email!, phone: client!.phone },
+      });
+      const sent = await sendBookingConfirmationEmail(env.RESEND_API_KEY, payload);
+      if (!sent.success) {
+        return jsonError("Échec de l'envoi de l'email de confirmation", 502);
+      }
+
+      await addAuditLog(env.DB, "booking", params.id, "resend-confirmation", {
+        to: client!.email,
+      }, request.headers.get("X-Admin-User-Id") || "admin");
+
+      return jsonSuccess({ sent: true, to: client!.email });
+    } catch (error) {
+      console.error("POST /api/admin/bookings/:id/resend-confirmation error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to resend confirmation", 500);
     }
   }),
 

@@ -129,6 +129,62 @@ export function buildPaidConfirmationEmailPayload(input: PaidConfirmationEmailIn
   };
 }
 
+export interface BookingConfirmationEmailInput {
+  booking: DbBooking;
+  user: Pick<DbUser, "name" | "phone"> & { email: string };
+  equipmentNames?: Record<string, string>;
+}
+
+/**
+ * Payload de confirmation pour une réservation unique, à l'état courant
+ * (créneau, matériel, totaux, mode de paiement). Utilisé pour le renvoi admin.
+ */
+export function buildBookingConfirmationEmailPayload(
+  input: BookingConfirmationEmailInput,
+): BookingConfirmationData {
+  const booking = input.booking;
+  const promoDiscount = Number(booking.promo_discount) || 0;
+  const isLoyalty = Boolean(booking.loyalty_award_id);
+
+  return {
+    bookingRef: booking.booking_ref,
+    studioId: booking.studio_id,
+    date: booking.date,
+    startTime: booking.start_time,
+    endTime: booking.end_time,
+    groupType: booking.group_type,
+    equipment: parseBookingEquipmentLines(booking.equipment),
+    equipmentPrice: Number(booking.equipment_price) || 0,
+    equipmentNames: input.equipmentNames,
+    totalPrice: getBookingAmountDue(booking),
+    paymentMethod: booking.payment_method || "cash",
+    paymentStatus: booking.payment_status || "pay-on-site",
+    userName: input.user.name,
+    userEmail: input.user.email,
+    userPhone: input.user.phone || "",
+    clientType: booking.client_type ?? undefined,
+    legalName: booking.legal_name ?? undefined,
+    promoCode: booking.promo_code,
+    promoDiscount: isLoyalty ? 0 : promoDiscount,
+    loyaltyDiscount: isLoyalty ? promoDiscount : 0,
+    promoType: booking.promo_type,
+  };
+}
+
+export function canResendBookingConfirmation(
+  booking: Pick<DbBooking, "status"> | null | undefined,
+  userEmail: string | null | undefined,
+): { ok: true } | { ok: false; error: string } {
+  if (!booking) return { ok: false, error: "Réservation introuvable" };
+  if (booking.status === "cancelled") {
+    return { ok: false, error: "Impossible de renvoyer un email de confirmation pour une réservation annulée" };
+  }
+  if (!userEmail?.trim()) {
+    return { ok: false, error: "Le client n'a pas d'adresse e-mail" };
+  }
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Finalizer orchestration (DB/email injectés pour la testabilité)
 // ---------------------------------------------------------------------------

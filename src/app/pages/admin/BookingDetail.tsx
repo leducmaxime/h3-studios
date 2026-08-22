@@ -22,6 +22,7 @@ import {
   Pencil,
   Trash2,
   Undo2,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -176,6 +177,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [noShowOpen, setNoShowOpen] = useState(false);
   const [noShowLoading, setNoShowLoading] = useState(false);
 
+  const [resendingEmail, setResendingEmail] = useState(false);
+
   // Notes editing
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState("");
@@ -303,6 +306,26 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       }
     }
   }, [payments, booking]);
+
+  const handleResendConfirmation = async () => {
+    if (!booking) return;
+    setResendingEmail(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/resend-confirmation`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as { success: boolean; error?: string; data?: { to?: string } };
+      if (json.success) {
+        toast.success(json.data?.to ? `Email renvoyé à ${json.data.to}` : "Email de confirmation renvoyé");
+      } else {
+        toast.error(json.error || "Erreur lors de l'envoi");
+      }
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   const handleNoShow = async () => {
     if (!booking) return;
@@ -1162,6 +1185,22 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               <h2 className="font-semibold text-lg">Actions</h2>
             </div>
             <div className="p-4 space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
+                onClick={handleResendConfirmation}
+                disabled={resendingEmail || isCancelled || !user?.email}
+                title={
+                  isCancelled
+                    ? "Impossible de renvoyer un email de confirmation pour une réservation annulée"
+                    : !user?.email
+                      ? "Le client n'a pas d'adresse e-mail"
+                      : undefined
+                }
+              >
+                {resendingEmail ? <Loader2 className="mr-3 h-4 w-4 animate-spin text-zinc-400" /> : <Mail className="mr-3 h-4 w-4 text-zinc-400" />}
+                Renvoyer l&apos;email de confirmation
+              </Button>
               <Button
                 variant="outline"
                 className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
