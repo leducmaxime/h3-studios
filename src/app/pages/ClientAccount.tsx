@@ -208,7 +208,7 @@ export function ClientAccount() {
               </div>
               {loyalty.isDue && (
                 <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
-                  Votre remise fidélité est disponible : elle s'appliquera automatiquement à votre prochaine réservation.
+                  Votre remise fidélité de {loyalty.type === "fixed" ? <Price amount={loyalty.value} /> : `${loyalty.value.toLocaleString("fr-FR")} %`} est disponible : elle s'appliquera automatiquement à votre prochaine réservation.
                 </div>
               )}
             </div>
