@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, CircleCheckBig, CreditCard, IdCard, ShoppingCart, Users, Package } from "lucide-react";
+import { Calendar, CircleCheckBig, CreditCard, IdCard, ShoppingCart, Star, Users } from "lucide-react";
 import { type BookingStep, stepIndex } from "@/lib/booking";
 
 interface ProgressIndicatorProps {
@@ -23,7 +23,7 @@ type StepDef = {
 const STEP_DEFS: StepDef[] = [
   { icon: Users, step: "groupe", label: "Type" },
   { icon: Calendar, step: "creneau", label: "Créneaux" },
-  { icon: Package, step: "options", label: "Options" },
+  { icon: Star, step: "options", label: "Options" },
   { icon: ShoppingCart, step: "panier", label: "Panier" },
   { icon: IdCard, step: "coordonnees", label: "Coordonnées" },
   { icon: CreditCard, step: "paiement", label: "Paiement" },
