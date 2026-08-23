@@ -12,6 +12,7 @@ import {
   Save,
   Search,
   Download,
+  Plus,
   ChevronUp,
   ChevronDown,
   Building2,
@@ -578,6 +579,13 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           </div>
           <p className="text-zinc-400">Profil client</p>
         </div>
+        <a href={`/admin/bookings/new?userId=${user.id}`}>
+          <Button size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Nouvelle réservation</span>
+            <span className="sm:hidden">Réserver</span>
+          </Button>
+        </a>
       </div>
 
       <Tabs defaultValue="profile" className="w-full">
@@ -1291,14 +1299,22 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between gap-2">
                 <h2 className="font-semibold">
                   Réservations ({sortedBookings.length})
                 </h2>
-                <Button variant="outline" size="sm" onClick={handleExportCSV}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Exporter CSV
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Exporter CSV
+                  </Button>
+                  <a href={`/admin/bookings/new?userId=${user.id}`}>
+                    <Button size="sm">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Nouvelle réservation
+                    </Button>
+                  </a>
+                </div>
               </div>
               {sortedBookings.length === 0 ? (
                 <p className="text-zinc-400">Aucune réservation trouvée</p>

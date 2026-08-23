@@ -112,16 +112,28 @@ interface EquipmentSelection {
 
 
 export function AdminBookingNew() {
-  // Read query params for pre-fill from calendar
+  // Read query params for pre-fill from calendar / fiche client
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const qDate = params.get("date");
     const qStudio = params.get("studio");
     const qStartTime = params.get("startTime");
+    const qUserId = params.get("userId");
     if (qDate) setDate(qDate);
     if (qStudio && (qStudio === "la-scene" || qStudio === "le-podium")) setStudioId(qStudio);
     if (qStartTime) setStartTime(qStartTime);
+    if (!qUserId) return;
+    fetch(`/api/admin/users/${qUserId}`)
+      .then((r) => r.json() as Promise<{ success: boolean; data?: DbUser; error?: string }>)
+      .then((json) => {
+        if (json.success && json.data) {
+          setSelectedUser(json.data);
+          return;
+        }
+        toast.error(json.error || "Client introuvable");
+      })
+      .catch(() => toast.error("Impossible de charger le client"));
   }, []);
 
   // User selection
