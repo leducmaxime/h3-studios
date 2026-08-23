@@ -35,19 +35,11 @@ import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceD
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, studioLabel } from "@/lib/labels";
 import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
+import { computeClientBookingInsights, formatDurationHours, slotDurationHours } from "@/lib/user-booking-stats";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function slotDurationHours(startTime: string, endTime: string): number {
-  const [sh, sm] = startTime.split(":").map(Number);
-  const [eh, em] = endTime.split(":").map(Number);
-  const start = sh * 60 + sm;
-  let end = eh * 60 + em;
-  if (end <= start) end += 24 * 60;
-  return (end - start) / 60;
 }
 
 // ─── Studio Pie Chart ─────────────────────────────────────────────────────
@@ -500,8 +492,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
 
   // Durée totale
   const totalHours = nonCancelledBookings.reduce(
-    (acc, b) => acc + slotDurationHours(b.start_time, b.end_time), 0,
+    (acc, b) => acc + slotDurationHours(b.start_time, b.end_time),
+    0,
   );
+  const bookingInsights = computeClientBookingInsights(bookings);
 
   // Ancienneté
   const monthsSinceFirst = firstBooking
@@ -995,11 +989,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   </div>
                   <div className="border-t border-zinc-800 pt-3 flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Durée totale</span>
-                    <span className="font-semibold">
-                      {totalHours >= 1
-                        ? `${Math.floor(totalHours)}h${totalHours % 1 > 0 ? String(Math.round((totalHours % 1) * 60)).padStart(2, "0") : ""}`
-                        : totalHours > 0 ? `${Math.round(totalHours * 60)}min` : "—"}
-                    </span>
+                    <span className="font-semibold">{formatDurationHours(totalHours)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Durée moyenne</span>
+                    <span className="font-semibold">{bookingInsights.averageDurationLabel}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Client depuis</span>
@@ -1014,6 +1008,28 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Dernière réservation</span>
                     <span className="text-sm font-medium">{lastBooking ? formatDate(lastBooking.date) : "—"}</span>
+                  </div>
+                  <div className="border-t border-zinc-800 pt-3 flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Jour préféré</span>
+                    <span className="font-semibold">{bookingInsights.preferredWeekday ?? "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Créneau préféré</span>
+                    <span className="font-semibold">{bookingInsights.preferredStartTime ?? "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Studio favori</span>
+                    <span className="font-semibold">
+                      {bookingInsights.preferredStudioId ? studioLabel(bookingInsights.preferredStudioId) : "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-400 text-sm">Formule préférée</span>
+                    <span className="font-semibold">
+                      {bookingInsights.preferredGroupType
+                        ? groupTypeLabel(bookingInsights.preferredGroupType)
+                        : "—"}
+                    </span>
                   </div>
                 </div>
               </div>
