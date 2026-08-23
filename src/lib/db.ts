@@ -23,6 +23,8 @@ import {
   type DbPaymentWithRefund,
   type CreateBooking,
   type DashboardStats,
+  type OverdueBooking,
+  type OverdueBookingsResult,
   type TopClientEntry,
   type TopClientsResult,
 } from "./db-types";
@@ -2117,6 +2119,89 @@ export async function getDashboardStats(
     rangeEquipmentRevenue: rangeEquipmentRow.total,
     rangeMinPrice: rangeMinMaxRow.min_price,
     rangeMaxPrice: rangeMinMaxRow.max_price,
+  };
+}
+
+export async function getOverdueBookings(
+  db: D1Database,
+  opts?: { search?: string },
+): Promise<OverdueBookingsResult> {
+  const today = getParisDateISO();
+  const parisNow = getParisNow();
+  const nowHHMM = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
+  const remainingExpr = `(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) - COALESCE(paid.paid_amount, 0))`;
+  const sessionEndedSql = `(b.date < ? OR (b.date = ? AND CASE WHEN b.end_time = '00:00' THEN '24:00' ELSE b.end_time END <= ?))`;
+
+  const search = opts?.search?.trim() ?? "";
+  const searchSql = search
+    ? `AND (
+        b.booking_ref LIKE ? OR u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ?
+        OR b.band_name LIKE ? OR u.band_name LIKE ?
+      )`
+    : "";
+  const searchParams = search ? Array<string>(6).fill(`%${search}%`) : [];
+  const filterParams = [today, today, nowHHMM, ...searchParams];
+
+  const [aggregateResult, listResult] = await db.batch([
+    db.prepare(
+      `WITH ${PAID_BY_BOOKING_CTE}
+      SELECT COUNT(*) as count, COALESCE(SUM(${remainingExpr}), 0) as total
+      FROM bookings b
+      LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+      LEFT JOIN users u ON u.id = b.user_id
+      WHERE (b.status != 'cancelled' OR b.keep_balance_due = 1)
+        AND ${sessionEndedSql}
+        AND ${remainingExpr} > 0.005
+        ${searchSql}`,
+    ).bind(...filterParams),
+    db.prepare(
+      `WITH ${PAID_BY_BOOKING_CTE}
+      SELECT b.id, b.booking_ref, b.user_id, b.date, b.start_time, b.end_time, b.studio_id, b.status,
+        b.payment_status, COALESCE(b.keep_balance_due, 0) as keep_balance_due,
+        b.total_price, COALESCE(b.promo_discount, 0) as promo_discount,
+        MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) as amount_due,
+        COALESCE(paid.paid_amount, 0) as total_paid,
+        ${remainingExpr} as remaining,
+        u.name as user_name, u.email as user_email, u.phone as user_phone,
+        COALESCE(b.band_name, u.band_name) as band_name
+      FROM bookings b
+      LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+      LEFT JOIN users u ON u.id = b.user_id
+      WHERE (b.status != 'cancelled' OR b.keep_balance_due = 1)
+        AND ${sessionEndedSql}
+        AND ${remainingExpr} > 0.005
+        ${searchSql}
+      ORDER BY b.date ASC, b.start_time ASC`,
+    ).bind(...filterParams),
+  ]);
+
+  const aggregate = (aggregateResult.results as unknown as Array<{ count: number; total: number }>)[0] ?? { count: 0, total: 0 };
+  const bookings = (listResult.results as unknown as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    booking_ref: String(row.booking_ref ?? ""),
+    user_id: String(row.user_id ?? ""),
+    date: String(row.date ?? ""),
+    start_time: String(row.start_time ?? ""),
+    end_time: String(row.end_time ?? ""),
+    studio_id: String(row.studio_id ?? ""),
+    status: String(row.status ?? ""),
+    payment_status: (row.payment_status as string | null) ?? null,
+    keep_balance_due: Number(row.keep_balance_due) || 0,
+    total_price: Number(row.total_price) || 0,
+    promo_discount: Number(row.promo_discount) || 0,
+    amount_due: Number(row.amount_due) || 0,
+    total_paid: Number(row.total_paid) || 0,
+    remaining: Number(row.remaining) || 0,
+    user_name: (row.user_name as string | null) ?? null,
+    user_email: (row.user_email as string | null) ?? null,
+    user_phone: (row.user_phone as string | null) ?? null,
+    band_name: (row.band_name as string | null) ?? null,
+  })) as OverdueBooking[];
+
+  return {
+    bookings,
+    totalCount: Number(aggregate.count) || 0,
+    totalRemaining: Number(aggregate.total) || 0,
   };
 }
 

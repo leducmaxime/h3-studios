@@ -14,6 +14,34 @@ export interface DashboardOverdueBooking {
   remaining: number;
 }
 
+export interface OverdueBooking {
+  id: string;
+  booking_ref: string;
+  user_id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  studio_id: string;
+  status: string;
+  payment_status: string | null;
+  keep_balance_due: number;
+  total_price: number;
+  promo_discount: number;
+  amount_due: number;
+  total_paid: number;
+  remaining: number;
+  user_name: string | null;
+  user_email: string | null;
+  user_phone: string | null;
+  band_name: string | null;
+}
+
+export interface OverdueBookingsResult {
+  bookings: OverdueBooking[];
+  totalCount: number;
+  totalRemaining: number;
+}
+
 export interface DashboardStats {
   todayBookings: number;
   todayRevenue: number;

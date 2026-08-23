@@ -32,6 +32,7 @@ import { AdminBlockedSlots } from "@/app/pages/admin/BlockedSlots";
 import { AdminUsers } from "@/app/pages/admin/Users";
 import { AdminUserDetail } from "@/app/pages/admin/UserDetail";
 import { AdminPayments } from "@/app/pages/admin/Payments";
+import { AdminRecouvrement } from "@/app/pages/admin/Recouvrement";
 import { AdminEquipements } from "@/app/pages/admin/Equipements";
 import { AdminPricing } from "@/app/pages/admin/Pricing";
 import { AdminSettings } from "@/app/pages/admin/Settings";
@@ -124,6 +125,7 @@ import {
   addAuditLog,
   getAuditLogs,
   getDashboardStats,
+  getOverdueBookings,
   getTopClients,
   getMonthlyReportData,
   getSetting,
@@ -584,6 +586,7 @@ const app = defineApp([
       route("/admin/users", AdminUsers),
       route("/admin/users/:id", ({ params }) => <AdminUserDetail userId={params.id} />),
       route("/admin/payments", AdminPayments),
+      route("/admin/recouvrement", AdminRecouvrement),
       route("/admin/equipements", AdminEquipements),
       route("/admin/studios", () => new Response(null, { status: 301, headers: { Location: "/admin/equipements" } })),
       route("/admin/pricing", AdminPricing),
@@ -3269,6 +3272,22 @@ const app = defineApp([
     }
 
     return jsonError("Method not allowed", 405);
+  }),
+
+  // ─── Admin Recouvrement API ─────────────────────────────────────────────────
+
+  route("/api/admin/recouvrement", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    try {
+      const url = new URL(request.url);
+      const search = url.searchParams.get("search") ?? undefined;
+      const result = await getOverdueBookings(env.DB, { search });
+      return jsonSuccess(result);
+    } catch (error) {
+      console.error("GET /api/admin/recouvrement error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch overdue bookings", 500);
+    }
   }),
 
   // ─── Admin Payments API ─────────────────────────────────────────────────────

@@ -1759,14 +1759,15 @@ export function AdminDashboard() {
             color={(stats?.rangePendingPayments ?? 0) > 0 ? "red" : "blue"}
           />
         </a>
-        <StatCard
-          title="Au recouvrement"
-          value={stats?.rangeOverduePayments ?? 0}
-          subValue={`${formatPrice(stats?.rangeOverdueAmount ?? 0)} · Séances terminées, solde dû`}
-          icon={AlertCircle}
-          color={(stats?.rangeOverduePayments ?? 0) > 0 ? "red" : "blue"}
-          className="sm:col-span-2 lg:col-span-3"
-        />
+        <a href="/admin/recouvrement" className="block sm:col-span-2 lg:col-span-3">
+          <StatCard
+            title="Au recouvrement"
+            value={stats?.rangeOverduePayments ?? 0}
+            subValue={`${formatPrice(stats?.rangeOverdueAmount ?? 0)} · Séances terminées, solde dû`}
+            icon={AlertCircle}
+            color={(stats?.rangeOverduePayments ?? 0) > 0 ? "red" : "blue"}
+          />
+        </a>
       </div>
 
       {/* Liste Au recouvrement */}
@@ -1774,7 +1775,12 @@ export function AdminDashboard() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-300">Au recouvrement — par réservation</h2>
-            <span className="text-sm font-medium text-red-400">{formatPrice(stats.rangeOverdueAmount)}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-red-400">{formatPrice(stats.rangeOverdueAmount)}</span>
+              <a href="/admin/recouvrement" className="text-sm text-primary transition-colors hover:text-primary/80">
+                Voir tout →
+              </a>
+            </div>
           </div>
           <div className="space-y-2">
             {stats.rangeOverdueBookings.map((booking) => {
