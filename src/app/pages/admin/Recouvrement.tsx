@@ -597,8 +597,6 @@ function BookingsTable({
               <th className="px-4 py-3 font-medium">Date</th>
               <th className="px-4 py-3 font-medium">Studio</th>
               <th className="px-4 py-3 font-medium">Statut</th>
-              <th className="px-4 py-3 text-right font-medium">Dû</th>
-              <th className="px-4 py-3 text-right font-medium">Payé</th>
               <th className="px-4 py-3 text-right font-medium">Reste</th>
             </tr>
           </thead>
@@ -658,8 +656,6 @@ function BookingsTable({
                       {BOOKING_STATUS_LABELS[displayStatus] ?? displayStatus}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right text-sm">{formatPrice(booking.amount_due)}</td>
-                  <td className="px-4 py-3 text-right text-sm text-zinc-400">{formatPrice(booking.total_paid)}</td>
                   <td className="px-4 py-3 text-right text-sm font-semibold text-red-400">
                     {formatPrice(booking.remaining)}
                   </td>
