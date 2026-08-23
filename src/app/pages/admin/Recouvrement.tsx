@@ -435,7 +435,7 @@ export function AdminRecouvrement() {
                       onClick={() => openCollectDialog(group)}
                     >
                       <Banknote className="mr-1.5 h-4 w-4" />
-                      Encaisser tout
+                      Encaisser
                     </Button>
                   )}
                 </div>
