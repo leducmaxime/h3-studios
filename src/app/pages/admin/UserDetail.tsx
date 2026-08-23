@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   ChevronLeft,
-  User,
   Mail,
   Phone,
   Music,
@@ -18,6 +17,10 @@ import {
   Building2,
   FileText,
   Instagram,
+  Wallet,
+  Clock,
+  AlertTriangle,
+  StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,9 +36,10 @@ import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientTy
 import { formatPrice, type StudioId } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, studioLabel } from "@/lib/labels";
-import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
+import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 import { computeClientBookingInsights, formatDurationHours, slotDurationHours } from "@/lib/user-booking-stats";
+import { formatCountRate, formatNextBookingWhen } from "@/lib/user-ops-snapshot";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -124,6 +128,7 @@ interface LoyaltyProgress {
 
 type UserWithLoyalty = DbUser & {
   loyalty?: LoyaltyProgress | null;
+  ops?: UserOpsSnapshot | null;
 };
 
 interface LoyaltyFormState {
@@ -184,6 +189,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     threshold: "",
   });
 
+  const [notesEditing, setNotesEditing] = useState(false);
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesDraft, setNotesDraft] = useState("");
+
   // Filters (like /admin/bookings)
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -203,6 +212,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
       if (json.success && json.data) {
         setUser(json.data);
         setLoyaltyForm(loyaltyFormFromUser(json.data));
+        if (!notesEditing) setNotesDraft(json.data.notes || "");
         setEditForm({
           name: json.data.name,
           email: json.data.email || "",
@@ -391,6 +401,39 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     }
   };
 
+  const handleSaveNotes = async () => {
+    if (!user) return;
+    setNotesSaving(true);
+    try {
+      const notes = notesDraft.trim() || null;
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes }),
+      });
+      const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
+      if (json.success && json.data) {
+        toast.success(notes ? "Note enregistrée" : "Note supprimée");
+        setUser({ ...user, ...json.data, loyalty: user.loyalty, ops: user.ops });
+        setEditForm((current) => ({ ...current, notes: notes ?? "" }));
+        setNotesDraft(notes ?? "");
+        setNotesEditing(false);
+      } else {
+        toast.error(json.error || "Erreur lors de la sauvegarde");
+      }
+    } catch (error) {
+      console.error("Notes save error:", error);
+      toast.error("Erreur lors de la sauvegarde");
+    } finally {
+      setNotesSaving(false);
+    }
+  };
+
+  const handleCancelNotes = () => {
+    setNotesDraft(user?.notes || "");
+    setNotesEditing(false);
+  };
+
   const handleCancelLoyalty = () => {
     if (user) setLoyaltyForm(loyaltyFormFromUser(user));
     setLoyaltyError(null);
@@ -551,6 +594,71 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
         </TabsList>
 
         <TabsContent value="profile">
+          {user.ops && (
+            <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className={`rounded-xl border p-4 ${user.ops.overdueCount > 0 ? "border-orange-500/40 bg-orange-500/5" : "border-zinc-800 bg-zinc-900"}`}>
+                <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  {user.ops.overdueCount > 0 ? <AlertTriangle className="h-3.5 w-3.5 text-orange-400" /> : <Wallet className="h-3.5 w-3.5" />}
+                  Reste à payer
+                </div>
+                {user.ops.overdueCount > 0 ? (
+                  <>
+                    <p className="text-lg font-semibold text-orange-300">{formatPrice(user.ops.overdueRemaining)}</p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {user.ops.overdueCount} séance{user.ops.overdueCount > 1 ? "s" : ""} en retard
+                    </p>
+                    <a
+                      href={`/admin/recouvrement?userId=${user.id}`}
+                      className="mt-2 inline-block text-sm font-medium text-orange-300 hover:underline"
+                    >
+                      Encaisser
+                    </a>
+                  </>
+                ) : (
+                  <p className="text-lg font-semibold">Aucun impayé</p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+                <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  <Clock className="h-3.5 w-3.5" />
+                  Prochaine réservation
+                </div>
+                {user.ops.nextBooking ? (
+                  <>
+                    <p className="text-lg font-semibold">{formatNextBookingWhen(user.ops.nextBooking.date, user.ops.nextBooking.start_time)}</p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {studioLabel(user.ops.nextBooking.studio_id)} · {user.ops.nextBooking.start_time.slice(0, 5)}–{user.ops.nextBooking.end_time.slice(0, 5)}
+                    </p>
+                    <a
+                      href={`/admin/bookings/${user.ops.nextBooking.id}`}
+                      className="mt-2 inline-block text-sm font-medium text-primary hover:underline"
+                    >
+                      {user.ops.nextBooking.booking_ref}
+                    </a>
+                  </>
+                ) : (
+                  <p className="text-lg font-semibold text-zinc-300">Aucune à venir</p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+                <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Annulations
+                </div>
+                <p className="text-lg font-semibold">{formatCountRate(user.ops.cancelledBookings, user.ops.totalBookings)}</p>
+                <p className="mt-1 text-xs text-zinc-500">sur toutes les réservations</p>
+              </div>
+
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+                <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Absences
+                </div>
+                <p className="text-lg font-semibold">{formatCountRate(user.ops.noShowBookings, user.ops.totalBookings)}</p>
+                <p className="mt-1 text-xs text-zinc-500">no-show sur toutes les réservations</p>
+              </div>
+            </div>
+          )}
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
@@ -575,7 +683,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setEditing(true)}
+                      onClick={() => {
+                        setNotesEditing(false);
+                        setEditing(true);
+                      }}
                       className="gap-1"
                     >
                       <Edit className="h-4 w-4" />
@@ -761,14 +872,54 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       </div>
                     </div>
 
-                    {user.notes && (
-                      <div className="border-t border-zinc-800 pt-4">
-                        <p className="text-sm font-medium text-zinc-400 mb-2">Notes internes</p>
+                    <div className="border-t border-zinc-800 pt-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="flex items-center gap-2 text-sm font-medium text-zinc-400">
+                          <StickyNote className="h-4 w-4" />
+                          Notes internes
+                        </p>
+                        {!notesEditing && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setNotesDraft(user.notes || "");
+                              setNotesEditing(true);
+                            }}
+                            className="gap-1"
+                          >
+                            <Edit className="h-4 w-4" />
+                            {user.notes ? "Modifier" : "Ajouter"}
+                          </Button>
+                        )}
+                      </div>
+                      {notesEditing ? (
+                        <div className="space-y-3">
+                          <textarea
+                            value={notesDraft}
+                            onChange={(e) => setNotesDraft(e.target.value)}
+                            rows={4}
+                            placeholder="Préférences, contexte, points d'attention…"
+                            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] dark:bg-input/30"
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={handleSaveNotes} disabled={notesSaving} className="gap-1">
+                              <Save className="h-4 w-4" />
+                              {notesSaving ? "Sauvegarde..." : "Enregistrer"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={handleCancelNotes} disabled={notesSaving}>
+                              Annuler
+                            </Button>
+                          </div>
+                        </div>
+                      ) : user.notes ? (
                         <div className="rounded-lg bg-zinc-800 p-3">
                           <p className="text-sm whitespace-pre-wrap">{user.notes}</p>
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <p className="text-sm text-zinc-500">Aucune note interne.</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

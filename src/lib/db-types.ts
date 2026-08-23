@@ -169,6 +169,25 @@ export interface DbUser {
   updated_at: string;
 }
 
+export interface UserOpsNextBooking {
+  id: string;
+  booking_ref: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  studio_id: string;
+}
+
+/** Snapshot opérationnel de la fiche client (hors limite des 100 dernières résas). */
+export interface UserOpsSnapshot {
+  overdueCount: number;
+  overdueRemaining: number;
+  nextBooking: UserOpsNextBooking | null;
+  totalBookings: number;
+  cancelledBookings: number;
+  noShowBookings: number;
+}
+
 // --- Bookings ---
 
 export type BookingStatus = "confirmed" | "cancelled" | "completed" | "no-show";

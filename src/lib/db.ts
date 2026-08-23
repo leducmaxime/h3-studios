@@ -27,6 +27,8 @@ import {
   type OverdueBookingsResult,
   type TopClientEntry,
   type TopClientsResult,
+  type UserOpsNextBooking,
+  type UserOpsSnapshot,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type StudioId } from "./booking";
@@ -608,6 +610,70 @@ export async function getUserById(
       WHERE u.id = ?
     `,
   ).bind(id).first<DbUser>();
+}
+
+export function buildNextBookingQuery(
+  userId: string,
+  now: { dateISO: string; hours: number; minutes: number },
+): { sql: string; params: unknown[] } {
+  const nowHHMM = `${String(now.hours).padStart(2, "0")}:${String(now.minutes).padStart(2, "0")}`;
+  return {
+    sql: `SELECT id, booking_ref, date, start_time, end_time, studio_id
+      FROM bookings
+      WHERE user_id = ?
+        AND status = 'confirmed'
+        AND (date > ? OR (date = ? AND CASE WHEN end_time = '00:00' THEN '24:00' ELSE end_time END > ?))
+      ORDER BY date ASC, start_time ASC
+      LIMIT 1`,
+    params: [userId, now.dateISO, now.dateISO, nowHHMM],
+  };
+}
+
+export function buildUserBookingStatusCountsQuery(userId: string): { sql: string; params: unknown[] } {
+  return {
+    sql: `SELECT
+        COUNT(*) as total,
+        COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled,
+        COALESCE(SUM(CASE WHEN status = 'no-show' THEN 1 ELSE 0 END), 0) as no_show
+      FROM bookings
+      WHERE user_id = ?`,
+    params: [userId],
+  };
+}
+
+export async function getUserOpsSnapshot(
+  db: D1Database,
+  userId: string,
+): Promise<UserOpsSnapshot> {
+  const nextQuery = buildNextBookingQuery(userId, getParisNow());
+  const countsQuery = buildUserBookingStatusCountsQuery(userId);
+  const [overdue, nextBooking, counts] = await Promise.all([
+    getOverdueBookings(db, { userId }),
+    db.prepare(nextQuery.sql).bind(...nextQuery.params).first<UserOpsNextBooking>(),
+    db.prepare(countsQuery.sql).bind(...countsQuery.params).first<{
+      total: number;
+      cancelled: number;
+      no_show: number;
+    }>(),
+  ]);
+
+  return {
+    overdueCount: overdue.totalCount,
+    overdueRemaining: overdue.totalRemaining,
+    nextBooking: nextBooking
+      ? {
+          id: nextBooking.id,
+          booking_ref: nextBooking.booking_ref,
+          date: nextBooking.date,
+          start_time: nextBooking.start_time,
+          end_time: nextBooking.end_time,
+          studio_id: nextBooking.studio_id,
+        }
+      : null,
+    totalBookings: Number(counts?.total) || 0,
+    cancelledBookings: Number(counts?.cancelled) || 0,
+    noShowBookings: Number(counts?.no_show) || 0,
+  };
 }
 
 export async function getUserByEmail(

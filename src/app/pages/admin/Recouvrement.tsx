@@ -111,6 +111,10 @@ export function AdminRecouvrement() {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [userIdFilter] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("userId")?.trim() ?? "";
+  });
   const [view, setView] = useState<ViewMode>(readStoredView);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortField>("date");
@@ -124,6 +128,7 @@ export function AdminRecouvrement() {
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
+      if (userIdFilter) params.set("userId", userIdFilter);
       const query = params.toString();
       const res = await fetch(`/api/admin/recouvrement${query ? `?${query}` : ""}`);
       const json = (await res.json()) as RecouvrementResponse;
@@ -140,7 +145,7 @@ export function AdminRecouvrement() {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, userIdFilter]);
 
   useEffect(() => {
     fetchOverdue();
@@ -294,7 +299,13 @@ export function AdminRecouvrement() {
           </p>
           <p className="mt-1 text-sm text-zinc-500">
             Séances terminées dont le solde n’est pas soldé.
+            {userIdFilter ? " Filtré sur un client." : ""}
           </p>
+          {userIdFilter && (
+            <a href="/admin/recouvrement" className="mt-2 inline-block text-sm text-primary hover:underline">
+              Voir tous les impayés
+            </a>
+          )}
         </div>
       </div>
 

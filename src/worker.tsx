@@ -85,6 +85,7 @@ import {
   checkConflict,
   getUsers,
   getUserById,
+  getUserOpsSnapshot,
   createUser,
   updateUser,
   updateUserPassword,
@@ -3197,10 +3198,25 @@ const app = defineApp([
       try {
         const user = await getUserById(env.DB, id);
         if (!user) return jsonError("Utilisateur introuvable", 404);
-        const counts = await getUserLoyaltyCounts(env.DB, id);
+        const [counts, totalDiscountGranted, ops] = await Promise.all([
+          getUserLoyaltyCounts(env.DB, id),
+          getUserLoyaltyDiscountTotal(env.DB, id),
+          getUserOpsSnapshot(env.DB, id),
+        ]);
         const progress = getLoyaltyProgress(readLoyaltyConfig(user), counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
-        const totalDiscountGranted = await getUserLoyaltyDiscountTotal(env.DB, id);
-        return jsonSuccess({ ...user, loyalty: { pastEligibleBookings: progress.pastEligibleBookings, awardsGranted: progress.awardsGranted, counter: progress.counter, remainingToNextAward: progress.remainingToNextAward, isDue: progress.isDue, threshold: progress.threshold, totalDiscountGranted } });
+        return jsonSuccess({
+          ...user,
+          loyalty: {
+            pastEligibleBookings: progress.pastEligibleBookings,
+            awardsGranted: progress.awardsGranted,
+            counter: progress.counter,
+            remainingToNextAward: progress.remainingToNextAward,
+            isDue: progress.isDue,
+            threshold: progress.threshold,
+            totalDiscountGranted,
+          },
+          ops,
+        });
       } catch (error) {
         console.error("GET /api/admin/users/:id error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to fetch user", 500);
@@ -3285,7 +3301,8 @@ const app = defineApp([
     try {
       const url = new URL(request.url);
       const search = url.searchParams.get("search") ?? undefined;
-      const result = await getOverdueBookings(env.DB, { search });
+      const userId = url.searchParams.get("userId") ?? undefined;
+      const result = await getOverdueBookings(env.DB, { search, userId });
       return jsonSuccess(result);
     } catch (error) {
       console.error("GET /api/admin/recouvrement error:", error);
