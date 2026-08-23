@@ -56,6 +56,50 @@ describe("buildEmailHtml copy", () => {
     expect(output).toContain("Cela prend moins d'une minute");
   });
 
+  it("shows a Remise line for an admin manual discount without a promo code", () => {
+    const output = buildEmailHtml({
+      ...baseEmail,
+      totalPrice: 60,
+      promoDiscount: 20,
+    });
+
+    expect(output).toContain("Remise");
+    expect(output).toContain("-20€ TTC");
+    expect(output).not.toContain("Code promo");
+    expect(output).toContain("60€ TTC");
+  });
+
+  it("keeps the promo-code label when a code is applied", () => {
+    const output = buildEmailHtml({
+      ...baseEmail,
+      totalPrice: 60,
+      promoCode: "H3OFF",
+      promoDiscount: 20,
+    });
+
+    expect(output).toContain("Code promo");
+    expect(output).toContain("H3OFF");
+    expect(output).toContain("-20€ TTC");
+    expect(output).not.toContain(">Remise<");
+  });
+
+  it("shows Remise on a multi-slot confirmation with a manual discount", () => {
+    const output = buildEmailHtml({
+      ...baseEmail,
+      totalPrice: 140,
+      promoDiscount: 20,
+      allSlots: [
+        { ...baseEmail, bookingRef: "H3-88", totalPrice: 80 },
+        { ...baseEmail, bookingRef: "H3-89", date: "2026-08-28", totalPrice: 80 },
+      ],
+    });
+
+    expect(output).toContain("Remise");
+    expect(output).toContain("-20€ TTC");
+    expect(output).not.toContain("Code promo");
+    expect(output).toContain("140€ TTC");
+  });
+
   it("mentions the remaining amount only when keepBalanceDue", () => {
     const due = buildCancellationEmailHtml({
       bookingRef: "H3-46",

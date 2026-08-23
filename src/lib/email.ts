@@ -185,8 +185,23 @@ export function buildEmailHtml(data: BookingConfirmationData): string {
   const groupLabel = getGroupTypeLabel(data.groupType);
   const paymentLabel = getPaymentMethodLabel(data.paymentMethod, data.paymentStatus, data.totalPrice);
   const equipmentLabel = buildEquipmentList(data.equipment);
-  const hasPromo = data.promoCode && (data.promoDiscount || 0) > 0;
-  const promoLabel = data.promoType === "percentage" ? `${data.promoValue ?? data.promoDiscount}%` : `${formatPrice(data.promoDiscount || 0)}`;
+  const promoDiscount = data.promoDiscount || 0;
+  const hasPromoCode = Boolean(data.promoCode) && promoDiscount > 0;
+  const hasManualDiscount = !data.promoCode && promoDiscount > 0;
+  const promoLabel = data.promoType === "percentage" ? `${data.promoValue ?? data.promoDiscount}%` : `${formatPrice(promoDiscount)}`;
+  const discountRow = hasPromoCode
+    ? `<tr>
+          <td style="padding:6px 0;color:#facc15;font-size:14px;">
+            Code promo <strong>${data.promoCode}</strong> (-${promoLabel})
+          </td>
+          <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(promoDiscount)}</td>
+        </tr>`
+    : hasManualDiscount
+    ? `<tr>
+          <td style="padding:6px 0;color:#facc15;font-size:14px;">Remise</td>
+          <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(promoDiscount)}</td>
+        </tr>`
+    : "";
   const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, data.equipmentPrice, data.equipmentNames);
   const clientTypeLabel = isClientType(data.clientType) ? CLIENT_TYPE_RULES[data.clientType].label : data.clientType;
   const clientIdentitySection = data.clientType
@@ -329,13 +344,8 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
   <tr>
     <td>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        ${hasPromo ? `
-        <tr>
-          <td style="padding:6px 0;color:#facc15;font-size:14px;">
-            Code promo <strong>${data.promoCode}</strong> (-${promoLabel})
-          </td>
-          <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
-        </tr>
+        ${discountRow ? `
+        ${discountRow}
         <tr>
           <td colspan="2" style="border-top:1px solid #333333;padding-top:8px;"></td>
         </tr>
@@ -361,14 +371,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
           <td align="right" style="padding:6px 0;color:#ffffff;font-size:14px;font-weight:500;">${formatPrice(data.totalPrice - data.equipmentPrice + (data.promoDiscount || 0) + (data.loyaltyDiscount || 0))}</td>
         </tr>
         ${equipmentBreakdown}
-        ${hasPromo ? `
-        <tr>
-          <td style="padding:6px 0;color:#facc15;font-size:14px;">
-            Code promo <strong>${data.promoCode}</strong> (-${promoLabel})
-          </td>
-          <td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.promoDiscount || 0)}</td>
-        </tr>
-        ` : ""}
+        ${discountRow}
         ${(data.loyaltyDiscount || 0) > 0 ? `<tr><td style="padding:6px 0;color:#facc15;font-size:14px;">Remise fidélité</td><td align="right" style="padding:6px 0;color:#facc15;font-size:14px;font-weight:500;">-${formatPrice(data.loyaltyDiscount || 0)}</td></tr>` : ""}
         <tr>
           <td colspan="2" style="border-top:1px solid #333333;padding-top:12px;"></td>
