@@ -1,5 +1,6 @@
 import { render, route, layout } from "rwsdk/router";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
+import { allocateCollectPayments, isCollectMethod, type CollectPaymentInput } from "@/lib/recouvrement-collect";
 import { groupTypeLabel, paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, CLIENT_TYPE_RULES, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { buildBookingConfirmationEmailPayload, buildBookingReminderEmailPayload, canResendBookingConfirmation, canSendBookingReminder, finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
@@ -3287,6 +3288,70 @@ const app = defineApp([
     } catch (error) {
       console.error("GET /api/admin/recouvrement error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to fetch overdue bookings", 500);
+    }
+  }),
+
+  route("/api/admin/recouvrement/collect", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    try {
+      const body = await request.json() as {
+        userId?: string;
+        bookingIds?: string[];
+        payments?: Array<{ amount: number; method: string }>;
+      };
+      const userId = body.userId?.trim() ?? "";
+      const bookingIds = Array.isArray(body.bookingIds) ? body.bookingIds.filter((id) => typeof id === "string" && id.trim()) : [];
+      if (!userId) return jsonError("Client introuvable", 400);
+      if (bookingIds.length === 0) return jsonError("Aucune réservation à encaisser", 400);
+
+      const payments: CollectPaymentInput[] = [];
+      for (const payment of body.payments ?? []) {
+        if (!isCollectMethod(payment.method)) return jsonError("Méthode de paiement invalide", 400);
+        const amount = Number(payment.amount);
+        if (!Number.isFinite(amount) || amount <= 0) return jsonError("Montant invalide", 400);
+        payments.push({ amount, method: payment.method });
+      }
+
+      const overdue = await getOverdueBookings(env.DB, { userId });
+      const requested = new Set(bookingIds);
+      const selected = overdue.bookings.filter((booking) => requested.has(booking.id));
+      if (selected.length !== bookingIds.length) {
+        return jsonError("La liste a changé, rechargez la page", 409);
+      }
+
+      const allocation = allocateCollectPayments(
+        selected.map((booking) => ({ id: booking.id, remaining: booking.remaining })),
+        payments,
+      );
+      if ("error" in allocation) return jsonError(allocation.error, 400);
+
+      const paymentIds: string[] = [];
+      for (const line of allocation) {
+        const result = await addPayment(env.DB, {
+          booking_id: line.bookingId,
+          amount: line.amount,
+          method: line.method,
+          status: "paid",
+        });
+        if (!result.success) return jsonError("Échec de l'enregistrement du paiement", 500);
+        paymentIds.push(result.id);
+      }
+
+      const collectedAmount = selected.reduce((sum, booking) => sum + booking.remaining, 0);
+      await addAuditLog(
+        env.DB,
+        "user",
+        userId,
+        "mark-paid",
+        { bookingIds, paymentIds, amount: collectedAmount, count: selected.length },
+        request.headers.get("X-Admin-User-Id") || "admin",
+      );
+
+      return jsonSuccess({ paymentIds, count: selected.length });
+    } catch (error) {
+      console.error("POST /api/admin/recouvrement/collect error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to collect overdue bookings", 500);
     }
   }),
 

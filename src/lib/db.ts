@@ -2124,7 +2124,7 @@ export async function getDashboardStats(
 
 export async function getOverdueBookings(
   db: D1Database,
-  opts?: { search?: string },
+  opts?: { search?: string; userId?: string },
 ): Promise<OverdueBookingsResult> {
   const today = getParisDateISO();
   const parisNow = getParisNow();
@@ -2140,7 +2140,9 @@ export async function getOverdueBookings(
       )`
     : "";
   const searchParams = search ? Array<string>(6).fill(`%${search}%`) : [];
-  const filterParams = [today, today, nowHHMM, ...searchParams];
+  const userId = opts?.userId?.trim() ?? "";
+  const userSql = userId ? "AND b.user_id = ?" : "";
+  const filterParams = [today, today, nowHHMM, ...searchParams, ...(userId ? [userId] : [])];
 
   const [aggregateResult, listResult] = await db.batch([
     db.prepare(
@@ -2152,7 +2154,8 @@ export async function getOverdueBookings(
       WHERE (b.status != 'cancelled' OR b.keep_balance_due = 1)
         AND ${sessionEndedSql}
         AND ${remainingExpr} > 0.005
-        ${searchSql}`,
+        ${searchSql}
+        ${userSql}`,
     ).bind(...filterParams),
     db.prepare(
       `WITH ${PAID_BY_BOOKING_CTE}
@@ -2171,6 +2174,7 @@ export async function getOverdueBookings(
         AND ${sessionEndedSql}
         AND ${remainingExpr} > 0.005
         ${searchSql}
+        ${userSql}
       ORDER BY b.date ASC, b.start_time ASC`,
     ).bind(...filterParams),
   ]);

@@ -1,13 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, Search, Wallet } from "lucide-react";
+import { Banknote, ChevronDown, ChevronUp, Loader2, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatPrice } from "@/lib/booking";
-import { getDisplayStatus } from "@/lib/booking-totals";
+import { getDisplayStatus, parseAmountInput, round2 } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, studioLabel } from "@/lib/labels";
+import { formatTaxBreakdown } from "@/lib/tax";
+import { amountsMatch, type CollectMethod } from "@/lib/recouvrement-collect";
 import type { BookingStatus, OverdueBooking } from "@/lib/db-types";
 
 const VIEW_STORAGE_KEY = "h3-admin-recouvrement-view";
@@ -33,6 +46,12 @@ interface ClientGroup {
   phone: string | null;
   bookings: OverdueBooking[];
   remaining: number;
+}
+
+interface CollectEntry {
+  id: string;
+  amount: string;
+  method: CollectMethod;
 }
 
 const STATUS_CLASSES: Record<BookingStatus, string> = {
@@ -125,6 +144,9 @@ export function AdminRecouvrement() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [collectGroup, setCollectGroup] = useState<ClientGroup | null>(null);
+  const [collectEntries, setCollectEntries] = useState<CollectEntry[]>([]);
+  const [collectLoading, setCollectLoading] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -234,6 +256,76 @@ export function AdminRecouvrement() {
     setOpenGroups((current) => ({ ...current, [userId]: !current[userId] }));
   };
 
+  const openCollectDialog = (group: ClientGroup) => {
+    if (!group.userId || group.userId === "unknown") {
+      toast.error("Impossible d'encaisser un client sans fiche");
+      return;
+    }
+    setCollectGroup(group);
+    setCollectEntries([
+      {
+        id: crypto.randomUUID(),
+        amount: group.remaining.toFixed(2).replace(".", ","),
+        method: "cash",
+      },
+    ]);
+  };
+
+  const collectTotals = useMemo(() => {
+    const remainingStart = collectGroup?.remaining ?? 0;
+    const parsed = collectEntries.map((entry) => {
+      const amount = parseAmountInput(entry.amount);
+      return { method: entry.method, amount: Number.isFinite(amount) && amount > 0 ? amount : 0 };
+    });
+    const totalAmount = round2(parsed.reduce((sum, entry) => sum + entry.amount, 0));
+    return {
+      remainingStart,
+      totalAmount,
+      remainingAfter: round2(remainingStart - totalAmount),
+      exact: amountsMatch(remainingStart, totalAmount),
+      cashAmount: parsed.filter((entry) => entry.method === "cash").reduce((sum, entry) => sum + entry.amount, 0),
+      cardAmount: parsed.filter((entry) => entry.method === "card").reduce((sum, entry) => sum + entry.amount, 0),
+      transferAmount: parsed.filter((entry) => entry.method === "transfer").reduce((sum, entry) => sum + entry.amount, 0),
+      checkAmount: parsed.filter((entry) => entry.method === "check").reduce((sum, entry) => sum + entry.amount, 0),
+    };
+  }, [collectEntries, collectGroup]);
+
+  const submitCollect = async () => {
+    if (!collectGroup) return;
+    if (!collectTotals.exact) {
+      toast.error("Le total doit égaler exactement le reste dû");
+      return;
+    }
+    const payments = collectEntries
+      .map((entry) => ({ method: entry.method, amount: parseAmountInput(entry.amount) }))
+      .filter((entry) => Number.isFinite(entry.amount) && entry.amount > 0);
+    setCollectLoading(true);
+    try {
+      const res = await fetch("/api/admin/recouvrement/collect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: collectGroup.userId,
+          bookingIds: collectGroup.bookings.map((booking) => booking.id),
+          payments,
+        }),
+      });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (!json.success) {
+        toast.error(json.error || "Erreur lors de l'encaissement");
+        return;
+      }
+      toast.success(`${collectGroup.bookings.length} réservation(s) soldée(s)`);
+      setCollectGroup(null);
+      await fetchOverdue();
+    } catch (error) {
+      console.error("Collect overdue error:", error);
+      toast.error("Erreur réseau");
+    } finally {
+      setCollectLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -301,39 +393,52 @@ export function AdminRecouvrement() {
             const open = Boolean(openGroups[group.userId]);
             return (
               <div key={group.userId} className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(group.userId)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-zinc-800/60"
-                  aria-expanded={open}
-                >
-                  <ChevronDown
-                    className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${open ? "rotate-180" : ""}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    {group.userId !== "unknown" ? (
-                      <a
-                        href={`/admin/users/${group.userId}`}
-                        className="truncate font-medium hover:underline"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {group.name}
-                      </a>
-                    ) : (
-                      <p className="truncate font-medium">{group.name}</p>
-                    )}
-                    <p className="truncate text-xs text-zinc-500">
-                      {group.email || "—"}
-                      {group.phone ? ` · ${group.phone}` : ""}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-semibold text-red-400">{formatPrice(group.remaining)}</p>
-                    <p className="text-xs text-zinc-500">
-                      {group.bookings.length} réservation{group.bookings.length === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                </button>
+                <div className="flex items-center gap-2 px-4 py-3 hover:bg-zinc-800/60">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.userId)}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    aria-expanded={open}
+                  >
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${open ? "rotate-180" : ""}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      {group.userId !== "unknown" ? (
+                        <a
+                          href={`/admin/users/${group.userId}`}
+                          className="truncate font-medium hover:underline"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {group.name}
+                        </a>
+                      ) : (
+                        <p className="truncate font-medium">{group.name}</p>
+                      )}
+                      <p className="truncate text-xs text-zinc-500">
+                        {group.email || "—"}
+                        {group.phone ? ` · ${group.phone}` : ""}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold text-red-400">{formatPrice(group.remaining)}</p>
+                      <p className="text-xs text-zinc-500">
+                        {group.bookings.length} réservation{group.bookings.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  </button>
+                  {group.userId !== "unknown" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => openCollectDialog(group)}
+                    >
+                      <Banknote className="mr-1.5 h-4 w-4" />
+                      Encaisser tout
+                    </Button>
+                  )}
+                </div>
                 {open && (
                   <div className="border-t border-zinc-800">
                     <BookingsTable bookings={group.bookings} compact sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
@@ -344,6 +449,147 @@ export function AdminRecouvrement() {
           })}
         </div>
       )}
+
+      <Dialog
+        open={collectGroup !== null}
+        onOpenChange={(open) => {
+          if (!open) setCollectGroup(null);
+        }}
+      >
+        <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Encaisser le solde</DialogTitle>
+            <DialogDescription>
+              {collectGroup ? (
+                <>
+                  {collectGroup.name} · {collectGroup.bookings.length} réservation
+                  {collectGroup.bookings.length === 1 ? "" : "s"} · Reste dû :{" "}
+                  <span className="font-semibold text-foreground">{formatPrice(collectTotals.remainingStart)}</span>
+                  {(() => {
+                    const tax = formatTaxBreakdown(collectTotals.remainingStart);
+                    return (
+                      <span className="ml-2 text-xs text-zinc-500">
+                        (HT {tax.ht} · TVA 20% {tax.vat})
+                      </span>
+                    );
+                  })()}
+                </>
+              ) : (
+                "Chargement..."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {collectGroup && (
+            <div className="space-y-3">
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/40">
+                {collectGroup.bookings.map((booking) => (
+                  <div key={booking.id} className="flex items-center justify-between gap-3 border-b border-zinc-800/80 px-3 py-2 last:border-b-0">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs text-primary">{booking.booking_ref}</p>
+                      <p className="text-xs text-zinc-500">
+                        {formatDate(booking.date)} · {booking.start_time}–{booking.end_time}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-medium text-red-400">{formatPrice(booking.remaining)}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-400">Paiements saisis</span>
+                  <span className="font-semibold">{formatPrice(collectTotals.totalAmount)}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
+                  <span>
+                    Espèces: {formatPrice(collectTotals.cashAmount)} · CB: {formatPrice(collectTotals.cardAmount)} · Virement:{" "}
+                    {formatPrice(collectTotals.transferAmount)} · Chèque: {formatPrice(collectTotals.checkAmount)}
+                  </span>
+                  <span>Reste: {formatPrice(Math.max(0, collectTotals.remainingAfter))}</span>
+                </div>
+                {!collectTotals.exact && (
+                  <p className="mt-2 text-xs text-destructive">
+                    Le total doit égaler exactement {formatPrice(collectTotals.remainingStart)}
+                  </p>
+                )}
+              </div>
+
+              {collectEntries.map((entry, idx) => (
+                <div key={entry.id} className="grid grid-cols-12 gap-2">
+                  <div className="col-span-5">
+                    <Label className="text-xs text-zinc-400">Montant (€ TTC)</Label>
+                    <Input
+                      value={entry.amount}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setCollectEntries((prev) => prev.map((item, i) => (i === idx ? { ...item, amount: value } : item)));
+                      }}
+                      placeholder="0,00"
+                      className="border-zinc-700 bg-zinc-800"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="col-span-5">
+                    <Label className="text-xs text-zinc-400">Type</Label>
+                    <select
+                      value={entry.method}
+                      onChange={(event) => {
+                        const value = event.target.value as CollectMethod;
+                        setCollectEntries((prev) => prev.map((item, i) => (i === idx ? { ...item, method: value } : item)));
+                      }}
+                      className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+                    >
+                      <option value="cash">Espèces</option>
+                      <option value="card">CB</option>
+                      <option value="transfer">Virement</option>
+                      <option value="check">Chèque</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2 flex items-end justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCollectEntries((prev) => prev.filter((_, i) => i !== idx))}
+                      disabled={collectEntries.length === 1 || collectLoading}
+                      className="text-zinc-400"
+                    >
+                      Retirer
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              <Button
+                type="button"
+                variant="outline"
+                className="border-zinc-700"
+                onClick={() => setCollectEntries((prev) => [...prev, { id: crypto.randomUUID(), amount: "", method: "cash" }])}
+                disabled={collectLoading}
+              >
+                Ajouter un paiement
+              </Button>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCollectGroup(null)}
+              className="border-zinc-700"
+              disabled={collectLoading}
+            >
+              Annuler
+            </Button>
+            <Button type="button" onClick={submitCollect} disabled={collectLoading || !collectGroup || !collectTotals.exact}>
+              {collectLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Solder {collectGroup?.bookings.length ?? 0} réservation{(collectGroup?.bookings.length ?? 0) === 1 ? "" : "s"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
