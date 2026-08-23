@@ -1717,8 +1717,9 @@ export function AdminDashboard() {
             stats ? (
               <>
                 <span className="mt-1 block">
-                  <span className="block">dont {formatPrice(stats.rangePromoDiscounts)} code promo · {formatPrice(stats.rangeManualDiscounts)} remise manuelle</span>
-                  <span className="block">{formatPrice(stats.rangeLoyaltyDiscounts)} remise fidélité</span>
+                  <span className="block whitespace-nowrap">dont {formatPrice(stats.rangePromoDiscounts)} code promo</span>
+                  <span className="block whitespace-nowrap">{formatPrice(stats.rangeManualDiscounts)} remise manuelle</span>
+                  <span className="block whitespace-nowrap">{formatPrice(stats.rangeLoyaltyDiscounts)} remise fidélité</span>
                 </span>
                 <span className="mt-1.5 block text-xs">Déjà déduites du CA réservé</span>
               </>
