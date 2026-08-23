@@ -590,7 +590,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
 
         <TabsContent value="profile">
           <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <div className={`rounded-xl border p-4 ${user.ops && user.ops.overdueCount > 0 ? "border-orange-500/40 bg-orange-500/5" : "border-zinc-800 bg-zinc-900"}`}>
+              <a
+                href={`/admin/recouvrement?userId=${user.id}`}
+                className={`rounded-xl border p-4 transition-colors hover:bg-zinc-800/60 ${user.ops && user.ops.overdueCount > 0 ? "border-orange-500/40 bg-orange-500/5 hover:bg-orange-500/10" : "border-zinc-800 bg-zinc-900"}`}
+              >
                 <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   {user.ops && user.ops.overdueCount > 0 ? <AlertTriangle className="h-3.5 w-3.5 text-orange-400" /> : <Wallet className="h-3.5 w-3.5" />}
                   Recouvrement
@@ -601,17 +604,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     <p className="mt-1 text-xs text-zinc-400">
                       {user.ops.overdueCount} séance{user.ops.overdueCount > 1 ? "s" : ""} en retard
                     </p>
-                    <a
-                      href={`/admin/recouvrement?userId=${user.id}`}
-                      className="mt-2 inline-block text-sm font-medium text-orange-300 hover:underline"
-                    >
-                      Encaisser
-                    </a>
                   </>
                 ) : (
                   <p className="text-lg font-semibold">Aucun impayé</p>
                 )}
-              </div>
+              </a>
 
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
                 <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
