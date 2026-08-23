@@ -37,9 +37,9 @@ import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientTy
 import { formatPrice, type StudioId } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
-import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot } from "@/lib/db-types";
+import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot, type UserBookingInsights } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
-import { computeClientBookingInsights, formatDurationHours, slotDurationHours } from "@/lib/user-booking-stats";
+import { formatDurationHours } from "@/lib/user-booking-stats";
 import { formatCountRate, formatNextBookingWhen } from "@/lib/user-ops-snapshot";
 
 function formatDate(dateStr: string): string {
@@ -78,6 +78,7 @@ interface LoyaltyProgress {
 type UserWithLoyalty = DbUser & {
   loyalty?: LoyaltyProgress | null;
   ops?: UserOpsSnapshot | null;
+  insights?: UserBookingInsights | null;
 };
 
 interface LoyaltyFormState {
@@ -297,7 +298,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
       const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
       if (json.success && json.data) {
         toast.success("Profil mis à jour");
-        setUser(json.data);
+        setUser({ ...user, ...json.data, loyalty: user.loyalty, ops: user.ops, insights: user.insights });
         setEditing(false);
       } else {
         toast.error(json.error || "Erreur lors de la sauvegarde");
@@ -380,7 +381,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
       const json = (await res.json()) as { success: boolean; data?: DbUser; error?: string };
       if (json.success && json.data) {
         toast.success(notes ? "Note enregistrée" : "Note supprimée");
-        setUser({ ...user, ...json.data, loyalty: user.loyalty, ops: user.ops });
+        setUser({ ...user, ...json.data, loyalty: user.loyalty, ops: user.ops, insights: user.insights });
         setEditForm((current) => ({ ...current, notes: notes ?? "" }));
         setNotesDraft(notes ?? "");
         setNotesEditing(false);
@@ -484,29 +485,16 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     exportBookingsCSV(sortedBookings);
   };
 
-  const nonCancelledBookings = bookings.filter((b) => b.status !== "cancelled");
-  const lastBooking = nonCancelledBookings.length > 0
-    ? nonCancelledBookings.reduce((a, b) => (a.date > b.date ? a : b))
-    : null;
-  const firstBooking = nonCancelledBookings.length > 0
-    ? nonCancelledBookings.reduce((a, b) => (a.date < b.date ? a : b))
-    : null;
-  // Durée totale
-  const totalHours = nonCancelledBookings.reduce(
-    (acc, b) => acc + slotDurationHours(b.start_time, b.end_time),
-    0,
-  );
-  const bookingInsights = computeClientBookingInsights(bookings);
-
-  // Ancienneté
-  const monthsSinceFirst = firstBooking
-    ? Math.max(1, Math.round((Date.now() - new Date(firstBooking.date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
+  const bookingInsights = user.insights;
+  const firstBookingDate = bookingInsights?.firstBookingDate ?? null;
+  const lastBookingDate = bookingInsights?.lastBookingDate ?? null;
+  const totalHours = (user.total_minutes ?? 0) / 60;
+  const monthsSinceFirst = firstBookingDate
+    ? Math.max(1, Math.round((Date.now() - new Date(`${firstBookingDate}T12:00:00Z`).getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
     : 0;
-
-  // Fréquence mensuelle
-  const freqMensuelle = monthsSinceFirst > 1
-    ? (nonCancelledBookings.length / monthsSinceFirst).toFixed(1)
-    : nonCancelledBookings.length.toString();
+  const freqMensuelle = user.total_bookings > 0
+    ? (monthsSinceFirst > 1 ? (user.total_bookings / monthsSinceFirst).toFixed(1) : String(user.total_bookings))
+    : null;
 
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ")
     || user.name?.trim()
@@ -1102,42 +1090,42 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Durée moyenne</span>
-                    <span className="font-semibold">{bookingInsights.averageDurationLabel}</span>
+                    <span className="font-semibold">{bookingInsights?.averageDurationLabel ?? "—"}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Client depuis</span>
-                    <span className="text-sm font-medium">{firstBooking ? formatDate(firstBooking.date) : "—"}</span>
+                    <span className="text-sm font-medium">{firstBookingDate ? formatDate(firstBookingDate) : "—"}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Fréquence</span>
                     <span className="font-semibold">
-                      {nonCancelledBookings.length > 0
+                      {freqMensuelle
                         ? `${freqMensuelle} session${freqMensuelle === "1" ? "" : "s"} / mois`
                         : "—"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Dernière réservation</span>
-                    <span className="text-sm font-medium">{lastBooking ? formatDate(lastBooking.date) : "—"}</span>
+                    <span className="text-sm font-medium">{lastBookingDate ? formatDate(lastBookingDate) : "—"}</span>
                   </div>
                   <div className="border-t border-zinc-800 pt-3 flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Jour préféré</span>
-                    <span className="font-semibold">{bookingInsights.preferredWeekday ?? "—"}</span>
+                    <span className="font-semibold">{bookingInsights?.preferredWeekday ?? "—"}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Créneau préféré</span>
-                    <span className="font-semibold">{bookingInsights.preferredStartTime ?? "—"}</span>
+                    <span className="font-semibold">{bookingInsights?.preferredStartTime ?? "—"}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Studio favori</span>
                     <span className="font-semibold">
-                      {bookingInsights.preferredStudioId ? studioLabel(bookingInsights.preferredStudioId) : "—"}
+                      {bookingInsights?.preferredStudioId ? studioLabel(bookingInsights.preferredStudioId) : "—"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Formule préférée</span>
                     <span className="font-semibold">
-                      {bookingInsights.preferredGroupType
+                      {bookingInsights?.preferredGroupType
                         ? groupTypeLabel(bookingInsights.preferredGroupType)
                         : "—"}
                     </span>

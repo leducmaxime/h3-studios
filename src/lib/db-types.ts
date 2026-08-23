@@ -188,6 +188,17 @@ export interface UserOpsSnapshot {
   noShowBookings: number;
 }
 
+export interface UserBookingInsights {
+  preferredWeekday: string | null;
+  averageDurationHours: number;
+  averageDurationLabel: string;
+  preferredStartTime: string | null;
+  preferredStudioId: string | null;
+  preferredGroupType: string | null;
+  firstBookingDate: string | null;
+  lastBookingDate: string | null;
+}
+
 // --- Bookings ---
 
 export type BookingStatus = "confirmed" | "cancelled" | "completed" | "no-show";

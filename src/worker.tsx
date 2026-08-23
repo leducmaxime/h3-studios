@@ -86,6 +86,7 @@ import {
   getUsers,
   getUserById,
   getUserOpsSnapshot,
+  getUserBookingInsights,
   createUser,
   updateUser,
   updateUserPassword,
@@ -3198,10 +3199,11 @@ const app = defineApp([
       try {
         const user = await getUserById(env.DB, id);
         if (!user) return jsonError("Utilisateur introuvable", 404);
-        const [counts, totalDiscountGranted, ops] = await Promise.all([
+        const [counts, totalDiscountGranted, ops, insights] = await Promise.all([
           getUserLoyaltyCounts(env.DB, id),
           getUserLoyaltyDiscountTotal(env.DB, id),
           getUserOpsSnapshot(env.DB, id),
+          getUserBookingInsights(env.DB, id),
         ]);
         const progress = getLoyaltyProgress(readLoyaltyConfig(user), counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
         return jsonSuccess({
@@ -3216,6 +3218,7 @@ const app = defineApp([
             totalDiscountGranted,
           },
           ops,
+          insights,
         });
       } catch (error) {
         console.error("GET /api/admin/users/:id error:", error);

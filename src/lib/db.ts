@@ -29,10 +29,12 @@ import {
   type TopClientsResult,
   type UserOpsNextBooking,
   type UserOpsSnapshot,
+  type UserBookingInsights,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type StudioId } from "./booking";
 import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
+import { computeClientBookingInsights, type BookingStatSource } from "./user-booking-stats";
 
 export function buildLoyaltyCountsQuery(userId: string, nowValue: { dateISO: string; hours: number; minutes: number }): { sql: string; params: unknown[] } {
   const direction = dateDirectionCondition("past", nowValue);
@@ -595,18 +597,16 @@ export async function getUserById(
         u.loyalty_threshold,
         COALESCE(s.total_bookings, 0) as total_bookings,
         COALESCE(s.total_spent, 0) as total_spent,
+        COALESCE(s.total_cancellations, 0) as total_cancellations,
+        COALESCE(s.total_discounts, 0) as total_discounts,
+        COALESCE(s.total_equipment, 0) as total_equipment,
+        COALESCE(s.total_minutes, 0) as total_minutes,
+        COALESCE(s.total_bookings_la_scene, 0) as total_bookings_la_scene,
+        COALESCE(s.total_bookings_le_podium, 0) as total_bookings_le_podium,
         u.created_at,
         u.updated_at
       FROM users u
-      LEFT JOIN (
-        SELECT
-          user_id,
-          COUNT(*) as total_bookings,
-          COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as total_spent
-        FROM bookings
-        WHERE status != 'cancelled'
-        GROUP BY user_id
-      ) s ON u.id = s.user_id
+      LEFT JOIN (${USER_BOOKING_STATS_SQL}) s ON u.id = s.user_id
       WHERE u.id = ?
     `,
   ).bind(id).first<DbUser>();
@@ -674,6 +674,27 @@ export async function getUserOpsSnapshot(
     cancelledBookings: Number(counts?.cancelled) || 0,
     noShowBookings: Number(counts?.no_show) || 0,
   };
+}
+
+export async function getUserBookingInsights(
+  db: D1Database,
+  userId: string,
+): Promise<UserBookingInsights> {
+  const result = await db.prepare(
+    `SELECT status, date, start_time, end_time, studio_id, group_type
+     FROM bookings
+     WHERE user_id = ?`,
+  ).bind(userId).all<BookingStatSource>();
+  const rows = result.results;
+  const insights = computeClientBookingInsights(rows);
+  let firstBookingDate: string | null = null;
+  let lastBookingDate: string | null = null;
+  for (const booking of rows) {
+    if (booking.status === "cancelled") continue;
+    if (!firstBookingDate || booking.date < firstBookingDate) firstBookingDate = booking.date;
+    if (!lastBookingDate || booking.date > lastBookingDate) lastBookingDate = booking.date;
+  }
+  return { ...insights, firstBookingDate, lastBookingDate };
 }
 
 export async function getUserByEmail(

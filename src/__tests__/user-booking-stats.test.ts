@@ -82,6 +82,19 @@ describe("computeClientBookingInsights", () => {
     expect(insights.preferredStudioId).toBe("le-podium");
   });
 
+  it("uses the full history, not only the most recent bookings", () => {
+    const saturdays = Array.from({ length: 12 }, (_, i) => {
+      const date = new Date(Date.UTC(2025, 0, 4 + i * 7)).toISOString().slice(0, 10);
+      return booking({ date, start_time: "10:00", end_time: "12:00" });
+    });
+    const insights = computeClientBookingInsights([
+      ...saturdays,
+      booking({ date: "2026-08-23", start_time: "18:00", end_time: "20:00" }),
+    ]);
+    expect(insights.preferredWeekday).toBe("Samedi");
+    expect(insights.preferredStartTime).toBe("10:00");
+  });
+
   it("computes the average session duration", () => {
     const insights = computeClientBookingInsights([
       booking({ start_time: "10:00", end_time: "11:00" }),
