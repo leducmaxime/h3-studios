@@ -589,11 +589,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
         </TabsList>
 
         <TabsContent value="profile">
-          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <div className={`rounded-xl border p-4 ${user.ops && user.ops.overdueCount > 0 ? "border-orange-500/40 bg-orange-500/5" : "border-zinc-800 bg-zinc-900"}`}>
                 <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   {user.ops && user.ops.overdueCount > 0 ? <AlertTriangle className="h-3.5 w-3.5 text-orange-400" /> : <Wallet className="h-3.5 w-3.5" />}
-                  Reste à payer
+                  Recouvrement
                 </div>
                 {user.ops && user.ops.overdueCount > 0 ? (
                   <>
@@ -638,24 +638,12 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
 
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
                 <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  Total réservations
-                </div>
-                <p className="text-lg font-semibold">{user.total_bookings}</p>
-              </div>
-
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Total dépensé
                 </div>
                 <p className="text-lg font-semibold text-primary">{formatPrice(user.total_spent)}</p>
-              </div>
-
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  Panier moyen
-                </div>
-                <p className="text-lg font-semibold">
-                  {user.total_bookings > 0 ? formatPrice(user.total_spent / user.total_bookings) : "—"}
+                <p className="mt-2 text-xs text-zinc-400">
+                  {user.total_bookings} réservation{user.total_bookings > 1 ? "s" : ""}
+                  {user.total_bookings > 0 ? ` · panier moyen ${formatPrice(user.total_spent / user.total_bookings)}` : ""}
                 </p>
               </div>
             </div>
