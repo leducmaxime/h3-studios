@@ -283,10 +283,6 @@ export function AdminRecouvrement() {
       totalAmount,
       remainingAfter: round2(remainingStart - totalAmount),
       exact: amountsMatch(remainingStart, totalAmount),
-      cashAmount: parsed.filter((entry) => entry.method === "cash").reduce((sum, entry) => sum + entry.amount, 0),
-      cardAmount: parsed.filter((entry) => entry.method === "card").reduce((sum, entry) => sum + entry.amount, 0),
-      transferAmount: parsed.filter((entry) => entry.method === "transfer").reduce((sum, entry) => sum + entry.amount, 0),
-      checkAmount: parsed.filter((entry) => entry.method === "check").reduce((sum, entry) => sum + entry.amount, 0),
     };
   }, [collectEntries, collectGroup]);
 
@@ -462,17 +458,22 @@ export function AdminRecouvrement() {
             <DialogDescription>
               {collectGroup ? (
                 <>
-                  {collectGroup.name} · {collectGroup.bookings.length} réservation
-                  {collectGroup.bookings.length === 1 ? "" : "s"} · Reste dû :{" "}
-                  <span className="font-semibold text-foreground">{formatPrice(collectTotals.remainingStart)}</span>
-                  {(() => {
-                    const tax = formatTaxBreakdown(collectTotals.remainingStart);
-                    return (
-                      <span className="ml-2 text-xs text-zinc-500">
-                        (HT {tax.ht} · TVA 20% {tax.vat})
-                      </span>
-                    );
-                  })()}
+                  <span>
+                    {collectGroup.name} · {collectGroup.bookings.length} réservation
+                    {collectGroup.bookings.length === 1 ? "" : "s"}
+                  </span>
+                  <span className="mt-1 block">
+                    Reste dû :{" "}
+                    <span className="font-semibold text-foreground">{formatPrice(collectTotals.remainingStart)}</span>
+                    {(() => {
+                      const tax = formatTaxBreakdown(collectTotals.remainingStart);
+                      return (
+                        <span className="ml-2 text-xs text-zinc-500">
+                          (HT {tax.ht} · TVA 20% {tax.vat})
+                        </span>
+                      );
+                    })()}
+                  </span>
                 </>
               ) : (
                 "Chargement..."
@@ -501,12 +502,8 @@ export function AdminRecouvrement() {
                   <span className="text-zinc-400">Paiements saisis</span>
                   <span className="font-semibold">{formatPrice(collectTotals.totalAmount)}</span>
                 </div>
-                <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
-                  <span>
-                    Espèces: {formatPrice(collectTotals.cashAmount)} · CB: {formatPrice(collectTotals.cardAmount)} · Virement:{" "}
-                    {formatPrice(collectTotals.transferAmount)} · Chèque: {formatPrice(collectTotals.checkAmount)}
-                  </span>
-                  <span>Reste: {formatPrice(Math.max(0, collectTotals.remainingAfter))}</span>
+                <div className="mt-1 text-right text-xs text-zinc-500">
+                  Reste: {formatPrice(Math.max(0, collectTotals.remainingAfter))}
                 </div>
                 {!collectTotals.exact && (
                   <p className="mt-2 text-xs text-destructive">
