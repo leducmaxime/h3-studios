@@ -1929,7 +1929,7 @@ export async function getDashboardStats(
     }
   }
 
-  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult, rangeEquipmentResult, rangeMinMaxResult, rangeDiscountsResult, rangeCancellationsResult, rangeOverdueAggregateResult, rangeOverdueListResult] = await db.batch([
+  const [todayResult, weekResult, monthResult, pendingResult, occupancyResult, reportMonthResult, rangeResult, rangeDurationResult, rangePendingResult, rangeEquipmentResult, rangeMinMaxResult, rangeDiscountsResult, rangeCancellationsResult, rangeOverdueAggregateResult] = await db.batch([
     db.prepare(
       "SELECT COUNT(*) as count, COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as revenue FROM bookings WHERE date = ? AND status != 'cancelled'",
     ).bind(today),
@@ -2025,21 +2025,6 @@ export async function getDashboardStats(
         AND ${sessionEndedSql}
         AND ${remainingExpr} > 0.005`,
     ).bind(rangeFrom, rangeTo, today, today, nowHHMM),
-    db.prepare(
-      `WITH ${PAID_BY_BOOKING_CTE}
-      SELECT b.id, b.booking_ref, b.date, b.start_time, b.end_time, b.studio_id, b.status,
-        u.name as user_name, COALESCE(b.band_name, u.band_name) as band_name,
-        ${remainingExpr} as remaining
-      FROM bookings b
-      LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
-      LEFT JOIN users u ON u.id = b.user_id
-      WHERE (b.status != 'cancelled' OR b.keep_balance_due = 1)
-        AND b.date >= ? AND b.date <= ?
-        AND ${sessionEndedSql}
-        AND ${remainingExpr} > 0.005
-      ORDER BY b.date ASC, b.start_time ASC
-      LIMIT 50`,
-    ).bind(rangeFrom, rangeTo, today, today, nowHHMM),
   ]);
 
   type CountRevenue = { count: number; revenue: number };
@@ -2060,10 +2045,6 @@ export async function getDashboardStats(
   const rangeDiscountsRow = (rangeDiscountsResult.results as unknown as Array<{ promo_discounts: number; manual_discounts: number; loyalty_discounts: number }>)[0] ?? { promo_discounts: 0, manual_discounts: 0, loyalty_discounts: 0 };
   const rangeCancellationsRow = (rangeCancellationsResult.results as unknown as Array<{ count: number }>)[0] ?? { count: 0 };
   const rangeOverdueRow = (rangeOverdueAggregateResult.results as unknown as Array<{ count: number; total: number }>)[0] ?? { count: 0, total: 0 };
-  const rangeOverdueBookings = (rangeOverdueListResult.results as unknown as Array<Record<string, unknown>>).map((row) => ({
-    ...row,
-    remaining: Number(row.remaining) || 0,
-  })) as DashboardStats["rangeOverdueBookings"];
   const todaySlots = occupancyResult.results as unknown as TimeRange[];
 
   const rangeBookedMinutes = (() => {
@@ -2112,7 +2093,6 @@ export async function getDashboardStats(
     rangeCancellations: rangeCancellationsRow.count,
     rangeOverduePayments: rangeOverdueRow.count,
     rangeOverdueAmount: rangeOverdueRow.total,
-    rangeOverdueBookings,
     rangeBookedMinutes,
     rangePendingPayments: rangePendingRow.count,
     rangePendingAmount: rangePendingRow.total,

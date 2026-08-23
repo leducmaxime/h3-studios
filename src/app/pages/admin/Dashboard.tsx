@@ -44,13 +44,13 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
-import { getBookingAmountDue, getDisplayStatus } from "@/lib/booking-totals";
-import { BOOKING_STATUS_LABELS, DISPLAY_PAYMENT_STATUS_LABELS, studioLabel, studioLabelShort } from "@/lib/labels";
+import { getBookingAmountDue } from "@/lib/booking-totals";
+import { DISPLAY_PAYMENT_STATUS_LABELS, studioLabel, studioLabelShort } from "@/lib/labels";
 import { generateMonthlyReportPDF } from "@/lib/export";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import type { BookingStatus, DashboardStats } from "@/lib/db-types";
+import type { DashboardStats } from "@/lib/db-types";
 
 interface RevenuePoint {
   date: string;
@@ -140,19 +140,6 @@ interface NowBooking {
   end_time: string;
   payment_status: string;
   remaining: number;
-}
-
-// Mêmes couleurs que la page Réservations (Bookings.tsx)
-const OVERDUE_STATUS_CLASSES: Record<BookingStatus, string> = {
-  confirmed: "bg-green-500/15 text-green-400 border-green-500/30",
-  completed: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  cancelled: "bg-red-500/15 text-red-400 border-red-500/30",
-  "no-show": "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-};
-
-function formatOverdueDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
 type Period = "week" | "month" | "quarter" | "year";
@@ -1769,57 +1756,6 @@ export function AdminDashboard() {
           />
         </a>
       </div>
-
-      {/* Liste Au recouvrement */}
-      {stats && stats.rangeOverdueBookings.length > 0 && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-zinc-300">Au recouvrement — par réservation</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-red-400">{formatPrice(stats.rangeOverdueAmount)}</span>
-              <a href="/admin/recouvrement" className="text-sm text-primary transition-colors hover:text-primary/80">
-                Voir tout →
-              </a>
-            </div>
-          </div>
-          <div className="space-y-2">
-            {stats.rangeOverdueBookings.map((booking) => {
-              const displayStatus = getDisplayStatus({
-                status: booking.status as BookingStatus,
-                date: booking.date,
-                end_time: booking.end_time,
-              }) as BookingStatus;
-              return (
-                <a
-                  key={booking.id}
-                  href={`/admin/bookings/${booking.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 transition-colors hover:border-zinc-700"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {booking.band_name || booking.user_name || "—"}
-                    </p>
-                    <p className="text-xs text-zinc-500">
-                      {formatOverdueDate(booking.date)} · {booking.start_time} – {booking.end_time} · {studioLabel(booking.studio_id)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge variant="outline" className={OVERDUE_STATUS_CLASSES[displayStatus] ?? ""}>
-                      {BOOKING_STATUS_LABELS[displayStatus] ?? displayStatus}
-                    </Badge>
-                    <span className="text-sm font-semibold text-red-400">{formatPrice(booking.remaining)}</span>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-          {stats.rangeOverduePayments > stats.rangeOverdueBookings.length && (
-            <p className="mt-3 text-center text-xs text-zinc-500">
-              Les {stats.rangeOverdueBookings.length} plus anciennes sur {stats.rangeOverduePayments}
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Widget En cours maintenant */}
       {nowBookings.length > 0 && (

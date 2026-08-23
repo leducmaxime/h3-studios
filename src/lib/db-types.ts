@@ -1,19 +1,6 @@
 // TypeScript types matching D1 database tables (migrations/0001_initial_schema.sql)
 // All dates stored as ISO TEXT in SQLite, booleans as INTEGER (0/1)
 
-export interface DashboardOverdueBooking {
-  id: string;
-  booking_ref: string;
-  date: string;
-  start_time: string;
-  end_time: string;
-  studio_id: string;
-  status: string;
-  user_name: string | null;
-  band_name: string | null;
-  remaining: number;
-}
-
 export interface OverdueBooking {
   id: string;
   booking_ref: string;
@@ -64,7 +51,6 @@ export interface DashboardStats {
   rangeCancellations: number;
   rangeOverduePayments: number;
   rangeOverdueAmount: number;
-  rangeOverdueBookings: DashboardOverdueBooking[];
   rangeBookedMinutes: number;
   rangePendingPayments: number;
   rangePendingAmount: number;
