@@ -912,7 +912,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                         </div>
                       </div>
                       {booking.loyalty_award_id ? (
-                        <p className="text-xs text-zinc-500">Cette remise manuelle remplacera la ristourne fidélité.</p>
+                        <p className="text-xs text-zinc-500">Cette remise manuelle remplacera la remise fidélité.</p>
                       ) : booking.promo_code ? (
                         <p className="text-xs text-zinc-500">Cette remise remplacera le code promo {booking.promo_code}.</p>
                       ) : null}
