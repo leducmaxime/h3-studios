@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { Banknote, ChevronDown, Loader2, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ import { BOOKING_STATUS_LABELS, studioLabel } from "@/lib/labels";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { amountsMatch, type CollectMethod } from "@/lib/recouvrement-collect";
 import type { BookingStatus, OverdueBooking } from "@/lib/db-types";
+import { subscribe } from "@/lib/navigation-events";
 
 const VIEW_STORAGE_KEY = "h3-admin-recouvrement-view";
 
@@ -75,6 +76,18 @@ function readStoredView(): ViewMode {
   return window.localStorage.getItem(VIEW_STORAGE_KEY) === "bookings" ? "bookings" : "clients";
 }
 
+function getUserIdFilter(): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("userId")?.trim() ?? "";
+}
+
+function clearUserIdFilter(event: MouseEvent<HTMLAnchorElement>) {
+  event.preventDefault();
+  const url = new URL(window.location.href);
+  url.searchParams.delete("userId");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 function compareBookings(a: OverdueBooking, b: OverdueBooking, sortBy: SortField, sortOrder: SortOrder): number {
   const dir = sortOrder === "asc" ? 1 : -1;
   let cmp = 0;
@@ -111,10 +124,7 @@ export function AdminRecouvrement() {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [userIdFilter] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("userId")?.trim() ?? "";
-  });
+  const userIdFilter = useSyncExternalStore(subscribe, getUserIdFilter, () => "");
   const [view, setView] = useState<ViewMode>(readStoredView);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortField>("date");
@@ -302,7 +312,11 @@ export function AdminRecouvrement() {
             {userIdFilter ? " Filtré sur un client." : ""}
           </p>
           {userIdFilter && (
-            <a href="/admin/recouvrement" className="mt-2 inline-block text-sm text-primary hover:underline">
+            <a
+              href="/admin/recouvrement"
+              onClick={clearUserIdFilter}
+              className="mt-2 inline-block text-sm text-primary hover:underline"
+            >
               Voir tous les impayés
             </a>
           )}
