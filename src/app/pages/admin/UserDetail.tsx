@@ -527,11 +527,6 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     : null;
   const sceneCount = nonCancelledBookings.filter((b) => b.studio_id === "la-scene").length;
   const podiumCount = nonCancelledBookings.filter((b) => b.studio_id === "le-podium").length;
-  // Panier moyen
-  const totalSpentCalc = nonCancelledBookings.reduce(
-    (acc, b) => acc + getBookingAmountDue(b), 0,
-  );
-  const panierMoyen = nonCancelledBookings.length > 0 ? totalSpentCalc / nonCancelledBookings.length : 0;
 
   // Durée totale
   const totalHours = nonCancelledBookings.reduce(
@@ -594,14 +589,13 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
         </TabsList>
 
         <TabsContent value="profile">
-          {user.ops && (
-            <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className={`rounded-xl border p-4 ${user.ops.overdueCount > 0 ? "border-orange-500/40 bg-orange-500/5" : "border-zinc-800 bg-zinc-900"}`}>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className={`rounded-xl border p-4 ${user.ops && user.ops.overdueCount > 0 ? "border-orange-500/40 bg-orange-500/5" : "border-zinc-800 bg-zinc-900"}`}>
                 <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  {user.ops.overdueCount > 0 ? <AlertTriangle className="h-3.5 w-3.5 text-orange-400" /> : <Wallet className="h-3.5 w-3.5" />}
+                  {user.ops && user.ops.overdueCount > 0 ? <AlertTriangle className="h-3.5 w-3.5 text-orange-400" /> : <Wallet className="h-3.5 w-3.5" />}
                   Reste à payer
                 </div>
-                {user.ops.overdueCount > 0 ? (
+                {user.ops && user.ops.overdueCount > 0 ? (
                   <>
                     <p className="text-lg font-semibold text-orange-300">{formatPrice(user.ops.overdueRemaining)}</p>
                     <p className="mt-1 text-xs text-zinc-400">
@@ -624,7 +618,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <Clock className="h-3.5 w-3.5" />
                   Prochaine réservation
                 </div>
-                {user.ops.nextBooking ? (
+                {user.ops?.nextBooking ? (
                   <>
                     <p className="text-lg font-semibold">{formatNextBookingWhen(user.ops.nextBooking.date, user.ops.nextBooking.start_time)}</p>
                     <p className="mt-1 text-xs text-zinc-400">
@@ -643,22 +637,28 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
               </div>
 
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-                <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  Annulations
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Total réservations
                 </div>
-                <p className="text-lg font-semibold">{formatCountRate(user.ops.cancelledBookings, user.ops.totalBookings)}</p>
-                <p className="mt-1 text-xs text-zinc-500">sur toutes les réservations</p>
+                <p className="text-lg font-semibold">{user.total_bookings}</p>
               </div>
 
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-                <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  Absences
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Total dépensé
                 </div>
-                <p className="text-lg font-semibold">{formatCountRate(user.ops.noShowBookings, user.ops.totalBookings)}</p>
-                <p className="mt-1 text-xs text-zinc-500">no-show sur toutes les réservations</p>
+                <p className="text-lg font-semibold text-primary">{formatPrice(user.total_spent)}</p>
+              </div>
+
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Panier moyen
+                </div>
+                <p className="text-lg font-semibold">
+                  {user.total_bookings > 0 ? formatPrice(user.total_spent / user.total_bookings) : "—"}
+                </p>
               </div>
             </div>
-          )}
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
@@ -1127,16 +1127,16 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 <h2 className="mb-4 font-semibold">Statistiques</h2>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-400 text-sm">Total réservations</span>
-                    <span className="font-semibold">{user.total_bookings}</span>
+                    <span className="text-zinc-400 text-sm">Annulations</span>
+                    <span className="font-semibold">
+                      {user.ops ? formatCountRate(user.ops.cancelledBookings, user.ops.totalBookings) : "—"}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-400 text-sm">Total dépensé</span>
-                    <span className="font-semibold text-primary">{formatPrice(user.total_spent)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-400 text-sm">Panier moyen</span>
-                    <span className="font-semibold">{nonCancelledBookings.length > 0 ? formatPrice(panierMoyen) : "—"}</span>
+                    <span className="text-zinc-400 text-sm">Absences</span>
+                    <span className="font-semibold">
+                      {user.ops ? formatCountRate(user.ops.noShowBookings, user.ops.totalBookings) : "—"}
+                    </span>
                   </div>
                   <div className="border-t border-zinc-800 pt-3 flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Durée totale</span>
