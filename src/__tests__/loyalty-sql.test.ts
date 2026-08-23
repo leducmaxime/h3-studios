@@ -1,6 +1,6 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { describe, expect, it, beforeEach } from "vitest";
-import { buildLoyaltyCountsQuery, claimLoyaltyAward, getUserLoyaltyCounts } from "@/lib/db";
+import { buildLoyaltyCountsQuery, claimLoyaltyAward, getUserLoyaltyCounts, getUserLoyaltyDiscountTotal } from "@/lib/db";
 import { getBookingAmountDue } from "@/lib/booking-totals";
 import { getLoyaltyProgress } from "@/lib/loyalty";
 
@@ -93,5 +93,14 @@ describe("fidélité — SQL D1", () => {
     sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status) VALUES ('duplicate-booking','duplicate','2000-01-02','10:00','12:00','completed')").run();
     sqlite.prepare("UPDATE bookings SET user_id='u' WHERE user_id='duplicate'").run();
     await expect(getUserLoyaltyCounts(db as unknown as D1Database, "u")).resolves.toMatchObject({ pastEligibleBookings: 2 });
+  });
+
+  it("somme uniquement les remises fidélité non annulées, bornées par le brut", async () => {
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status,promo_discount,loyalty_award_id,total_price) VALUES (?,?,?,?,?,?,?,?,?)").run("loyal", "u", "2000-01-01", "10:00", "12:00", "confirmed", 10, "award-1", 20);
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status,promo_discount,loyalty_award_id,total_price) VALUES (?,?,?,?,?,?,?,?,?)").run("capped", "u", "2000-01-02", "10:00", "12:00", "completed", 12, "award-2", 5);
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status,promo_discount,loyalty_award_id,total_price) VALUES (?,?,?,?,?,?,?,?,?)").run("cancelled", "u", "2000-01-03", "10:00", "12:00", "cancelled", 8, "award-3", 30);
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status,promo_discount,total_price) VALUES (?,?,?,?,?,?,?,?)").run("promo", "u", "2000-01-04", "10:00", "12:00", "confirmed", 9, 40);
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status,promo_discount,total_price) VALUES (?,?,?,?,?,?,?,?)").run("manual", "u", "2000-01-05", "10:00", "12:00", "confirmed", 4, 25);
+    await expect(getUserLoyaltyDiscountTotal(db as unknown as D1Database, "u")).resolves.toBe(15);
   });
 });

@@ -127,6 +127,7 @@ interface LoyaltyProgress {
   remainingToNextAward: number;
   isDue: boolean;
   threshold: number;
+  totalDiscountGranted?: number;
 }
 
 type UserWithLoyalty = DbUser & {
@@ -945,6 +946,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             <div className="flex items-center justify-between">
                               <span className="text-zinc-400 text-sm">Remises déjà accordées</span>
                               <span className="font-semibold">{loyaltyProgress.awardsGranted}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-zinc-400 text-sm">Total des remises fidélité utilisées</span>
+                              <span className="font-semibold">{formatPrice(loyaltyProgress.totalDiscountGranted ?? 0)}</span>
                             </div>
                           </div>
                         </>

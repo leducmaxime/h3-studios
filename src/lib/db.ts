@@ -45,6 +45,16 @@ export async function getUserLoyaltyCounts(db: D1Database, userId: string): Prom
   const row = await db.prepare(q.sql).bind(...q.params).first<{ past_eligible: number; awards_granted: number; past_since_award: number }>();
   return { pastEligibleBookings: Number(row?.past_eligible) || 0, awardsGranted: Number(row?.awards_granted) || 0, pastSinceLastAward: Number(row?.past_since_award) || 0 };
 }
+
+/** Somme des remises fidélité réellement utilisées (hors annulations). */
+export async function getUserLoyaltyDiscountTotal(db: D1Database, userId: string): Promise<number> {
+  const row = await db.prepare(
+    `SELECT COALESCE(SUM(MIN(COALESCE(promo_discount, 0), MAX(total_price, 0))), 0) as total
+     FROM bookings
+     WHERE user_id = ? AND status != 'cancelled' AND loyalty_award_id IS NOT NULL`,
+  ).bind(userId).first<{ total: number }>();
+  return Number(row?.total) || 0;
+}
 export async function claimLoyaltyAward(db: D1Database, args: { bookingId: string; userId: string; awardId: string; discount: number; expectedAwardsGranted: number }): Promise<boolean> {
   const result = await db.prepare(`UPDATE bookings SET promo_discount = ?, loyalty_award_id = ?, updated_at = ? WHERE id = ? AND user_id = ? AND (SELECT COUNT(DISTINCT loyalty_award_id) FROM bookings WHERE user_id = ? AND status != 'cancelled') = ?`).bind(args.discount, args.awardId, now(), args.bookingId, args.userId, args.userId, args.expectedAwardsGranted).run();
   return result.meta.changes === 1;

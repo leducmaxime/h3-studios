@@ -140,6 +140,7 @@ import {
   getBookingsByRefs,
   resolveStatsRange,
   getUserLoyaltyCounts,
+  getUserLoyaltyDiscountTotal,
   claimLoyaltyAward,
 } from "@/lib/db";
 import { getLoyaltyProgress, readLoyaltyConfig, isLoyaltyConfigured, validateLoyaltySettings, computeLoyaltyDiscount } from "@/lib/loyalty";
@@ -3198,7 +3199,8 @@ const app = defineApp([
         if (!user) return jsonError("Utilisateur introuvable", 404);
         const counts = await getUserLoyaltyCounts(env.DB, id);
         const progress = getLoyaltyProgress(readLoyaltyConfig(user), counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
-        return jsonSuccess({ ...user, loyalty: { pastEligibleBookings: progress.pastEligibleBookings, awardsGranted: progress.awardsGranted, counter: progress.counter, remainingToNextAward: progress.remainingToNextAward, isDue: progress.isDue, threshold: progress.threshold } });
+        const totalDiscountGranted = await getUserLoyaltyDiscountTotal(env.DB, id);
+        return jsonSuccess({ ...user, loyalty: { pastEligibleBookings: progress.pastEligibleBookings, awardsGranted: progress.awardsGranted, counter: progress.counter, remainingToNextAward: progress.remainingToNextAward, isDue: progress.isDue, threshold: progress.threshold, totalDiscountGranted } });
       } catch (error) {
         console.error("GET /api/admin/users/:id error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to fetch user", 500);
