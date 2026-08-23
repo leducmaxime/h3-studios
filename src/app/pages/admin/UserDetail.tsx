@@ -620,7 +620,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 </div>
                 {user.ops?.nextBooking ? (
                   <>
-                    <p className="text-lg font-semibold">{formatNextBookingWhen(user.ops.nextBooking.date, user.ops.nextBooking.start_time)}</p>
+                    <p className="text-lg font-semibold">{formatNextBookingWhen(user.ops.nextBooking.date)}</p>
                     <p className="mt-1 text-xs text-zinc-400">
                       {studioLabel(user.ops.nextBooking.studio_id)} · {user.ops.nextBooking.start_time.slice(0, 5)}–{user.ops.nextBooking.end_time.slice(0, 5)}
                     </p>

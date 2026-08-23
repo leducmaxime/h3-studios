@@ -65,8 +65,8 @@ describe("formatCountRate", () => {
 
 describe("formatNextBookingWhen", () => {
   it("formats the calendar date in French without shifting timezone", () => {
-    expect(formatNextBookingWhen("2026-08-29", "18:00")).toContain("29");
-    expect(formatNextBookingWhen("2026-08-29", "18:00")).toContain("18:00");
+    expect(formatNextBookingWhen("2026-08-29")).toContain("29");
+    expect(formatNextBookingWhen("2026-08-29")).not.toContain("18:00");
   });
 });
 

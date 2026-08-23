@@ -4,10 +4,9 @@ export function formatCountRate(count: number, total: number): string {
   return `${count} (${percent} %)`;
 }
 
-export function formatNextBookingWhen(date: string, startTime: string): string {
+export function formatNextBookingWhen(date: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
-  if (!match) return startTime.slice(0, 5);
-  const weekday = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+  if (!match) return date;
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
     .toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-  return `${weekday} · ${startTime.slice(0, 5)}`;
 }
