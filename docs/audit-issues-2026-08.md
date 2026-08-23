@@ -45,7 +45,7 @@ sont pas soumises à cette preuve ; elles référencent explicitement l'issue co
 | **44** | non implémenté | `Settings.tsx:235` clé `booking.allow_cash` **jamais consommée hors de cet écran** ; `PaymentChoice.tsx:144` rendu inconditionnel | Carte « Paiement espèces » toujours présente et inchangée sur `/admin/settings` | Fermée `duplicate` | **#58** |
 | **45** | non implémenté | `Settings.tsx:214` clé `booking.require_phone` **jamais consommée hors de cet écran** ; `booking-fields.ts:113/119/127` téléphone toujours requis | Carte « Téléphone obligatoire » toujours présente → le paramétrage jugé inutile n'a pas été retiré | Fermée `duplicate` | **#58** |
 | **47** | non implémenté | `migrations/0001_initial_schema.sql:87` table `pricing` sans date d'effet ; aucune migration ne l'ajoute | `/admin/pricing` : aucun champ date, effet ou validité sur toute la page | **Réécrite en place** | — |
-| **48** | non implémenté | Aucune colonne de fidélité (`db-types.ts:75`) ; panier = `max(0, total - promoDiscount)` (`Reservation.tsx:163`) | Profil client : aucune section ristourne ou fidélité | **Réécrite en place** | — |
+| **48** | non implémenté | Aucune colonne de fidélité (`db-types.ts:75`) ; panier = `max(0, total - promoDiscount)` (`Reservation.tsx:163`) | Profil client : aucune section remise ou fidélité | **Réécrite en place** | — |
 | **49** | non implémenté | `booking.ts:239` étapes ; récap rendu dans `creneau` (`Reservation.tsx:544-547`) | `/reservation/creneau` (étape 2/6) : les trois blocs apparaissent sous le sélecteur d'horaires | **Réécrite en place** | — |
 
 ### Synthèse
@@ -74,7 +74,7 @@ sont pas soumises à cette preuve ; elles référencent explicitement l'issue co
 | 41 | ADMIN | Page Clients — tri peu découvrable et filtre par type de client absent | réécriture de #41 |
 | 42 | ADMIN, bug | Filtre « À venir » — le prédicat ne compare que la date, pas l'heure | réécriture de #42 |
 | 47 | ADMIN | Tarification — planifier un changement de tarif à partir d'une date d'effet | réécriture de #47 |
-| 48 | ADMIN, Prioritaire | Ristourne automatique après X réservations, paramétrable par client | réécriture de #48 |
+| 48 | ADMIN, Prioritaire | Remise automatique après X réservations, paramétrable par client | réécriture de #48 |
 | 49 | PUBLIC | Options supplémentaires — isoler dans une étape dédiée du tunnel | réécriture de #49 |
 | 58 | ADMIN | Paramètres sans effet — Paiement espèces et Téléphone obligatoire | consolide 44, 45 |
 | 59 | ADMIN | Ergonomie admin — padding des libellés en modale et largeur des onglets | consolide 14, 15 |

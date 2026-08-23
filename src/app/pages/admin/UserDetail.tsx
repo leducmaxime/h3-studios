@@ -115,7 +115,7 @@ function StudioPieChart({ sceneCount, podiumCount }: { sceneCount: number; podiu
   );
 }
 
-// ─── Ristourne de fidélité (issue #48) ────────────────────────────────────
+// ─── Remise de fidélité (issue #48) ───────────────────────────────────────
 // `loyalty` est calculé par GET /api/admin/users/:id et n'appartient pas à
 // la ligne users : il reste donc typé ici, à côté de DbUser.
 type LoyaltyDiscountType = "percentage" | "fixed";
@@ -155,7 +155,7 @@ interface UserDetailProps {
 
 export function AdminUserDetail({ userId }: UserDetailProps) {
   const [user, setUser] = useState<UserWithLoyalty | null>(null);
-  // La ristourne est un levier tarifaire : réservée au super-admin, comme la
+  // La remise est un levier tarifaire : réservée au super-admin, comme la
   // grille de tarifs. Le serveur refuse de toute façon (403) pour un opérateur.
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [bookings, setBookings] = useState<BookingWithUser[]>([]);
@@ -180,7 +180,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     instagram_accounts: "",
   });
 
-  // Ristourne de fidélité
+  // Remise de fidélité
   const [loyaltyEditing, setLoyaltyEditing] = useState(false);
   const [loyaltySaving, setLoyaltySaving] = useState(false);
   const [loyaltyError, setLoyaltyError] = useState<string | null>(null);
@@ -517,7 +517,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     || user.email
     || "—";
 
-  // Ristourne de fidélité — derived display values
+  // Remise de fidélité — derived display values
   const loyaltyEnabled = user.loyalty_enabled === 1;
   const loyaltyDiscountLabel = user.loyalty_discount_type === "fixed"
     ? formatPrice(user.loyalty_discount_value ?? 0)
@@ -778,7 +778,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 )}
               </div>
 
-              {/* Ristourne de fidélité — super-admin uniquement */}
+              {/* Remise de fidélité — super-admin uniquement */}
               {isSuperAdmin && (
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
                 <div className="mb-4 flex items-center justify-between">
@@ -822,7 +822,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
                       <div>
-                        <p className="font-medium text-sm">Activer la ristourne de fidélité</p>
+                        <p className="font-medium text-sm">Activer la remise de fidélité</p>
                         <p className="text-xs text-zinc-500 mt-0.5">
                           Le client bénéficie d'une remise automatique après un nombre défini de réservations.
                         </p>
@@ -831,7 +831,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         type="button"
                         role="switch"
                         aria-checked={loyaltyForm.enabled}
-                        aria-label="Activer la ristourne de fidélité"
+                        aria-label="Activer la remise de fidélité"
                         onClick={() => setLoyaltyForm({ ...loyaltyForm, enabled: !loyaltyForm.enabled })}
                         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${loyaltyForm.enabled ? "bg-primary" : "bg-zinc-700"}`}
                       >
@@ -883,7 +883,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             placeholder="Ex. 10"
                           />
                           <p className="text-xs text-zinc-500">
-                            Une ristourne est accordée chaque fois que ce nombre de réservations comptabilisées est atteint, puis le compteur repart à zéro.
+                            Une remise est accordée chaque fois que ce nombre de réservations comptabilisées est atteint, puis le compteur repart à zéro.
                           </p>
                         </div>
                       </div>
@@ -913,7 +913,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         <p className="text-sm font-medium text-zinc-400">Progression</p>
                         {loyaltyProgress?.isDue && (
                           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
-                            Ristourne à appliquer
+                            Remise à appliquer
                           </Badge>
                         )}
                       </div>
@@ -943,7 +943,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                               <span className="font-semibold">{loyaltyProgress.pastEligibleBookings}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-zinc-400 text-sm">Ristournes déjà accordées</span>
+                              <span className="text-zinc-400 text-sm">Remises déjà accordées</span>
                               <span className="font-semibold">{loyaltyProgress.awardsGranted}</span>
                             </div>
                           </div>
@@ -956,15 +956,15 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     <div className="border-t border-zinc-800 pt-4">
                       <p className="text-xs text-zinc-500">
                         Seules les réservations passées, confirmées ou terminées, sont comptées ; les annulations et les absences sont exclues.
-                        La ristourne n'est pas cumulable : une remise manuelle ou un code promo sur une réservation est prioritaire.
+                        La remise n'est pas cumulable : une remise manuelle ou un code promo sur une réservation est prioritaire.
                       </p>
                     </div>
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-zinc-700 p-4">
-                    <p className="text-sm text-zinc-400">Aucune ristourne n'est configurée pour ce client.</p>
+                    <p className="text-sm text-zinc-400">Aucune remise n'est configurée pour ce client.</p>
                     <p className="mt-1 text-xs text-zinc-500">
-                      La ristourne de fidélité est inactive par défaut. Elle ne s'applique qu'aux clients pour lesquels elle est explicitement activée.
+                      La remise de fidélité est inactive par défaut. Elle ne s'applique qu'aux clients pour lesquels elle est explicitement activée.
                     </p>
                   </div>
                 )}

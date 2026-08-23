@@ -981,7 +981,7 @@ const app = defineApp([
       const allowCash = body.paymentMethod === "cash"
         ? parseAllowCash(await getSetting(env.DB, "booking.allow_cash"))
         : true;
-      // Sans code promo ni ristourne de fidélité possible, le net ne peut pas
+      // Sans code promo ni remise de fidélité possible, le net ne peut pas
       // tomber à 0 : on refuse avant toute écriture. Dès qu'une remise peut
       // s'appliquer, seul le net calculé côté serveur tranche (plus bas).
       if (body.paymentMethod === "cash" && !allowCash && !body.promoCode) {
@@ -1319,7 +1319,7 @@ const app = defineApp([
         cartSubtotal += serverTotalPrice;
 
         // Priorité stricte (#48) : un code promo valide l'emporte sur la
-        // ristourne de fidélité, qui n'est donc évaluée qu'à défaut de code.
+        // remise de fidélité, qui n'est donc évaluée qu'à défaut de code.
         if (body.promoCode) {
           // Validate promo on full cart subtotal
           const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), cartSubtotal);
@@ -1379,7 +1379,7 @@ const app = defineApp([
             }
           }
         } else {
-          // Ristourne de fidélité : réservée aux clients configurés ayant
+          // Remise de fidélité : réservée aux clients configurés ayant
           // franchi un nouveau palier. L'allocation reste PROVISOIRE — rien
           // n'est écrit tant que l'award n'a pas été réclamé atomiquement.
           const loyaltyUser = await getUserById(env.DB, userId);
@@ -3239,7 +3239,7 @@ const app = defineApp([
           loyalty_threshold?: number;
         };
 
-        // La ristourne est un levier tarifaire récurrent : comme la grille de
+        // La remise est un levier tarifaire récurrent : comme la grille de
         // tarifs, les codes promo et les réglages, elle reste au super-admin.
         if (["loyalty_enabled", "loyalty_discount_type", "loyalty_discount_value", "loyalty_threshold"].some((key) => Object.prototype.hasOwnProperty.call(rawBody, key))) {
           if (request.headers.get("X-Admin-User-Role") !== "super-admin") {
