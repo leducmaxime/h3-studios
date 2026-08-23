@@ -1716,19 +1716,9 @@ export function AdminDashboard() {
           subValue={
             stats ? (
               <>
-                <span className="mt-1 block space-y-1.5">
-                  <span className="block">
-                    <span className="block text-zinc-400">{formatPrice(stats.rangePromoDiscounts)}</span>
-                    code promo
-                  </span>
-                  <span className="block">
-                    <span className="block text-zinc-400">{formatPrice(stats.rangeManualDiscounts)}</span>
-                    remise manuelle
-                  </span>
-                  <span className="block">
-                    <span className="block text-zinc-400">{formatPrice(stats.rangeLoyaltyDiscounts)}</span>
-                    remise fidélité
-                  </span>
+                <span className="mt-1 block">
+                  <span className="block">dont {formatPrice(stats.rangePromoDiscounts)} code promo · {formatPrice(stats.rangeManualDiscounts)} remise manuelle</span>
+                  <span className="block">{formatPrice(stats.rangeLoyaltyDiscounts)} remise fidélité</span>
                 </span>
                 <span className="mt-1.5 block text-xs">Déjà déduites du CA réservé</span>
               </>
