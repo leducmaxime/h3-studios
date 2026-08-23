@@ -1705,11 +1705,11 @@ export function AdminDashboard() {
               stats ? (
                 <>
                   <span>
-                    {formatPrice(stats.rangePromoDiscounts)} promo
+                    <span className="whitespace-nowrap">{formatPrice(stats.rangePromoDiscounts)} promo</span>
                     {" · "}
-                    {formatPrice(stats.rangeManualDiscounts)} manuelle
+                    <span className="whitespace-nowrap">{formatPrice(stats.rangeManualDiscounts)} manuelle</span>
                     {" · "}
-                    {formatPrice(stats.rangeLoyaltyDiscounts)} fidélité
+                    <span className="whitespace-nowrap">{formatPrice(stats.rangeLoyaltyDiscounts)} fidélité</span>
                   </span>
                   <span className="mt-0.5 block text-xs">Déjà déduites du CA réservé</span>
                 </>
