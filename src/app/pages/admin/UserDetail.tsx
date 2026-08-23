@@ -36,7 +36,7 @@ import { formatSiret, resolveUserClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
 import { formatPrice, type StudioId } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
-import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, studioLabel } from "@/lib/labels";
+import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
 import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 import { computeClientBookingInsights, formatDurationHours, slotDurationHours } from "@/lib/user-booking-stats";
@@ -47,69 +47,17 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// ─── Studio Pie Chart ─────────────────────────────────────────────────────
-function StudioPieChart({ sceneCount, podiumCount }: { sceneCount: number; podiumCount: number }) {
-  const total = sceneCount + podiumCount;
-  if (total === 0) return <p className="text-sm text-zinc-400">Aucune donnée</p>;
-
-  const r = 40;
-  const cx = 56;
-  const cy = 56;
-  const circumference = 2 * Math.PI * r;
-  const scenePct = sceneCount / total;
-  const podiumPct = podiumCount / total;
-  const sceneDash = scenePct * circumference;
-  const podiumDash = podiumPct * circumference;
-  const podiumRotation = -90 + scenePct * 360;
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <svg width="112" height="112" viewBox="0 0 112 112">
-        {/* Fond gris */}
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#27272a" strokeWidth="18" />
-        {/* Le Podium */}
-        {podiumCount > 0 && (
-          <circle
-            cx={cx} cy={cy} r={r}
-            fill="none"
-            stroke="#a78bfa"
-            strokeWidth="18"
-            strokeDasharray={`${podiumDash} ${circumference}`}
-            strokeLinecap="butt"
-            transform={`rotate(${podiumRotation} ${cx} ${cy})`}
-          />
-        )}
-        {/* La Scène */}
-        {sceneCount > 0 && (
-          <circle
-            cx={cx} cy={cy} r={r}
-            fill="none"
-            stroke="#ffde59"
-            strokeWidth="18"
-            strokeDasharray={`${sceneDash} ${circumference}`}
-            strokeLinecap="butt"
-            transform={`rotate(-90 ${cx} ${cy})`}
-          />
-        )}
-      </svg>
-      <div className="w-full space-y-2 text-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#ffde59] shrink-0" />
-            <span className="text-zinc-300">La Scène</span>
-          </div>
-          <span className="font-semibold">{Math.round(scenePct * 100)}%</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#a78bfa] shrink-0" />
-            <span className="text-zinc-300">Le Podium</span>
-          </div>
-          <span className="font-semibold">{Math.round(podiumPct * 100)}%</span>
-        </div>
-      </div>
-    </div>
-  );
+interface ClientPaymentRow {
+  id: string;
+  booking_id: string;
+  amount: number;
+  method: string;
+  payment_type: "on-site" | "online";
+  status: "pending" | "paid" | "refunded" | "partial-refund";
+  refunded_amount: number;
+  created_at: string;
+  booking_ref: string | null;
+  booking_date: string | null;
 }
 
 // ─── Remise de fidélité (issue #48) ───────────────────────────────────────
@@ -158,6 +106,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
   // grille de tarifs. Le serveur refuse de toute façon (403) pour un opérateur.
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [bookings, setBookings] = useState<BookingWithUser[]>([]);
+  const [payments, setPayments] = useState<ClientPaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -240,7 +189,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
 
   const fetchBookings = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ userId: userId, limit: "100" });
+      const params = new URLSearchParams({ userId: userId, all: "true" });
       const res = await fetch(`/api/admin/bookings?${params}`);
       const json = (await res.json()) as {
         success: boolean;
@@ -254,14 +203,30 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     }
   }, [userId]);
 
+  const fetchPayments = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ userId, all: "true", sortBy: "created_at", sortOrder: "desc" });
+      const res = await fetch(`/api/admin/payments?${params}`);
+      const json = (await res.json()) as {
+        success: boolean;
+        data?: { data: ClientPaymentRow[] };
+      };
+      if (json.success && json.data) {
+        setPayments(json.data.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch payments:", error);
+    }
+  }, [userId]);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchUser(), fetchBookings()]);
+      await Promise.all([fetchUser(), fetchBookings(), fetchPayments()]);
       setLoading(false);
     };
     load();
-  }, [fetchUser, fetchBookings]);
+  }, [fetchUser, fetchBookings, fetchPayments]);
 
   useEffect(() => {
     let active = true;
@@ -526,9 +491,6 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
   const firstBooking = nonCancelledBookings.length > 0
     ? nonCancelledBookings.reduce((a, b) => (a.date < b.date ? a : b))
     : null;
-  const sceneCount = nonCancelledBookings.filter((b) => b.studio_id === "la-scene").length;
-  const podiumCount = nonCancelledBookings.filter((b) => b.studio_id === "le-podium").length;
-
   // Durée totale
   const totalHours = nonCancelledBookings.reduce(
     (acc, b) => acc + slotDurationHours(b.start_time, b.end_time),
@@ -593,6 +555,9 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           <TabsTrigger value="profile">Profil</TabsTrigger>
           <TabsTrigger value="bookings">
             Réservations ({bookings.length})
+          </TabsTrigger>
+          <TabsTrigger value="payments">
+            Paiements ({payments.length})
           </TabsTrigger>
         </TabsList>
 
@@ -1180,11 +1145,6 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 </div>
               </div>
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-                <h2 className="mb-4 font-semibold">Répartition studios</h2>
-                <StudioPieChart sceneCount={sceneCount} podiumCount={podiumCount} />
-              </div>
-
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
                 <h2 className="mb-4 font-semibold">Actions</h2>
                 <Button
                   onClick={handleBlock}
@@ -1344,7 +1304,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     </thead>
                     <tbody className="divide-y divide-zinc-800">
                       {sortedBookings.map((b) => (
-                        <tr key={b.id} className={`bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors ${b.date < today ? "opacity-50" : ""}`}>
+                        <tr key={b.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
                           <td className="px-4 py-3">
                             <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline block">
                               {b.booking_ref}
@@ -1409,6 +1369,68 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 </div>
               )}
             </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="payments">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+            <h2 className="mb-4 font-semibold">Paiements ({payments.length})</h2>
+            {payments.length === 0 ? (
+              <p className="text-zinc-400">Aucun paiement enregistré</p>
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-zinc-800">
+                <table className="w-full">
+                  <thead className="border-b border-zinc-800 bg-zinc-900/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Réservation</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Moyen</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Statut</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {payments.map((payment) => (
+                      <tr key={payment.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
+                        <td className="px-4 py-3 text-sm">
+                          {payment.created_at ? formatDate(payment.created_at) : "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          {payment.booking_id ? (
+                            <a href={`/admin/bookings/${payment.booking_id}`} className="font-mono text-sm text-primary hover:underline">
+                              {payment.booking_ref || payment.booking_id}
+                            </a>
+                          ) : (
+                            <span className="text-sm text-zinc-500">—</span>
+                          )}
+                          {payment.booking_date && (
+                            <p className="text-xs text-zinc-500">{formatDate(payment.booking_date)}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">{paymentMethodLabelShort(payment.method)}</td>
+                        <td className="px-4 py-3 text-sm">{paymentTypeLabel(payment.payment_type)}</td>
+                        <td className="px-4 py-3">
+                          <Badge className={`text-xs ${
+                            payment.status === "paid" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
+                            payment.status === "pending" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
+                            "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+                          }`}>
+                            {paymentRecordStatusLabel(payment.status)}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="font-medium">{formatPrice(payment.amount)}</span>
+                          {payment.refunded_amount > 0 && (
+                            <p className="text-xs text-zinc-500">-{formatPrice(payment.refunded_amount)}</p>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>

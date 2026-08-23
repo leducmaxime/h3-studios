@@ -980,6 +980,11 @@ export async function getPayments(
     params.push(term, term, term);
   }
 
+  if (filters.userId) {
+    conditions.push("user_id = ?");
+    params.push(filters.userId);
+  }
+
   if (filters.dateFrom) {
     conditions.push("booking_date >= ?");
     params.push(filters.dateFrom);

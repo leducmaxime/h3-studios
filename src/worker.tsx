@@ -3386,6 +3386,7 @@ const app = defineApp([
         method?: "card" | "cash" | "transfer" | "check";
         paymentType?: "on-site" | "online";
         search?: string;
+        userId?: string;
         dateFrom?: string;
         dateTo?: string;
         sortBy?: "created_at" | "booking_date" | "amount" | "status" | "method" | "payment_type";
@@ -3404,6 +3405,8 @@ const app = defineApp([
       if (paymentType) filters.paymentType = paymentType as typeof filters.paymentType;
       const search = url.searchParams.get("search");
       if (search) filters.search = search;
+      const userId = url.searchParams.get("userId");
+      if (userId) filters.userId = userId;
       const dateFrom = url.searchParams.get("dateFrom");
       if (dateFrom) filters.dateFrom = dateFrom;
       const dateTo = url.searchParams.get("dateTo");

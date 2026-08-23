@@ -295,6 +295,7 @@ export interface AdminPaymentFilters {
   method?: "card" | "cash" | "transfer" | "check";
   paymentType?: "on-site" | "online";
   search?: string;
+  userId?: string;
   dateFrom?: string;
   dateTo?: string;
   sortBy?: AdminPaymentSortField;
