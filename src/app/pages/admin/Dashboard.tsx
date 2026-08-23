@@ -1754,7 +1754,13 @@ export function AdminDashboard() {
             <StatCard
               title="Au recouvrement"
               value={stats?.rangeOverduePayments ?? 0}
-              subValue={`${formatPrice(stats?.rangeOverdueAmount ?? 0)} · Séances terminées, solde dû`}
+              subValue={
+                <>
+                  {formatPrice(stats?.rangeOverdueAmount ?? 0)}
+                  {" · "}
+                  <span className="whitespace-nowrap">Séances terminées, solde dû</span>
+                </>
+              }
               icon={AlertCircle}
               color={(stats?.rangeOverduePayments ?? 0) > 0 ? "red" : "blue"}
               className="transition-colors group-hover:border-zinc-600"
