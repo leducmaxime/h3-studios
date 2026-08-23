@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, Loader2, Search, Wallet } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,8 @@ import type { BookingStatus, OverdueBooking } from "@/lib/db-types";
 const VIEW_STORAGE_KEY = "h3-admin-recouvrement-view";
 
 type ViewMode = "bookings" | "clients";
+type SortField = "date" | "client" | "studio" | "status" | "amount_due" | "total_paid" | "remaining";
+type SortOrder = "asc" | "desc";
 
 interface RecouvrementResponse {
   success: boolean;
@@ -54,6 +56,64 @@ function readStoredView(): ViewMode {
   return window.localStorage.getItem(VIEW_STORAGE_KEY) === "clients" ? "clients" : "bookings";
 }
 
+function compareBookings(a: OverdueBooking, b: OverdueBooking, sortBy: SortField, sortOrder: SortOrder): number {
+  const dir = sortOrder === "asc" ? 1 : -1;
+  let cmp = 0;
+  switch (sortBy) {
+    case "date":
+      cmp = a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time);
+      break;
+    case "client":
+      cmp = clientDisplayName(a).localeCompare(clientDisplayName(b), "fr");
+      break;
+    case "studio":
+      cmp = studioLabel(a.studio_id).localeCompare(studioLabel(b.studio_id), "fr");
+      break;
+    case "status":
+      cmp = a.status.localeCompare(b.status);
+      break;
+    case "amount_due":
+      cmp = a.amount_due - b.amount_due;
+      break;
+    case "total_paid":
+      cmp = a.total_paid - b.total_paid;
+      break;
+    case "remaining":
+      cmp = a.remaining - b.remaining;
+      break;
+  }
+  return cmp * dir;
+}
+
+function SortHeader({
+  label,
+  field,
+  sortBy,
+  sortOrder,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  field: SortField;
+  sortBy: SortField;
+  sortOrder: SortOrder;
+  onSort: (field: SortField) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortBy === field;
+  return (
+    <th
+      className={`px-4 py-3 font-medium cursor-pointer hover:text-zinc-200 ${align === "right" ? "text-right" : "text-left"} ${active ? "text-zinc-200" : ""}`}
+      onClick={() => onSort(field)}
+    >
+      <span className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>
+        {label}
+        {active && (sortOrder === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+      </span>
+    </th>
+  );
+}
+
 export function AdminRecouvrement() {
   const [bookings, setBookings] = useState<OverdueBooking[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -63,6 +123,17 @@ export function AdminRecouvrement() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<ViewMode>(readStoredView);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [sortBy, setSortBy] = useState<SortField>("date");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+
+  const handleSort = (field: SortField) => {
+    if (sortBy === field) {
+      setSortOrder((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortBy(field);
+    setSortOrder(field === "remaining" || field === "amount_due" ? "desc" : "asc");
+  };
 
   const fetchOverdue = useCallback(async () => {
     setLoading(true);
@@ -101,6 +172,11 @@ export function AdminRecouvrement() {
     window.localStorage.setItem(VIEW_STORAGE_KEY, next);
   };
 
+  const sortedBookings = useMemo(
+    () => [...bookings].sort((a, b) => compareBookings(a, b, sortBy, sortOrder)),
+    [bookings, sortBy, sortOrder],
+  );
+
   const groups = useMemo<ClientGroup[]>(() => {
     const byUser = new Map<string, ClientGroup>();
     for (const booking of bookings) {
@@ -120,8 +196,39 @@ export function AdminRecouvrement() {
         remaining: booking.remaining,
       });
     }
-    return [...byUser.values()].sort((a, b) => b.remaining - a.remaining);
-  }, [bookings]);
+    const dir = sortOrder === "asc" ? 1 : -1;
+    return [...byUser.values()]
+      .map((group) => ({
+        ...group,
+        bookings: [...group.bookings].sort((a, b) => compareBookings(a, b, sortBy, sortOrder)),
+      }))
+      .sort((a, b) => {
+        let cmp = 0;
+        switch (sortBy) {
+          case "client":
+            cmp = a.name.localeCompare(b.name, "fr");
+            break;
+          case "date": {
+            const aDate = a.bookings[0] ? `${a.bookings[0].date}${a.bookings[0].start_time}` : "";
+            const bDate = b.bookings[0] ? `${b.bookings[0].date}${b.bookings[0].start_time}` : "";
+            cmp = aDate.localeCompare(bDate);
+            break;
+          }
+          case "amount_due":
+            cmp = a.bookings.reduce((sum, booking) => sum + booking.amount_due, 0)
+              - b.bookings.reduce((sum, booking) => sum + booking.amount_due, 0);
+            break;
+          case "total_paid":
+            cmp = a.bookings.reduce((sum, booking) => sum + booking.total_paid, 0)
+              - b.bookings.reduce((sum, booking) => sum + booking.total_paid, 0);
+            break;
+          default:
+            cmp = a.remaining - b.remaining;
+            break;
+        }
+        return cmp * dir;
+      });
+  }, [bookings, sortBy, sortOrder]);
 
   const toggleGroup = (userId: string) => {
     setOpenGroups((current) => ({ ...current, [userId]: !current[userId] }));
@@ -187,7 +294,7 @@ export function AdminRecouvrement() {
           </p>
         </div>
       ) : view === "bookings" ? (
-        <BookingsTable bookings={bookings} />
+        <BookingsTable bookings={sortedBookings} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
       ) : (
         <div className="space-y-2">
           {groups.map((group) => {
@@ -229,7 +336,7 @@ export function AdminRecouvrement() {
                 </button>
                 {open && (
                   <div className="border-t border-zinc-800">
-                    <BookingsTable bookings={group.bookings} compact />
+                    <BookingsTable bookings={group.bookings} compact sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
                   </div>
                 )}
               </div>
@@ -241,7 +348,19 @@ export function AdminRecouvrement() {
   );
 }
 
-function BookingsTable({ bookings, compact = false }: { bookings: OverdueBooking[]; compact?: boolean }) {
+function BookingsTable({
+  bookings,
+  compact = false,
+  sortBy,
+  sortOrder,
+  onSort,
+}: {
+  bookings: OverdueBooking[];
+  compact?: boolean;
+  sortBy: SortField;
+  sortOrder: SortOrder;
+  onSort: (field: SortField) => void;
+}) {
   return (
     <div className={compact ? "" : "overflow-hidden rounded-xl border border-zinc-800"}>
       <div className="overflow-x-auto">
@@ -249,13 +368,13 @@ function BookingsTable({ bookings, compact = false }: { bookings: OverdueBooking
           <thead className="border-b border-zinc-800 bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-4 py-3 font-medium">Réf</th>
-              <th className="px-4 py-3 font-medium">Client</th>
-              <th className="px-4 py-3 font-medium">Date</th>
-              <th className="px-4 py-3 font-medium">Studio</th>
-              <th className="px-4 py-3 font-medium">Statut</th>
-              <th className="px-4 py-3 text-right font-medium">Dû</th>
-              <th className="px-4 py-3 text-right font-medium">Payé</th>
-              <th className="px-4 py-3 text-right font-medium">Reste</th>
+              <SortHeader label="Client" field="client" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              <SortHeader label="Date" field="date" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              <SortHeader label="Studio" field="studio" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              <SortHeader label="Statut" field="status" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+              <SortHeader label="Dû" field="amount_due" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
+              <SortHeader label="Payé" field="total_paid" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
+              <SortHeader label="Reste" field="remaining" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
             </tr>
           </thead>
           <tbody>
