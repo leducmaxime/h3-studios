@@ -71,8 +71,8 @@ function clientDisplayName(booking: Pick<OverdueBooking, "band_name" | "user_nam
 }
 
 function readStoredView(): ViewMode {
-  if (typeof window === "undefined") return "bookings";
-  return window.localStorage.getItem(VIEW_STORAGE_KEY) === "clients" ? "clients" : "bookings";
+  if (typeof window === "undefined") return "clients";
+  return window.localStorage.getItem(VIEW_STORAGE_KEY) === "bookings" ? "bookings" : "clients";
 }
 
 function compareBookings(a: OverdueBooking, b: OverdueBooking, sortBy: SortField, sortOrder: SortOrder): number {
