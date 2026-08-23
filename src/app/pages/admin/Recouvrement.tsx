@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Banknote, ChevronDown, ChevronUp, Loader2, Search, Wallet } from "lucide-react";
+import { Banknote, ChevronDown, Loader2, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -104,35 +104,6 @@ function compareBookings(a: OverdueBooking, b: OverdueBooking, sortBy: SortField
   return cmp * dir;
 }
 
-function SortHeader({
-  label,
-  field,
-  sortBy,
-  sortOrder,
-  onSort,
-  align = "left",
-}: {
-  label: string;
-  field: SortField;
-  sortBy: SortField;
-  sortOrder: SortOrder;
-  onSort: (field: SortField) => void;
-  align?: "left" | "right";
-}) {
-  const active = sortBy === field;
-  return (
-    <th
-      className={`px-4 py-3 font-medium cursor-pointer hover:text-zinc-200 ${align === "right" ? "text-right" : "text-left"} ${active ? "text-zinc-200" : ""}`}
-      onClick={() => onSort(field)}
-    >
-      <span className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>
-        {label}
-        {active && (sortOrder === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
-      </span>
-    </th>
-  );
-}
-
 export function AdminRecouvrement() {
   const [bookings, setBookings] = useState<OverdueBooking[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -147,15 +118,6 @@ export function AdminRecouvrement() {
   const [collectGroup, setCollectGroup] = useState<ClientGroup | null>(null);
   const [collectEntries, setCollectEntries] = useState<CollectEntry[]>([]);
   const [collectLoading, setCollectLoading] = useState(false);
-
-  const handleSort = (field: SortField) => {
-    if (sortBy === field) {
-      setSortOrder((current) => (current === "asc" ? "desc" : "asc"));
-      return;
-    }
-    setSortBy(field);
-    setSortOrder(field === "remaining" || field === "amount_due" ? "desc" : "asc");
-  };
 
   const fetchOverdue = useCallback(async () => {
     setLoading(true);
@@ -347,25 +309,51 @@ export function AdminRecouvrement() {
             className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
           />
         </div>
-        <div className="flex rounded-lg border border-zinc-700 bg-zinc-800 p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewMode("bookings")}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              view === "bookings" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Toutes les réservations
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("clients")}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              view === "clients" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Par client
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg border border-zinc-700 bg-zinc-800 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("bookings")}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                view === "bookings" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Toutes les réservations
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("clients")}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                view === "clients" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Par client
+            </button>
+          </div>
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-[10px] text-zinc-500">Tri</span>
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as SortField)}
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="date">Date</option>
+              <option value="client">Client</option>
+              <option value="studio">Studio</option>
+              <option value="status">Statut</option>
+              <option value="amount_due">Dû</option>
+              <option value="total_paid">Payé</option>
+              <option value="remaining">Reste</option>
+            </select>
+            <select
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value as SortOrder)}
+              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            >
+              <option value="desc">↓</option>
+              <option value="asc">↑</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -382,7 +370,7 @@ export function AdminRecouvrement() {
           </p>
         </div>
       ) : view === "bookings" ? (
-        <BookingsTable bookings={sortedBookings} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
+        <BookingsTable bookings={sortedBookings} />
       ) : (
         <div className="space-y-2">
           {groups.map((group) => {
@@ -437,7 +425,7 @@ export function AdminRecouvrement() {
                 </div>
                 {open && (
                   <div className="border-t border-zinc-800">
-                    <BookingsTable bookings={group.bookings} compact sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
+                    <BookingsTable bookings={group.bookings} compact />
                   </div>
                 )}
               </div>
@@ -594,15 +582,9 @@ export function AdminRecouvrement() {
 function BookingsTable({
   bookings,
   compact = false,
-  sortBy,
-  sortOrder,
-  onSort,
 }: {
   bookings: OverdueBooking[];
   compact?: boolean;
-  sortBy: SortField;
-  sortOrder: SortOrder;
-  onSort: (field: SortField) => void;
 }) {
   return (
     <div className={compact ? "" : "overflow-hidden rounded-xl border border-zinc-800"}>
@@ -611,13 +593,13 @@ function BookingsTable({
           <thead className="border-b border-zinc-800 bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-4 py-3 font-medium">Réf</th>
-              <SortHeader label="Client" field="client" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-              <SortHeader label="Date" field="date" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-              <SortHeader label="Studio" field="studio" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-              <SortHeader label="Statut" field="status" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
-              <SortHeader label="Dû" field="amount_due" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
-              <SortHeader label="Payé" field="total_paid" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
-              <SortHeader label="Reste" field="remaining" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="right" />
+              <th className="px-4 py-3 font-medium">Client</th>
+              <th className="px-4 py-3 font-medium">Date</th>
+              <th className="px-4 py-3 font-medium">Studio</th>
+              <th className="px-4 py-3 font-medium">Statut</th>
+              <th className="px-4 py-3 text-right font-medium">Dû</th>
+              <th className="px-4 py-3 text-right font-medium">Payé</th>
+              <th className="px-4 py-3 text-right font-medium">Reste</th>
             </tr>
           </thead>
           <tbody>
