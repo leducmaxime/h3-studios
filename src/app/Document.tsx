@@ -17,6 +17,7 @@ const BREADCRUMB_NAMES: Record<string, string> = {
   "mon-compte": "Mon Compte",
   "connexion": "Connexion",
   "profil": "Profil",
+  "fidelite": "Fidélité",
 };
 
 const LEGAL_PATHS = ["/mentions-legales", "/politique-confidentialite", "/conditions-de-vente"];

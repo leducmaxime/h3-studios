@@ -47,6 +47,7 @@ import { PaymentCancel } from "@/app/pages/PaymentCancel";
 import { ClientLogin } from "@/app/pages/ClientLogin";
 import { ClientAccount } from "@/app/pages/ClientAccount";
 import { ClientProfile } from "@/app/pages/ClientProfile";
+import { ClientLoyalty } from "@/app/pages/ClientLoyalty";
 import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
 import { createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent, type StripeCheckoutSession } from "@/lib/stripe";
@@ -5865,6 +5866,12 @@ const app = defineApp([
   render(({ children, rw }) => <DocumentWithPath path="/mon-compte/profil" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/mon-compte/profil", ClientProfile),
+    ]),
+  ]),
+
+  render(({ children, rw }) => <DocumentWithPath path="/mon-compte/fidelite" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+    layout(MainLayout, [
+      route("/mon-compte/fidelite", ClientLoyalty),
     ]),
   ]),
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { navigate } from "rwsdk/client";
-import { Facebook, Instagram, User, LogOut, UserCircle, CalendarDays, Phone } from "lucide-react";
+import { Facebook, Instagram, User, LogOut, UserCircle, CalendarDays, Gift, Phone } from "lucide-react";
 import { logout, useClientAuth } from "@/lib/client-auth-store";
 import { subscribe } from "@/lib/navigation-events";
 
@@ -184,6 +184,16 @@ export function Header() {
                       >
                         <CalendarDays className="h-4 w-4 text-primary" />
                         Mes Réservations
+                      </button>
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          navigate("/mon-compte/fidelite");
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
+                      >
+                        <Gift className="h-4 w-4 text-primary" />
+                        Fidélité
                       </button>
                       <div className="my-1 border-t border-white/10" />
                       <button

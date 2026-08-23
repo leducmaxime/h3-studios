@@ -174,6 +174,18 @@ export const pageSEO: Record<string, PageSEO> = {
     ],
     path: "/mon-compte/profil",
   },
+  "/mon-compte/fidelite": {
+    title: "Fidélité | H3 STUDIOS",
+    description:
+      "Consultez votre jauge de fidélité H3 Studios et le nombre de réservations restantes avant votre prochaine remise.",
+    keywords: [
+      "fidélité H3 Studios",
+      "remise fidélité",
+      "programme fidélité",
+      "espace client",
+    ],
+    path: "/mon-compte/fidelite",
+  },
   "/mentions-legales": {
     title: "Mentions Légales - H3 Studios",
     description:
