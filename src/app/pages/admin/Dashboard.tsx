@@ -1676,85 +1676,91 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-        <a
-          href={stats ? `/admin/bookings?status=not-cancelled&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}` : "/admin/bookings?status=not-cancelled"}
-          className="block lg:col-span-2"
-        >
+      <div className="grid gap-4">
+        <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <a
+            href={stats ? `/admin/bookings?status=not-cancelled&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}` : "/admin/bookings?status=not-cancelled"}
+            className="group block h-full"
+          >
+            <StatCard
+              title={`Réservations (${rangeTitle})`}
+              value={stats?.rangeBookings ?? 0}
+              subValue={stats ? `${rangeSubtitle} · ${formatSlotsToDuration(rangeBookedSlots)}` : rangeSubtitle}
+              icon={Calendar}
+              color="primary"
+              className="transition-colors group-hover:border-zinc-600"
+            />
+          </a>
           <StatCard
-            title={`Réservations (${rangeTitle})`}
-            value={stats?.rangeBookings ?? 0}
-            subValue={stats ? `${rangeSubtitle} · ${formatSlotsToDuration(rangeBookedSlots)}` : rangeSubtitle}
-            icon={Calendar}
-            color="primary"
+            title="CA réservé (total)"
+            value={formatPrice(stats?.rangeRevenue ?? 0)}
+            subValue={stats ? `dont ${formatPrice(stats.rangeEquipmentRevenue)} options (${stats.rangeRevenue > 0 ? Math.round((stats.rangeEquipmentRevenue / stats.rangeRevenue) * 100) : 0}%)` : ""}
+            icon={Users}
+            color="blue"
           />
-        </a>
-        <StatCard
-          title="CA réservé (total)"
-          value={formatPrice(stats?.rangeRevenue ?? 0)}
-          subValue={stats ? `dont ${formatPrice(stats.rangeEquipmentRevenue)} options (${stats.rangeRevenue > 0 ? Math.round((stats.rangeEquipmentRevenue / stats.rangeRevenue) * 100) : 0}%)` : ""}
-          icon={Users}
-          color="blue"
-          className="lg:col-span-2"
-        />
-        <StatCard
-          title="Remises accordées"
-          value={formatPrice(stats?.rangeDiscounts ?? 0)}
-          subValue={
-            stats ? (
-              <>
-                <span className="mt-1 block">
-                  <span className="block whitespace-nowrap">dont {formatPrice(stats.rangePromoDiscounts)} code promo</span>
-                  <span className="block whitespace-nowrap">{formatPrice(stats.rangeManualDiscounts)} remise manuelle</span>
-                  <span className="block whitespace-nowrap">{formatPrice(stats.rangeLoyaltyDiscounts)} remise fidélité</span>
-                </span>
-                <span className="mt-1.5 block text-xs">Déjà déduites du CA réservé</span>
-              </>
-            ) : (
-              "Déjà déduites du CA réservé"
-            )
-          }
-          icon={Euro}
-          color="zinc"
-          className="lg:col-span-2"
-        />
-        <StatCard
-          title="Panier moyen"
-          value={formatPrice(avgBasket)}
-          subValue={stats ? `de ${formatPrice(stats.rangeMinPrice)} à ${formatPrice(stats.rangeMaxPrice)}` : ""}
-          icon={ShoppingCart}
-          color="green"
-          className="lg:col-span-3"
-        />
-        <StatCard
-          title="Annulations"
-          value={stats?.rangeCancellations ?? 0}
-          subValue="Sur la période (date de séance)"
-          icon={Ban}
-          color="zinc"
-          className="lg:col-span-3"
-        />
-        <a
-          href={stats ? `/admin/bookings?payment=on-site-due&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}&dateDirection=upcoming` : "/admin/bookings?payment=on-site-due&dateDirection=upcoming"}
-          className="block sm:col-span-2 lg:col-span-3"
-        >
           <StatCard
-            title="Sur place à encaisser"
-            value={stats?.rangePendingPayments ?? 0}
-            subValue={`${formatPrice(stats?.rangePendingAmount ?? 0)} · Séances à venir`}
-            icon={CreditCard}
-            color={(stats?.rangePendingPayments ?? 0) > 0 ? "red" : "blue"}
+            title="Remises accordées"
+            value={formatPrice(stats?.rangeDiscounts ?? 0)}
+            subValue={
+              stats ? (
+                <>
+                  <span>
+                    {formatPrice(stats.rangePromoDiscounts)} promo
+                    {" · "}
+                    {formatPrice(stats.rangeManualDiscounts)} manuelle
+                    {" · "}
+                    {formatPrice(stats.rangeLoyaltyDiscounts)} fidélité
+                  </span>
+                  <span className="mt-0.5 block text-xs">Déjà déduites du CA réservé</span>
+                </>
+              ) : (
+                "Déjà déduites du CA réservé"
+              )
+            }
+            icon={Euro}
+            color="zinc"
+            className="sm:col-span-2 lg:col-span-1"
           />
-        </a>
-        <a href="/admin/recouvrement" className="block sm:col-span-2 lg:col-span-3">
+        </div>
+        <div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            title="Au recouvrement"
-            value={stats?.rangeOverduePayments ?? 0}
-            subValue={`${formatPrice(stats?.rangeOverdueAmount ?? 0)} · Séances terminées, solde dû`}
-            icon={AlertCircle}
-            color={(stats?.rangeOverduePayments ?? 0) > 0 ? "red" : "blue"}
+            title="Panier moyen"
+            value={formatPrice(avgBasket)}
+            subValue={stats ? `de ${formatPrice(stats.rangeMinPrice)} à ${formatPrice(stats.rangeMaxPrice)}` : ""}
+            icon={ShoppingCart}
+            color="green"
           />
-        </a>
+          <StatCard
+            title="Annulations"
+            value={stats?.rangeCancellations ?? 0}
+            subValue="Sur la période (date de séance)"
+            icon={Ban}
+            color="zinc"
+          />
+          <a
+            href={stats ? `/admin/bookings?payment=on-site-due&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}&dateDirection=upcoming` : "/admin/bookings?payment=on-site-due&dateDirection=upcoming"}
+            className="group block h-full"
+          >
+            <StatCard
+              title="Sur place à encaisser"
+              value={stats?.rangePendingPayments ?? 0}
+              subValue={`${formatPrice(stats?.rangePendingAmount ?? 0)} · Séances à venir`}
+              icon={CreditCard}
+              color={(stats?.rangePendingPayments ?? 0) > 0 ? "red" : "blue"}
+              className="transition-colors group-hover:border-zinc-600"
+            />
+          </a>
+          <a href="/admin/recouvrement" className="group block h-full">
+            <StatCard
+              title="Au recouvrement"
+              value={stats?.rangeOverduePayments ?? 0}
+              subValue={`${formatPrice(stats?.rangeOverdueAmount ?? 0)} · Séances terminées, solde dû`}
+              icon={AlertCircle}
+              color={(stats?.rangeOverduePayments ?? 0) > 0 ? "red" : "blue"}
+              className="transition-colors group-hover:border-zinc-600"
+            />
+          </a>
+        </div>
       </div>
 
       {/* Widget En cours maintenant */}
