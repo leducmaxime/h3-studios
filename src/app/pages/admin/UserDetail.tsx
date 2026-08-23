@@ -1138,7 +1138,9 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Fréquence</span>
                     <span className="font-semibold">
-                      {nonCancelledBookings.length > 0 ? `${freqMensuelle} / mois` : "—"}
+                      {nonCancelledBookings.length > 0
+                        ? `${freqMensuelle} session${freqMensuelle === "1" ? "" : "s"} / mois`
+                        : "—"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
