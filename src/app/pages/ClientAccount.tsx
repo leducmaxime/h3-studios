@@ -9,7 +9,6 @@ import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceD
 import { Price } from "@/components/common/Price";
 import { logout, useClientAuth } from "@/lib/client-auth-store";
 import { BOOKING_STATUS_LABELS, bookingStatusLabel, clientDisplayPaymentStatusLabel, groupTypeLabel, PAYMENT_STATUS_FAQ_HREF, studioLabel } from "@/lib/labels";
-import { LoyaltyGauge, type LoyaltyData } from "@/components/account/LoyaltyGauge";
 
 interface BookingRow {
   id: string;
@@ -67,7 +66,6 @@ export function ClientAccount() {
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [loyalty, setLoyalty] = useState<LoyaltyData | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -82,16 +80,6 @@ export function ClientAccount() {
     }).catch(() => {
       window.location.href = "/mon-compte/connexion";
     });
-  }, [status, user?.id]);
-
-  useEffect(() => {
-    if (status === "loading" || !user) return;
-    fetch("/api/client/loyalty")
-      .then((response) => response.json() as Promise<{ success?: boolean; data?: LoyaltyData }>)
-      .then((result) => {
-        setLoyalty(result.success === true && result.data?.configured === true ? result.data : null);
-      })
-      .catch(() => setLoyalty(null));
   }, [status, user?.id]);
 
   const handleLogout = async () => {
@@ -163,8 +151,6 @@ export function ClientAccount() {
             </Button>
           </div>
         </div>
-
-        {loyalty && <div className="mb-10"><LoyaltyGauge loyalty={loyalty} /></div>}
 
         <section className="mb-10">
           <div className="flex items-center gap-3 mb-5">

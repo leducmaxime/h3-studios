@@ -28,10 +28,34 @@ export function Header() {
   const [sticky, setSticky] = useState(false);
   const [spin, setSpin] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const { user } = useClientAuth();
+  const [loyaltyConfigured, setLoyaltyConfigured] = useState(false);
+  const { user, status } = useClientAuth();
   const currentPath = usePathname();
   const navRef = useRef<HTMLElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setLoyaltyConfigured(false);
+    if (status === "loading" || !user) return;
+
+    let active = true;
+    fetch("/api/client/loyalty")
+      .then(async (response) => {
+        if (!response.ok) return false;
+        const result = (await response.json()) as { success?: boolean; data?: { configured?: boolean } };
+        return result.success === true && result.data?.configured === true;
+      })
+      .then((configured) => {
+        if (active) setLoyaltyConfigured(configured);
+      })
+      .catch(() => {
+        if (active) setLoyaltyConfigured(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [status, user?.id]);
 
   useEffect(() => {
     const handleStickyNavbar = () => {
@@ -61,6 +85,7 @@ export function Header() {
   };
 
   const handleLogout = async () => {
+    setLoyaltyConfigured(false);
     try {
       await logout();
       setProfileOpen(false);
@@ -185,16 +210,18 @@ export function Header() {
                         <CalendarDays className="h-4 w-4 text-primary" />
                         Mes Réservations
                       </button>
-                      <button
-                        onClick={() => {
-                          setProfileOpen(false);
-                          navigate("/mon-compte/fidelite");
-                        }}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
-                      >
-                        <Gift className="h-4 w-4 text-primary" />
-                        Fidélité
-                      </button>
+                      {loyaltyConfigured && (
+                        <button
+                          onClick={() => {
+                            setProfileOpen(false);
+                            navigate("/mon-compte/fidelite");
+                          }}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
+                        >
+                          <Gift className="h-4 w-4 text-primary" />
+                          Fidélité
+                        </button>
+                      )}
                       <div className="my-1 border-t border-white/10" />
                       <button
                         onClick={handleLogout}
