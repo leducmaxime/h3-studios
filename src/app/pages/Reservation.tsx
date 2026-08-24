@@ -306,11 +306,9 @@ export function Reservation({ step }: ReservationProps) {
             {/* Step creneau: Unified booking step — Date + Créneaux + Studio */}
             {state.step === "creneau" && (
               <div className="flex flex-col gap-6">
-                {state.selectedDate && (
+                {state.selectedDate && state.startTime && (
                   <p className="text-white/70">
-                    {!state.startTime
-                      ? "Choisissez votre créneau horaire"
-                      : "Créneau sélectionné — passez aux options"}
+                    Créneau sélectionné — passez aux options
                   </p>
                 )}
 
