@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { navigate } from "rwsdk/client";
 import { Facebook, Instagram, User, LogOut, UserCircle, CalendarDays, Gift, Phone } from "lucide-react";
+import { goToAccountPage } from "@/lib/account-nav";
 import { logout, useClientAuth } from "@/lib/client-auth-store";
 import { subscribe } from "@/lib/navigation-events";
 
@@ -193,7 +194,7 @@ export function Header() {
                       <button
                         onClick={() => {
                           setProfileOpen(false);
-                          navigate("/mon-compte/profil");
+                          goToAccountPage("profile");
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
                       >
@@ -203,7 +204,7 @@ export function Header() {
                       <button
                         onClick={() => {
                           setProfileOpen(false);
-                          navigate("/mon-compte");
+                          goToAccountPage("reservations");
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
                       >
@@ -214,7 +215,7 @@ export function Header() {
                         <button
                           onClick={() => {
                             setProfileOpen(false);
-                            navigate("/mon-compte/fidelite");
+                            goToAccountPage("loyalty");
                           }}
                           className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/10 hover:text-primary"
                         >

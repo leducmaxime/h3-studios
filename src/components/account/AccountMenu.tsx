@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { navigate } from "rwsdk/client";
 import { CalendarDays, Gift, Plus, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { goToAccountPage, type AccountPage } from "@/lib/account-nav";
 import { useClientAuth } from "@/lib/client-auth-store";
-
-export type AccountPage = "reservations" | "profile" | "loyalty";
 
 const NAV_BUTTON =
   "border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white";
@@ -55,38 +54,42 @@ export function AccountMenu({ current }: { current: AccountPage }) {
       )}
       <nav aria-label="Espace compte" className="flex flex-wrap items-center justify-center gap-3 mt-6">
         <Button
+          type="button"
           variant="outline"
           size="sm"
           className={current === "reservations" ? NAV_BUTTON_ACTIVE : NAV_BUTTON}
           aria-current={current === "reservations" ? "page" : undefined}
-          onClick={() => navigate("/mon-compte")}
+          onClick={() => goToAccountPage("reservations")}
         >
           <CalendarDays className="h-4 w-4 mr-2" />
           Mes réservations
         </Button>
         <Button
+          type="button"
           variant="outline"
           size="sm"
           className={current === "profile" ? NAV_BUTTON_ACTIVE : NAV_BUTTON}
           aria-current={current === "profile" ? "page" : undefined}
-          onClick={() => navigate("/mon-compte/profil")}
+          onClick={() => goToAccountPage("profile")}
         >
           <User className="h-4 w-4 mr-2" />
           Mon profil
         </Button>
         {loyaltyConfigured && (
           <Button
+            type="button"
             variant="outline"
             size="sm"
             className={current === "loyalty" ? NAV_BUTTON_ACTIVE : NAV_BUTTON}
             aria-current={current === "loyalty" ? "page" : undefined}
-            onClick={() => navigate("/mon-compte/fidelite")}
+            onClick={() => goToAccountPage("loyalty")}
           >
             <Gift className="h-4 w-4 mr-2" />
             Fidélité
           </Button>
         )}
         <Button
+          type="button"
           className="bg-primary text-black hover:bg-primary/90"
           size="sm"
           onClick={() => navigate("/reservation")}
