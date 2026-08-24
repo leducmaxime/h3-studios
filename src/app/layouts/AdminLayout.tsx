@@ -20,6 +20,7 @@ import {
   Ban,
 } from "lucide-react";
 
+import { navigate } from "rwsdk/client";
 import { Toaster } from "@/components/ui/sonner";
 import {
   DropdownMenu,
@@ -65,6 +66,7 @@ const ALL_NAV_ITEMS = [
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [spin, setSpin] = useState(false);
   const [user, setUser] = useState<AdminUser | null>(null);
   const currentPath = usePathname();
 
@@ -78,6 +80,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }, []);
 
   const navItems = ALL_NAV_ITEMS;
+
+  const onLogoClick = () => {
+    setSpin(true);
+    setTimeout(() => setSpin(false), 1000);
+  };
 
   const handleLogout = async () => {
     try {
@@ -105,14 +112,22 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         } ${sidebarCollapsed ? "w-16" : "w-56"}`}
       >
         <div className="flex h-16 items-center justify-between border-b border-zinc-800 px-4">
-          <a href="/admin" className="flex items-center gap-2">
+          <a
+            href="/admin"
+            onClick={(e) => {
+              e.preventDefault();
+              onLogoClick();
+              navigate("/admin");
+            }}
+            className="flex items-center gap-2"
+          >
             <img
               src="/images/logo.webp"
               alt="H3 Studios - Tableau de bord"
               width={32}
               height={32}
               decoding="async"
-              className="h-8 w-8 shrink-0"
+              className={`h-8 w-8 shrink-0 ${spin ? "animate-[spin_1s_linear_1]" : ""}`}
             />
             {!sidebarCollapsed && <span className="font-blanka text-lg">ADMIN</span>}
           </a>
