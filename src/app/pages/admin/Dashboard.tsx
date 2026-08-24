@@ -46,7 +46,7 @@ import {
 import { SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
 import { getBookingAmountDue } from "@/lib/booking-totals";
 import { DISPLAY_PAYMENT_STATUS_LABELS, studioLabel, studioLabelShort } from "@/lib/labels";
-import { generateMonthlyReportPDF } from "@/lib/export";
+import { generateDashboardReportPDF } from "@/lib/export";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1067,6 +1067,7 @@ export function AdminDashboard() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/stats/meta")
@@ -1433,46 +1434,93 @@ export function AdminDashboard() {
     Promise.all([fetchStats(), fetchCharts(), fetchTopClients()]).finally(() => setLoading(false));
   }, [fetchStats, fetchCharts, fetchTopClients]);
 
-  const handleGenerateMonthlyReport = async () => {
-    const [year, month] = reportMonth.split("-").map(Number);
+  const customRangeValid = Boolean(customDateFrom && customDateTo && customDateFrom <= customDateTo);
+  const canExportReport = rangeMode !== "custom" || customRangeValid;
+
+  const handleGenerateReport = async () => {
+    if (!stats || exporting) return;
+    if (!canExportReport) {
+      toast.error("Période personnalisée invalide");
+      return;
+    }
+
+    setExporting(true);
     try {
-      const [reportRes, chartsRes, revenueRes] = await Promise.all([
-        fetch(`/api/admin/stats/report?month=${month}&year=${year}`),
-        fetch(`/api/admin/stats/charts?mode=month&month=${month}&year=${year}`),
-        fetch(`/api/admin/stats/revenue?mode=month&month=${month}&year=${year}`),
-      ]);
+      const {
+        renderReportCharts,
+        zeroFillDaily,
+        zeroFillMonthly,
+        shouldGroupRevenueByMonth,
+        occupancyGranularityForRange,
+        aggregatePaymentChannels,
+      } = await import("@/lib/report-charts");
 
-      const reportJson = await reportRes.json() as { success: boolean; data?: Parameters<typeof generateMonthlyReportPDF>[0] };
-      const chartsJson = await chartsRes.json() as {
-        success: boolean;
-        data?: { occupancy?: Array<{ day: string; occupancyPct: number }> };
-      };
-      const revenueJson = await revenueRes.json() as {
-        success: boolean;
-        data?: Array<{ date: string; revenue: number }>;
-      };
+      const groupByMonth = shouldGroupRevenueByMonth(rangeMode, stats.rangeDays);
+      const revenue = groupByMonth
+        ? zeroFillMonthly(revenueData, stats.rangeFrom, stats.rangeTo)
+        : zeroFillDaily(revenueData, stats.rangeFrom, stats.rangeTo);
+      const occupancyGranularity = occupancyGranularityForRange(rangeMode);
+      const paymentChannels = aggregatePaymentChannels(paymentData);
 
-      if (!reportJson.success || !reportJson.data) {
-        toast.error("Échec de la génération du rapport");
-        return;
-      }
-
-      const { renderReportCharts, zeroFillDaily } = await import("@/lib/report-charts");
-      // L'API revenue ne renvoie que les jours avec du CA : on comble le mois
-      // pour que l'axe des abscisses reste linéaire (et non NaN sur 1 seul jour).
-      const monthStr = String(month).padStart(2, "0");
-      const lastDay = String(new Date(year, month, 0).getDate()).padStart(2, "0");
       const chartPngs = renderReportCharts({
-        revenue: zeroFillDaily(revenueJson.data ?? [], `${year}-${monthStr}-01`, `${year}-${monthStr}-${lastDay}`),
-        occupancy: chartsJson.data?.occupancy ?? [],
-        studios: reportJson.data.studioStats,
-        paymentMethods: reportJson.data.paymentMethods,
+        revenue,
+        occupancy: occupancyData,
+        occupancyGranularity,
+        studios: studioData.map((s) => ({ label: s.studio, count: s.count, revenue: s.revenue })),
+        groupTypes: groupTypeData.map((g) => ({ label: g.groupType, count: g.count, revenue: g.revenue })),
+        clientTypes: clientTypeData.map((c) => ({ label: c.clientType, count: c.count, revenue: c.revenue })),
+        payments: paymentData,
+        durations: durationData,
+        avgDurationMinutes,
+        medianDurationMinutes,
       });
 
-      await generateMonthlyReportPDF(reportJson.data, { month, year }, chartPngs);
+      const filename = (() => {
+        if (rangeMode === "today") return `h3-rapport-${stats.rangeFrom}.pdf`;
+        if (rangeMode === "week") return `h3-rapport-${selectedYear}-S${String(selectedWeek).padStart(2, "0")}.pdf`;
+        if (rangeMode === "month") return `h3-rapport-${reportMonth}.pdf`;
+        if (rangeMode === "year") return `h3-rapport-${selectedYear}.pdf`;
+        return `h3-rapport-${stats.rangeFrom}_${stats.rangeTo}.pdf`;
+      })();
+
+      await generateDashboardReportPDF({
+        revenue: stats.rangeRevenue,
+        bookingCount: stats.rangeBookings,
+        bookedDurationLabel: formatSlotsToDuration(rangeBookedSlots),
+        equipmentRevenue: stats.rangeEquipmentRevenue,
+        discounts: stats.rangeDiscounts,
+        promoDiscounts: stats.rangePromoDiscounts,
+        manualDiscounts: stats.rangeManualDiscounts,
+        loyaltyDiscounts: stats.rangeLoyaltyDiscounts,
+        avgBasket,
+        minPrice: stats.rangeMinPrice,
+        maxPrice: stats.rangeMaxPrice,
+        cancellations: stats.rangeCancellations,
+        occupancyRate: totalOccupancy.totalPct,
+        occupancyBookedLabel: formatSlotsToDuration(totalOccupancy.totalBookedSlots),
+        occupancyOpenLabel: formatSlotsToDuration(totalOccupancy.totalOpenSlots),
+        pendingPayments: stats.rangePendingPayments,
+        pendingAmount: stats.rangePendingAmount,
+        overduePayments: stats.rangeOverduePayments,
+        overdueAmount: stats.rangeOverdueAmount,
+        studioStats: studioData.map((s) => ({ label: s.studio, count: s.count, revenue: s.revenue })),
+        groupTypes: groupTypeData.map((g) => ({ label: g.groupType, count: g.count, revenue: g.revenue })),
+        clientTypes: clientTypeData.map((c) => ({ label: c.clientType, count: c.count, revenue: c.revenue })),
+        paymentMethods: paymentData.map((p) => ({ label: p.method, count: p.count, revenue: p.revenue })),
+        paymentChannels: paymentChannels.map((p) => ({ label: p.method, count: p.count, revenue: p.revenue })),
+        topByRevenue: topClients?.byRevenue ?? [],
+        topByBookings: topClients?.byBookings ?? [],
+        topByHours: topClients?.byHours ?? [],
+      }, {
+        title: `Rapport — ${rangeTitle}`,
+        subtitle: rangeSubtitle,
+        filename,
+      }, chartPngs);
     } catch (err) {
       console.error("Failed to generate report:", err);
       toast.error("Échec de la génération du rapport");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -1658,11 +1706,12 @@ export function AdminDashboard() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleGenerateMonthlyReport}
-              disabled={rangeMode === "custom"}
+              onClick={handleGenerateReport}
+              disabled={!canExportReport || exporting || !stats}
+              title="Exporter le rapport de la période affichée"
               className="border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <Download className="h-4 w-4" />
+              <Download className={`h-4 w-4 ${exporting ? "animate-pulse" : ""}`} />
             </Button>
           </div>
           <a

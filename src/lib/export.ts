@@ -3,7 +3,7 @@ import { formatPrice, resolveEquipmentDisplay, bookingEndMinutes, clockMinutes }
 import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
-import { storedPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
+import { storedPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
 import { roundCents, splitTtc } from "@/lib/tax";
 import type { ReportChartsPngs } from "@/lib/report-charts";
 import { COMPANY, companyRcs } from "@/lib/company";
@@ -500,24 +500,68 @@ export async function generateInvoicePDF(
   doc.save(`h3-facture-${booking.booking_ref}.pdf`);
 }
 
-// ─── PDF Monthly Report Export ────────────────────────────────────────────────
+// ─── PDF Dashboard Report Export ──────────────────────────────────────────────
 
-interface MonthlyStats {
+export interface DashboardReportClient {
+  name: string;
+  bandName: string | null;
+  bookings: number;
   revenue: number;
-  bookingCount: number;
-  equipmentRevenue: number;
-  noShowCount: number;
-  avgBasket: number;
-  occupancyRate: number;
-  studioStats: Array<{ studio_id: string; count: number; revenue: number }>;
-  paymentMethods: Array<{ method: string; count: number; revenue: number }>;
-  topClients: Array<{ name: string; band_name: string | null; bookings: number; revenue: number }>;
-  weeklyStats: Array<{ week: number; count: number; revenue: number }>;
+  minutes: number;
 }
 
-export async function generateMonthlyReportPDF(
-  stats: MonthlyStats,
-  period: { month: number; year: number },
+export interface DashboardReportNamedStat {
+  label: string;
+  count: number;
+  revenue: number;
+}
+
+export interface DashboardReportStats {
+  revenue: number;
+  bookingCount: number;
+  bookedDurationLabel: string;
+  equipmentRevenue: number;
+  discounts: number;
+  promoDiscounts: number;
+  manualDiscounts: number;
+  loyaltyDiscounts: number;
+  avgBasket: number;
+  minPrice: number;
+  maxPrice: number;
+  cancellations: number;
+  occupancyRate: number;
+  occupancyBookedLabel: string;
+  occupancyOpenLabel: string;
+  pendingPayments: number;
+  pendingAmount: number;
+  overduePayments: number;
+  overdueAmount: number;
+  studioStats: DashboardReportNamedStat[];
+  groupTypes: DashboardReportNamedStat[];
+  clientTypes: DashboardReportNamedStat[];
+  paymentMethods: DashboardReportNamedStat[];
+  paymentChannels: DashboardReportNamedStat[];
+  topByRevenue: DashboardReportClient[];
+  topByBookings: DashboardReportClient[];
+  topByHours: DashboardReportClient[];
+}
+
+export interface DashboardReportPeriod {
+  title: string;
+  subtitle: string;
+  filename: string;
+}
+
+function formatReportHours(minutes: number): string {
+  const safe = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safe / 60);
+  const remainder = safe % 60;
+  return remainder > 0 ? `${hours}h${String(remainder).padStart(2, "0")}` : `${hours}h`;
+}
+
+export async function generateDashboardReportPDF(
+  stats: DashboardReportStats,
+  period: DashboardReportPeriod,
   charts?: ReportChartsPngs,
 ): Promise<void> {
   const { jsPDF } = await import("jspdf");
@@ -528,15 +572,6 @@ export async function generateMonthlyReportPDF(
   const marginBottom = 18;
   let y = marginTop;
 
-  const monthNames = [
-    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
-  ];
-  const periodLabel = `${monthNames[period.month - 1]} ${period.year}`;
-
-  // Saut de page automatique : ajoute une page si la hauteur nécessaire ne
-  // tient plus, et réinitialise la police / couleur (le pied de page passe le
-  // texte en gris 120, qui doit être repris en noir ensuite).
   const ensureSpace = (neededH: number) => {
     if (y + neededH > pageHeight - marginBottom) {
       doc.addPage();
@@ -547,7 +582,6 @@ export async function generateMonthlyReportPDF(
     }
   };
 
-  // Image d'un graphique (aspect 760×300), largeur pleine de contenu.
   const insertChart = (dataUrl: string) => {
     const chartW = pageWidth - 40;
     const chartH = chartW * (300 / 760);
@@ -575,34 +609,85 @@ export async function generateMonthlyReportPDF(
     y += 10;
   };
 
-  // Header
+  const writeNamedStats = (rows: DashboardReportNamedStat[], emptyLabel: string) => {
+    if (rows.length === 0) {
+      doc.text(emptyLabel, 25, y);
+      y += 7;
+      return;
+    }
+    rows.forEach((row) => {
+      doc.text(`${row.label}:`, 25, y);
+      doc.text(`${row.count} · ${row.revenue.toFixed(2)} \u20AC TTC`, 90, y);
+      y += 7;
+    });
+  };
+
+  const writeTopClients = (rows: DashboardReportClient[], metric: "revenue" | "bookings" | "hours") => {
+    if (rows.length === 0) {
+      doc.text("Aucune r\u00E9servation sur la p\u00E9riode", 25, y);
+      y += 7;
+      return;
+    }
+    rows.forEach((client, idx) => {
+      const bandSuffix = client.bandName ? ` (${client.bandName})` : "";
+      const primary = metric === "revenue"
+        ? `${client.revenue.toFixed(2)} \u20AC TTC`
+        : metric === "bookings"
+          ? `${client.bookings} r\u00E9sa`
+          : formatReportHours(client.minutes);
+      const secondary = metric === "revenue"
+        ? `${client.bookings} r\u00E9sa · ${formatReportHours(client.minutes)}`
+        : metric === "bookings"
+          ? `${client.revenue.toFixed(2)} \u20AC TTC · ${formatReportHours(client.minutes)}`
+          : `${client.revenue.toFixed(2)} \u20AC TTC · ${client.bookings} r\u00E9sa`;
+      doc.text(`${idx + 1}. ${client.name}${bandSuffix}`, 25, y);
+      doc.text(`${primary} · ${secondary}`, 120, y);
+      y += 7;
+    });
+  };
+
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.text("H3 STUDIOS", 20, y);
   y += 8;
 
   doc.setFontSize(14);
-  doc.text(`Rapport Mensuel - ${periodLabel}`, 20, y);
-  y += 15;
+  doc.text(period.title, 20, y);
+  y += 7;
+  if (period.subtitle) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80);
+    doc.text(period.subtitle, 20, y);
+    doc.setTextColor(0);
+    y += 10;
+  } else {
+    y += 8;
+  }
 
-  // Line separator
   separator(20);
 
-  // KPIs Section
-  sectionHeader("Indicateurs Clés", 90);
+  sectionHeader("Indicateurs cl\u00E9s", 120);
 
+  const tax = splitTtc(stats.revenue);
   const equipPct = stats.revenue > 0 ? Math.round((stats.equipmentRevenue / stats.revenue) * 100) : 0;
-  const noShowPct = stats.bookingCount > 0 ? Math.round((stats.noShowCount / stats.bookingCount) * 100) : 0;
+  const occupancyLabel = stats.occupancyRate % 1 === 0
+    ? stats.occupancyRate.toFixed(0)
+    : stats.occupancyRate.toFixed(1);
 
   const kpis = [
-    ["Revenu total:", `${stats.revenue.toFixed(2)} \u20AC TTC`],
-    ["  HT:", `${splitTtc(stats.revenue).ht.toFixed(2)} \u20AC`],
-    ["  TVA 20%:", `${splitTtc(stats.revenue).vat.toFixed(2)} \u20AC`],
-    ["  dont options/\u00E9quipements:", `${stats.equipmentRevenue.toFixed(2)} \u20AC TTC (${equipPct}%)`],
-    ["Nombre de r\u00E9servations:", `${stats.bookingCount}`],
-    ["Panier moyen:", `${stats.avgBasket.toFixed(2)} \u20AC TTC`],
-    ["Taux d'occupation:", `${stats.occupancyRate.toFixed(1)}%`],
-    ["No-shows:", `${stats.noShowCount} (${noShowPct}% des r\u00E9servations)`],
+    ["R\u00E9servations:", `${stats.bookingCount} \u00B7 ${stats.bookedDurationLabel}`],
+    ["CA r\u00E9serv\u00E9:", `${stats.revenue.toFixed(2)} \u20AC TTC`],
+    ["  HT:", `${tax.ht.toFixed(2)} \u20AC`],
+    ["  TVA 20%:", `${tax.vat.toFixed(2)} \u20AC`],
+    ["  dont options:", `${stats.equipmentRevenue.toFixed(2)} \u20AC TTC (${equipPct}%)`],
+    ["Remises accord\u00E9es:", `${stats.discounts.toFixed(2)} \u20AC TTC`],
+    ["  promo / manuelle / fid\u00E9lit\u00E9:", `${stats.promoDiscounts.toFixed(2)} / ${stats.manualDiscounts.toFixed(2)} / ${stats.loyaltyDiscounts.toFixed(2)} \u20AC`],
+    ["Panier moyen:", `${stats.avgBasket.toFixed(2)} \u20AC TTC (de ${stats.minPrice.toFixed(2)} \u00E0 ${stats.maxPrice.toFixed(2)})`],
+    ["Annulations:", `${stats.cancellations}`],
+    ["Occupation:", `${occupancyLabel}% \u00B7 ${stats.occupancyBookedLabel} / ${stats.occupancyOpenLabel}`],
+    ["Sur place \u00E0 encaisser:", `${stats.pendingPayments} \u00B7 ${stats.pendingAmount.toFixed(2)} \u20AC TTC`],
+    ["Au recouvrement:", `${stats.overduePayments} \u00B7 ${stats.overdueAmount.toFixed(2)} \u20AC TTC`],
   ];
 
   kpis.forEach(([label, value]) => {
@@ -613,103 +698,81 @@ export async function generateMonthlyReportPDF(
 
   y += 10;
 
-  // Chart: CA réservé (juste après les indicateurs)
-  if (charts?.revenue) {
-    insertChart(charts.revenue);
-  }
+  if (charts?.revenue) insertChart(charts.revenue);
 
-  // Line separator
   separator();
+  if (charts?.occupancy) insertChart(charts.occupancy);
 
-  // By Studio Section
-  sectionHeader("Répartition par Studio", 20 + stats.studioStats.length * 7 + 20);
-
-  stats.studioStats.forEach((studio) => {
-    const studioName = studioLabel(studio.studio_id);
-    doc.text(`${studioName}:`, 25, y);
-    doc.text(`${studio.count} réservation${studio.count > 1 ? "s" : ""}, ${studio.revenue.toFixed(2)} € TTC`, 80, y);
-    y += 7;
-  });
-
-  y += 10;
-
-  // Chart: Répartition par studio
-  if (charts?.studios) {
-    insertChart(charts.studios);
-  }
-
-  // Line separator
   separator();
+  sectionHeader("R\u00E9partition par studio", 20 + Math.max(stats.studioStats.length, 1) * 7 + 20);
+  writeNamedStats(stats.studioStats, "Aucun studio sur la p\u00E9riode");
+  y += 6;
+  if (charts?.studiosBookings) insertChart(charts.studiosBookings);
+  if (charts?.studiosRevenue) insertChart(charts.studiosRevenue);
 
-  // Payment Methods Section
-  sectionHeader("Moyens de Paiement", 20 + stats.paymentMethods.length * 7 + 20);
-
-  if (stats.paymentMethods.length > 0) {
-    stats.paymentMethods.forEach((pm) => {
-      const label = paymentMethodLabelShort(pm.method);
-      doc.text(`${label}:`, 25, y);
-      doc.text(`${pm.count} paiement${pm.count > 1 ? "s" : ""}, ${pm.revenue.toFixed(2)} \u20AC TTC`, 80, y);
-      y += 7;
-    });
-  } else {
-    doc.text("Aucun paiement enregistr\u00E9", 25, y);
-    y += 7;
-  }
-
-  y += 10;
-
-  // Chart: Méthodes de paiement
-  if (charts?.paymentMethods) {
-    insertChart(charts.paymentMethods);
-  }
-
-  // Line separator
   separator();
+  sectionHeader("R\u00E9partition par type de client", 20 + Math.max(stats.groupTypes.length, stats.clientTypes.length, 1) * 7 + 20);
+  doc.setFont("helvetica", "bold");
+  doc.text("Nombre", 25, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  writeNamedStats(stats.groupTypes, "Aucune r\u00E9servation sur la p\u00E9riode");
+  y += 4;
+  doc.setFont("helvetica", "bold");
+  doc.text("Type", 25, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  writeNamedStats(stats.clientTypes, "Aucune r\u00E9servation sur la p\u00E9riode");
+  y += 6;
+  if (charts?.clientsGroup) insertChart(charts.clientsGroup);
+  if (charts?.clientsType) insertChart(charts.clientsType);
 
-  // Top 5 Clients Section
-  sectionHeader("Top 5 Clients", 20 + stats.topClients.length * 7 + 20);
-
-  if (stats.topClients.length > 0) {
-    stats.topClients.forEach((client, idx) => {
-      const bandSuffix = client.band_name ? ` (${client.band_name})` : "";
-      doc.text(`${idx + 1}. ${client.name}${bandSuffix}`, 25, y);
-      doc.text(`${client.bookings} r\u00E9sa, ${client.revenue.toFixed(2)} \u20AC TTC`, 120, y);
-      y += 7;
-    });
-  } else {
-    doc.text("Aucune r\u00E9servation sur la p\u00E9riode", 25, y);
-    y += 7;
-  }
-
-  y += 10;
-
-  // Line separator
   separator();
+  sectionHeader("Moyens de paiement", 20 + Math.max(stats.paymentMethods.length, stats.paymentChannels.length, 1) * 7 + 20);
+  doc.setFont("helvetica", "bold");
+  doc.text("Tous", 25, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  writeNamedStats(stats.paymentMethods, "Aucun paiement enregistr\u00E9");
+  y += 4;
+  doc.setFont("helvetica", "bold");
+  doc.text("En ligne / Sur place", 25, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  writeNamedStats(stats.paymentChannels, "Aucun paiement enregistr\u00E9");
+  y += 6;
+  if (charts?.paymentMethods) insertChart(charts.paymentMethods);
+  if (charts?.paymentChannels) insertChart(charts.paymentChannels);
 
-  // By Week Section
-  sectionHeader("Répartition par Semaine", 20 + stats.weeklyStats.length * 6 + 20);
+  separator();
+  sectionHeader("Top 5 des meilleurs clients", 30 + 21 * 3);
+  doc.setFont("helvetica", "bold");
+  doc.text("Par CA", 25, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  writeTopClients(stats.topByRevenue, "revenue");
+  y += 6;
+  doc.setFont("helvetica", "bold");
+  doc.text("Par r\u00E9servations", 25, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  writeTopClients(stats.topByBookings, "bookings");
+  y += 6;
+  doc.setFont("helvetica", "bold");
+  doc.text("Par heures", 25, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  writeTopClients(stats.topByHours, "hours");
 
-  stats.weeklyStats.forEach((week) => {
-    doc.text(`Semaine ${week.week}:`, 25, y);
-    doc.text(`${week.count} r\u00E9sa, ${week.revenue.toFixed(2)} \u20AC TTC`, 80, y);
-    y += 6;
-  });
+  separator();
+  if (charts?.durations) insertChart(charts.durations);
 
-  y += 15;
-
-  // Chart: Occupation par semaine
-  if (charts?.occupancy) {
-    insertChart(charts.occupancy);
-  }
-
-  // Footer
   ensureSpace(20);
   doc.setFontSize(9);
   doc.setTextColor(120);
-  doc.text(`Généré le ${new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}`, pageWidth / 2, y, { align: "center" });
+  doc.text(`G\u00E9n\u00E9r\u00E9 le ${new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}`, pageWidth / 2, y, { align: "center" });
   doc.setTextColor(0);
 
-  // Download
-  const monthStr = String(period.month).padStart(2, "0");
-  doc.save(`h3-rapport-${period.year}-${monthStr}.pdf`);
+  const filename = period.filename.endsWith(".pdf") ? period.filename : `${period.filename}.pdf`;
+  doc.save(filename);
 }
