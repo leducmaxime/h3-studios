@@ -31,6 +31,7 @@ import {
 } from "@/lib/booking";
 import { companyFullAddress } from "@/lib/company";
 import { Price } from "@/components/common/Price";
+import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 import { useClientAuth } from "@/lib/client-auth-store";
 import {
   BOOKING_STATUS_LABELS,
@@ -560,58 +561,63 @@ function PaymentBadge({ payment }: { payment: ReturnType<typeof getPaymentView> 
   return <span className={className}>{payment.label}</span>;
 }
 
-function BookingDetails({ booking, className }: { booking: BookingRow; className?: string }) {
-  const duration = formatDuration(booking.start_time, booking.end_time);
-  const equipment = resolveEquipmentDisplay(booking.equipment, booking.equipment_price ?? 0);
-  const amount = getBookingDueAmount(booking);
-
+function RecapLine({ label, amount, tone }: { label: string; amount?: number; tone?: "muted" | "discount" }) {
   return (
-    <div className={className}>
-      <dl className="grid grid-cols-1 gap-3 text-sm lg:grid-cols-2">
-        <DetailItem label="Horaire">
-          {booking.start_time} — {booking.end_time}{duration ? ` (${duration})` : ""}
-        </DetailItem>
-        <DetailItem label="Studio">{studioLabel(booking.studio_id)}</DetailItem>
-        <DetailItem label="Formule">{groupTypeLabel(booking.group_type, { long: true })}</DetailItem>
-        {booking.band_name && <DetailItem label="Groupe">{booking.band_name}</DetailItem>}
-        <DetailItem label="Référence">{booking.booking_ref}</DetailItem>
-        {(booking.promo_discount ?? 0) > 0 && (
-          <DetailItem label="Remise">
-            -<Price amount={booking.promo_discount} />
-            {booking.promo_code ? ` (${booking.promo_code})` : ""}
-          </DetailItem>
-        )}
-        {amount !== null && (
-          <DetailItem label="Total">
-            <Price amount={amount} />
-          </DetailItem>
-        )}
-      </dl>
-      {equipment.lines.length > 0 && (
-        <div className="mt-4">
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Matériel</p>
-          <ul className="mt-2 space-y-1 text-sm text-zinc-300">
-            {equipment.lines.map((line) => (
-              <li key={`${line.id}-${line.quantity}`} className="flex items-center justify-between gap-3">
-                <span>{line.name} ×{line.quantity}</span>
-                {equipment.showLinePrices && typeof line.lineTotal === "number" && <Price amount={line.lineTotal} />}
-              </li>
-            ))}
-          </ul>
-          {!equipment.showLinePrices && equipment.subtotal > 0 && (
-            <p className="mt-2 text-sm text-zinc-400">Options : <Price amount={equipment.subtotal} /></p>
-          )}
-        </div>
+    <div className={`flex items-center justify-between gap-4 text-sm ${tone === "discount" ? "text-emerald-400" : tone === "muted" ? "text-zinc-400" : "text-zinc-200"}`}>
+      <span className="min-w-0">{label}</span>
+      {amount != null && (
+        <span className="shrink-0 tabular-nums">{tone === "discount" ? "-" : ""}<Price amount={amount} bare /></span>
       )}
     </div>
   );
 }
 
-function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
+function BookingDetails({ booking, className }: { booking: BookingRow; className?: string }) {
+  const duration = formatDuration(booking.start_time, booking.end_time);
+  const equipment = resolveEquipmentDisplay(booking.equipment, booking.equipment_price ?? 0);
+  const amount = getBookingDueAmount(booking);
+  const studioPrice = Number(booking.base_price) || Math.max(0, (Number(booking.total_price) || 0) - (Number(booking.equipment_price) || 0));
+  const discount = Number(booking.promo_discount) || 0;
+  const studioName = studioLabel(booking.studio_id);
+
   return (
-    <div>
-      <dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt>
-      <dd className="mt-1 text-zinc-200">{children}</dd>
+    <div className={className}>
+      <div className="rounded-xl border border-zinc-800 bg-black/30 p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Récapitulatif</p>
+        <div className="mt-3 space-y-2">
+          <RecapLine
+            label={duration ? `${studioName} · ${duration}` : studioName}
+            amount={studioPrice}
+          />
+          {equipment.lines.map((line) => (
+            <RecapLine
+              key={`${line.id}-${line.quantity}`}
+              label={`${line.name} ×${line.quantity}`}
+              amount={equipment.showLinePrices && typeof line.lineTotal === "number" ? line.lineTotal : undefined}
+              tone="muted"
+            />
+          ))}
+          {!equipment.showLinePrices && equipment.subtotal > 0 && (
+            <RecapLine label="Options" amount={equipment.subtotal} tone="muted" />
+          )}
+          {discount > 0 && (
+            <RecapLine
+              label={booking.promo_code ? `Remise (${booking.promo_code})` : "Remise"}
+              amount={discount}
+              tone="discount"
+            />
+          )}
+        </div>
+        {amount !== null && (
+          <div className="mt-3 space-y-1 border-t border-zinc-800 pt-3">
+            <TaxBreakdown ttc={amount} />
+            <div className="flex items-center justify-between gap-4 pt-1 text-sm font-semibold text-white">
+              <span>Total TTC</span>
+              <span className="tabular-nums"><Price amount={amount} bare /></span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
