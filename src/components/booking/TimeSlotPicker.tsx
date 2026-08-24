@@ -842,7 +842,8 @@ export function TimeSlotPicker({
                   {priceInfo.start} <ArrowRight className="inline w-4 h-4 mx-1" /> {priceInfo.end}
                 </div>
                 <div className="text-sm text-white/70">
-                  {priceInfo.duration} · <Price amount={priceInfo.price} />
+                  <span className="capitalize">{formatDate(date, "short")}</span> · {priceInfo.duration} ·{" "}
+                  <Price amount={priceInfo.price} />
                   {activeStudio && (
                     <span className="ml-2 text-primary/70">· {STUDIO_LABELS[activeStudio]}</span>
                   )}
