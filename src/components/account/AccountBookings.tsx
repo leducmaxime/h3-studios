@@ -403,6 +403,7 @@ function NextSessionCard({
             </span>
             <span className="text-zinc-400">{groupTypeLabel(booking.group_type, { long: true })}</span>
           </p>
+          <p className="mt-2 font-mono text-sm text-zinc-400">{booking.booking_ref}</p>
           <a
             href={MAPS_URL}
             target="_blank"
@@ -489,6 +490,7 @@ function BookingCard({
               </span>
             )}
           </div>
+          <div className="mt-1.5 font-mono text-xs text-zinc-500">{booking.booking_ref}</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
