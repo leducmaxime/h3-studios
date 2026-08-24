@@ -574,11 +574,6 @@ function BookingDetails({ booking, className }: { booking: BookingRow; className
         <DetailItem label="Studio">{studioLabel(booking.studio_id)}</DetailItem>
         <DetailItem label="Formule">{groupTypeLabel(booking.group_type, { long: true })}</DetailItem>
         {booking.band_name && <DetailItem label="Groupe">{booking.band_name}</DetailItem>}
-        <DetailItem label="Adresse">
-          <a href={MAPS_URL} target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
-            {STUDIO_ADDRESS}
-          </a>
-        </DetailItem>
         <DetailItem label="Référence">{booking.booking_ref}</DetailItem>
         {(booking.promo_discount ?? 0) > 0 && (
           <DetailItem label="Remise">
