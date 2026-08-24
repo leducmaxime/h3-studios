@@ -2,8 +2,8 @@
 
 import { CreditCard, Banknote } from "lucide-react";
 import { type CompletedBooking, type PaymentMethod } from "@/lib/booking";
-import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 import { Price } from "@/components/common/Price";
+import { PaymentSummary } from "@/components/booking/PaymentSummary";
 
 export type { PaymentMethod };
 
@@ -21,6 +21,7 @@ interface PaymentChoiceProps {
   isSubmitting?: boolean;
   onConfirmFree: () => void;
   allowOnSitePayment?: boolean;
+  displayPrices?: Record<string, number>;
 }
 
 export function PaymentChoice({
@@ -37,6 +38,7 @@ export function PaymentChoice({
   isSubmitting = false,
   onConfirmFree,
   allowOnSitePayment = true,
+  displayPrices = {},
 }: PaymentChoiceProps) {
   const actionsDisabled = !acceptedCgv || isSubmitting;
 
@@ -47,40 +49,12 @@ export function PaymentChoice({
           {isFree ? "Confirmer la réservation" : "Comment souhaitez-vous payer ?"}
         </h3>
         <p className="mt-2 text-sm text-white/70 lg:text-base">
-          {cart.length} réservation{cart.length > 1 ? "s" : ""} • Total : <Price amount={total} />
+          {cart.length} réservation{cart.length > 1 ? "s" : ""} • choisissez votre mode de règlement
           {isFree && " — aucun paiement n'est requis"}
         </p>
       </div>
 
-      <div className="space-y-2">
-        {(promoDiscount > 0 || loyaltyDiscount > 0) && (
-          <>
-            <div className="flex items-center justify-between text-sm text-white/70">
-              <span>Sous-total</span>
-              <span><Price amount={subtotal} /></span>
-            </div>
-            {promoDiscount > 0 && (
-              <div className="flex items-center justify-between text-sm text-green-400">
-                <span>Réduction ({promoCode})</span>
-                <span>-<Price amount={promoDiscount} /></span>
-              </div>
-            )}
-          </>
-        )}
-        {loyaltyDiscount > 0 && (
-          <div className="flex items-center justify-between text-sm text-green-400">
-            <span>Remise fidélité</span>
-            <span>-<Price amount={loyaltyDiscount} /></span>
-          </div>
-        )}
-        <TaxBreakdown ttc={total} />
-        <div className="flex items-center justify-between">
-          <span className="text-lg font-semibold">Total TTC</span>
-          {/* Mention portée par le libellé « Total TTC » : montant nu (pas de doublon). */}
-          <span className="text-2xl font-bold text-primary"><Price amount={total} bare /></span>
-        </div>
-      </div>
-
+      <PaymentSummary cart={cart} total={total} subtotal={subtotal} promoCode={promoCode} promoDiscount={promoDiscount} loyaltyDiscount={loyaltyDiscount} displayPrices={displayPrices} />
       <div className="rounded-xl border border-primary/30 bg-white/5 p-4 lg:p-5">
         <label htmlFor="acceptCgv" className="flex cursor-pointer items-start gap-3">
           <input

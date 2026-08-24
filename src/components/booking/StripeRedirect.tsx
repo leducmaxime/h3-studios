@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { CreditCard, Lock, ShieldCheck, Loader2, ExternalLink } from "lucide-react";
-import { type CompletedBooking, STUDIOS, formatDate, sortBookingsByStart } from "@/lib/booking";
-import { TaxBreakdown } from "@/components/common/TaxBreakdown";
+import { type CompletedBooking } from "@/lib/booking";
 import { Price } from "@/components/common/Price";
+import { PaymentSummary } from "@/components/booking/PaymentSummary";
 
 interface StripeRedirectProps {
   cart: CompletedBooking[];
@@ -145,58 +145,7 @@ export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount
         </div>
 
         <div className="order-1 lg:order-2">
-          <div className="rounded-xl border border-white/10 bg-white/15 p-4">
-            <h4 className="mb-4 font-semibold">Récapitulatif de commande</h4>
-            
-            <div className="space-y-3">
-              {sortBookingsByStart(cart).map((booking) => (
-                <div key={booking.id} className="flex justify-between text-sm">
-                  <div>
-                    <p className="font-medium">
-                      {STUDIOS[booking.studioId].name}
-                    </p>
-                    <p className="text-white/50">
-                      {formatDate(booking.date, "short")} - {booking.startTime}-{booking.endTime}
-                    </p>
-                  </div>
-                  <span className="font-medium"><Price amount={displayPrices[booking.id] ?? booking.price} /></span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-              {(promoDiscount > 0 || loyaltyDiscount > 0) && (
-                <>
-                  <div className="flex items-center justify-between text-sm text-white/70">
-                    <span>Sous-total</span>
-                    <span><Price amount={subtotal} /></span>
-                  </div>
-                  {promoDiscount > 0 && (
-                    <div className="flex items-center justify-between text-sm text-green-400">
-                      <span>Réduction ({promoCode})</span>
-                      <span>-<Price amount={promoDiscount} /></span>
-                    </div>
-                  )}
-                </>
-              )}
-              {loyaltyDiscount > 0 && (
-                <div className="flex items-center justify-between text-sm text-green-400">
-                  <span>Remise fidélité</span>
-                  <span>-<Price amount={loyaltyDiscount} /></span>
-                </div>
-              )}
-              <TaxBreakdown ttc={total} />
-              <div className="flex justify-between">
-                <span className="font-semibold">Total TTC</span>
-                {/* Mention portée par le libellé « Total TTC » : montant nu (pas de doublon). */}
-                <span className="text-xl font-bold text-primary"><Price amount={total} bare /></span>
-              </div>
-            </div>
-
-            <p className="mt-4 text-xs text-white/40">
-              Un reçu sera envoyé à {userEmail}
-            </p>
-          </div>
+          <PaymentSummary cart={cart} total={total} subtotal={subtotal} promoCode={promoCode} promoDiscount={promoDiscount} loyaltyDiscount={loyaltyDiscount} displayPrices={displayPrices} userEmail={userEmail} />
 
           <div className="mt-4 flex items-center justify-center gap-6">
             <svg className="h-8 opacity-60" viewBox="0 0 60 25" fill="currentColor">

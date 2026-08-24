@@ -567,6 +567,7 @@ export function Reservation({ step }: ReservationProps) {
                 isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
                 onConfirmFree={confirmFreeBooking}
+                displayPrices={displayPrices}
               />
             )}
             {state.step === "paiement" && state.paymentMethod === "card" && (
@@ -597,6 +598,7 @@ export function Reservation({ step }: ReservationProps) {
                 isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
                 onConfirmFree={confirmFreeBooking}
+                displayPrices={displayPrices}
               />
             )}
 
