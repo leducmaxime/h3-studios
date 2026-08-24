@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Lock, Phone, Music, MapPin, Building2, Hash, Home, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
 import { refresh, useClientAuth } from "@/lib/client-auth-store";
+import { AccountMenu } from "@/components/account/AccountMenu";
 import { bookingFieldFormatHint, getVisibleBookingFields, isValidRna, isValidSiret } from "@/lib/booking-fields";
 import type { ClientType } from "@/lib/booking-fields";
 
@@ -146,6 +147,7 @@ export function ClientProfile() {
         <div className="mb-10 text-center">
           <h1 className="font-blanka text-4xl lg:text-6xl">MON PROFIL</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          <AccountMenu current="profile" />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">

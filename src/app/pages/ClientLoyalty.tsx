@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { navigate } from "rwsdk/client";
 import { ArrowLeft, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AccountMenu } from "@/components/account/AccountMenu";
 import { LoyaltyGauge, type LoyaltyData } from "@/components/account/LoyaltyGauge";
 import { useClientAuth } from "@/lib/client-auth-store";
 
@@ -36,6 +37,7 @@ export function ClientLoyalty() {
         <div className="mb-10 text-center">
           <h1 className="font-blanka text-4xl lg:text-6xl">FIDELITE</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
+          <AccountMenu current="loyalty" />
         </div>
 
         {loyalty ? (

@@ -10,12 +10,9 @@ import {
   Clock,
   Download,
   ExternalLink,
-  Gift,
   History,
   MapPin,
   Music,
-  Plus,
-  User,
 } from "lucide-react";
 import { getParisDateISO } from "@/lib/utils";
 import {
@@ -33,6 +30,7 @@ import {
   resolveEquipmentDisplay,
 } from "@/lib/booking";
 import { companyFullAddress } from "@/lib/company";
+import { AccountMenu } from "@/components/account/AccountMenu";
 import { Price } from "@/components/common/Price";
 import { useClientAuth } from "@/lib/client-auth-store";
 import {
@@ -194,7 +192,6 @@ export function ClientAccount() {
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [loyaltyConfigured, setLoyaltyConfigured] = useState(false);
   const [listTab, setListTab] = useState<ListTab>("upcoming");
   const [pastVisible, setPastVisible] = useState(PAST_PAGE_SIZE);
   const [openBookingId, setOpenBookingId] = useState<string | null>(null);
@@ -232,29 +229,6 @@ export function ClientAccount() {
     void loadBookings();
   }, [status, user?.id, loadBookings]);
 
-  useEffect(() => {
-    if (status === "loading" || !user) {
-      setLoyaltyConfigured(false);
-      return;
-    }
-    let active = true;
-    fetch("/api/client/loyalty")
-      .then(async (response) => {
-        if (!response.ok) return false;
-        const result = (await response.json()) as { success?: boolean; data?: { configured?: boolean } };
-        return result.success === true && result.data?.configured === true;
-      })
-      .then((configured) => {
-        if (active) setLoyaltyConfigured(configured);
-      })
-      .catch(() => {
-        if (active) setLoyaltyConfigured(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [status, user?.id]);
-
   const today = getParisDateISO();
   const upcoming = useMemo(
     () => bookings.filter((booking) => !isPastBooking(booking, today)).sort(compareUpcoming),
@@ -267,12 +241,6 @@ export function ClientAccount() {
   const nextBooking = upcoming[0] ?? null;
   const otherUpcoming = upcoming.slice(1);
   const visiblePast = past.slice(0, pastVisible);
-
-  const fullName = [user?.first_name, user?.last_name]
-    .map((part) => (part ?? "").trim())
-    .filter(Boolean)
-    .join(" ");
-  const displayName = fullName || user?.name.trim() || "";
 
   if (loading || !user) {
     return (
@@ -288,41 +256,7 @@ export function ClientAccount() {
         <div className="mb-12 text-center">
           <h1 className="font-blanka text-4xl lg:text-6xl">Mes réservations</h1>
           <div className="mx-auto mt-4 h-1 w-24 rounded-full bg-gradient-to-r from-transparent via-primary to-transparent" />
-          {displayName && (
-            <p className="mt-4 text-sm text-zinc-400 lg:text-base">
-              Bonjour <span className="font-medium text-zinc-100">{displayName}</span>
-            </p>
-          )}
-          <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-              onClick={() => navigate("/mon-compte/profil")}
-            >
-              <User className="h-4 w-4 mr-2" />
-              Mon profil
-            </Button>
-            {loyaltyConfigured && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                onClick={() => navigate("/mon-compte/fidelite")}
-              >
-                <Gift className="h-4 w-4 mr-2" />
-                Fidélité
-              </Button>
-            )}
-            <Button
-              className="bg-primary text-black hover:bg-primary/90"
-              size="sm"
-              onClick={() => navigate("/reservation")}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Nouvelle réservation
-            </Button>
-          </div>
+          <AccountMenu current="reservations" />
         </div>
 
         {loadError && (
