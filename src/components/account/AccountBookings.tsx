@@ -145,6 +145,25 @@ function getBookingDueAmount(booking: BookingRow): number | null {
   });
 }
 
+function getBookingPaidAmount(booking: BookingRow): number {
+  return Number(booking.total_paid) || 0;
+}
+
+function getBookingRemainingAmount(booking: BookingRow, due: number | null): number {
+  if (due == null) return 0;
+  if (booking.remaining != null) return Math.max(0, Number(booking.remaining) || 0);
+  return Math.max(0, due - getBookingPaidAmount(booking));
+}
+
+function getCardAmount(booking: BookingRow): number | null {
+  const due = getBookingDueAmount(booking);
+  if (due == null) return null;
+  const paid = getBookingPaidAmount(booking);
+  const remaining = getBookingRemainingAmount(booking, due);
+  if (paid > 0.005 && remaining > 0.005) return remaining;
+  return due;
+}
+
 function getStatusTone(booking: BookingRow) {
   return STATUS_CONFIG[booking.status] ?? {
     label: bookingStatusLabel(booking.status),
@@ -382,7 +401,7 @@ function NextSessionCard({
 }) {
   const status = getStatusTone(booking);
   const payment = getPaymentView(booking);
-  const amount = getBookingDueAmount(booking);
+  const amount = getCardAmount(booking);
   const duration = formatDuration(booking.start_time, booking.end_time);
 
   return (
@@ -452,7 +471,7 @@ function BookingCard({
 }) {
   const status = getStatusTone(booking);
   const payment = getPaymentView(booking);
-  const amount = getBookingDueAmount(booking);
+  const amount = getCardAmount(booking);
   const isPast = isPastBooking(booking, getParisDateISO());
 
   return (
@@ -576,6 +595,9 @@ function BookingDetails({ booking, className }: { booking: BookingRow; className
   const duration = formatDuration(booking.start_time, booking.end_time);
   const equipment = resolveEquipmentDisplay(booking.equipment, booking.equipment_price ?? 0);
   const amount = getBookingDueAmount(booking);
+  const paid = getBookingPaidAmount(booking);
+  const remaining = getBookingRemainingAmount(booking, amount);
+  const hasPartialPayment = paid > 0.005 && remaining > 0.005;
   const studioPrice = Number(booking.base_price) || Math.max(0, (Number(booking.total_price) || 0) - (Number(booking.equipment_price) || 0));
   const discount = Number(booking.promo_discount) || 0;
   const studioName = studioLabel(booking.studio_id);
@@ -615,6 +637,15 @@ function BookingDetails({ booking, className }: { booking: BookingRow; className
               <span>Total TTC</span>
               <span className="tabular-nums"><Price amount={amount} bare /></span>
             </div>
+            {hasPartialPayment && (
+              <>
+                <RecapLine label="Déjà payé" amount={paid} tone="discount" />
+                <div className="flex items-center justify-between gap-4 pt-1 text-sm font-semibold text-orange-300">
+                  <span>Reste à payer</span>
+                  <span className="tabular-nums"><Price amount={remaining} bare /></span>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
