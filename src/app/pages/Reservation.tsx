@@ -12,7 +12,7 @@ import { FinalCheckout } from "@/components/booking/FinalCheckout";
 import { ProgressIndicator } from "@/components/booking/ProgressIndicator";
 import { PaymentChoice } from "@/components/booking/PaymentChoice";
 import { StripeRedirect } from "@/components/booking/StripeRedirect";
-import { ChevronLeft, ArrowRight, Plus, RotateCcw, ShoppingCart, X, BadgePercent, WrenchIcon, AlertTriangle } from "lucide-react";
+import { ArrowRight, Plus, RotateCcw, ShoppingCart, X, BadgePercent, WrenchIcon, AlertTriangle } from "lucide-react";
 import { PromoCodeInput } from "@/components/booking/PromoCodeInput";
 import { BookingOptionsStep } from "@/components/booking/BookingOptionsStep";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
@@ -79,7 +79,6 @@ export function Reservation({ step }: ReservationProps) {
     goToCart,
     removeFromCart,
     resetBooking,
-    goBack,
     navigateToStep,
     canNavigateToStep,
     selectPaymentMethod,
@@ -308,13 +307,6 @@ export function Reservation({ step }: ReservationProps) {
             {state.step === "creneau" && (
               <div className="flex flex-col gap-6">
                 <div className="flex items-center gap-4">
-                  <button
-                    onClick={goBack}
-                    className="rounded-full p-2 transition-colors hover:bg-white/15"
-                    aria-label="Retour"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
                   <p className="text-white/70">
                     {!state.selectedDate
                       ? "Choisissez une date"
@@ -346,7 +338,6 @@ export function Reservation({ step }: ReservationProps) {
                       studioId={state.studioId}
                       onSelectRange={selectTimeRange}
                       onClear={clearTimeRange}
-                      onBack={goBack}
                       hideHeader
                       groupType={state.groupType || "group"}
                       todayFullyBlocked={todayFullyBlocked}
@@ -395,7 +386,6 @@ export function Reservation({ step }: ReservationProps) {
                 updateEquipment={updateEquipment}
                 getEquipmentName={getEquipmentName}
                 onConfirm={confirmBooking}
-                onBack={goBack}
               />
             )}
 
@@ -428,7 +418,6 @@ export function Reservation({ step }: ReservationProps) {
                     updateUserInfo(fields);
                   }}
                   onContinue={goToPaymentFromCoordonnees}
-                  onBack={goBack}
                   canContinue={canConfirmBooking}
                   bookingFieldIssues={bookingFieldIssues}
                   submitError={submitError}
@@ -558,8 +547,7 @@ export function Reservation({ step }: ReservationProps) {
             )}
 
             {/* Step paiement: PaymentChoice + StripeRedirect */}
-            {/* Échec de l'envoi (selectPaymentMethod → submitCart) : visible ici,
-                avec un chemin de retour vers les coordonnées (ex. session expirée → se reconnecter). */}
+            {/* Échec de l'envoi (selectPaymentMethod → submitCart) : visible ici. */}
             {state.step === "paiement" && submitError && (
               <div
                 role="alert"
@@ -568,22 +556,6 @@ export function Reservation({ step }: ReservationProps) {
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-red-200">{submitError}</p>
-                  <div className="mt-2.5 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={goBack}
-                      className="rounded-lg border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
-                    >
-                      Retour aux coordonnées
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigateToStep("panier")}
-                      className="rounded-lg border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20"
-                    >
-                      Retour au panier
-                    </button>
-                  </div>
                 </div>
                 <button
                   type="button"
@@ -610,7 +582,6 @@ export function Reservation({ step }: ReservationProps) {
                 isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
                 onConfirmFree={confirmFreeBooking}
-                onBack={goBack}
               />
             )}
             {state.step === "paiement" && state.paymentMethod === "card" && (
@@ -624,7 +595,6 @@ export function Reservation({ step }: ReservationProps) {
                 displayPrices={displayPrices}
                 userName={`${state.firstName} ${state.lastName}`.trim()}
                 userEmail={state.userEmail}
-                onBack={goBack}
               />
             )}
             {state.step === "paiement" && state.paymentMethod === "cash" && (
@@ -642,7 +612,6 @@ export function Reservation({ step }: ReservationProps) {
                 isSubmitting={isSubmitting}
                 onSelectMethod={selectPaymentMethod}
                 onConfirmFree={confirmFreeBooking}
-                onBack={goBack}
               />
             )}
 

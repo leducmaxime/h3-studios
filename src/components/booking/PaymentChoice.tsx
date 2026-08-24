@@ -15,7 +15,6 @@ interface PaymentChoiceProps {
   promoDiscount: number;
   loyaltyDiscount?: number;
   onSelectMethod: (method: PaymentMethod) => void;
-  onBack: () => void;
   acceptedCgv: boolean;
   onAcceptedCgvChange: (accepted: boolean) => void;
   isFree: boolean;

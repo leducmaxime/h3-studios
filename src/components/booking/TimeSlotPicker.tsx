@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef, useId } from "react";
-import { ChevronLeft, Clock, ArrowRight } from "lucide-react";
+import { Clock, ArrowRight } from "lucide-react";
 import {
   getStudioTimeSlots,
   formatDate,
@@ -32,7 +32,8 @@ interface TimeSlotPickerProps {
   studioId: StudioId | null;
   onSelectRange: (start: string, end: string, studioId: StudioId) => void;
   onClear: () => void;
-  onBack: () => void;
+  /** Retained for the admin picker API; the public header has no back control. */
+  onBack?: () => void;
   hideHeader?: boolean;
   groupType?: GroupType;
   pricingGrid?: PricingGrid | null;
@@ -87,7 +88,6 @@ export function TimeSlotPicker({
   studioId: initialStudioId,
   onSelectRange,
   onClear,
-  onBack,
   hideHeader = false,
   groupType = "group",
   pricingGrid,
@@ -788,13 +788,6 @@ export function TimeSlotPicker({
     <div className="flex flex-col gap-6">
       {!hideHeader && (
         <div className="flex items-center gap-4">
-          <button
-            onClick={onBack}
-            className="rounded-full p-2 transition-colors hover:bg-white/15"
-            aria-label="Retour"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
           <div>
             <h3 className="text-lg font-semibold capitalize">{formatDate(date)}</h3>
           </div>

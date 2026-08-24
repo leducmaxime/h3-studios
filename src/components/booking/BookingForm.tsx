@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronLeft, Pencil, UserCheck, X } from "lucide-react";
+import { AlertTriangle, Check, Pencil, UserCheck, X } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, type FormEvent } from "react";
 import { accountFieldValues, BOOKING_FIELD_FORMAT_HINTS, bookingFieldFormatHint, bookingFieldLabel, bookingFieldPlaceholder, computeAccountFieldStatus, getRequiredBookingFields, getVisibleBookingFields, isValidBookingFieldValue, type BookingFieldIssue, type BookingFieldKey, type ClientType } from "@/lib/booking-fields";
 import type { ClientUser } from "@/lib/client-user";
@@ -59,7 +59,6 @@ interface BookingFormProps {
   clientLogout: () => Promise<{ ok: boolean; error?: string }>;
   onUpdateField: (fields: Partial<BookingFormFields>) => void;
   onContinue: () => void;
-  onBack: () => void;
   canContinue: boolean;
   bookingFieldIssues?: BookingFieldIssue[];
   /** Failed POST /api/bookings — already French, ready to display. */
@@ -424,7 +423,6 @@ export function BookingForm({
   clientLogout,
   onUpdateField,
   onContinue,
-  onBack,
   canContinue,
   bookingFieldIssues = [],
   submitError = null,
@@ -629,13 +627,6 @@ export function BookingForm({
   return (
     <div className="flex flex-col gap-5 lg:gap-6">
       <div className="flex items-center gap-3 lg:gap-4">
-        <button
-          onClick={onBack}
-          className="rounded-full p-2 transition-colors hover:bg-white/15"
-          aria-label="Retour"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
         <h3 className="text-base font-semibold lg:text-lg">Vos coordonnées</h3>
       </div>
 

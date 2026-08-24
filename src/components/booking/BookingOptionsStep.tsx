@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, PackageCheck, Package, Check, ShoppingCart, X } from "lucide-react";
+import { PackageCheck, Package, Check, ShoppingCart, X } from "lucide-react";
 import { EquipmentSelector, type EquipmentAvailability } from "@/components/booking/EquipmentSelector";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
@@ -27,12 +27,11 @@ interface Props {
   updateEquipment: (equipment: EquipmentSelection[]) => void;
   getEquipmentName: (id: string) => string;
   onConfirm: () => void;
-  onBack: () => void;
 }
 
 const RECAP_GROUP_LABELS: Record<GroupType, string> = { solo: "Solo / Prof particulier", duo: "Duo", group: "Groupe (3+)" };
 
-export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, availableEquipment, equipmentLoading, equipmentAvailability, equipmentClampMessage, cartTotal, updateEquipment, getEquipmentName, onConfirm, onBack }: Props) {
+export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, availableEquipment, equipmentLoading, equipmentAvailability, equipmentClampMessage, cartTotal, updateEquipment, getEquipmentName, onConfirm }: Props) {
     if (!state.selectedDate || !state.startTime || !state.endTime || !state.studioId) return null;
 
     const studio = STUDIOS[state.studioId as StudioId];
@@ -83,20 +82,11 @@ export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, 
     return (
       <div className="flex flex-col gap-6">
         {/* Step header */}
-        <div className="flex items-start gap-3">
-          <button
-            onClick={onBack}
-            className="mt-0.5 shrink-0 rounded-full p-2 transition-colors hover:bg-white/15"
-            aria-label="Retour"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <h2 className="text-xl font-semibold">Personnalisez votre session</h2>
-            <p className="mt-1 text-sm text-white/50">
-              Ajoutez du matériel si besoin, puis vérifiez le total avant d'ajouter au panier.
-            </p>
-          </div>
+        <div>
+          <h2 className="text-xl font-semibold">Personnalisez votre session</h2>
+          <p className="mt-1 text-sm text-white/50">
+            Ajoutez du matériel si besoin, puis vérifiez le total avant d'ajouter au panier.
+          </p>
         </div>
 
         <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)] lg:items-start lg:gap-8">

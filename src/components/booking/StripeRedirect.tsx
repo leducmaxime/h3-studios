@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Lock, ShieldCheck, ChevronLeft, Loader2, ExternalLink } from "lucide-react";
+import { CreditCard, Lock, ShieldCheck, Loader2, ExternalLink } from "lucide-react";
 import { type CompletedBooking, STUDIOS, formatDate, sortBookingsByStart } from "@/lib/booking";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 import { Price } from "@/components/common/Price";
@@ -16,10 +16,9 @@ interface StripeRedirectProps {
   displayPrices: Record<string, number>;
   userName: string;
   userEmail: string;
-  onBack: () => void;
 }
 
-export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount, loyaltyDiscount = 0, displayPrices, userName, userEmail, onBack }: StripeRedirectProps) {
+export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount, loyaltyDiscount = 0, displayPrices, userName, userEmail }: StripeRedirectProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,14 +67,6 @@ export function StripeRedirect({ cart, total, subtotal, promoCode, promoDiscount
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-4">
-        <button
-          onClick={onBack}
-          disabled={isProcessing}
-          className="rounded-full p-2 transition-colors hover:bg-white/15 disabled:opacity-50"
-          aria-label="Retour"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
         <div>
           <h3 className="text-xl font-semibold">Paiement sécurisé</h3>
           <p className="text-sm text-white/60">Paiement via Stripe</p>
