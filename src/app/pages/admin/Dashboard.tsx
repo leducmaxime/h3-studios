@@ -1779,13 +1779,19 @@ export function AdminDashboard() {
             icon={ShoppingCart}
             color="green"
           />
-          <StatCard
-            title="Annulations"
-            value={stats?.rangeCancellations ?? 0}
-            subValue="Sur la période (date de séance)"
-            icon={Ban}
-            color="zinc"
-          />
+          <a
+            href={stats ? `/admin/bookings?status=cancelled&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}` : "/admin/bookings?status=cancelled"}
+            className="group block h-full"
+          >
+            <StatCard
+              title="Annulations"
+              value={stats?.rangeCancellations ?? 0}
+              subValue="Sur la période (date de séance)"
+              icon={Ban}
+              color="zinc"
+              className="transition-colors group-hover:border-zinc-600"
+            />
+          </a>
           <a
             href={stats ? `/admin/bookings?payment=on-site-due&dateFrom=${stats.rangeFrom}&dateTo=${stats.rangeTo}&dateDirection=upcoming` : "/admin/bookings?payment=on-site-due&dateDirection=upcoming"}
             className="group block h-full"
