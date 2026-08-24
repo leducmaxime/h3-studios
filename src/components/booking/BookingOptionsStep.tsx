@@ -92,13 +92,13 @@ export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, 
         <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)] lg:items-start lg:gap-8">
           {/* Left column: passive reassurance, then the actionable add-ons */}
           <div className="flex min-w-0 flex-col gap-6">
-            <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <section className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
               <div className="mb-3 flex items-center gap-2.5">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10">
-                  <PackageCheck className="h-4 w-4 text-primary" />
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-yellow-500/20">
+                  <PackageCheck className="h-4 w-4 text-yellow-300" />
                 </div>
-                <h3 className="text-base font-semibold text-white/80">Inclus dans votre réservation</h3>
-                <span className="ml-auto rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                <h3 className="text-base font-semibold text-white">Inclus dans votre réservation</h3>
+                <span className="ml-auto rounded-full border border-yellow-400/40 bg-yellow-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-yellow-300">
                   Sans surcoût
                 </span>
               </div>
@@ -110,9 +110,9 @@ export function BookingOptionsStep({ state, grid, pricingError, refetchPricing, 
                 {["Batterie (sans crash)", "Sono", "Amplis guitare", "Amplis basse", "4 micros", "Pupitres", "Pied synthé"].map((item) => (
                   <span
                     key={item}
-                    className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-white/70 xl:px-2"
+                    className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/10 px-2.5 py-1 text-xs text-white/85 xl:px-2"
                   >
-                    <Check className="h-3 w-3 shrink-0 text-primary" />
+                    <Check className="h-3 w-3 shrink-0 text-yellow-300" />
                     {item}
                   </span>
                 ))}

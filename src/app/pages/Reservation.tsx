@@ -262,24 +262,24 @@ export function Reservation({ step }: ReservationProps) {
                   canNavigateToStep={canNavigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {(state.step === "creneau" || state.step === "options") && state.groupType && (
+                  {state.step === "creneau" && state.groupType && (
                     <span className={pillClass}>
                       {GROUP_LABELS[state.groupType as GroupType]}
                     </span>
                   )}
                   {/* Studio pill: show on booking step only */}
-                  {state.studioId && (state.step === "creneau" || state.step === "options") && state.groupType === "group" && (
+                  {state.studioId && state.step === "creneau" && state.groupType === "group" && (
                     <span className={pillClass}>
                       {STUDIOS[state.studioId as StudioId].name}
                     </span>
                   )}
                   {/* Date + time pills */}
-                  {state.selectedDate && (state.step === "creneau" || state.step === "options") && (
+                  {state.selectedDate && state.step === "creneau" && (
                     <span className={pillClass}>
                       {formatShortDate(state.selectedDate)}
                     </span>
                   )}
-                  {state.startTime && state.endTime && (state.step === "creneau" || state.step === "options") && (
+                  {state.startTime && state.endTime && state.step === "creneau" && (
                     <span className={pillClass}>
                       {state.startTime} - {state.endTime}
                     </span>
