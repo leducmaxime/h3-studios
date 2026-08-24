@@ -38,7 +38,6 @@ import {
   clientDisplayPaymentStatusLabel,
   groupTypeLabel,
   PAYMENT_STATUS_FAQ_HREF,
-  paymentMethodLabel,
   studioLabel,
 } from "@/lib/labels";
 
@@ -565,9 +564,6 @@ function BookingDetails({ booking, className }: { booking: BookingRow; className
   const duration = formatDuration(booking.start_time, booking.end_time);
   const equipment = resolveEquipmentDisplay(booking.equipment, booking.equipment_price ?? 0);
   const amount = getBookingDueAmount(booking);
-  const payment = getPaymentView(booking);
-  const paymentMethod = paymentMethodLabel(booking.payment_method);
-  const showPaidMethod = payment.status === "paid" || payment.status === "refunded" || payment.status === "paid-before-cancel";
 
   return (
     <div className={className}>
@@ -584,12 +580,6 @@ function BookingDetails({ booking, className }: { booking: BookingRow; className
           </a>
         </DetailItem>
         <DetailItem label="Référence">{booking.booking_ref}</DetailItem>
-        {shouldShowDisplayPaymentStatus(payment.status) && (
-          <DetailItem label="Paiement">
-            {payment.label}
-            {showPaidMethod && paymentMethod !== "—" ? ` · ${paymentMethod}` : ""}
-          </DetailItem>
-        )}
         {(booking.promo_discount ?? 0) > 0 && (
           <DetailItem label="Remise">
             -<Price amount={booking.promo_discount} />
