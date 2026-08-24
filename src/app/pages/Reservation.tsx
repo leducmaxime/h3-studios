@@ -262,11 +262,6 @@ export function Reservation({ step }: ReservationProps) {
                   canNavigateToStep={canNavigateToStep}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                  {state.step === "options" && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                      Votre sélection
-                    </span>
-                  )}
                   {(state.step === "creneau" || state.step === "options") && state.groupType && (
                     <span className={pillClass}>
                       {GROUP_LABELS[state.groupType as GroupType]}
@@ -306,12 +301,6 @@ export function Reservation({ step }: ReservationProps) {
             {/* Step creneau: Unified booking step — Date + Créneaux + Studio */}
             {state.step === "creneau" && (
               <div className="flex flex-col gap-6">
-                {state.selectedDate && state.startTime && (
-                  <p className="text-white/70">
-                    Créneau sélectionné — passez aux options
-                  </p>
-                )}
-
                 {/* Date picker */}
                 <WeekCalendar
                   selectedDate={state.selectedDate}
