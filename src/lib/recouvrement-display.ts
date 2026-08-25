@@ -33,8 +33,6 @@ export function buildClientGroupIdentity(
   const person = bookings.find((booking) => booking.user_name?.trim())?.user_name?.trim() ?? "";
   const email = bookings.find((booking) => booking.user_email)?.user_email ?? null;
   const phone = bookings.find((booking) => booking.user_phone)?.user_phone ?? null;
-  const name = bands.length > 1
-    ? (person || bands.join(" · "))
-    : (bands[0] || person || "Client inconnu");
+  const name = person || bands.join(" · ") || "Client inconnu";
   return { name, bands, email, phone };
 }

@@ -431,7 +431,7 @@ export function AdminRecouvrement() {
                       ) : (
                         <p className="truncate font-medium">{group.name}</p>
                       )}
-                      {group.bands.length > 1 && (
+                      {group.bands.length > 0 && (
                         <p className="truncate text-xs text-zinc-400">{group.bands.join(" · ")}</p>
                       )}
                       <p className="truncate text-xs text-zinc-500">

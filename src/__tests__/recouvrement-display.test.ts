@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import { buildClientGroupIdentity } from "@/lib/recouvrement-display";
 
 describe("buildClientGroupIdentity", () => {
-  it("uses the single band name as the folded title", () => {
+  it("uses the person name as the folded title", () => {
     const result = buildClientGroupIdentity([
       { band_name: "TeTelle Band", user_name: "Estelle Debache", user_email: "estelle@example.com" },
     ]);
 
-    expect(result.name).toBe("TeTelle Band");
+    expect(result.name).toBe("Estelle Debache");
     expect(result.bands).toEqual(["TeTelle Band"]);
   });
 
-  it("uses the person name when several band names share the same client", () => {
+  it("keeps the person name when several band names share the same client", () => {
     const result = buildClientGroupIdentity([
       { band_name: "La Noirmoutrine", user_name: "Estelle Debache", user_email: "estelle@example.com", user_phone: "0761423343" },
       { band_name: "TeTelle Band", user_name: "Estelle Debache", user_email: "estelle@example.com", user_phone: "0761423343" },
