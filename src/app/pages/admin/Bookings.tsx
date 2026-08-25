@@ -562,24 +562,24 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                                 <span>Marquer terminé</span>
                               </DropdownMenuItem>
                             )}
-                            {booking.status === "confirmed" && <DropdownMenuSeparator />}
+                            {(booking.status === "confirmed" || booking.status === "completed") && <DropdownMenuSeparator />}
+                            {(booking.status === "confirmed" || booking.status === "completed") && (
+                              <DropdownMenuItem
+                                onClick={() => setNoShowDialog({ open: true, bookingId: booking.id, bookingRef: booking.booking_ref })}
+                                className="text-yellow-400 focus:text-yellow-400"
+                              >
+                                <AlertTriangle className="h-4 w-4" />
+                                Marquer absent
+                              </DropdownMenuItem>
+                            )}
                             {booking.status === "confirmed" && (
-                              <>
-                                <DropdownMenuItem
-                                  onClick={() => setNoShowDialog({ open: true, bookingId: booking.id, bookingRef: booking.booking_ref })}
-                                  className="text-yellow-400 focus:text-yellow-400"
-                                >
-                                  <AlertTriangle className="h-4 w-4" />
-                                  Marquer absent
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onClick={() => setCancelDialog({ open: true, bookingId: booking.id, bookingRef: booking.booking_ref })}
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                  Annuler
-                                </DropdownMenuItem>
-                              </>
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setCancelDialog({ open: true, bookingId: booking.id, bookingRef: booking.booking_ref })}
+                              >
+                                <XCircle className="h-4 w-4" />
+                                Annuler
+                              </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
                         </DropdownMenu>

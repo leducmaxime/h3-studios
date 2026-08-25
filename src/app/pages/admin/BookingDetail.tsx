@@ -604,6 +604,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const displayStatus = getDisplayStatus(booking);
   const sessionEnded = displayStatus === "completed" || displayStatus === "no-show" || isBookingPast(booking);
   const canMutateSession = booking.status === "confirmed" && displayStatus === "confirmed";
+  const canMarkNoShow = booking.status === "confirmed" || booking.status === "completed";
   const displayPaymentStatus = getDisplayPaymentStatus(booking, payments);
 
   return (
@@ -1268,14 +1269,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   </Button>
                   <Button
                     variant="outline"
-                    className="w-full justify-start h-11 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
-                    onClick={() => setNoShowOpen(true)}
-                  >
-                    <AlertTriangle className="mr-3 h-4 w-4" />
-                    Marquer absent
-                  </Button>
-                  <Button
-                    variant="outline"
                     className="w-full justify-start h-11 border-red-500/30 text-red-400 hover:bg-red-500/10"
                     onClick={() => setCancelOpen(true)}
                   >
@@ -1283,6 +1276,16 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     Annuler la réservation
                   </Button>
                 </>
+              )}
+              {canMarkNoShow && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start h-11 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+                  onClick={() => setNoShowOpen(true)}
+                >
+                  <AlertTriangle className="mr-3 h-4 w-4" />
+                  Marquer absent
+                </Button>
               )}
             </div>
           </section>
