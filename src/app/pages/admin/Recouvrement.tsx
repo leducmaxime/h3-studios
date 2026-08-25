@@ -21,6 +21,7 @@ import { getDisplayStatus, parseAmountInput, round2 } from "@/lib/booking-totals
 import { BOOKING_STATUS_LABELS, studioLabel } from "@/lib/labels";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { amountsMatch, type CollectMethod } from "@/lib/recouvrement-collect";
+import { buildClientGroupIdentity } from "@/lib/recouvrement-display";
 import type { BookingStatus, OverdueBooking } from "@/lib/db-types";
 import { subscribe } from "@/lib/navigation-events";
 
@@ -43,6 +44,7 @@ interface RecouvrementResponse {
 interface ClientGroup {
   userId: string;
   name: string;
+  bands: string[];
   email: string | null;
   phone: string | null;
   bookings: OverdueBooking[];
@@ -188,7 +190,8 @@ export function AdminRecouvrement() {
       }
       byUser.set(userId, {
         userId,
-        name: clientDisplayName(booking),
+        name: "",
+        bands: [],
         email: booking.user_email,
         phone: booking.user_phone,
         bookings: [booking],
@@ -197,10 +200,14 @@ export function AdminRecouvrement() {
     }
     const dir = sortOrder === "asc" ? 1 : -1;
     return [...byUser.values()]
-      .map((group) => ({
-        ...group,
-        bookings: [...group.bookings].sort((a, b) => compareBookings(a, b, sortBy, sortOrder)),
-      }))
+      .map((group) => {
+        const identity = buildClientGroupIdentity(group.bookings);
+        return {
+          ...group,
+          ...identity,
+          bookings: [...group.bookings].sort((a, b) => compareBookings(a, b, sortBy, sortOrder)),
+        };
+      })
       .sort((a, b) => {
         let cmp = 0;
         switch (sortBy) {
@@ -423,6 +430,9 @@ export function AdminRecouvrement() {
                         </a>
                       ) : (
                         <p className="truncate font-medium">{group.name}</p>
+                      )}
+                      {group.bands.length > 1 && (
+                        <p className="truncate text-xs text-zinc-400">{group.bands.join(" · ")}</p>
                       )}
                       <p className="truncate text-xs text-zinc-500">
                         {group.email || "—"}
