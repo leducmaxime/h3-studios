@@ -37,7 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
+import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary, isBookingPast, isKeepBalanceDue } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, displayPaymentStatusLabel, studioLabel } from "@/lib/labels";
 import { formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus, type BookingWithUser, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
@@ -84,15 +84,6 @@ const STATUS_CLASSES: Record<BookingStatus, string> = {
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + "T00:00:00");
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function isBookingPast(booking: { date: string; end_time: string }): boolean {
-  const today = formatDateISO(new Date());
-  if (booking.date < today) return true;
-  if (booking.date > today) return false;
-  const now = new Date();
-  const nowStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  return booking.end_time <= nowStr;
 }
 
 function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: string; dateDirection?: "past" | "upcoming" } {

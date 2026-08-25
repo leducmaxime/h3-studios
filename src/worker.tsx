@@ -1,5 +1,5 @@
 import { render, route, layout } from "rwsdk/router";
-import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage, isBookingPast } from "@/lib/booking-totals";
 import { allocateCollectPayments, isCollectMethod, type CollectPaymentInput } from "@/lib/recouvrement-collect";
 import { groupTypeLabel, paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, CLIENT_TYPE_RULES, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
@@ -5713,16 +5713,10 @@ const app = defineApp([
 
       // Transform past confirmed bookings to completed (same logic as admin API)
       const parisNow = getParisNow();
-      const nowTimeStr = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
       const bookingsWithStatus = bookings.data.map((booking) => {
         let b: (typeof booking) & { total_paid?: number; total_collected?: number; total_refunded?: number; remaining?: number } = booking;
-        if (booking.status === "confirmed") {
-          const isPast =
-            booking.date < parisNow.dateISO ||
-            (booking.date === parisNow.dateISO && booking.end_time <= nowTimeStr);
-          if (isPast) {
-            b = { ...booking, status: "completed" as const };
-          }
+        if (booking.status === "confirmed" && isBookingPast(booking, parisNow)) {
+          b = { ...booking, status: "completed" as const };
         }
         const totals = paymentTotals.get(b.id);
         const totalPaid = totals?.totalPaid ?? 0;

@@ -1,4 +1,5 @@
 import type { DbBooking, DbPayment } from "./db-types";
+import { getParisNow } from "./utils";
 
 export type PromoRoundMode = "down" | "up" | "none";
 export type ManualDiscountBlockReason = "cancelled";
@@ -72,13 +73,28 @@ export function getBookingOverpayment(booking: Pick<DbBooking, "base_price" | "e
   return Math.max(0, getTotalCollected(payments) - getTotalRefunded(payments) - getBookingAmountDue(booking));
 }
 
+type ParisClock = { dateISO: string; hours: number; minutes: number };
+
+/** `00:00` is the end-of-day sentinel, not midnight at the start of the date. */
+function normalizeEndTime(endTime: string): string {
+  return endTime === "00:00" ? "24:00" : endTime;
+}
+
+function parisTimeStr(now: ParisClock): string {
+  return `${String(now.hours).padStart(2, "0")}:${String(now.minutes).padStart(2, "0")}`;
+}
+
 /**
- * Retourne true si la réservation est dans le passé (heure Paris).
+ * True if the session has already ended in Europe/Paris.
+ * Matches `dateDirectionCondition("past")`: end_time "00:00" is end of day.
  */
-export function isBookingPast(booking: Pick<DbBooking, "date" | "end_time">): boolean {
-  const parisNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" }));
-  const bookingEnd = new Date(`${booking.date}T${booking.end_time}:00`);
-  return bookingEnd < parisNow;
+export function isBookingPast(
+  booking: Pick<DbBooking, "date" | "end_time">,
+  now: ParisClock = getParisNow(),
+): boolean {
+  if (booking.date < now.dateISO) return true;
+  if (booking.date > now.dateISO) return false;
+  return normalizeEndTime(booking.end_time) <= parisTimeStr(now);
 }
 
 /**
@@ -95,9 +111,12 @@ export function parseAmountInput(value: string): number {
  * Le statut DB reste 'confirmed' après la fin du créneau —
  * ce helper calcule le statut visuel sans modifier la DB.
  */
-export function getDisplayStatus(booking: Pick<DbBooking, "status" | "date" | "end_time">): string {
+export function getDisplayStatus(
+  booking: Pick<DbBooking, "status" | "date" | "end_time">,
+  now: ParisClock = getParisNow(),
+): string {
   if (booking.status !== "confirmed") return booking.status;
-  if (isBookingPast(booking)) return "completed";
+  if (isBookingPast(booking, now)) return "completed";
   return "confirmed";
 }
 

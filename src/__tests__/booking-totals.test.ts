@@ -4,6 +4,7 @@ import {
   getBookingBalance,
   parseAmountInput,
   isBookingPast,
+  getDisplayStatus,
   getDisplayPaymentStatus,
   getDisplayPaymentStatusFromSummary,
   getTotalRefunded,
@@ -240,6 +241,9 @@ describe("parseAmountInput", () => {
 // ─── isBookingPast ───────────────────────────────────────────────────────────
 
 describe("isBookingPast", () => {
+  const NOW = { dateISO: "2026-08-25", hours: 20, minutes: 51 };
+  const LATE = { dateISO: "2026-08-25", hours: 23, minutes: 30 };
+
   it("returns true for a date in the past", () => {
     const booking = { date: "2020-01-01", end_time: "12:00" };
     expect(isBookingPast(booking)).toBe(true);
@@ -249,6 +253,25 @@ describe("isBookingPast", () => {
     // Use a far-future date to avoid timezone flakiness
     const booking = { date: "2099-12-31", end_time: "12:00" };
     expect(isBookingPast(booking)).toBe(false);
+  });
+
+  it("treats end_time 00:00 as end of day, not midnight this morning", () => {
+    const midnight = { date: "2026-08-25", end_time: "00:00" };
+    expect(isBookingPast(midnight, NOW)).toBe(false);
+    expect(isBookingPast(midnight, LATE)).toBe(false);
+    expect(isBookingPast(midnight, { dateISO: "2026-08-26", hours: 0, minutes: 0 })).toBe(true);
+  });
+
+  it("marks a same-day session past once its end time is reached", () => {
+    expect(isBookingPast({ date: "2026-08-25", end_time: "17:00" }, NOW)).toBe(true);
+    expect(isBookingPast({ date: "2026-08-25", end_time: "22:00" }, NOW)).toBe(false);
+    expect(isBookingPast({ date: "2026-08-25", end_time: "20:51" }, NOW)).toBe(true);
+  });
+
+  it("keeps a midnight session confirmed until the day actually ends", () => {
+    const booking = { status: "confirmed" as const, date: "2026-08-25", end_time: "00:00" };
+    expect(getDisplayStatus(booking, NOW)).toBe("confirmed");
+    expect(getDisplayStatus(booking, { dateISO: "2026-08-26", hours: 0, minutes: 1 })).toBe("completed");
   });
 });
 
