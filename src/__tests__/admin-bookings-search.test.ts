@@ -30,4 +30,15 @@ describe("parseBookingsSearch", () => {
       extraDateDirection: "",
     });
   });
+
+  it("defaults to upcoming sessions when no date params are present", () => {
+    expect(parseBookingsSearch()).toMatchObject({
+      dateFilter: "upcoming",
+      extraDateDirection: "",
+    });
+    expect(parseBookingsSearch("status=confirmed")).toMatchObject({
+      dateFilter: "upcoming",
+      statusFilter: "confirmed",
+    });
+  });
 });

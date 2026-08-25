@@ -125,8 +125,8 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
   const [customDateTo, setCustomDateTo] = useState(initialFilters.customDateTo);
   const [extraDateDirection, setExtraDateDirection] = useState<BookingsDateDirectionFilter>(initialFilters.extraDateDirection);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<BookingsPaymentFilter>(initialFilters.paymentStatusFilter);
-  const [sortBy, setSortBy] = useState<BookingSortField>("created_at");
-  const [sortOrder, setSortOrder] = useState<BookingSortOrder>("desc");
+  const [sortBy, setSortBy] = useState<BookingSortField>("date");
+  const [sortOrder, setSortOrder] = useState<BookingSortOrder>("asc");
   const [page, setPage] = useState(1);
   const perPage = 20;
 
@@ -337,13 +337,13 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
             onChange={(e) => { setDateFilter(e.target.value as BookingsDateFilter); setExtraDateDirection(""); setPage(1); }}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
-            <option value="all">Date</option>
-            <option value="today">Auj.</option>
-            <option value="week">Sem.</option>
-            <option value="month">Mois</option>
+            <option value="all">Toutes les dates</option>
+            <option value="today">Aujourd'hui</option>
+            <option value="week">Cette semaine</option>
+            <option value="month">Ce mois</option>
             <option value="upcoming">À venir</option>
             <option value="past">Passées</option>
-            <option value="custom">Perso.</option>
+            <option value="custom">Période personnalisée</option>
           </select>
           {dateFilter === "custom" && (
             <>
@@ -366,12 +366,12 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
             onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all" | "not-cancelled"); setPage(1); }}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
-            <option value="all">Statut</option>
+            <option value="all">Tous les statuts</option>
             <option value="not-cancelled">Hors annulées</option>
-            <option value="confirmed">Confirmé</option>
-            <option value="completed">Terminé</option>
-            <option value="cancelled">Annulé</option>
-            <option value="no-show">Absent</option>
+            <option value="confirmed">{BOOKING_STATUS_LABELS.confirmed}</option>
+            <option value="completed">{BOOKING_STATUS_LABELS.completed}</option>
+            <option value="cancelled">{BOOKING_STATUS_LABELS.cancelled}</option>
+            <option value="no-show">{BOOKING_STATUS_LABELS["no-show"]}</option>
           </select>
           <select
             value={studioFilter}
@@ -400,20 +400,20 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
               onChange={(e) => { setSortBy(e.target.value as BookingSortField); setPage(1); }}
               className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
             >
-              <option value="date">Date</option>
+              <option value="date">Date de séance</option>
               <option value="start_time">Heure</option>
-              <option value="total_price">€</option>
+              <option value="total_price">Montant</option>
               <option value="status">Statut</option>
               <option value="payment_status">Paiement</option>
-              <option value="created_at">Créé</option>
+              <option value="created_at">Date de création</option>
             </select>
             <select
               value={sortOrder}
               onChange={(e) => { setSortOrder(e.target.value as BookingSortOrder); setPage(1); }}
               className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
             >
-              <option value="desc">↓</option>
-              <option value="asc">↑</option>
+              <option value="desc">Décroissant</option>
+              <option value="asc">Croissant</option>
             </select>
           </div>
         </div>

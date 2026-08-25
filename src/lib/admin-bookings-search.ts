@@ -17,7 +17,7 @@ export function parseBookingsSearch(search?: string) {
   const payment = params.get("payment");
   const studio = params.get("studio");
 
-  let dateFilter: BookingsDateFilter = "all";
+  let dateFilter: BookingsDateFilter = "upcoming";
   if (dateFrom) dateFilter = "custom";
   else if (dateDirection === "upcoming") dateFilter = "upcoming";
   else if (dateDirection === "past") dateFilter = "past";
