@@ -539,7 +539,7 @@ export function AdminPayments() {
     if (serverStats) return serverStats;
     // Fallback sur page courante si pas encore chargé
     const paid = payments.filter((p) => p.status === "paid");
-    const refunded = payments.filter((p) => (p.refunded_amount ?? 0) > 0);
+    const refunded = payments.filter((p) => p.status === "refunded" || p.status === "partial-refund");
     return {
       paidCount: paid.length,
       paidAmount: paid.reduce((acc, p) => acc + p.amount, 0),

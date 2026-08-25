@@ -1047,10 +1047,10 @@ export async function getPayments(
       SELECT
         COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
         COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
-        COUNT(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN 1 END) as paidCount,
-        COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paidAmount,
-        COUNT(CASE WHEN COALESCE(refunded_amount, 0) > 0 THEN 1 END) as refundedCount,
-        COALESCE(SUM(COALESCE(refunded_amount, 0)), 0) as refundedAmount
+        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paidCount,
+        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paidAmount,
+        COUNT(CASE WHEN status IN ('refunded', 'partial-refund') THEN 1 END) as refundedCount,
+        COALESCE(SUM(CASE WHEN status IN ('refunded', 'partial-refund') THEN COALESCE(refunded_amount, 0) ELSE 0 END), 0) as refundedAmount
       FROM payments_enriched ${statsWhere}
     `,
   ).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number; refundedCount: number; refundedAmount: number }>();
