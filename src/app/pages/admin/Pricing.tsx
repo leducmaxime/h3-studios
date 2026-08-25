@@ -325,6 +325,7 @@ function PublicHolidaysSection() {
         <div className="flex items-center gap-2">
           <input
             type="date"
+            aria-label="Date du jour férié"
             value={newDate}
             onChange={(e) => setNewDate(e.target.value)}
             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -357,6 +358,7 @@ function PublicHolidaysSection() {
                   size="sm"
                   onClick={() => handleRemove(iso)}
                   disabled={saving}
+                  aria-label={`Supprimer le ${formatHolidayDate(iso)}`}
                   className="h-7 w-7 p-0 text-zinc-500"
                 >
                   <Trash2 className="h-3.5 w-3.5" />

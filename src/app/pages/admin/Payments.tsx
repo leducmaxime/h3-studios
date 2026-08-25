@@ -1055,6 +1055,8 @@ export function AdminPayments() {
                         <a href={`/admin/users/${payment.user_id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
                           {payment.user_name}
                         </a>
+                      ) : payment.booking_id ? (
+                        <span className="text-zinc-500">Compte supprimé</span>
                       ) : (
                         "—"
                       )}

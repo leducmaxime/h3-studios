@@ -844,6 +844,20 @@ function StatCard({
   );
 }
 
+function ChartViewport({ children }: { children: React.ReactElement }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  if (!ready) return <div className="h-full min-w-0" />;
+  return (
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+      {children}
+    </ResponsiveContainer>
+  );
+}
+
 function ChartCard({ title, action, children, className = "" }: { title: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <div className={`rounded-xl border border-zinc-800 bg-zinc-900 p-4 ${className}`}>
@@ -1905,8 +1919,8 @@ export function AdminDashboard() {
                   <p className="mt-1 text-xs text-zinc-500">Somme des réservations (hors annulations) sur la période</p>
                 </div>
               </div>
-              <div className="h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-[280px] min-w-0">
+                <ChartViewport>
                   {/* top margin leaves room for the highest Y tick label,
                       which recharts centers on the top gridline and would
                       otherwise clip against the SVG edge (labels wrap to
@@ -1938,15 +1952,15 @@ export function AdminDashboard() {
                       activeDot={{ r: 5, fill: CHART_COLORS.primary }}
                     />
                   </LineChart>
-                </ResponsiveContainer>
+                </ChartViewport>
               </div>
             </div>
 
             <ChartCard
               title={rangeMode === "year" ? "Occupation par mois" : rangeMode === "month" ? "Occupation par semaine" : "Occupation par jour"}
             >
-              <div className="h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-[280px] min-w-0">
+                <ChartViewport>
                   {/* same reason as the revenue chart: the "100%" tick sits on
                       the top gridline and needs headroom. */}
                   <BarChart data={occupancyData} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
@@ -1983,7 +1997,7 @@ export function AdminDashboard() {
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartViewport>
               </div>
               <div className="mt-3 flex flex-col gap-1 border-t border-zinc-800 pt-3 sm:flex-row sm:items-baseline sm:justify-between">
                 <p className="text-xs text-zinc-400">Occupation totale sur la période</p>
@@ -2033,7 +2047,7 @@ export function AdminDashboard() {
                         always fits its box instead of demanding a fixed
                         190px that the mobile column layout can't provide. */}
                     <div className="h-[190px] w-full lg:h-full lg:w-1/2">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ChartViewport>
                         <PieChart>
                           <Pie
                             data={studioData}
@@ -2053,7 +2067,7 @@ export function AdminDashboard() {
                           </Pie>
                           <Tooltip content={<PieTooltip />} />
                         </PieChart>
-                      </ResponsiveContainer>
+                      </ChartViewport>
                     </div>
 
                     <div className="w-full lg:w-1/2">
@@ -2112,7 +2126,7 @@ export function AdminDashboard() {
                 return (
                   <div className="flex flex-col gap-4 lg:h-[280px] lg:flex-row lg:items-center">
                     <div className="h-[190px] w-full lg:h-full lg:w-1/2">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ChartViewport>
                         <PieChart>
                           <Pie
                             data={points}
@@ -2132,7 +2146,7 @@ export function AdminDashboard() {
                           </Pie>
                           <Tooltip content={<PieTooltip />} />
                         </PieChart>
-                      </ResponsiveContainer>
+                      </ChartViewport>
                     </div>
 
                     <div className="w-full lg:w-1/2">
@@ -2190,7 +2204,7 @@ export function AdminDashboard() {
                   return (
                     <div className="flex flex-col gap-4 lg:h-[280px] lg:flex-row lg:items-center">
                       <div className="h-[190px] w-full lg:h-full lg:w-1/2">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ChartViewport>
                           <PieChart>
                             <Pie
                               data={displayedPaymentData}
@@ -2210,7 +2224,7 @@ export function AdminDashboard() {
                             </Pie>
                             <Tooltip content={<PaymentPieTooltip total={totalCount} />} />
                           </PieChart>
-                        </ResponsiveContainer>
+                        </ChartViewport>
                       </div>
 
                       <div className="w-full lg:w-1/2">
@@ -2343,7 +2357,7 @@ export function AdminDashboard() {
                           page, densité supérieure (barres + courbe + 2 repères +
                           second axe Y). */}
                       <div className="h-[320px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ChartViewport>
                           {/* mêmes marges que les autres graphiques : headroom
                               pour le tick Y le plus haut. */}
                           <ComposedChart data={durationChartData} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
@@ -2426,7 +2440,7 @@ export function AdminDashboard() {
                               />
                             )}
                           </ComposedChart>
-                        </ResponsiveContainer>
+                        </ChartViewport>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
                         <DurationLegendHint

@@ -49,8 +49,8 @@ import {
 } from "@/components/ui/select";
 import { STUDIOS, formatPrice, slotDurationHours, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
-import { formatDbTimestamp, getParisDateISO } from "@/lib/utils";
-import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus, shouldShowDisplayPaymentStatus } from "@/lib/booking-totals";
+import { formatDbTimestamp } from "@/lib/utils";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getDisplayStatus, getManualDiscountEligibility, getManualDiscountBlockMessage, isBookingPast, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus, shouldShowDisplayPaymentStatus } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel } from "@/lib/labels";
 import { formatSiret, resolveBookingClientIdentity } from "@/lib/client-identity";
@@ -601,7 +601,9 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   // Présentation du paiement : le statut d'affichage tient compte du solde
   // conservé sur une réservation annulée.
   const isCancelled = booking.status === "cancelled";
-  const isPastBooking = booking.date < getParisDateISO();
+  const displayStatus = getDisplayStatus(booking);
+  const sessionEnded = displayStatus === "completed" || displayStatus === "no-show" || isBookingPast(booking);
+  const canMutateSession = booking.status === "confirmed" && displayStatus === "confirmed";
   const displayPaymentStatus = getDisplayPaymentStatus(booking, payments);
 
   return (
@@ -610,7 +612,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <a 
-            href="/admin/bookings" 
+            href="/admin/bookings"
+            aria-label="Retour aux réservations"
             className="flex items-center justify-center h-10 w-10 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -662,7 +665,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Équipements</p>
                     {!editingEquipment && (
-                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-400" onClick={() => { setEquipmentDraft(equipment.map(e => ({ id: e.id, quantity: e.quantity }))); setEditingEquipment(true); }}>
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-400" aria-label={equipment.length === 0 ? "Ajouter des équipements" : "Modifier les équipements"} onClick={() => { setEquipmentDraft(equipment.map(e => ({ id: e.id, quantity: e.quantity }))); setEditingEquipment(true); }}>
                         <Pencil className="h-3 w-3 mr-1" />{equipment.length === 0 ? "Ajouter" : "Modifier"}
                       </Button>
                     )}
@@ -768,7 +771,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Informations supplémentaires</p>
                   {!editingNotes && (
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-400" onClick={() => { setNotesValue(booking?.notes || ""); setEditingNotes(true); }}>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-zinc-400" aria-label="Modifier les notes" onClick={() => { setNotesValue(booking?.notes || ""); setEditingNotes(true); }}>
                       <Pencil className="h-3 w-3 mr-1" />Modifier
                     </Button>
                   )}
@@ -1020,7 +1023,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                             }}
                           >
                             <Pencil className="h-3 w-3 mr-1" />
-                            Modifier
+                            Modifier le paiement
                           </Button>
                           <Button
                             size="sm"
@@ -1228,11 +1231,11 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 variant="outline"
                 className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
                 onClick={handleSendReminder}
-                disabled={sendingReminder || isCancelled || isPastBooking || !user?.email}
+                disabled={sendingReminder || isCancelled || sessionEnded || !user?.email}
                 title={
                   isCancelled
                     ? "Impossible d'envoyer un rappel pour une réservation annulée"
-                    : isPastBooking
+                    : sessionEnded
                       ? "Impossible d'envoyer un rappel pour une réservation passée"
                       : !user?.email
                         ? "Le client n'a pas d'adresse e-mail"
@@ -1253,7 +1256,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 Générer la facture PDF
               </Button>
               
-              {booking.status === "confirmed" && (
+              {canMutateSession && (
                 <>
                   <Button
                     variant="outline"

@@ -536,7 +536,7 @@ export function AdminBookingNew() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <a href="/admin/bookings" className="rounded-lg p-2 hover:bg-zinc-800">
+        <a href="/admin/bookings" aria-label="Retour aux réservations" className="rounded-lg p-2 hover:bg-zinc-800">
           <ChevronLeft className="h-5 w-5" />
         </a>
         <div>

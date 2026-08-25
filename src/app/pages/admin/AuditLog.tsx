@@ -142,6 +142,8 @@ const ACTION_LABELS: Record<string, { label: string; variant: "default" | "secon
   activate: { label: "Activation", variant: "default" },
   deactivate: { label: "Désactivation", variant: "destructive" },
   "change-password": { label: "Mot de passe", variant: "secondary" },
+  "send-reminder": { label: "Rappel envoyé", variant: "secondary" },
+  "resend-confirmation": { label: "Confirmation renvoyée", variant: "secondary" },
 };
 
 function getEntityConfig(entityType: string) {
@@ -217,6 +219,9 @@ const FIELD_LABELS: Record<string, string> = {
   price_per_half_hour: "Tarif (30 min)",
   equipment_id: "Identifiant équipement",
   price: "Prix",
+  loyalty_enabled: "Remise de fidélité",
+  bookingIds: "Réservations",
+  to: "Destinataire",
 };
 
 type ChangeObj = Record<string, unknown>;
@@ -257,6 +262,8 @@ function formatFieldValue(key: string, value: unknown): string {
     case "method":
     case "previousMethod":
       return paymentMethodLabel(str);
+    case "loyalty_enabled":
+      return str === "1" || str === "true" ? "Activée" : "Désactivée";
     case "role":
       return adminRoleLabel(str);
     case "type":
@@ -894,6 +901,8 @@ export function AdminAuditLog() {
             <option value="activate">Activation</option>
             <option value="deactivate">Désactivation</option>
             <option value="change-password">Mot de passe</option>
+            <option value="send-reminder">Rappel envoyé</option>
+            <option value="resend-confirmation">Confirmation renvoyée</option>
           </select>
           <select
             value={adminFilter}
@@ -909,12 +918,14 @@ export function AdminAuditLog() {
           </select>
           <input
             type="date"
+            aria-label="Date de début"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
           />
           <input
             type="date"
+            aria-label="Date de fin"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"

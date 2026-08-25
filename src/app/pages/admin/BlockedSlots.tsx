@@ -365,12 +365,14 @@ export function AdminBlockedSlots() {
                   </select>
                   <input
                     type="date"
+                    aria-label="Date de début"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
                     className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
                   />
                   <input
                     type="date"
+                    aria-label="Date de fin"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
                     className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"

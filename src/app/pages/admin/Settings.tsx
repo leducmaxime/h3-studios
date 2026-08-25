@@ -456,16 +456,16 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
         <h3 className="font-semibold mb-4">Changer mon mot de passe</h3>
         <form onSubmit={handleChangePassword} className="space-y-3 max-w-sm">
           <div className="space-y-1.5">
-            <Label className="text-xs text-zinc-400">Mot de passe actuel</Label>
-            <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required />
+            <Label htmlFor="current-password" className="text-xs text-zinc-400">Mot de passe actuel</Label>
+            <Input id="current-password" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-zinc-400">Nouveau mot de passe</Label>
-            <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required minLength={8} />
+            <Label htmlFor="new-password" className="text-xs text-zinc-400">Nouveau mot de passe</Label>
+            <Input id="new-password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required minLength={8} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-zinc-400">Confirmer le nouveau mot de passe</Label>
-            <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required />
+            <Label htmlFor="confirm-password" className="text-xs text-zinc-400">Confirmer le nouveau mot de passe</Label>
+            <Input id="confirm-password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="bg-zinc-800 border-zinc-700" required />
           </div>
           {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
           {passwordSuccess && <p className="text-xs text-emerald-400">Mot de passe modifié avec succès</p>}
@@ -517,7 +517,7 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
             </div>
 
             <div className="flex items-center gap-2">
-              {user.id !== currentUser?.id && (
+              {currentUser && user.id !== currentUser.id && (
                 <Select
                   value={user.role}
                   onValueChange={(v) => handleRoleChange(user.id, v as AdminUserRow["role"])}
@@ -533,7 +533,7 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
                 </Select>
               )}
 
-              {user.id !== currentUser?.id && (
+              {currentUser && user.id !== currentUser.id && (
                 <Button
                   size="sm"
                   variant="destructive"
@@ -545,7 +545,7 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
                 </Button>
               )}
 
-              {user.id !== currentUser?.id && (
+              {currentUser && user.id !== currentUser.id && (
                 <Button
                   size="sm"
                   variant={user.is_active ? "outline" : "default"}
