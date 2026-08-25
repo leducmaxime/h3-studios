@@ -84,8 +84,6 @@ interface PaymentsResponse {
     page: number;
     limit: number;
     stats?: {
-      pendingCount: number;
-      pendingAmount: number;
       paidCount: number;
       paidAmount: number;
       refundedCount: number;
@@ -458,7 +456,7 @@ export function AdminPayments() {
   const [discountInput, setDiscountInput] = useState("");
   const [discountSaving, setDiscountSaving] = useState(false);
 
-  const [serverStats, setServerStats] = useState<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number; refundedCount: number; refundedAmount: number } | null>(null);
+  const [serverStats, setServerStats] = useState<{ paidCount: number; paidAmount: number; refundedCount: number; refundedAmount: number } | null>(null);
 
   const collectTotals = useMemo(() => {
     const entries = collectEntries.map((e) => {
@@ -540,12 +538,9 @@ export function AdminPayments() {
   const stats = useMemo(() => {
     if (serverStats) return serverStats;
     // Fallback sur page courante si pas encore chargé
-    const pending = payments.filter((p) => p.status === "pending");
     const paid = payments.filter((p) => p.status === "paid");
     const refunded = payments.filter((p) => (p.refunded_amount ?? 0) > 0);
     return {
-      pendingCount: pending.length,
-      pendingAmount: pending.reduce((acc, p) => acc + p.amount, 0),
       paidCount: paid.length,
       paidAmount: paid.reduce((acc, p) => acc + p.amount, 0),
       refundedCount: refunded.length,
@@ -834,16 +829,7 @@ export function AdminPayments() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="text-sm text-zinc-400">En attente</p>
-          <p className="mt-1 text-2xl font-bold text-yellow-400">
-            {stats.pendingCount}
-          </p>
-          <p className="text-sm text-zinc-500">
-            {formatPrice(stats.pendingAmount)}
-          </p>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-sm text-zinc-400">Payés</p>
           <p className="mt-1 text-2xl font-bold text-green-400">
