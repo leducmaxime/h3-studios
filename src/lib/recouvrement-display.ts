@@ -36,3 +36,36 @@ export function buildClientGroupIdentity(
   const name = person || bands.join(" · ") || "Client inconnu";
   return { name, bands, email, phone };
 }
+
+export const UNGROUPED_BAND_KEY = "";
+export const UNGROUPED_BAND_LABEL = "Sans groupe";
+
+export interface RecouvrementBandScope<T> {
+  key: string;
+  label: string;
+  bookings: T[];
+  remaining: number;
+}
+
+export function bandScopeKey(bandName: string | null | undefined): string {
+  return (bandName?.trim() ?? "").toLocaleLowerCase("fr");
+}
+
+export function groupBookingsByBand<T extends RecouvrementIdentityBooking & { remaining: number }>(
+  bookings: T[],
+): RecouvrementBandScope<T>[] {
+  const groups = new Map<string, RecouvrementBandScope<T>>();
+  for (const booking of bookings) {
+    const trimmed = booking.band_name?.trim() ?? "";
+    const key = bandScopeKey(trimmed);
+    const label = trimmed || UNGROUPED_BAND_LABEL;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.bookings.push(booking);
+      existing.remaining += booking.remaining;
+      continue;
+    }
+    groups.set(key, { key, label, bookings: [booking], remaining: booking.remaining });
+  }
+  return [...groups.values()];
+}

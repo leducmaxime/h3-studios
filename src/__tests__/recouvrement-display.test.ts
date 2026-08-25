@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildClientGroupIdentity } from "@/lib/recouvrement-display";
+import { buildClientGroupIdentity, groupBookingsByBand } from "@/lib/recouvrement-display";
 
 describe("buildClientGroupIdentity", () => {
   it("uses the person name as the folded title", () => {
@@ -32,5 +32,52 @@ describe("buildClientGroupIdentity", () => {
 
     expect(result.name).toBe("La Noirmoutrine · TeTelle Band");
     expect(result.bands).toEqual(["La Noirmoutrine", "TeTelle Band"]);
+  });
+});
+
+describe("groupBookingsByBand", () => {
+  it("splits remaining by band name", () => {
+    const result = groupBookingsByBand([
+      { id: "1", band_name: "La Noirmoutrine", remaining: 20 },
+      { id: "2", band_name: "TeTelle Band", remaining: 10 },
+      { id: "3", band_name: "La Noirmoutrine", remaining: 5 },
+    ]);
+
+    expect(result).toEqual([
+      {
+        key: "la noirmoutrine",
+        label: "La Noirmoutrine",
+        remaining: 25,
+        bookings: [
+          { id: "1", band_name: "La Noirmoutrine", remaining: 20 },
+          { id: "3", band_name: "La Noirmoutrine", remaining: 5 },
+        ],
+      },
+      {
+        key: "tetelle band",
+        label: "TeTelle Band",
+        remaining: 10,
+        bookings: [{ id: "2", band_name: "TeTelle Band", remaining: 10 }],
+      },
+    ]);
+  });
+
+  it("groups bookings without a band name", () => {
+    const result = groupBookingsByBand([
+      { id: "1", band_name: null, remaining: 8 },
+      { id: "2", band_name: "  ", remaining: 2 },
+    ]);
+
+    expect(result).toEqual([
+      {
+        key: "",
+        label: "Sans groupe",
+        remaining: 10,
+        bookings: [
+          { id: "1", band_name: null, remaining: 8 },
+          { id: "2", band_name: "  ", remaining: 2 },
+        ],
+      },
+    ]);
   });
 });

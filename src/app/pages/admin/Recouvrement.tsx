@@ -21,7 +21,7 @@ import { getDisplayStatus, parseAmountInput, round2 } from "@/lib/booking-totals
 import { BOOKING_STATUS_LABELS, studioLabel } from "@/lib/labels";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { amountsMatch, type CollectMethod } from "@/lib/recouvrement-collect";
-import { buildClientGroupIdentity } from "@/lib/recouvrement-display";
+import { buildClientGroupIdentity, groupBookingsByBand } from "@/lib/recouvrement-display";
 import type { BookingStatus, OverdueBooking } from "@/lib/db-types";
 import { subscribe } from "@/lib/navigation-events";
 
@@ -132,6 +132,7 @@ export function AdminRecouvrement() {
   const [sortBy, setSortBy] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [collectGroup, setCollectGroup] = useState<ClientGroup | null>(null);
+  const [collectScopeKey, setCollectScopeKey] = useState<string | null>(null);
   const [collectEntries, setCollectEntries] = useState<CollectEntry[]>([]);
   const [collectLoading, setCollectLoading] = useState(false);
 
@@ -246,6 +247,7 @@ export function AdminRecouvrement() {
       return;
     }
     setCollectGroup(group);
+    setCollectScopeKey("all");
     setCollectEntries([
       {
         id: crypto.randomUUID(),
@@ -255,8 +257,37 @@ export function AdminRecouvrement() {
     ]);
   };
 
+  const collectScopes = useMemo(
+    () => groupBookingsByBand(collectGroup?.bookings ?? []),
+    [collectGroup],
+  );
+
+  const selectedCollectScope = useMemo(() => {
+    if (!collectGroup || collectScopeKey === "all") {
+      return collectGroup
+        ? { bookings: collectGroup.bookings, remaining: collectGroup.remaining }
+        : null;
+    }
+    return collectScopes.find((scope) => scope.key === collectScopeKey) ?? {
+      bookings: collectGroup.bookings,
+      remaining: collectGroup.remaining,
+    };
+  }, [collectGroup, collectScopeKey, collectScopes]);
+
+  const changeCollectScope = (scopeKey: string) => {
+    if (!collectGroup) return;
+    const scope = scopeKey === "all"
+      ? { remaining: collectGroup.remaining }
+      : collectScopes.find((candidate) => candidate.key === scopeKey);
+    if (!scope) return;
+    setCollectScopeKey(scopeKey);
+    setCollectEntries([
+      { id: crypto.randomUUID(), amount: scope.remaining.toFixed(2).replace(".", ","), method: "cash" },
+    ]);
+  };
+
   const collectTotals = useMemo(() => {
-    const remainingStart = collectGroup?.remaining ?? 0;
+    const remainingStart = selectedCollectScope?.remaining ?? 0;
     const parsed = collectEntries.map((entry) => {
       const amount = parseAmountInput(entry.amount);
       return { method: entry.method, amount: Number.isFinite(amount) && amount > 0 ? amount : 0 };
@@ -268,7 +299,7 @@ export function AdminRecouvrement() {
       remainingAfter: round2(remainingStart - totalAmount),
       exact: amountsMatch(remainingStart, totalAmount),
     };
-  }, [collectEntries, collectGroup]);
+  }, [collectEntries, selectedCollectScope]);
 
   const submitCollect = async () => {
     if (!collectGroup) return;
@@ -286,7 +317,7 @@ export function AdminRecouvrement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: collectGroup.userId,
-          bookingIds: collectGroup.bookings.map((booking) => booking.id),
+          bookingIds: selectedCollectScope?.bookings.map((booking) => booking.id) ?? [],
           payments,
         }),
       });
@@ -295,8 +326,9 @@ export function AdminRecouvrement() {
         toast.error(json.error || "Erreur lors de l'encaissement");
         return;
       }
-      toast.success(`${collectGroup.bookings.length} réservation(s) soldée(s)`);
+      toast.success(`${selectedCollectScope?.bookings.length ?? 0} réservation(s) soldée(s)`);
       setCollectGroup(null);
+      setCollectScopeKey(null);
       await fetchOverdue();
     } catch (error) {
       console.error("Collect overdue error:", error);
@@ -472,7 +504,10 @@ export function AdminRecouvrement() {
       <Dialog
         open={collectGroup !== null}
         onOpenChange={(open) => {
-          if (!open) setCollectGroup(null);
+          if (!open) {
+            setCollectGroup(null);
+            setCollectScopeKey(null);
+          }
         }}
       >
         <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-lg">
@@ -482,8 +517,8 @@ export function AdminRecouvrement() {
               {collectGroup ? (
                 <>
                   <span>
-                    {collectGroup.name} · {collectGroup.bookings.length} réservation
-                    {collectGroup.bookings.length === 1 ? "" : "s"}
+                    {collectGroup.name} · {selectedCollectScope?.bookings.length ?? 0} réservation
+                    {(selectedCollectScope?.bookings.length ?? 0) === 1 ? "" : "s"}
                   </span>
                   <span className="mt-1 block">
                     Reste dû :{" "}
@@ -506,8 +541,37 @@ export function AdminRecouvrement() {
 
           {collectGroup && (
             <div className="space-y-3">
+              {collectScopes.length > 1 && (
+                <fieldset>
+                  <legend className="mb-2 text-xs font-medium text-zinc-400">Quoi encaisser</legend>
+                  <div className="space-y-1.5">
+                    {[
+                      { key: "all", label: "Tout le client", bookings: collectGroup.bookings, remaining: collectGroup.remaining },
+                      ...collectScopes,
+                    ].map((scope) => (
+                      <button
+                        key={scope.key}
+                        type="button"
+                        role="radio"
+                        aria-checked={collectScopeKey === scope.key}
+                        onClick={() => changeCollectScope(scope.key)}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+                          collectScopeKey === scope.key
+                            ? "border-primary bg-primary/10"
+                            : "border-zinc-800 bg-zinc-950/40 hover:border-zinc-700"
+                        }`}
+                      >
+                        <span className="min-w-0 truncate font-medium">{scope.label}</span>
+                        <span className="shrink-0 text-xs text-zinc-400">
+                          {scope.bookings.length} réservation{scope.bookings.length === 1 ? "" : "s"} · {formatPrice(scope.remaining)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
               <div className="max-h-40 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/40">
-                {collectGroup.bookings.map((booking) => (
+                {selectedCollectScope?.bookings.map((booking) => (
                   <div key={booking.id} className="flex items-center justify-between gap-3 border-b border-zinc-800/80 px-3 py-2 last:border-b-0">
                     <div className="min-w-0">
                       <p className="font-mono text-xs text-primary">{booking.booking_ref}</p>
@@ -597,15 +661,18 @@ export function AdminRecouvrement() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setCollectGroup(null)}
+              onClick={() => {
+                setCollectGroup(null);
+                setCollectScopeKey(null);
+              }}
               className="border-zinc-700"
               disabled={collectLoading}
             >
               Annuler
             </Button>
-            <Button type="button" onClick={submitCollect} disabled={collectLoading || !collectGroup || !collectTotals.exact}>
+            <Button type="button" onClick={submitCollect} disabled={collectLoading || !collectGroup || !selectedCollectScope || !collectTotals.exact}>
               {collectLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Solder {collectGroup?.bookings.length ?? 0} réservation{(collectGroup?.bookings.length ?? 0) === 1 ? "" : "s"}
+              Solder {selectedCollectScope?.bookings.length ?? 0} réservation{(selectedCollectScope?.bookings.length ?? 0) === 1 ? "" : "s"}
             </Button>
           </DialogFooter>
         </DialogContent>
