@@ -43,4 +43,24 @@ describe("buildUserFilterConditions", () => {
 
     expect(result.conditions).not.toContain("u.loyalty_enabled = ?");
   });
+
+  it("searches live identity fields and historical booking band names", () => {
+    const result = buildUserFilterConditions({ search: "  La Noirmoutrine  " });
+
+    expect(result.conditions).toHaveLength(1);
+    expect(result.conditions[0]).toContain("u.name LIKE ?");
+    expect(result.conditions[0]).toContain("u.first_name LIKE ?");
+    expect(result.conditions[0]).toContain("u.last_name LIKE ?");
+    expect(result.conditions[0]).toContain("u.band_name LIKE ?");
+    expect(result.conditions[0]).toContain("u.legal_name LIKE ?");
+    expect(result.conditions[0]).toContain("EXISTS (SELECT 1 FROM bookings b WHERE b.user_id = u.id AND b.band_name LIKE ?)");
+    expect(result.params).toEqual(Array(8).fill("%La Noirmoutrine%"));
+  });
+
+  it("ignores blank search terms", () => {
+    const result = buildUserFilterConditions({ search: "   " });
+
+    expect(result.conditions).toEqual([]);
+    expect(result.params).toEqual([]);
+  });
 });

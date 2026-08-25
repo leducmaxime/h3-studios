@@ -449,10 +449,16 @@ export function buildUserFilterConditions(filters: UserFilters = {}): {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
-  if (filters.search) {
-    conditions.push("(u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.band_name LIKE ?)");
-    const term = `%${filters.search}%`;
-    params.push(term, term, term, term);
+  const search = filters.search?.trim();
+  if (search) {
+    conditions.push(`(
+      u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ?
+      OR u.first_name LIKE ? OR u.last_name LIKE ?
+      OR u.band_name LIKE ? OR u.legal_name LIKE ?
+      OR EXISTS (SELECT 1 FROM bookings b WHERE b.user_id = u.id AND b.band_name LIKE ?)
+    )`);
+    const term = `%${search}%`;
+    params.push(term, term, term, term, term, term, term, term);
   }
   if (filters.isBlocked !== undefined) {
     conditions.push("u.is_blocked = ?");
