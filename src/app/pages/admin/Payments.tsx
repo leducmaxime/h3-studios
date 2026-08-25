@@ -830,7 +830,17 @@ export function AdminPayments() {
 
       {/* Stats cards */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+        <button
+          type="button"
+          aria-pressed={statusFilter === "paid"}
+          onClick={() => {
+            setStatusFilter((current) => (current === "paid" ? "all" : "paid"));
+            setPage(1);
+          }}
+          className={`rounded-xl border bg-zinc-900 p-4 text-left transition-colors hover:border-zinc-600 ${
+            statusFilter === "paid" ? "border-green-400/50" : "border-zinc-800"
+          }`}
+        >
           <p className="text-sm text-zinc-400">Payés</p>
           <p className="mt-1 text-2xl font-bold text-green-400">
             {stats.paidCount}
@@ -838,8 +848,18 @@ export function AdminPayments() {
           <p className="text-sm text-zinc-500">
             {formatPrice(stats.paidAmount)}
           </p>
-        </div>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+        </button>
+        <button
+          type="button"
+          aria-pressed={statusFilter === "refunded"}
+          onClick={() => {
+            setStatusFilter((current) => (current === "refunded" ? "all" : "refunded"));
+            setPage(1);
+          }}
+          className={`rounded-xl border bg-zinc-900 p-4 text-left transition-colors hover:border-zinc-600 ${
+            statusFilter === "refunded" ? "border-red-400/50" : "border-zinc-800"
+          }`}
+        >
           <p className="text-sm text-zinc-400">Remboursés</p>
           <p className="mt-1 text-2xl font-bold text-red-400">
             {stats.refundedCount}
@@ -847,7 +867,7 @@ export function AdminPayments() {
           <p className="text-sm text-zinc-500">
             {formatPrice(stats.refundedAmount)}
           </p>
-        </div>
+        </button>
       </div>
 
       {/* Filters */}

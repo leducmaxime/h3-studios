@@ -981,13 +981,15 @@ export async function getPayments(
 ): Promise<PaginatedResult<AdminPaymentRow>> {
   const conditions: string[] = [];
   const params: unknown[] = [];
+  const statusConditions: string[] = [];
+  const statusParams: unknown[] = [];
 
   if (filters.status) {
     if (filters.status === "refunded") {
-      conditions.push("status IN ('refunded', 'partial-refund')");
+      statusConditions.push("status IN ('refunded', 'partial-refund')");
     } else {
-      conditions.push("status = ?");
-      params.push(filters.status);
+      statusConditions.push("status = ?");
+      statusParams.push(filters.status);
     }
   }
 
@@ -1022,7 +1024,10 @@ export async function getPayments(
     params.push(filters.dateTo);
   }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const listConditions = [...statusConditions, ...conditions];
+  const listParams = [...statusParams, ...params];
+  const where = listConditions.length > 0 ? `WHERE ${listConditions.join(" AND ")}` : "";
+  const statsWhere = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const sortBy = filters.sortBy || "created_at";
   const sortOrder = filters.sortOrder || "desc";
@@ -1034,7 +1039,7 @@ export async function getPayments(
     `${buildPaymentsCTE()}
       SELECT COUNT(*) as total FROM payments_enriched ${where}
     `,
-  ).bind(...params).first<{ total: number }>();
+  ).bind(...listParams).first<{ total: number }>();
   const total = countResult?.total ?? 0;
 
   const statsResult = await db.prepare(
@@ -1046,7 +1051,7 @@ export async function getPayments(
         COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paidAmount,
         COUNT(CASE WHEN COALESCE(refunded_amount, 0) > 0 THEN 1 END) as refundedCount,
         COALESCE(SUM(COALESCE(refunded_amount, 0)), 0) as refundedAmount
-      FROM payments_enriched ${where}
+      FROM payments_enriched ${statsWhere}
     `,
   ).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number; refundedCount: number; refundedAmount: number }>();
 
@@ -1057,7 +1062,7 @@ export async function getPayments(
       ORDER BY ${safeSortBy} ${safeSortOrder}, created_at DESC
       LIMIT ? OFFSET ?
     `,
-  ).bind(...params, limit, offset).all<AdminPaymentRow>();
+  ).bind(...listParams, limit, offset).all<AdminPaymentRow>();
 
   return {
     data: result.results,
