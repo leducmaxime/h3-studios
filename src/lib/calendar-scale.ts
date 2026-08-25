@@ -19,6 +19,11 @@ export interface HourScale {
   totalHeight: number;
 }
 
+export interface CalendarLane {
+  lane: number;
+  laneCount: number;
+}
+
 export interface HourBand {
   startHour: number;
   endHour: number;
@@ -47,10 +52,11 @@ export function isAnyStudioOpenDuringHour(date: Date, hour: number): boolean {
 export function buildHourScale(
   dates: Date[],
   openHeight: number = CAL_OPEN_HOUR_H,
-  closedHeight: number = CAL_CLOSED_HOUR_H,
+  closedHeight: number = 0,
+  forcedVisibleHours: number[] = [],
 ): HourScale {
   const open = Array.from({ length: 24 }, (_, hour) =>
-    dates.some((date) => isAnyStudioOpenDuringHour(date, hour)),
+    dates.some((date) => isAnyStudioOpenDuringHour(date, hour)) || forcedVisibleHours.includes(hour),
   );
   const heights = open.map((isOpen) => (isOpen ? openHeight : closedHeight));
   const tops: number[] = [];
@@ -62,6 +68,38 @@ export function buildHourScale(
   return { open, heights, tops, totalHeight: y };
 }
 
+/** Assign display lanes to overlapping rectangles without changing booking rules. */
+export function assignOverlapLanes(rects: MinuteRect[]): CalendarLane[] {
+  const result = rects.map(() => ({ lane: 0, laneCount: 1 }));
+  const order = rects
+    .map((_, index) => index)
+    .filter((index) => rects[index].height > 0)
+    .sort((a, b) => rects[a].top - rects[b].top);
+  let active: Array<{ index: number; bottom: number; lane: number }> = [];
+  let component: number[] = [];
+  const components: number[][] = [];
+  for (const index of order) {
+    const top = rects[index].top;
+    active = active.filter((item) => item.bottom > top);
+    if (active.length === 0 && component.length) {
+      components.push(component);
+      component = [];
+    }
+    const used = new Set(active.map((item) => item.lane));
+    let lane = 0;
+    while (used.has(lane)) lane += 1;
+    active.push({ index, bottom: top + rects[index].height, lane });
+    result[index].lane = lane;
+    component.push(index);
+  }
+  if (component.length) components.push(component);
+  for (const group of components) {
+    const laneCount = Math.max(...group.map((index) => result[index].lane)) + 1;
+    for (const index of group) result[index].laneCount = laneCount;
+  }
+  return result;
+}
+
 export function hourBands(scale: HourScale): HourBand[] {
   const bands: HourBand[] = [];
   let hour = 0;
@@ -71,13 +109,16 @@ export function hourBands(scale: HourScale): HourBand[] {
     if (!open) {
       while (end < 24 && !scale.open[end]) end += 1;
     }
-    bands.push({
-      startHour: hour,
-      endHour: end,
-      open,
-      top: scale.tops[hour],
-      height: (end < 24 ? scale.tops[end] : scale.totalHeight) - scale.tops[hour],
-    });
+    const height = (end < 24 ? scale.tops[end] : scale.totalHeight) - scale.tops[hour];
+    if (height > 0) {
+      bands.push({
+        startHour: hour,
+        endHour: end,
+        open,
+        top: scale.tops[hour],
+        height,
+      });
+    }
     hour = end;
   }
   return bands;

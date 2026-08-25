@@ -44,7 +44,7 @@ import {
 import { toast } from "sonner";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
-import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, parseBookingEquipmentLines, type StudioId, type GroupType } from "@/lib/booking";
+import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, parseBookingEquipmentLines, setOpeningHours, type StudioId, type GroupType } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, isKeepBalanceDue } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
@@ -56,8 +56,10 @@ import {
   closedBandLabel,
   hourBands,
   isAnyStudioOpenDuringHour,
+  isStudioOpenDuringHour,
   layoutScaledBlockOnDate,
   minutesToY,
+  assignOverlapLanes,
 } from "@/lib/calendar-scale";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -148,6 +150,26 @@ const VISIBLE_HOURS = [
 function rectOccupiesHour(rect: { top: number; height: number }, hourIdx: number): boolean {
   const hourTop = hourIdx * 60;
   return rect.top < hourTop + 60 && rect.top + rect.height > hourTop;
+}
+
+function overnightHoursForDates(
+  dates: Date[],
+  items: Array<{ date: string; start_time: string; end_time: string }>,
+): number[] {
+  const result = new Set<number>();
+  for (const date of dates) {
+    const previous = new Date(date);
+    previous.setDate(previous.getDate() - 1);
+    const previousStr = toDateStr(previous);
+    for (const item of items) {
+      if (item.date !== previousStr) continue;
+      const end = bookingEndMinutes(item.start_time, item.end_time);
+      if (end > 24 * 60) {
+        for (let hour = 0; hour < Math.ceil((end - 24 * 60) / 60); hour += 1) result.add(hour);
+      }
+    }
+  }
+  return [...result];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -277,6 +299,23 @@ export function AdminCalendar() {
 
   // Detect mobile viewport
   const [isMobile, setIsMobile] = useState(false);
+  const [, setOpeningHoursVersion] = useState(0);
+
+  // Opening hours are edited in admin. Load the same map used by the public
+  // picker so the calendar never silently falls back to stale defaults.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pricing")
+      .then((res) => res.json() as Promise<{ success?: boolean; data?: { openingHours?: Record<string, Record<number, { open: string; close: string }>> } }>)
+      .then((json) => {
+        if (cancelled) return;
+        if (json.success && json.data?.openingHours) setOpeningHours(json.data.openingHours);
+        else setOpeningHours(STUDIO_HOURS);
+        setOpeningHoursVersion((version) => version + 1);
+      })
+      .catch(() => { if (!cancelled) { setOpeningHours(STUDIO_HOURS); setOpeningHoursVersion((version) => version + 1); } });
+    return () => { cancelled = true; };
+  }, []);
 
   const [nowTime, setNowTime] = useState<string>(() => {
     const now = new Date();
@@ -651,12 +690,6 @@ export function AdminCalendar() {
     },
   };
 
-  const CONSULTATION_COLORS = {
-    bg: "bg-emerald-500/15",
-    text: "text-emerald-400",
-    border: "border-emerald-500/30",
-  };
-
   function getPaymentStatusColor(booking: CalendarBooking): { bg: string; text: string; border: string } {
     const isNoShow = booking.status === "no-show";
     const border = isNoShow ? "border-red-500/70" : booking.payment_status === "paid" ? "border-emerald-500/30" : "border-orange-500/30";
@@ -684,7 +717,7 @@ export function AdminCalendar() {
       border: "border-zinc-700/70",
     };
 
-    const scale = buildHourScale(weekDates);
+    const scale = buildHourScale(weekDates, undefined, undefined, overnightHoursForDates(weekDates, [...bookings, ...blockedSlots]));
     const bands = hourBands(scale);
 
     return (
@@ -777,6 +810,7 @@ export function AdminCalendar() {
                       const leftPos = studioId === "la-scene" ? "0" : "50%";
                       const width = "50%";
                       return VISIBLE_HOURS.map((hour, hourIdx) => {
+                        if (scale.heights[hourIdx] <= 0) return null;
                         const hasBooking = bookings.some((b) => {
                           if (b.studio_id !== studioId || b.status === "cancelled") return false;
                           const rect = layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time);
@@ -787,7 +821,7 @@ export function AdminCalendar() {
                           const rect = layoutBookingBlockOnDate(s.date, dateStr, s.start_time, s.end_time);
                           return rect ? rectOccupiesHour(rect, hourIdx) : false;
                         });
-                        if (hasBooking || hasBlocked) return null;
+                        if (hasBooking || hasBlocked || !isStudioOpenDuringHour(studioId, date, hourIdx)) return null;
                         return (
                           <a
                             key={`empty-${dateStr}-${studioId}-${hour}`}
@@ -815,16 +849,23 @@ export function AdminCalendar() {
                         (b) =>
                           b.studio_id === studioId &&
                           b.status !== "cancelled" &&
-                          b.group_type === "group" &&
                           layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
                       );
 
-                      const leftPos = studioId === "la-scene" ? "4px" : "50%";
-                      const width = "calc(50% - 8px)";
+                      const laneRects = [...studioBlocked, ...studioBookings].map((item) =>
+                        layoutScaledBlockOnDate(item.date, dateStr, item.start_time, item.end_time, scale) ?? { top: 0, height: 0 },
+                      );
+                      const lanes = assignOverlapLanes(laneRects);
+                      const blockLaneStyle = (index: number) => {
+                        const lane = lanes[index];
+                        const base = studioId === "la-scene" ? 0 : 50;
+                        const count = lane?.laneCount ?? 1;
+                        return { left: `calc(${base + (lane?.lane ?? 0) * (50 / count)}% + 4px)`, width: `calc(${50 / count}% - 8px)` };
+                      };
 
                       return (
                         <div key={`${dateStr}-${studioId}`} className="contents">
-                          {studioBlocked.map((slot) => {
+                          {studioBlocked.map((slot, slotIndex) => {
                             const rect = layoutScaledBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time, scale);
                             if (!rect) return null;
                             const { top, height } = rect;
@@ -837,8 +878,7 @@ export function AdminCalendar() {
                                 style={{
                                   top: `${top}px`,
                                   height: `${Math.max(height, 24)}px`,
-                                  left: leftPos,
-                                  width,
+                                  ...blockLaneStyle(slotIndex),
                                   zIndex: 1,
                                   backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 6px, rgba(255,255,255,0.0) 6px, rgba(255,255,255,0.0) 12px)",
                                 }}
@@ -851,7 +891,7 @@ export function AdminCalendar() {
                             );
                           })}
 
-                          {studioBookings.map((booking) => {
+                          {studioBookings.map((booking, bookingIndex) => {
                             const rect = layoutScaledBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time, scale);
                             if (!rect) return null;
                             const { top, height } = rect;
@@ -868,8 +908,7 @@ export function AdminCalendar() {
                                 style={{
                                   top: `${top}px`,
                                   height: `${Math.max(height, 24)}px`,
-                                  left: leftPos,
-                                  width,
+                                  ...blockLaneStyle(studioBlocked.length + bookingIndex),
                                 }}
                               >
                                 <p className="truncate text-[11px] font-medium leading-tight">
@@ -887,48 +926,6 @@ export function AdminCalendar() {
                         </div>
                       );
                     })}
-
-                    {(() => {
-                      const consultationBookings = bookings.filter(
-                        (b) =>
-                          (b.group_type === "solo" || b.group_type === "duo") &&
-                          b.status !== "cancelled" &&
-                          layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
-                      );
-
-                      return consultationBookings.map((booking) => {
-                        const rect = layoutScaledBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time, scale);
-                        if (!rect) return null;
-                        const { top, height } = rect;
-
-                        const studioId = booking.studio_id as StudioId;
-                        const leftPos = studioId === "la-scene" ? "4px" : studioId === "le-podium" ? "50%" : "4px";
-                        const width = studioId === "la-scene" || studioId === "le-podium" ? "calc(50% - 8px)" : "calc(100% - 8px)";
-
-                        const consultColors = booking.status === "no-show" ? getPaymentStatusColor(booking) : CONSULTATION_COLORS;
-                        return (
-                          <button
-                            key={booking.id}
-                            type="button"
-                            onClick={() => setSelectedBooking(booking)}
-                            onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking, getEquipmentName), x: e.clientX, y: e.clientY })}
-                            onMouseLeave={() => setTooltip(null)}
-                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
-                            style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, left: leftPos, width }}
-                          >
-                             <p className="truncate text-[11px] font-medium leading-tight">
-                               {booking.start_time} · {groupTypeLabel(booking.group_type)}
-                             </p>
-                              <p className="truncate text-[10px] leading-tight opacity-90">
-                                {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                              </p>
-                              {hasOptions(booking.equipment) && (
-                                <span className="inline-block rounded bg-primary/20 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary">Options</span>
-                              )}
-                            </button>
-                          );
-                        });
-                      })()}
 
                     {/* Current time indicator */}
                     {isToday && (() => {
@@ -995,7 +992,7 @@ export function AdminCalendar() {
       border: "border-zinc-700/70",
     };
 
-    const scale = buildHourScale([currentDate]);
+    const scale = buildHourScale([currentDate], undefined, undefined, overnightHoursForDates([currentDate], [...bookings, ...blockedSlots]));
     const bands = hourBands(scale);
 
     return (
@@ -1009,8 +1006,23 @@ export function AdminCalendar() {
             {isToday && <span className="text-xs text-primary/70">Aujourd&apos;hui</span>}
           </div>
 
-          {/* Studios side by side */}
-          <div className="grid grid-cols-2 divide-x divide-zinc-800">
+          <div className="grid grid-cols-[52px_minmax(0,1fr)_minmax(0,1fr)]">
+            <div>
+              <div className="h-14 border-b border-zinc-800" />
+              {bands.map((band) => (
+                <div
+                  key={band.startHour}
+                  className={`border-b border-zinc-800/50 pr-2 pt-0.5 text-right ${
+                    band.open ? "text-xs text-zinc-500" : "bg-zinc-950/80 text-[10px] leading-tight text-zinc-600"
+                  }`}
+                  style={{ height: band.height }}
+                >
+                  {band.open
+                    ? `${String(band.startHour).padStart(2, "0")}:00`
+                    : closedBandLabel(band.startHour, band.endHour)}
+                </div>
+              ))}
+            </div>
             {studios.map((studioId) => {
               const studio = STUDIOS[studioId];
               const studioBlocked = expandedBlocked(studioId);
@@ -1018,37 +1030,37 @@ export function AdminCalendar() {
                 (b) =>
                   b.studio_id === studioId &&
                   b.status !== "cancelled" &&
-                  b.group_type === "group" &&
                   layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
               );
               const studioColors = STUDIO_COLORS[studioId];
+              const laneRects = [...studioBlocked, ...studioBookings].map((item) =>
+                layoutScaledBlockOnDate(item.date, dateStr, item.start_time, item.end_time, scale) ?? { top: 0, height: 0 },
+              );
+              const lanes = assignOverlapLanes(laneRects);
+              const blockLaneStyle = (index: number) => {
+                const lane = lanes[index];
+                const count = lane?.laneCount ?? 1;
+                return { left: `calc(${(lane?.lane ?? 0) * (100 / count)}% + 4px)`, width: `calc(${100 / count}% - 8px)` };
+              };
 
               return (
-                <div key={studioId} className="relative">
-                  {/* Studio header */}
-                  <div className={`border-b border-zinc-800 p-3 text-center ${studioColors.bg}`}>
-                    <p className={`font-medium ${studioColors.text}`}>{studio.name}</p>
-                    <p className="text-xs text-zinc-500">{studio.size}</p>
+                <div key={studioId} className="relative border-l border-zinc-800">
+                  <div className={`flex h-14 flex-col justify-center border-b border-zinc-800 px-2 text-center ${studioColors.bg}`}>
+                    <p className={`truncate text-sm font-medium ${studioColors.text}`}>{studio.name}</p>
+                    <p className="truncate text-[11px] text-zinc-500">{studio.size}</p>
                   </div>
 
-                  {/* Time grid */}
                   <div className="relative" style={{ height: scale.totalHeight }}>
                     {bands.map((band) => (
                       <div
                         key={band.startHour}
-                        className={`border-b border-zinc-800/50 px-3 pt-0.5 ${
-                          band.open ? "text-xs text-zinc-600" : "bg-zinc-950/50 text-[10px] leading-tight text-zinc-600"
-                        }`}
+                        className={`border-b border-zinc-800/50 ${band.open ? "" : "bg-zinc-950/50"}`}
                         style={{ height: band.height }}
-                      >
-                        {band.open
-                          ? `${String(band.startHour).padStart(2, "0")}:00`
-                          : closedBandLabel(band.startHour, band.endHour)}
-                      </div>
+                      />
                     ))}
 
-                    {/* Clickable empty slots */}
                     {VISIBLE_HOURS.map((hour, hourIdx) => {
+                      if (scale.heights[hourIdx] <= 0) return null;
                       const hasBooking = bookings.some((b) => {
                         if (b.studio_id !== studioId || b.status === "cancelled") return false;
                         const rect = layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time);
@@ -1059,14 +1071,12 @@ export function AdminCalendar() {
                         const rect = layoutBookingBlockOnDate(s.date, dateStr, s.start_time, s.end_time);
                         return rect ? rectOccupiesHour(rect, hourIdx) : false;
                       });
-                      if (hasBooking || hasBlocked) return null;
+                      if (hasBooking || hasBlocked || !isStudioOpenDuringHour(studioId, currentDate, hourIdx)) return null;
                       return (
                         <a
                           key={`empty-${dateStr}-${studioId}-${hour}`}
                           href={`/admin/bookings/new?date=${dateStr}&studio=${studioId}&startTime=${hour}`}
-                          className={`absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100 ${
-                            isAnyStudioOpenDuringHour(currentDate, hourIdx) ? "hover:bg-primary/5" : "hover:bg-zinc-800/40"
-                          }`}
+                          className="absolute z-0 flex items-center justify-center opacity-0 transition-opacity hover:bg-primary/5 hover:opacity-100"
                           style={{
                             top: `${scale.tops[hourIdx]}px`,
                             height: `${scale.heights[hourIdx]}px`,
@@ -1080,8 +1090,7 @@ export function AdminCalendar() {
                       );
                     })}
 
-                    {/* Blocked slots */}
-                    {studioBlocked.map((slot) => {
+                    {studioBlocked.map((slot, slotIndex) => {
                       const rect = layoutScaledBlockOnDate(slot.date, dateStr, slot.start_time, slot.end_time, scale);
                       if (!rect) return null;
                       const { top, height } = rect;
@@ -1090,10 +1099,11 @@ export function AdminCalendar() {
                         <div
                           key={slot.id}
                           title={`Bloqué: ${slot.reason}`}
-                          className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 ${BLOCKED_COLORS.bg} ${BLOCKED_COLORS.border} ${BLOCKED_COLORS.text}`}
+                          className={`absolute overflow-hidden rounded border px-2 py-1 ${BLOCKED_COLORS.bg} ${BLOCKED_COLORS.border} ${BLOCKED_COLORS.text}`}
                           style={{
                             top: `${top}px`,
                             height: `${Math.max(height, 24)}px`,
+                            ...blockLaneStyle(slotIndex),
                             zIndex: 1,
                             backgroundImage: "repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 6px, rgba(255,255,255,0.0) 6px, rgba(255,255,255,0.0) 12px)",
                           }}
@@ -1106,8 +1116,7 @@ export function AdminCalendar() {
                       );
                     })}
 
-                    {/* Bookings */}
-                    {studioBookings.map((booking) => {
+                    {studioBookings.map((booking, bookingIndex) => {
                       const rect = layoutScaledBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time, scale);
                       if (!rect) return null;
                       const { top, height } = rect;
@@ -1120,10 +1129,11 @@ export function AdminCalendar() {
                           onClick={() => setSelectedBooking(booking)}
                           onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking, getEquipmentName), x: e.clientX, y: e.clientY })}
                           onMouseLeave={() => setTooltip(null)}
-                          className={`absolute left-2 right-2 overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
+                          className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${paymentColors.bg} ${paymentColors.border} ${paymentColors.text}`}
                           style={{
                             top: `${top}px`,
-                            height: `${Math.max(height, 28)}px`,
+                            height: `${Math.max(height, 44)}px`,
+                            ...blockLaneStyle(studioBlocked.length + bookingIndex),
                           }}
                         >
                           <p className="truncate text-[12px] font-medium leading-tight">
@@ -1133,58 +1143,12 @@ export function AdminCalendar() {
                             {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
                           </p>
                           {hasOptions(booking.equipment) && (
-                              <span className="inline-block rounded bg-primary/20 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary">Options</span>
-                                )}
+                            <span className="inline-block rounded bg-primary/20 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary">Options</span>
+                          )}
                         </button>
                       );
                     })}
 
-                    {/* Consultations (solo/duo) */}
-                    {bookings
-                      .filter(
-                        (b) =>
-                          b.studio_id === studioId &&
-                          (b.group_type === "solo" || b.group_type === "duo") &&
-                          b.status !== "cancelled" &&
-                          layoutBookingBlockOnDate(b.date, dateStr, b.start_time, b.end_time),
-                      )
-                      .map((booking) => {
-                        const rect = layoutScaledBlockOnDate(booking.date, dateStr, booking.start_time, booking.end_time, scale);
-                        if (!rect) return null;
-                        const { top, height } = rect;
-                        const leftPos = "4px";
-                        const width = "calc(100% - 8px)";
-
-                        const consultColors = booking.status === "no-show" ? getPaymentStatusColor(booking) : CONSULTATION_COLORS;
-                        return (
-                          <button
-                            key={booking.id}
-                            type="button"
-                            onClick={() => setSelectedBooking(booking)}
-                            onMouseEnter={(e) => setTooltip({ lines: getBookingTooltipLines(booking, getEquipmentName), x: e.clientX, y: e.clientY })}
-                            onMouseLeave={() => setTooltip(null)}
-                            className={`absolute overflow-hidden rounded border px-2 py-1 text-left transition-all hover:scale-[1.02] hover:shadow-lg z-10 ${consultColors.bg} ${consultColors.border} ${consultColors.text}`}
-                            style={{
-                              top: `${top}px`,
-                              height: `${Math.max(height, 28)}px`,
-                              left: leftPos,
-                              width,
-                            }}
-                          >
-                            <p className="truncate text-[12px] font-medium leading-tight">
-                              {booking.start_time} · {groupTypeLabel(booking.group_type)}
-                            </p>
-                            <p className="truncate text-[11px] leading-tight opacity-90">
-                              {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
-                            </p>
-                             {hasOptions(booking.equipment) && (
-                               <span className="inline-block rounded bg-primary/20 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary">Options</span>
-                             )}
-                           </button>
-                         );
-                       })}
-
-                    {/* Current time indicator */}
                     {isToday && (() => {
                       const [h, m] = nowTime.split(":").map(Number);
                       const nowMinutes = h * 60 + m;
@@ -1729,7 +1693,7 @@ export function AdminCalendar() {
         className="rounded-xl border border-zinc-800 bg-zinc-900"
       >
         {view === "day" && renderDayView()}
-        {view === "week" && renderWeekView()}
+        {view === "week" && (isMobile ? renderDayView() : renderWeekView())}
         {view === "month" && renderMonthView()}
       </div>
 
