@@ -237,21 +237,26 @@ describe("buildBookingConfirmationEmailPayload / canResendBookingConfirmation", 
     expect(payload.totalPrice).toBe(40);
   });
 
-  it("blocks cancelled bookings and missing emails", () => {
-    expect(canResendBookingConfirmation(makeBooking({ status: "cancelled" }), USER.email)).toEqual({
+  it("blocks cancelled, past, or email-less bookings", () => {
+    expect(canResendBookingConfirmation(makeBooking({ status: "cancelled", date: "2026-08-27" }), USER.email, "2026-08-22")).toEqual({
       ok: false,
       error: "Impossible de renvoyer un email de confirmation pour une réservation annulée",
     });
-    expect(canResendBookingConfirmation(makeBooking({ status: "confirmed" }), "  ")).toEqual({
+    expect(canResendBookingConfirmation(makeBooking({ status: "confirmed", date: "2026-08-27" }), "  ", "2026-08-22")).toEqual({
       ok: false,
       error: "Le client n'a pas d'adresse e-mail",
     });
-    expect(canResendBookingConfirmation(null, USER.email)).toEqual({
+    expect(canResendBookingConfirmation(null, USER.email, "2026-08-22")).toEqual({
       ok: false,
       error: "Réservation introuvable",
     });
-    expect(canResendBookingConfirmation(makeBooking({ status: "completed" }), USER.email)).toEqual({ ok: true });
-    expect(canResendBookingConfirmation(makeBooking({ status: "no-show" }), USER.email)).toEqual({ ok: true });
+    expect(canResendBookingConfirmation(makeBooking({ date: "2026-08-21" }), USER.email, "2026-08-22")).toEqual({
+      ok: false,
+      error: "Impossible de renvoyer un email de confirmation pour une réservation passée",
+    });
+    expect(canResendBookingConfirmation(makeBooking({ status: "completed", date: "2026-08-22" }), USER.email, "2026-08-22")).toEqual({ ok: true });
+    expect(canResendBookingConfirmation(makeBooking({ status: "no-show", date: "2026-08-22" }), USER.email, "2026-08-22")).toEqual({ ok: true });
+    expect(canResendBookingConfirmation(makeBooking({ status: "confirmed", date: "2026-08-22" }), USER.email, "2026-08-22")).toEqual({ ok: true });
   });
 
   it("allows upcoming reminders and blocks cancelled, past, or email-less bookings", () => {

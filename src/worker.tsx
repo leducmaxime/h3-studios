@@ -2763,7 +2763,7 @@ const app = defineApp([
       if (!booking) return jsonError("Réservation introuvable", 404);
 
       const client = await getUserById(env.DB, booking.user_id);
-      const eligibility = canResendBookingConfirmation(booking, client?.email);
+      const eligibility = canResendBookingConfirmation(booking, client?.email, getParisDateISO());
       if (!eligibility.ok) return jsonError(eligibility.error, 400);
 
       if (!env.RESEND_API_KEY) {

@@ -1216,13 +1216,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 variant="outline"
                 className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
                 onClick={handleResendConfirmation}
-                disabled={resendingEmail || isCancelled || !user?.email}
+                disabled={resendingEmail || isCancelled || sessionEnded || !user?.email}
                 title={
                   isCancelled
                     ? "Impossible de renvoyer un email de confirmation pour une réservation annulée"
-                    : !user?.email
-                      ? "Le client n'a pas d'adresse e-mail"
-                      : undefined
+                    : sessionEnded
+                      ? "Impossible de renvoyer un email de confirmation pour une réservation passée"
+                      : !user?.email
+                        ? "Le client n'a pas d'adresse e-mail"
+                        : undefined
                 }
               >
                 {resendingEmail ? <Loader2 className="mr-3 h-4 w-4 animate-spin text-zinc-400" /> : <Mail className="mr-3 h-4 w-4 text-zinc-400" />}

@@ -172,8 +172,9 @@ export function buildBookingConfirmationEmailPayload(
 }
 
 export function canResendBookingConfirmation(
-  booking: Pick<DbBooking, "status"> | null | undefined,
+  booking: Pick<DbBooking, "status" | "date"> | null | undefined,
   userEmail: string | null | undefined,
+  todayISO: string,
 ): { ok: true } | { ok: false; error: string } {
   if (!booking) return { ok: false, error: "Réservation introuvable" };
   if (booking.status === "cancelled") {
@@ -181,6 +182,9 @@ export function canResendBookingConfirmation(
   }
   if (!userEmail?.trim()) {
     return { ok: false, error: "Le client n'a pas d'adresse e-mail" };
+  }
+  if (daysUntilDate(todayISO, booking.date) < 0) {
+    return { ok: false, error: "Impossible de renvoyer un email de confirmation pour une réservation passée" };
   }
   return { ok: true };
 }
