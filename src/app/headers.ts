@@ -28,7 +28,18 @@ export const setCommonHeaders =
     // Only set default Cache-Control if not already set by an endpoint
     if (!response.headers.has("Cache-Control")) {
       const isPublicPage = !pathname.startsWith("/admin") && !pathname.startsWith("/api");
-      if (isPublicPage) {
+      // Pages dont le contenu est rendu depuis la configuration admin : une
+      // modification de tarif doit se voir vite. On garde un cache d'edge pour
+      // la perf, mais sans la fenêtre stale-while-revalidate de 24h qui
+      // pourrait servir un prix périmé toute une journée (cf. /api/pricing,
+      // volontairement en no-store pour la même raison).
+      const isAdminDrivenPage = pathname === "/tarifs";
+      if (isAdminDrivenPage) {
+        response.headers.set(
+          "Cache-Control",
+          "public, max-age=0, s-maxage=60, stale-while-revalidate=60",
+        );
+      } else if (isPublicPage) {
         // Edge cache: 5 minutes, browser: validate every time, serve stale while revalidating
         response.headers.set(
           "Cache-Control",

@@ -151,9 +151,10 @@ import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorPropos
 import { refundCardPayment, refundPayments } from "@/lib/refunds";
 import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, STUDIOS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
 import { buildPricingGridAsOf, listScheduledEffectiveDates } from "@/lib/pricing";
+import type { TarifsData } from "@/lib/tarifs";
 import {
   getParisDateISO,
   getParisNow,
@@ -216,6 +217,44 @@ function buildOpeningHoursMap(dbHours: DbOpeningHours[]): Record<string, Record<
     map[h.studio_id][h.day_of_week] = { open: h.open_time, close: h.close_time };
   }
   return map;
+}
+
+async function getTarifsData(db: D1Database): Promise<TarifsData> {
+  const rows = await getPricing(db);
+  const grid = buildPricingGridAsOf(rows, getParisDateISO());
+  const peakStartHour = parseInt(await getSetting(db, "peak_start_hour") || "18", 10);
+  const { results } = await db
+    .prepare("SELECT equipment_id, name, max_per_session, stock_total, pricing_type, session_pricing, price_per_hour FROM equipment ORDER BY name")
+    .all<{
+      equipment_id: string;
+      name: string;
+      max_per_session: number;
+      stock_total: number;
+      pricing_type: "session" | "hourly";
+      session_pricing: string | null;
+      price_per_hour: number;
+    }>();
+
+  const groupTypes = ["solo", "duo", "group"] as const;
+  const studios = (["la-scene", "le-podium"] as const).map((studioId) => {
+    const rates: TarifsData["studios"][number]["rates"] = {};
+    for (const groupType of groupTypes) {
+      const rate = grid[studioId]?.[groupType];
+      if (rate) rates[groupType] = { offPeak: rate.offPeak, peak: rate.peak };
+    }
+    return { studioId, studioName: STUDIOS[studioId].name, rates };
+  });
+
+  const equipment = results.map((eq) => ({
+    id: eq.equipment_id,
+    name: eq.name,
+    pricingType: eq.pricing_type,
+    sessionPricing: eq.session_pricing ? JSON.parse(eq.session_pricing) : null,
+    pricePerHour: eq.price_per_hour,
+    maxPerSession: eq.max_per_session,
+  }));
+
+  return { studios, peakStartHour, equipment };
 }
 
 function jsonResponse(data: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
@@ -513,7 +552,7 @@ const app = defineApp([
 
   render(({ children, rw }) => <DocumentWithPath path="/tarifs" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
-      route("/tarifs", Tarifs),
+      route("/tarifs", async () => <Tarifs data={await getTarifsData(env.DB)} />),
     ]),
   ]),
 

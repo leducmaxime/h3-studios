@@ -59,11 +59,10 @@ export const pageSEO: Record<string, PageSEO> = {
   "/tarifs": {
     title: "Tarifs - Studios dès 6€ TTC/h | H3 STUDIOS Sucy-en-Brie",
     description:
-      "Tarifs H3 Studios : Solo/Prof particulier 6€ TTC/h, Duo 12€ TTC/h, Groupe dès 15€ TTC/h. Enregistrement 50€ TTC/h. Studios de répétition à Sucy-en-Brie, à 2 min du RER A.",
+      "Tarifs H3 Studios : Solo/Prof particulier 6€ TTC/h, Duo 12€ TTC/h, Groupe dès 15€ TTC/h. Studios de répétition à Sucy-en-Brie, à 2 min du RER A.",
     keywords: [
       "tarif studio répétition",
       "prix location studio",
-      "enregistrement tarif",
       "studio pas cher",
       "tarif groupe musique",
       "prix répétition",
