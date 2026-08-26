@@ -191,9 +191,9 @@ export function Reservation({ step }: ReservationProps) {
     [state.cart, recomputeCartItemPrice],
   );
 
-  // Show cart banner when adding a new booking and cart has items (only on booking steps groupe/creneau;
+  // Show cart banner when adding a new booking and cart has items (only on booking steps participants/creneau;
   // options shows its own in-column cart chip, and goToCart would wipe the in-progress selection there)
-  const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "groupe" || state.step === "creneau");
+  const showCartBanner = state.isAddingNew && state.cart.length > 0 && (state.step === "participants" || state.step === "creneau");
 
   // Selection pills: bright primary on creneau (where the selection is being
   // made), muted context chips on options (where they only remind the user
@@ -287,8 +287,8 @@ export function Reservation({ step }: ReservationProps) {
                 </div>
               </div>
 
-            {/* Step groupe: Group type */}
-            {state.step === "groupe" && (
+            {/* Step participants: Group type */}
+            {state.step === "participants" && (
               <div className="flex flex-col gap-6">
                 <GroupTypeToggle
                   value={state.groupType}
@@ -637,7 +637,7 @@ export function Reservation({ step }: ReservationProps) {
         </div>
       )}
 
-      {state.step !== "groupe" && state.step !== "termine" && (
+      {state.step !== "participants" && state.step !== "termine" && (
         <button
           onClick={resetBooking}
           className="mt-4 flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/15 hover:text-white"

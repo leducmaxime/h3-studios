@@ -63,7 +63,7 @@ describe("booking step guards", () => {
   });
 
   it("guards options by group then selection", () => {
-    expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: true, targetStep: "options" }).step).toBe("groupe");
+    expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: true, targetStep: "options" }).step).toBe("participants");
     expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: "solo", hasSlotSelection: false, targetStep: "options" }).step).toBe("creneau");
   });
 
@@ -72,10 +72,10 @@ describe("booking step guards", () => {
   });
 
   it("keeps the pre-existing guards intact", () => {
-    expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: false, targetStep: "creneau" }).step).toBe("groupe");
-    expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: "solo", hasSlotSelection: true, targetStep: "panier" }).step).toBe("groupe");
-    expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: "solo", hasSlotSelection: true, targetStep: "coordonnees" }).step).toBe("groupe");
-    expect(applyStepGuards({ cart: [{} as never], isAddingNew: false, groupType: "solo", hasSlotSelection: true, targetStep: "termine" }).step).toBe("groupe");
+    expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: false, targetStep: "creneau" }).step).toBe("participants");
+    expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: "solo", hasSlotSelection: true, targetStep: "panier" }).step).toBe("participants");
+    expect(applyStepGuards({ cart: [], isAddingNew: false, groupType: "solo", hasSlotSelection: true, targetStep: "coordonnees" }).step).toBe("participants");
+    expect(applyStepGuards({ cart: [{} as never], isAddingNew: false, groupType: "solo", hasSlotSelection: true, targetStep: "termine" }).step).toBe("participants");
   });
 
   it("backs from options without clearing the selection, then clears it on the second press", () => {
@@ -87,9 +87,9 @@ describe("booking step guards", () => {
     expect(second.equipment).toEqual([]);
   });
 
-  it("backs from creneau without a date to groupe and clears group", () => {
+  it("backs from creneau without a date to participants and clears group", () => {
     const result = applyGoBack({ ...base, step: "creneau", selectedDate: null, startTime: null, endTime: null, studioId: null });
-    expect(result.step).toBe("groupe");
+    expect(result.step).toBe("participants");
     expect(result.groupType).toBeNull();
   });
 
@@ -99,13 +99,13 @@ describe("booking step guards", () => {
     expect(applyGoBack({ ...base, step: "paiement" }).step).toBe("coordonnees");
   });
 
-  it("cancels add-another from groupe back to the cart", () => {
-    const result = applyGoBack({ ...base, step: "groupe", isAddingNew: true, cart: [{} as never] });
+  it("cancels add-another from participants back to the cart", () => {
+    const result = applyGoBack({ ...base, step: "participants", isAddingNew: true, cart: [{} as never] });
     expect(result).toMatchObject({ step: "panier", isAddingNew: false, groupType: null, equipment: [] });
   });
 
   it("converges every guard input to a fixed point", () => {
-    const steps = ["groupe", "creneau", "options", "panier", "coordonnees", "paiement", "termine"] as const;
+    const steps = ["participants", "creneau", "options", "panier", "coordonnees", "paiement", "termine"] as const;
     for (const targetStep of steps) {
       for (const cart of [[], [{} as never]]) {
         for (const isAddingNew of [false, true]) {

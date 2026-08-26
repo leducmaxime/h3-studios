@@ -254,7 +254,7 @@ export function calculatePromoDiscount(promo: PromoCode, total: number): number 
 }
 
 // Slug-based step model for the booking wizard
-export const BOOKING_STEPS = ["groupe","creneau","options","panier","coordonnees","paiement","termine"] as const;
+export const BOOKING_STEPS = ["participants","creneau","options","panier","coordonnees","paiement","termine"] as const;
 export type BookingStep = (typeof BOOKING_STEPS)[number];
 
 /** Compare steps by order in the canonical flow */

@@ -11,20 +11,20 @@ Slug-based step model with guard-based navigation, per-step URLs, and localStora
 ## STEP FLOW
 
 ```
-groupe → creneau → options → panier → coordonnees → paiement → termine
+participants → creneau → options → panier → coordonnees → paiement → termine
 ```
 
-Each slug corresponds to its own URL path (`/reservation/<slug>`). Guards prevent direct access to unreachable steps (e.g., deep-linking to `/reservation/panier` with an empty cart redirects to `groupe`).
+Each slug corresponds to its own URL path (`/reservation/<slug>`). Guards prevent direct access to unreachable steps (e.g., deep-linking to `/reservation/panier` with an empty cart redirects to `participants`).
 
 ### Guard Logic (`applyStepGuards` in `useBookingWithRouter.ts`)
 
 | Target Step | Guard Condition | Redirect To |
 |---|---|---|
-| `groupe` / `creneau` / `options` | Cart lock: `cart.length > 0 && !isAddingNew` | `panier` |
-| `creneau` | No `groupType` selected | `groupe` |
-| `options` | No group, then incomplete date/time/studio selection | `groupe`, then `creneau` |
-| `panier` / `coordonnees` / `paiement` | Empty cart | `groupe` |
-| `termine` | Always (terminal, direct → groupe) | `groupe` |
+| `participants` / `creneau` / `options` | Cart lock: `cart.length > 0 && !isAddingNew` | `panier` |
+| `creneau` | No `groupType` selected | `participants` |
+| `options` | No group, then incomplete date/time/studio selection | `participants`, then `creneau` |
+| `panier` / `coordonnees` / `paiement` | Empty cart | `participants` |
+| `termine` | Always (terminal, direct → participants) | `participants` |
 
 The cart lock prevents users from choosing a new group type or date while they have items in the cart. The lock is lifted when `isAddingNew` is true (user clicked "Ajouter une autre réservation").
 
@@ -33,7 +33,7 @@ The cart lock prevents users from choosing a new group type or date while they h
 ```
 booking/
 ├── useBookingWithRouter.ts   # Hook: URL sync, persistence, API fetching, guard logic
-├── GroupTypeToggle.tsx        # Step groupe: Solo/Duo/Group selection
+├── GroupTypeToggle.tsx        # Step participants: Solo/Duo/Group selection
 ├── WeekCalendar.tsx           # Step creneau: Date picker (week view with API-loaded availability)
 ├── TimeSlotPicker.tsx         # Step creneau: Time slot grid, 2 studios side-by-side (desktop), stacked (mobile)
 ├── BookingForm.tsx            # Step coordonnees: User info form + inline login + account creation
@@ -59,7 +59,7 @@ booking/
 
 ```typescript
 interface ExtendedBookingState {
-  step: BookingStep;                      // "groupe" | "creneau" | "options" | "panier" | "coordonnees" | "paiement" | "termine"
+  step: BookingStep;                      // "participants" | "creneau" | "options" | "panier" | "coordonnees" | "paiement" | "termine"
   selectedDate: Date | null;
   startTime / endTime: string | null;
   studioId: "la-scene" | "le-podium" | null;  // implicit from selected slot
@@ -136,9 +136,9 @@ interface ExtendedBookingState {
 
 - `canNavigateToStep` derives from `applyStepGuards(…).isRedirect === false`
 - paiement/termine are always excluded from clickability (user must proceed through flow)
-- `navigateToStep` applies guards then sets step; groupe-reset (solo→duo→group) only fires when guard allows the navigation
+- `navigateToStep` applies guards then sets step; participants-reset (solo→duo→group) only fires when guard allows the navigation
 - URL sync effect enforces guards reactively (except for termine which is terminal)
-- `options` backs to `creneau` while retaining date/time/studio and equipment. The next back clears the range; a creneau back without a date returns to groupe.
+- `options` backs to `creneau` while retaining date/time/studio and equipment. The next back clears the range; a creneau back without a date returns to participants.
 - Equipment survives date/range changes and is reconciled by the availability clamp; it is cleared only on group-type change and full step-reset. Options back does not clear it.
 
 ## STALE-FETCH GUARD

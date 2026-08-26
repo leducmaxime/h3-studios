@@ -559,6 +559,7 @@ const app = defineApp([
   render(({ children, rw }) => <DocumentWithPath path="/reservation" nonce={rw.nonce}>{children}</DocumentWithPath>, [
     layout(MainLayout, [
       route("/reservation", () => <Reservation />),
+      route("/reservation/groupe", () => new Response(null, { status: 301, headers: { Location: "/reservation/participants" } })),
       route("/reservation/:step", ({ params }) => <Reservation step={params.step} />),
     ]),
   ]),

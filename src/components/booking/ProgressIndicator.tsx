@@ -21,7 +21,7 @@ type StepDef = {
  *   Type → Créneaux → Options → Panier → Coordonnées → Paiement → Terminé
  */
 const STEP_DEFS: StepDef[] = [
-  { icon: Users, step: "groupe", label: "Type" },
+  { icon: Users, step: "participants", label: "Type" },
   { icon: Calendar, step: "creneau", label: "Créneaux" },
   { icon: Star, step: "options", label: "Options" },
   { icon: ShoppingCart, step: "panier", label: "Panier" },

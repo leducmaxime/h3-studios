@@ -153,14 +153,14 @@ export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile, 
 
 /**
  * Slug-based step flow:
- *   groupe → creneau → options → panier → coordonnees → paiement → termine
+ *   participants → creneau → options → panier → coordonnees → paiement → termine
  *
  * Guards:
- *   - Cart lock:   cart.length > 0 && !isAddingNew → groupe/creneau/options → panier
- *   - creneau:     requires groupType, else → groupe
+ *   - Cart lock:   cart.length > 0 && !isAddingNew → participants/creneau/options → panier
+ *   - creneau:     requires groupType, else → participants
  *   - options:     requires groupType and a complete slot selection
- *   - panier/coordonnees/paiement: require cart.length > 0, else → groupe
- *   - termine:     terminal (direct nav → groupe)
+ *   - panier/coordonnees/paiement: require cart.length > 0, else → participants
+ *   - termine:     terminal (direct nav → participants)
  */
 
 // ---------------------------------------------------------------------------
@@ -176,10 +176,10 @@ const LEGACY_ALIASES: Record<string, BookingStep> = {
 };
 
 function resolveStepFromUrl(urlStep: string | undefined): BookingStep {
-  if (!urlStep || urlStep === "reservation") return "groupe";
+  if (!urlStep || urlStep === "reservation") return "participants";
   if (LEGACY_ALIASES[urlStep]) return LEGACY_ALIASES[urlStep];
   if ((BOOKING_STEPS as readonly string[]).includes(urlStep)) return urlStep as BookingStep;
-  return "groupe"; // unknown → groupe
+  return "participants"; // unknown → participants
 }
 
 function navigateToUrl(step: BookingStep, replace = false) {
@@ -208,20 +208,20 @@ export function applyStepGuards(args: {
   targetStep: BookingStep;
 }): { step: BookingStep; isRedirect: boolean } {
   const { cart, isAddingNew, groupType, hasSlotSelection: selected, targetStep } = args;
-  if (cart.length > 0 && !isAddingNew && (targetStep === "groupe" || targetStep === "creneau" || targetStep === "options")) {
+  if (cart.length > 0 && !isAddingNew && (targetStep === "participants" || targetStep === "creneau" || targetStep === "options")) {
     return { step: "panier", isRedirect: true };
   }
   if (targetStep === "creneau" && !groupType) {
-    return { step: "groupe", isRedirect: true };
+    return { step: "participants", isRedirect: true };
   }
-  if (targetStep === "options" && !groupType) return { step: "groupe", isRedirect: true };
+  if (targetStep === "options" && !groupType) return { step: "participants", isRedirect: true };
   if (targetStep === "options" && !selected) return { step: "creneau", isRedirect: true };
   if ((targetStep === "panier" || targetStep === "coordonnees" || targetStep === "paiement") && cart.length === 0) {
-    return { step: "groupe", isRedirect: true };
+    return { step: "participants", isRedirect: true };
   }
-  // Termine: terminal — redirect to groupe
+  // Termine: terminal — redirect to participants
   if (targetStep === "termine") {
-    return { step: "groupe", isRedirect: true };
+    return { step: "participants", isRedirect: true };
   }
   return { step: targetStep, isRedirect: false };
 }
@@ -231,14 +231,14 @@ export function applyGoBack<T extends {
   studioId: StudioId | null; groupType: GroupType | null; equipment: EquipmentSelection[];
   cart: CompletedBooking[]; isAddingNew: boolean; bookingRef: string | null; paymentMethod: PaymentMethod | null;
 }>(s: T): T {
-  if (s.step === "groupe") {
+  if (s.step === "participants") {
     if (s.isAddingNew && s.cart.length > 0) return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null, groupType: null, bookingRef: null, equipment: [], step: "panier", isAddingNew: false };
     return s;
   }
   if (s.step === "options") return { ...s, step: "creneau" };
   if (s.step === "creneau") {
     if (s.selectedDate) return { ...s, selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
-    return { ...s, step: "groupe", groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
+    return { ...s, step: "participants", groupType: null, selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [] };
   }
   if (s.step === "coordonnees") return { ...s, step: "panier" };
   if (s.step === "panier") return s;
@@ -305,7 +305,7 @@ export function deserializeState(serialized: SerializedBookingState): ExtendedBo
   return {
     ...initialState,
     ...safe,
-    step: (BOOKING_STEPS as readonly string[]).includes(serialized.step) ? serialized.step : ("groupe" as BookingStep),
+    step: (BOOKING_STEPS as readonly string[]).includes(serialized.step) ? serialized.step : ("participants" as BookingStep),
     clientType: isClientType(serialized.clientType) ? serialized.clientType : null,
     ...(typeof (serialized as unknown as { userName?: unknown }).userName === "string" && !serialized.firstName && !serialized.lastName
       ? splitDisplayName((serialized as unknown as { userName: string }).userName) : {}),
@@ -353,7 +353,7 @@ function clearBookingState(): void {
 // initialState
 // ---------------------------------------------------------------------------
 const initialState: ExtendedBookingState = {
-  step: "groupe",
+  step: "participants",
   selectedDate: null,
   startTime: null,
   endTime: null,
@@ -425,7 +425,7 @@ export function useBookingWithRouter(urlStep?: string) {
   const [state, setState] = useState<ExtendedBookingState>({
     ...initialState,
     // Guard the URL-derived step even for the very first render (SSR included):
-    // a fresh visitor has no cart/groupType, so deep links land on groupe.
+    // a fresh visitor has no cart/groupType, so deep links land on participants.
     step: applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: false, targetStep: initialStep }).step,
   });
   const [isHydrated, setIsHydrated] = useState(false);
@@ -661,7 +661,7 @@ export function useBookingWithRouter(urlStep?: string) {
       }
     } else {
       // Fresh visit: apply guards to the URL-derived step (deep links to
-      // panier/coordonnees/paiement/termine redirect to groupe) and replace
+      // panier/coordonnees/paiement/termine redirect to participants) and replace
       // the URL so it never points at an unreachable step.
       const urlStepSlug = resolveStepFromUrl(urlStep);
       const { step: guardedStep, isRedirect } = applyStepGuards({ cart: [], isAddingNew: false, groupType: null, hasSlotSelection: false, targetStep: urlStepSlug });
@@ -686,11 +686,11 @@ export function useBookingWithRouter(urlStep?: string) {
       }
     }
 
-    // Base /reservation → redirect to /reservation/groupe
+    // Base /reservation → redirect to /reservation/participants
     if (typeof window !== "undefined") {
       const path = window.location.pathname;
       if (path === "/reservation" || path === "/reservation/") {
-        window.history.replaceState({}, "", "/reservation/groupe");
+        window.history.replaceState({}, "", "/reservation/participants");
       }
     }
 
@@ -762,7 +762,7 @@ export function useBookingWithRouter(urlStep?: string) {
       setState((s) => {
         // Step "termine" is terminal: back button should reset
         if (s.step === "termine") {
-          window.history.replaceState({}, "", "/reservation/groupe");
+          window.history.replaceState({}, "", "/reservation/participants");
           return { ...initialState };
         }
 
@@ -792,11 +792,11 @@ export function useBookingWithRouter(urlStep?: string) {
       // Apply guards
       const { step: guardedStep } = applyStepGuards({ cart: s.cart, isAddingNew: s.isAddingNew, groupType: s.groupType, hasSlotSelection: hasSlotSelection(s), targetStep });
 
-      // Preserve reset behavior for groupe when switching group type —
+      // Preserve reset behavior for participants when switching group type —
       // only apply when the guard allowed the navigation (no redirect).
-      if (targetStep === "groupe" && guardedStep === targetStep && (s.groupType === "solo" || s.groupType === "duo")) {
+      if (targetStep === "participants" && guardedStep === targetStep && (s.groupType === "solo" || s.groupType === "duo")) {
         return {
-          ...s, step: "groupe", groupType: null,
+          ...s, step: "participants", groupType: null,
           selectedDate: null, startTime: null, endTime: null, studioId: null, equipment: [],
         };
       }
@@ -977,7 +977,7 @@ export function useBookingWithRouter(urlStep?: string) {
       groupType: null,
       bookingRef: null,
       equipment: [],
-      step: "groupe",
+      step: "participants",
       isAddingNew: true,
     }));
   }, []);
