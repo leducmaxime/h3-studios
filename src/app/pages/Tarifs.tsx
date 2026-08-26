@@ -33,7 +33,7 @@ export function Tarifs() {
           <div className="flex w-full flex-col items-center gap-8 text-center">
             <h2 className="text-center font-blanka text-2xl">GRILLE TARIFAIRE</h2>
             <div className="flex w-full flex-col gap-4">
-              <Table className="w-full border-8 border-primary text-center">
+              <Table className="w-full border-2 border-primary text-center">
                 <TableHeader>
                   <TableRow className="border-primary">
                     <TableHead className="hidden lg:table-cell"></TableHead>
@@ -114,7 +114,7 @@ export function Tarifs() {
               ENREGISTREMENT ET LOCATIONS
             </h2>
             <div className="flex w-full flex-col gap-4">
-              <Table className="w-full border-8 border-primary text-center">
+              <Table className="w-full border-2 border-primary text-center">
                 <TableBody>
                   <TableRow>
                     <TableCell>
@@ -154,7 +154,7 @@ export function Tarifs() {
             <div className={`mt-8 flex flex-col items-center gap-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "200ms" }}>
               <a
                 href="/reservation"
-                className="rounded-lg bg-primary px-8 py-4 text-lg font-bold text-black transition-colors hover:bg-primary/90"
+                className="rounded-lg bg-primary px-8 py-4 text-lg font-bold text-black transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
               >
                 Réserver un créneau
               </a>

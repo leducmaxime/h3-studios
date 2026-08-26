@@ -168,7 +168,7 @@ export function Avis() {
           {reviews.slice(0, 20).map((review, index) => (
             <div
               key={review.id}
-              className={`flex w-full flex-col gap-3 rounded-xl border border-white/10 bg-white/15 p-6 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
+              className={`flex w-full flex-col gap-3 rounded-xl border border-white/10 bg-black/40 p-6 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
               style={{ transitionDelay: `${200 + index * 50}ms` }}
             >
               <div className="flex items-start justify-between">

@@ -119,7 +119,7 @@ export function Header() {
               height={48}
               fetchPriority="high"
               decoding="async"
-              className={spin ? "animate-[spin_1s_linear_1]" : "animate-pulse"}
+              className={spin ? "animate-[spin_1s_linear_1]" : ""}
             />
           </a>
 

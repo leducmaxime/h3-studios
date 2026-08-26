@@ -53,7 +53,7 @@ export function Home() {
             <div className="flex flex-col items-center gap-4 lg:flex-row">
               <a
                 href="/reservation"
-                className="group inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 lg:px-12 lg:py-5 lg:text-2xl"
+                className="group inline-flex items-center justify-center gap-3 rounded-lg bg-primary px-10 py-4 text-xl font-bold text-black transition-all hover:bg-primary/90 lg:px-12 lg:py-5 lg:text-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
               >
                 <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1 lg:h-7 lg:w-7" />
                 Réserver maintenant
@@ -103,9 +103,9 @@ export function Home() {
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 transition-transform group-hover:scale-110">
                   <Icon className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="mb-2 font-blanka text-lg text-primary">
+                <h2 className="mb-2 font-blanka text-lg text-primary">
                   {service.title}
-                </h3>
+                </h2>
                 <p className="text-sm text-white/60">{service.description}</p>
               </div>
             );

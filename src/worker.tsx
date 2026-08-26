@@ -5524,10 +5524,12 @@ const app = defineApp([
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
 
     try {
-      const user = await requireClientAuth(request, env.DB);
+      const token = getClientSessionToken(request);
+      if (!token) return jsonSuccess(null);
+      const user = await validateClientSession(env.DB, token);
+      if (!user) return jsonSuccess(null);
       return jsonSuccess(user);
     } catch (error) {
-      if (error instanceof Response) return error;
       console.error("GET /api/client/me error:", error);
       return jsonError(error instanceof Error ? error.message : "Auth check failed", 500);
     }
