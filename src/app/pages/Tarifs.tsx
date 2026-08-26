@@ -187,7 +187,7 @@ function EquipmentPricing({ equipment }: { equipment: TarifsEquipment }) {
     return (
       <span>
         <Price amount={equipment.pricePerHour} unit="/Heure" />
-        {equipment.maxPerSession > 0 && (
+        {equipment.maxPerSession > 1 && (
           <span className="ml-1.5 text-xs text-white/50">
             (par unité, {equipment.maxPerSession} maximum par séance)
           </span>
@@ -205,7 +205,7 @@ function EquipmentPricing({ equipment }: { equipment: TarifsEquipment }) {
     return (
       <span>
         <Price amount={pricing[0]} unit="/séance" />
-        {equipment.maxPerSession > 0 && (
+        {equipment.maxPerSession > 1 && (
           <span className="ml-1.5 text-xs text-white/50">
             (par unité, {equipment.maxPerSession} maximum par séance)
           </span>
@@ -304,7 +304,7 @@ export function Tarifs({ data }: { data: TarifsData }) {
             </h2>
             <div className="flex w-full flex-col gap-4">
               {data.equipment.length > 0 ? (
-                <Table className="w-full border-2 border-primary bg-black">
+                <Table className="w-full border-2 border-primary bg-black text-left">
                   <TableHeader>
                     <TableRow className="border-primary hover:bg-black">
                       <TableHead>Matériel</TableHead>
