@@ -154,7 +154,8 @@ import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbB
 import { ALL_TIME_SLOTS, STUDIO_HOURS, STUDIOS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
 import { buildPricingGridAsOf, listScheduledEffectiveDates } from "@/lib/pricing";
-import type { TarifsData } from "@/lib/tarifs";
+import type { TarifsData, TarifsGroupType } from "@/lib/tarifs";
+import { formatEuro } from "@/lib/tax";
 import {
   getParisDateISO,
   getParisNow,
@@ -191,12 +192,14 @@ const DocumentWithPath = ({
   children,
   path,
   nonce,
+  seoOverride,
 }: {
   children: React.ReactNode;
   path: string;
   nonce?: string;
+  seoOverride?: { title?: string; description?: string };
 }) => (
-  <Document path={path} nonce={nonce}>
+  <Document path={path} nonce={nonce} seoOverride={seoOverride}>
     {children}
   </Document>
 );
@@ -255,6 +258,47 @@ async function getTarifsData(db: D1Database): Promise<TarifsData> {
   }));
 
   return { studios, peakStartHour, equipment };
+}
+
+/**
+ * Titre et description de /tarifs calculés depuis la grille en vigueur.
+ *
+ * La page affiche des prix issus de la base : sa meta doit suivre les mêmes
+ * valeurs, sinon Google annonce un tarif que le visiteur ne retrouve pas.
+ *
+ * On n'annonce que des minimums (« dès X€ »), seule formulation qui reste vraie
+ * quelle que soit la configuration : un type de groupe a un prix heure creuse
+ * et un prix heure pleine, éventuellement différents d'un studio à l'autre.
+ * Renvoie `undefined` si aucun tarif n'est configuré, auquel cas le Document
+ * retombe sur l'entrée statique de `pageSEO`.
+ */
+function buildTarifsSeo(data: TarifsData): { title: string; description: string } | undefined {
+  const minFor = (groupType: TarifsGroupType): number | undefined => {
+    const values = data.studios.flatMap((studio) => {
+      const rate = studio.rates[groupType];
+      return rate ? [rate.offPeak, rate.peak] : [];
+    });
+    return values.length > 0 ? Math.min(...values) : undefined;
+  };
+
+  const solo = minFor("solo");
+  const duo = minFor("duo");
+  const group = minFor("group");
+
+  const parts: string[] = [];
+  if (solo !== undefined) parts.push(`solo et enseignant dès ${formatEuro(solo)} TTC/h`);
+  if (duo !== undefined) parts.push(`duo dès ${formatEuro(duo)} TTC/h`);
+  if (group !== undefined) parts.push(`groupe dès ${formatEuro(group)} TTC/h`);
+
+  const configured = [solo, duo, group].filter((value): value is number => value !== undefined);
+  if (configured.length === 0) return undefined;
+
+  const cheapest = formatEuro(Math.min(...configured));
+
+  return {
+    title: `Tarifs - Studios dès ${cheapest} TTC/h | H3 STUDIOS Sucy-en-Brie`,
+    description: `Tarifs H3 Studios : ${parts.join(", ")}. Studios de répétition à Sucy-en-Brie, à 2 min du RER A.`,
+  };
 }
 
 function jsonResponse(data: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
@@ -550,7 +594,14 @@ const app = defineApp([
     });
   }),
 
-  render(({ children, rw }) => <DocumentWithPath path="/tarifs" nonce={rw.nonce}>{children}</DocumentWithPath>, [
+  render(async ({ children, rw }) => {
+    const seoOverride = buildTarifsSeo(await getTarifsData(env.DB));
+    return (
+      <DocumentWithPath path="/tarifs" nonce={rw.nonce} seoOverride={seoOverride}>
+        {children}
+      </DocumentWithPath>
+    );
+  }, [
     layout(MainLayout, [
       route("/tarifs", async () => <Tarifs data={await getTarifsData(env.DB)} />),
     ]),

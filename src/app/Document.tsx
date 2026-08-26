@@ -26,6 +26,14 @@ interface DocumentProps {
   children: React.ReactNode;
   path?: string;
   nonce?: string;
+  /**
+   * Titre et description calculés à la requête, pour les pages dont le contenu
+   * dépend de la configuration admin. Sans surcharge, on utilise l'entrée
+   * statique de `pageSEO`. Voir `getTarifsSeo` dans `src/worker.tsx` : la page
+   * /tarifs affiche des prix issus de la base, sa meta doit suivre les mêmes
+   * valeurs plutôt que d'annoncer un tarif figé qui dérive.
+   */
+  seoOverride?: Partial<Pick<PageSEO, "title" | "description">>;
 }
 
 function buildBreadcrumb(currentPath: string) {
@@ -53,8 +61,9 @@ function buildBreadcrumb(currentPath: string) {
   };
 }
 
-export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce }) => {
-  const seo: PageSEO = pageSEO[path] || pageSEO["/"];
+export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce, seoOverride }) => {
+  const baseSeo: PageSEO = pageSEO[path] || pageSEO["/"];
+  const seo: PageSEO = seoOverride ? { ...baseSeo, ...seoOverride } : baseSeo;
   const canonicalUrl = `${SITE_URL}${seo.path}`;
   const ogImageUrl = `${SITE_URL}/images/opengraph.png`;
 

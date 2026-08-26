@@ -2,7 +2,7 @@
 
 import { ImageCarousel } from "@/components/common/ImageCarousel";
 import { STUDIOS } from "@/lib/booking";
-import { Wifi, TrainFront, MapPin, ArrowRight, Calendar, Clock, Wrench } from "lucide-react";
+import { Wifi, TrainFront, MapPin, ArrowRight, Calendar, Clock, Wrench, Euro } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const studios = [
@@ -108,13 +108,20 @@ export function LesStudios() {
         ))}
       </div>
 
-      <div className={`w-full max-w-6xl px-2 lg:px-4 text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "500ms" }}>
+      <div className={`flex w-full max-w-6xl flex-col items-center justify-center gap-4 px-2 sm:flex-row lg:px-4 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`} style={{ transitionDelay: "500ms" }}>
         <a
           href="/le-materiel"
-          className="inline-flex items-center justify-center gap-3 rounded-lg border-2 border-primary bg-transparent px-8 py-4 text-lg font-bold text-primary transition-all hover:bg-primary hover:text-black"
+          className="inline-flex w-full items-center justify-center gap-3 rounded-lg border-2 border-primary bg-transparent px-8 py-4 text-lg font-bold text-primary transition-all hover:bg-primary hover:text-black sm:w-auto"
         >
           <Wrench className="h-5 w-5" />
           Découvrir le matériel disponible
+        </a>
+        <a
+          href="/tarifs"
+          className="inline-flex w-full items-center justify-center gap-3 rounded-lg border-2 border-primary bg-transparent px-8 py-4 text-lg font-bold text-primary transition-all hover:bg-primary hover:text-black sm:w-auto"
+        >
+          <Euro className="h-5 w-5" />
+          Les Tarifs
         </a>
       </div>
     </div>
