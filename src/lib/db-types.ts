@@ -151,6 +151,8 @@ export interface DbUser {
   loyalty_discount_type: string | null;
   loyalty_discount_value: number;
   loyalty_threshold: number;
+  loyalty_notified_award_index: number;
+  loyalty_emails_opt_out: number;
   /**
    * Agrégats d'export calculés côté serveur par `getUsers` (issue #61).
    * Optionnels : `getUserById` / `getUserByEmail` ne les renvoient pas.

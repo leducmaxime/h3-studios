@@ -791,3 +791,223 @@ export async function sendPasswordResetEmail(
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
+
+/* ------------------------------------------------------------------------ */
+/* Récompense fidélité débloquée                                             */
+/* ------------------------------------------------------------------------ */
+
+export interface LoyaltyRewardEmailData {
+  clientName: string;
+  clientEmail: string;
+  discountType: "percentage" | "fixed";
+  discountValue: number;
+  threshold: number;
+  bookingUrl: string;
+}
+
+/** `-15 %` ou `-15 €` — format d'affichage dédié (espace avant l'unité), distinct de `formatPrice`. */
+function formatLoyaltyDiscountValue(type: "percentage" | "fixed", value: number): string {
+  const amount = value % 1 === 0 ? `${value}` : value.toFixed(2).replace(".", ",");
+  return type === "percentage" ? `-${amount} %` : `-${amount} €`;
+}
+
+function pluralizeRepetitions(count: number): string {
+  return `${count} répétition${count > 1 ? "s" : ""}`;
+}
+
+export function loyaltyRewardEmailSubject(data: LoyaltyRewardEmailData): string {
+  const discountLabel = formatLoyaltyDiscountValue(data.discountType, data.discountValue);
+  return `Votre remise fidélité : ${discountLabel} sur votre prochaine réservation`;
+}
+
+export function buildLoyaltyRewardEmailHtml(data: LoyaltyRewardEmailData): string {
+  const discountLabel = formatLoyaltyDiscountValue(data.discountType, data.discountValue);
+  const threshold = Math.max(1, Math.round(data.threshold) || 1);
+  const preheader = `Votre remise fidélité de ${discountLabel.replace("-", "")} vous attend sur votre prochaine réservation. Elle s'applique automatiquement, sans code à saisir.`;
+
+  // Rangée de "jetons" représentant le cycle de fidélité complété — cellules de tableau
+  // bordées/colorées uniquement (pas de flexbox, pas de background CSS pur) pour rester
+  // fiable dans Outlook/Gmail/Apple Mail.
+  const cellWidthPct = (100 / threshold).toFixed(3);
+  const loyaltyTokens = Array.from({ length: threshold })
+    .map(
+      () => `
+        <td width="${cellWidthPct}%" style="padding:0 3px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td align="center" bgcolor="#facc15" style="background-color:#facc15;border-radius:6px;padding:12px 0;">
+                <span style="color:#111111;font-size:13px;font-weight:700;line-height:1;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">&#10003;</span>
+              </td>
+            </tr>
+          </table>
+        </td>`,
+    )
+    .join("");
+
+  return `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Récompense fidélité débloquée - H3 Studios</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#0a0a0a;">
+    ${preheader}
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td align="center" style="padding:40px 20px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#111111;border-radius:16px;overflow:hidden;border:1px solid #222222;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:40px 30px;text-align:center;border-bottom:2px solid #facc15;">
+              <img src="${COMPANY.siteUrl}/images/logo-email.png" alt="H3 Studios" width="180" style="display:block;margin:0 auto 16px;" />
+              <p style="margin:0;color:#facc15;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Récompense fidélité</p>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding:40px 30px 30px 30px;">
+              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;">Une récompense vous attend</h2>
+              <p style="margin:0 0 30px 0;color:#aaaaaa;font-size:15px;line-height:1.6;">
+                Bonjour ${data.clientName},<br>
+                Vous avez bouclé un nouveau cycle de <strong style="color:#ffffff;">${pluralizeRepetitions(threshold)}</strong> chez nous. Merci pour votre fidélité &mdash; voici ce qu'elle vous rapporte.
+              </p>
+
+              <!-- Hero: discount value -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#1a1a1a;border:1px solid #facc15;border-radius:14px;padding:32px 20px;text-align:center;">
+                    <p style="margin:0 0 10px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Votre remise fidélité</p>
+                    <p style="margin:0 0 6px 0;color:#facc15;font-size:56px;font-weight:800;line-height:1;">${discountLabel}</p>
+                    <p style="margin:0;color:#dddddd;font-size:14px;">sur votre prochaine réservation</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Loyalty cycle progress cue -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 10px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;text-align:center;">Cycle de fidélité complet · ${threshold}/${threshold}</p>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>${loyaltyTokens}</tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Automatic application reassurance -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+                <tr>
+                  <td style="background-color:#1a1a1a;border-radius:10px;padding:18px 20px;border-left:3px solid #facc15;">
+                    <p style="margin:0 0 6px 0;color:#facc15;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Rien à faire de votre côté</p>
+                    <p style="margin:0;color:#aaaaaa;font-size:13px;line-height:1.6;">
+                      Votre remise s'applique automatiquement dès votre prochaine réservation. Pas de code à saisir, pas de démarche à faire : elle sera déduite directement de votre panier au moment de réserver.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" bgcolor="#facc15" style="background-color:#facc15;border-radius:10px;">
+                          <a href="${data.bookingUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:16px 36px;font-size:15px;font-weight:700;color:#0a0a0a;text-decoration:none;line-height:1;">Réserver ma prochaine session</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;color:#888888;font-size:13px;line-height:1.6;">
+                À très bientôt en studio.<br>
+                L'équipe H3 Studios
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#0a0a0a;padding:30px;text-align:center;border-top:1px solid #222222;">
+              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
+                <tr>
+                  <td style="background-color:#111111;border:1px solid #facc15;border-radius:10px;padding:16px 24px;text-align:center;">
+                    <a href="https://www.instagram.com/h3_studios_sucy/" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#facc15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 8px auto;">
+                        <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
+                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                        <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+                      </svg>
+                      <span style="display:block;color:#facc15;font-size:15px;font-weight:700;margin-bottom:4px;">Suivez-nous sur Instagram</span>
+                      <span style="display:block;color:#aaaaaa;font-size:12px;">@h3_studios_sucy &mdash; coulisses, artistes &amp; actus</span>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 16px 0;">
+                <a href="https://www.facebook.com/profile.php?id=100089893392179" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:0 8px;text-decoration:none;">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
+                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                  </svg>
+                </a>
+              </p>
+              <p style="margin:0;color:#444444;font-size:11px;">
+                <a href="${COMPANY.siteUrl}" style="color:#888888;text-decoration:none;">${COMPANY.siteHost}</a> &nbsp;|&nbsp;
+                <a href="mailto:contact@h3-studios.fr" style="color:#888888;text-decoration:none;">contact@h3-studios.fr</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+export async function sendLoyaltyRewardEmail(
+  apiKey: string,
+  data: LoyaltyRewardEmailData,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const html = buildLoyaltyRewardEmailHtml(data);
+    const subject = loyaltyRewardEmailSubject(data);
+
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "H3 Studios <contact@h3-studios.fr>",
+        to: data.clientEmail,
+        subject,
+        html,
+        reply_to: "contact@h3-studios.fr",
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorData = await resendResponse.text();
+      console.error("Resend API error (loyalty reward):", errorData);
+      return { success: false, error: errorData };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending loyalty reward email:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}

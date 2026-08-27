@@ -1,6 +1,6 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { describe, expect, it, beforeEach } from "vitest";
-import { buildLoyaltyCountsQuery, claimLoyaltyAward, getUserLoyaltyCounts, getUserLoyaltyDiscountTotal } from "@/lib/db";
+import { buildDueLoyaltyRewardCandidatesQuery, buildLoyaltyCountsQuery, claimLoyaltyAward, claimLoyaltyRewardEmail, getUserLoyaltyCounts, getUserLoyaltyDiscountTotal } from "@/lib/db";
 import { getBookingAmountDue } from "@/lib/booking-totals";
 import { getLoyaltyProgress } from "@/lib/loyalty";
 
@@ -17,10 +17,10 @@ let sqlite: DatabaseSync;
 let db: D1Memory;
 beforeEach(() => {
   sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, loyalty_enabled INTEGER DEFAULT 0, loyalty_discount_type TEXT, loyalty_discount_value REAL DEFAULT 0, loyalty_threshold INTEGER DEFAULT 0);
+  sqlite.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, name TEXT DEFAULT '', first_name TEXT, is_blocked INTEGER DEFAULT 0, loyalty_enabled INTEGER DEFAULT 0, loyalty_discount_type TEXT, loyalty_discount_value REAL DEFAULT 0, loyalty_threshold INTEGER DEFAULT 0, loyalty_notified_award_index INTEGER DEFAULT 0, loyalty_emails_opt_out INTEGER DEFAULT 0, updated_at TEXT);
     CREATE TABLE bookings (id TEXT PRIMARY KEY, user_id TEXT, date TEXT, start_time TEXT, end_time TEXT, status TEXT, promo_discount REAL DEFAULT 0, loyalty_award_id TEXT, base_price REAL DEFAULT 0, equipment_price REAL DEFAULT 0, total_price REAL DEFAULT 0, updated_at TEXT);`);
   db = new D1Memory(sqlite);
-  sqlite.prepare("INSERT INTO users VALUES ('u',1,'fixed',10,3)").run();
+  sqlite.prepare("INSERT INTO users (id,email,name,first_name,is_blocked,loyalty_enabled,loyalty_discount_type,loyalty_discount_value,loyalty_threshold,loyalty_notified_award_index,loyalty_emails_opt_out) VALUES ('u','u@example.com','User',NULL,0,1,'fixed',10,3,0,0)").run();
 });
 
 const add = (id: string, date: string, status = "confirmed", award: string | null = null) => sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status,loyalty_award_id) VALUES (?,?,?,?,?,?,?)").run(id, "u", date, "10:00", "12:00", status, award);
@@ -33,6 +33,76 @@ describe("fidélité — SQL D1", () => {
     const row = sqlite.prepare(q.sql).get(...(q.params as SQLInputValue[])) as { past_eligible: number; awards_granted: number; past_since_award: number };
     expect(row).toEqual({ past_eligible: 2, awards_granted: 1, past_since_award: 0 });
     await expect(getUserLoyaltyCounts(db as unknown as D1Database, "u")).resolves.toEqual({ pastEligibleBookings: 2, awardsGranted: 1, pastSinceLastAward: 0 });
+  });
+
+  it("construit les candidats avec tous les paramètres liés et les filtres de sécurité", () => {
+    const q = buildDueLoyaltyRewardCandidatesQuery(now, 25);
+    expect(q.params).toHaveLength((q.sql.match(/\?/g) || []).length);
+    expect(q.params).toHaveLength(10);
+    expect(q.sql).toContain("COALESCE(u.is_blocked, 0) = 0");
+    expect(q.sql).toContain("u.email IS NOT NULL");
+    expect(q.sql).toContain("TRIM(u.email) <> ''");
+    expect(q.sql).toContain("COALESCE(u.loyalty_emails_opt_out, 0) = 0");
+    expect(q.sql).toContain("lower(trim(u.email))");
+  });
+
+  it("déduplique les candidats dus par email normalisé avec le plus petit id", () => {
+    sqlite.prepare("UPDATE users SET loyalty_threshold=1 WHERE id='u'").run();
+    sqlite.prepare("INSERT INTO users (id,email,name,first_name,is_blocked,loyalty_enabled,loyalty_discount_type,loyalty_discount_value,loyalty_threshold,loyalty_notified_award_index,loyalty_emails_opt_out) VALUES ('v',' U@EXAMPLE.COM ','Duplicate',NULL,0,1,'fixed',10,1,0,0)").run();
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status) VALUES ('u-booking','u','2000-01-01','10:00','12:00','confirmed')").run();
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status) VALUES ('v-booking','v','2000-01-02','10:00','12:00','confirmed')").run();
+
+    const q = buildDueLoyaltyRewardCandidatesQuery(now, 25);
+    const rows = sqlite.prepare(q.sql).all(...(q.params as SQLInputValue[])) as { id: string }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("u");
+  });
+
+  it("exclut du SQL les clients déjà notifiés pour l'award courant", () => {
+    // Un client reste « dû » jusqu'à sa prochaine réservation. Sans ce filtre
+    // en SQL, les déjà-notifiés satureraient le LIMIT à chaque exécution et
+    // les nouveaux gagnants ne seraient jamais atteints.
+    sqlite.prepare("UPDATE users SET loyalty_threshold=1 WHERE id='u'").run();
+    add("u-booking", "2000-01-01");
+
+    const pending = buildDueLoyaltyRewardCandidatesQuery(now, 25);
+    expect(sqlite.prepare(pending.sql).all(...(pending.params as SQLInputValue[]))).toHaveLength(1);
+
+    sqlite.prepare("UPDATE users SET loyalty_notified_award_index=1 WHERE id='u'").run();
+    const notified = buildDueLoyaltyRewardCandidatesQuery(now, 25);
+    expect(sqlite.prepare(notified.sql).all(...(notified.params as SQLInputValue[]))).toHaveLength(0);
+  });
+
+  it("ne promeut pas le doublon d'inbox une fois le gagnant notifié", () => {
+    // Le rang par inbox est calculé avant le filtre « déjà notifié » : sinon le
+    // perdant deviendrait rang 1 et enverrait un second mail à la même adresse.
+    sqlite.prepare("UPDATE users SET loyalty_threshold=1, loyalty_notified_award_index=1 WHERE id='u'").run();
+    sqlite.prepare("INSERT INTO users (id,email,name,first_name,is_blocked,loyalty_enabled,loyalty_discount_type,loyalty_discount_value,loyalty_threshold,loyalty_notified_award_index,loyalty_emails_opt_out) VALUES ('v',' U@EXAMPLE.COM ','Duplicate',NULL,0,1,'fixed',10,1,0,0)").run();
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status) VALUES ('u-booking','u','2000-01-01','10:00','12:00','confirmed')").run();
+    sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status) VALUES ('v-booking','v','2000-01-02','10:00','12:00','confirmed')").run();
+
+    const q = buildDueLoyaltyRewardCandidatesQuery(now, 25);
+    expect(sqlite.prepare(q.sql).all(...(q.params as SQLInputValue[]))).toHaveLength(0);
+  });
+
+  it("réarme l'index de notification au cycle suivant après consommation de l'award", () => {
+    const config = { enabled: true, type: "fixed" as const, value: 10, threshold: 2 };
+    const cycleOne = getLoyaltyProgress(config, 2, 0, 2);
+    const firstAwardIndex = cycleOne.awardsGranted + 1;
+    expect(cycleOne.isDue).toBe(true);
+    expect(firstAwardIndex).toBe(1);
+
+    const cycleTwo = getLoyaltyProgress(config, 4, 1, 2);
+    const secondAwardIndex = cycleTwo.awardsGranted + 1;
+    expect(cycleTwo.isDue).toBe(true);
+    expect(secondAwardIndex).toBe(2);
+    expect(1).toBeLessThan(secondAwardIndex);
+  });
+
+  it("la garde de claim email empêche une seconde réservation au même awardIndex", async () => {
+    expect(await claimLoyaltyRewardEmail(db as unknown as D1Database, { userId: "u", awardIndex: 1 })).toBe(true);
+    expect(await claimLoyaltyRewardEmail(db as unknown as D1Database, { userId: "u", awardIndex: 1 })).toBe(false);
+    expect(sqlite.prepare("SELECT loyalty_notified_award_index FROM users WHERE id='u'").get()).toEqual({ loyalty_notified_award_index: 1 });
   });
 
   it("réclamation concurrente : la seconde avec expectedAwardsGranted échoue et la ligne reste inchangée", async () => {
@@ -88,7 +158,7 @@ describe("fidélité — SQL D1", () => {
   });
 
   it("attribution commune : getUserLoyaltyCounts additionne les réservations passées des deux comptes", async () => {
-    sqlite.prepare("INSERT INTO users VALUES ('duplicate',1,'percentage',10,3)").run();
+    sqlite.prepare("INSERT INTO users (id,email,name,first_name,is_blocked,loyalty_enabled,loyalty_discount_type,loyalty_discount_value,loyalty_threshold,loyalty_notified_award_index,loyalty_emails_opt_out) VALUES ('duplicate','duplicate@example.com','Duplicate',NULL,0,1,'percentage',10,3,0,0)").run();
     add("primary-booking", "2000-01-01");
     sqlite.prepare("INSERT INTO bookings (id,user_id,date,start_time,end_time,status) VALUES ('duplicate-booking','duplicate','2000-01-02','10:00','12:00','completed')").run();
     sqlite.prepare("UPDATE bookings SET user_id='u' WHERE user_id='duplicate'").run();

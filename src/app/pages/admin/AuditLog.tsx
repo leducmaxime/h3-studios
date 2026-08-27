@@ -144,6 +144,7 @@ const ACTION_LABELS: Record<string, { label: string; variant: "default" | "secon
   "change-password": { label: "Mot de passe", variant: "secondary" },
   "send-reminder": { label: "Rappel envoyé", variant: "secondary" },
   "resend-confirmation": { label: "Confirmation renvoyée", variant: "secondary" },
+  "send-loyalty-reward": { label: "Récompense fidélité envoyée", variant: "secondary" },
 };
 
 function getEntityConfig(entityType: string) {
@@ -903,6 +904,7 @@ export function AdminAuditLog() {
             <option value="change-password">Mot de passe</option>
             <option value="send-reminder">Rappel envoyé</option>
             <option value="resend-confirmation">Confirmation renvoyée</option>
+            <option value="send-loyalty-reward">Récompense fidélité envoyée</option>
           </select>
           <select
             value={adminFilter}

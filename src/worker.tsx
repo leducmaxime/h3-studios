@@ -52,7 +52,8 @@ import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
 import { createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent, type StripeCheckoutSession } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
-import { sendBookingCancellationEmail, sendBookingConfirmationEmail, sendBookingReminderEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
+import { sendBookingCancellationEmail, sendBookingConfirmationEmail, sendBookingReminderEmail, sendLoyaltyRewardEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
+import { COMPANY } from "@/lib/company";
 import {
   type AdminRole,
   verifyPassword,
@@ -145,6 +146,8 @@ import {
   getUserLoyaltyCounts,
   getUserLoyaltyDiscountTotal,
   claimLoyaltyAward,
+  getDueLoyaltyRewardCandidates,
+  claimLoyaltyRewardEmail,
 } from "@/lib/db";
 import { getLoyaltyProgress, readLoyaltyConfig, isLoyaltyConfigured, validateLoyaltySettings, computeLoyaltyDiscount } from "@/lib/loyalty";
 import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
@@ -6095,52 +6098,151 @@ function buildFinalizeDeps(): FinalizePaidSessionDeps {
   };
 }
 
+async function sendDueLoyaltyRewardEmails(db: D1Database, apiKey: string): Promise<void> {
+  const candidates = await getDueLoyaltyRewardCandidates(db, 25);
+  let sent = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const candidate of candidates) {
+    const config = readLoyaltyConfig(candidate);
+    const progress = getLoyaltyProgress(
+      config,
+      candidate.pastEligibleBookings,
+      candidate.awardsGranted,
+      candidate.pastSinceLastAward,
+    );
+    if (!isLoyaltyConfigured(config) || !progress.isDue || (config.type !== "percentage" && config.type !== "fixed")) {
+      skipped++;
+      continue;
+    }
+
+    const awardIndex = progress.awardsGranted + 1;
+    if (candidate.loyalty_notified_award_index >= awardIndex) {
+      skipped++;
+      continue;
+    }
+
+    let claimed: boolean;
+    try {
+      claimed = await claimLoyaltyRewardEmail(db, { userId: candidate.id, awardIndex });
+    } catch (error) {
+      skipped++;
+      console.error(`[Cron] Loyalty reward claim failed for ${candidate.id}:`, error);
+      continue;
+    }
+    if (!claimed) {
+      skipped++;
+      continue;
+    }
+
+    let result: { success: boolean; error?: string };
+    try {
+      result = await sendLoyaltyRewardEmail(apiKey, {
+        clientName: candidate.first_name || candidate.name.split(" ")[0] || candidate.name,
+        clientEmail: candidate.email,
+        discountType: config.type,
+        discountValue: config.value,
+        threshold: config.threshold,
+        bookingUrl: `${COMPANY.siteUrl}/reservation`,
+      });
+    } catch (error) {
+      // The email helper normally collapses errors into { success: false }, but
+      // keep the claim consumed even if that implementation ever changes.
+      result = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+    }
+
+    const auditSnapshot = {
+      threshold: config.threshold,
+      discountType: config.type,
+      discountValue: config.value,
+      awardIndex,
+      pastEligibleBookings: progress.pastEligibleBookings,
+      awardsGranted: progress.awardsGranted,
+      pastSinceLastAward: candidate.pastSinceLastAward,
+      success: result.success,
+      error: result.error ?? null,
+    };
+    try {
+      await addAuditLog(db, "user", candidate.id, "send-loyalty-reward", auditSnapshot, "cron");
+    } catch (error) {
+      console.error(`[Cron] Loyalty reward audit failed for ${candidate.id}:`, error);
+    }
+
+    if (result.success) sent++;
+    else {
+      failed++;
+      console.error(`[Cron] Loyalty reward email failed for ${candidate.id}: ${result.error || "Unknown error"}`);
+    }
+  }
+
+  console.log(`[Cron] Loyalty reward emails: ${sent} sent, ${failed} failed, ${skipped} skipped`);
+}
+
 async function handleScheduled(controller: ScheduledController) {
   console.log(`[Cron] Triggered: ${controller.cron} at ${new Date().toISOString()}`);
 
-  const apiKey = (env as any).GOOGLE_PLACES_API_KEY;
-  if (apiKey) {
-    const result = await syncGoogleReviews(env.DB as D1Database, apiKey);
-    if (result.success) {
-      console.log(`[Cron] Reviews synced: ${result.reviewsCount} reviews, ${result.averageRating}/5`);
-    } else {
-      console.error(`[Cron] Reviews sync failed: ${result.error}`);
+  if (env.RESEND_API_KEY) {
+    try {
+      await sendDueLoyaltyRewardEmails(env.DB as D1Database, env.RESEND_API_KEY);
+    } catch (error) {
+      console.error("[Cron] Loyalty reward email step failed:", error);
     }
+  } else {
+    console.log("[Cron] Loyalty reward emails skipped (RESEND_API_KEY missing)");
   }
 
-  const igRefresh = await refreshAndPersistInstagramToken(
-    env.DB as D1Database,
-    (env as any).INSTAGRAM_ACCESS_TOKEN,
-  );
-  if (igRefresh.refreshed) {
-    console.log("[Cron] Instagram token refreshed");
-  } else if (igRefresh.skipped) {
-    console.log("[Cron] Instagram token refresh skipped (too recent)");
-  } else if (igRefresh.error) {
-    console.error(`[Cron] Instagram token refresh failed: ${igRefresh.error}`);
-  }
-  const igToken = igRefresh.token;
-  const igResult = await syncInstagram(env.DB as D1Database, igToken);
-  if (igResult.success) {
-    console.log(`[Cron] Instagram synced: ${igResult.count} posts`);
-  } else {
-    console.error(`[Cron] Instagram sync failed: ${igResult.error}`);
-    try {
-      const errorBody = igResult.error?.match(/\{[\s\S]*\}$/)?.[0];
-      const parsed = errorBody ? JSON.parse(errorBody) as {
-        error?: {
-          code?: number;
-          error_subcode?: number;
-          type?: string;
-          message?: string;
-          is_transient?: boolean;
-          fbtrace_id?: string;
-        };
-      } : null;
-      console.error("[Cron] Instagram Graph API error details:", parsed?.error || { message: igResult.error });
-    } catch {
-      console.error("[Cron] Instagram Graph API error details:", { message: igResult.error });
+  try {
+    const apiKey = (env as any).GOOGLE_PLACES_API_KEY;
+    if (apiKey) {
+      const result = await syncGoogleReviews(env.DB as D1Database, apiKey);
+      if (result.success) {
+        console.log(`[Cron] Reviews synced: ${result.reviewsCount} reviews, ${result.averageRating}/5`);
+      } else {
+        console.error(`[Cron] Reviews sync failed: ${result.error}`);
+      }
     }
+  } catch (error) {
+    console.error("[Cron] Reviews step failed:", error);
+  }
+
+  try {
+    const igRefresh = await refreshAndPersistInstagramToken(
+      env.DB as D1Database,
+      (env as any).INSTAGRAM_ACCESS_TOKEN,
+    );
+    if (igRefresh.refreshed) {
+      console.log("[Cron] Instagram token refreshed");
+    } else if (igRefresh.skipped) {
+      console.log("[Cron] Instagram token refresh skipped (too recent)");
+    } else if (igRefresh.error) {
+      console.error(`[Cron] Instagram token refresh failed: ${igRefresh.error}`);
+    }
+    const igToken = igRefresh.token;
+    const igResult = await syncInstagram(env.DB as D1Database, igToken);
+    if (igResult.success) {
+      console.log(`[Cron] Instagram synced: ${igResult.count} posts`);
+    } else {
+      console.error(`[Cron] Instagram sync failed: ${igResult.error}`);
+      try {
+        const errorBody = igResult.error?.match(/\{[\s\S]*\}$/)?.[0];
+        const parsed = errorBody ? JSON.parse(errorBody) as {
+          error?: {
+            code?: number;
+            error_subcode?: number;
+            type?: string;
+            message?: string;
+            is_transient?: boolean;
+            fbtrace_id?: string;
+          };
+        } : null;
+        console.error("[Cron] Instagram Graph API error details:", parsed?.error || { message: igResult.error });
+      } catch {
+        console.error("[Cron] Instagram Graph API error details:", { message: igResult.error });
+      }
+    }
+  } catch (error) {
+    console.error("[Cron] Instagram step failed:", error);
   }
 }
 
