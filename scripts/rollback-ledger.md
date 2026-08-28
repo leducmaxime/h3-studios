@@ -8,10 +8,33 @@
 Effectuer l'opération entre **23h00 et 23h10**. Éviter **05:55–06:15** : le
 cron quotidien `0 6 * * *`, déclaré dans `wrangler.jsonc`, écrit en base.
 
-Construire hors fenêtre, puis ne déployer que le worker pendant la coupure :
+Construire hors fenêtre, puis ne déployer que le worker pendant la coupure.
+
+> ⚠️ **Le build DOIT être celui de l'environnement cible.** L'environnement est
+> injecté à la construction via `CLOUDFLARE_ENV`, pas au déploiement :
+> `pnpm build` (générique) produit un `dist/worker/wrangler.json` portant le nom
+> de worker **`h3-studios`**, c'est-à-dire celui de production, et
+> **`"d1_databases": []`** — aucune liaison à la base. Comme `wrangler deploy`
+> consomme cette config générée, l'option `--env` devient **inopérante**.
+>
+> Erreur commise en répétition : `pnpm build` puis `wrangler deploy --env staging`
+> a déployé en **production**, sur un worker sans binding D1 — production en 500
+> jusqu'au `wrangler rollback`. `pnpm build` ne sert qu'à vérifier que le projet
+> compile ; il ne doit jamais précéder un déploiement.
 
 ```sh
-pnpm build
+pnpm build:staging     # avant un deploy --env staging
+pnpm build:prod        # avant un deploy --env production
+```
+
+Après le build, vérifier systématiquement que la cible est la bonne :
+
+```sh
+grep -o '"name":"[^"]*"' dist/worker/wrangler.json | head -1
+#   staging    → "name":"h3-studios-staging"
+#   production → "name":"h3-studios"
+grep -o '"d1_databases":\[[^]]*\]' dist/worker/wrangler.json | head -c 120
+#   doit contenir la base attendue, jamais []
 ```
 
 Ne pas lancer `release:prod` pendant la coupure : cette commande fait

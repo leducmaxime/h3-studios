@@ -71,3 +71,7 @@ coverage
 
 AGENTS_LOCAL.md
 .slim/deepwork/
+
+# Sauvegardes D1 : dumps de production/staging contenant des donnees clients
+backups/
+*.sql.bak
