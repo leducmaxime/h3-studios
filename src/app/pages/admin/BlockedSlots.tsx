@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { formatDateISO } from "@/lib/utils";
-import { STUDIOS, ALL_TIME_SLOTS, type StudioId } from "@/lib/booking";
+import { STUDIOS, ALL_TIME_SLOTS, formatDate, type StudioId } from "@/lib/booking";
 import { STUDIO_LABELS, studioLabel } from "@/lib/labels";
 
 interface BlockedSlot {
@@ -41,16 +41,6 @@ interface ApiResponse {
   success: boolean;
   data?: BlockedSlot[];
   error?: string;
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
 }
 
 function getMinDate(): string {
@@ -280,7 +270,7 @@ export function AdminBlockedSlots() {
             <tbody className={`divide-y ${border}`}>
               {list.map((slot) => (
                 <tr key={slot.id} className={tone === "muted" ? "" : "hover:bg-white/15 transition-colors"}>
-                  <td className={`px-4 py-3 text-sm ${rowText}`}>{formatDate(slot.date)}</td>
+                  <td className={`px-4 py-3 text-sm ${rowText}`}>{formatDate(new Date(slot.date + "T00:00:00"), "long")}</td>
                   <td className={`px-4 py-3 text-sm ${rowText}`}>
                     <Badge variant="outline" className={tone === "muted" ? "border-white/10 text-zinc-500" : "border-white/15 text-zinc-200"}>
                       {slot.studio_id ? studioLabel(slot.studio_id) : "Tous les studios"}
@@ -623,7 +613,7 @@ export function AdminBlockedSlots() {
               <div className="mb-2 text-sm font-medium text-white">
                 {selectedSlot.studio_id ? studioLabel(selectedSlot.studio_id) : "Tous les studios"}
               </div>
-              <div className="text-sm text-zinc-400">{formatDate(selectedSlot.date)}</div>
+              <div className="text-sm text-zinc-400">{formatDate(new Date(selectedSlot.date + "T00:00:00"), "long")}</div>
               <div className="text-sm text-zinc-400">
                 {formatTimeLabel(selectedSlot)}
               </div>

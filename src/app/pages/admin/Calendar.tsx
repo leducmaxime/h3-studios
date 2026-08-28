@@ -44,7 +44,7 @@ import {
 import { toast } from "sonner";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
-import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, parseBookingEquipmentLines, setOpeningHours, type StudioId, type GroupType } from "@/lib/booking";
+import { STUDIOS, formatBookingSlot, formatDate, formatDuration, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, parseBookingEquipmentLines, setOpeningHours, type StudioId, type GroupType } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
@@ -117,19 +117,6 @@ interface CalendarBlockedSlot {
 type ViewType = "day" | "week" | "month";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function formatDateHeader(date: Date): string {
-  return date.toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function formatShortDate(date: Date): string {
-  return date.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
-}
 
 function formatMonthHeader(date: Date): string {
   return date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
@@ -277,7 +264,7 @@ function getEquipmentLines(equipment: string | null, getEquipmentName: (id: stri
 
 function getBookingTooltipLines(booking: CalendarBooking, getEquipmentName: (id: string) => string): string[] {
   const clientName = booking.band_name || booking.user_band_name || booking.user_name || "Client";
-  const lines = [clientName, `${booking.start_time} – ${booking.end_time}`];
+  const lines = [clientName, formatBookingSlot(booking)];
   return lines.concat(getEquipmentLines(booking.equipment, getEquipmentName));
 }
 
@@ -675,8 +662,8 @@ export function AdminCalendar() {
   // ─── View subtitle ─────────────────────────────────────────────────────
 
   const subtitle = useMemo(() => {
-    if (view === "day") return formatDateHeader(currentDate);
-    if (view === "week") return `Semaine du ${formatShortDate(weekDates[0])}`;
+    if (view === "day") return formatDate(currentDate, "long");
+    if (view === "week") return `Semaine du ${formatDate(weekDates[0], "short")}`;
     return formatMonthHeader(currentDate);
   }, [view, currentDate, weekDates]);
 
@@ -739,7 +726,7 @@ export function AdminCalendar() {
                   className={`border-l border-zinc-800 p-3 text-center ${isToday ? "bg-primary/5" : ""}`}
                 >
                   <p className={`text-sm ${isToday ? "font-medium text-primary" : "text-zinc-400"}`}>
-                    {formatShortDate(date)}
+                    {formatDate(date, "short")}
                   </p>
                 </div>
               );
@@ -918,7 +905,7 @@ export function AdminCalendar() {
                                 }}
                               >
                                 <p className="truncate text-[11px] font-medium leading-tight">
-                                  {booking.start_time} · {groupTypeLabel(booking.group_type)}
+                                  {booking.start_time}–{booking.end_time} ({formatDuration(booking.start_time, booking.end_time)}) · {groupTypeLabel(booking.group_type)}
                                 </p>
                                 <p className="truncate text-[10px] leading-tight opacity-90">
                                   {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
@@ -1007,7 +994,7 @@ export function AdminCalendar() {
           {/* Header with date */}
           <div className={`border-b border-zinc-800 p-4 text-center ${isToday ? "bg-primary/5" : ""}`}>
             <h3 className={`text-lg ${isToday ? "font-medium text-primary" : "text-zinc-200"}`}>
-              {formatDateHeader(currentDate)}
+              {formatDate(currentDate, "long")}
             </h3>
             {isToday && <span className="text-xs text-primary/70">Aujourd&apos;hui</span>}
           </div>
@@ -1143,7 +1130,7 @@ export function AdminCalendar() {
                           }}
                         >
                           <p className="truncate text-[12px] font-medium leading-tight">
-                            {booking.start_time} · {groupTypeLabel(booking.group_type)}
+                            {booking.start_time}–{booking.end_time} ({formatDuration(booking.start_time, booking.end_time)}) · {groupTypeLabel(booking.group_type)}
                           </p>
                           <p className="truncate text-[11px] leading-tight opacity-90">
                             {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
@@ -1370,12 +1357,7 @@ export function AdminCalendar() {
               </Badge>
             </DialogTitle>
             <DialogDescription className="text-zinc-400">
-              Réf: {b.booking_ref} · {new Date(b.date + "T00:00:00").toLocaleDateString("fr-FR", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
+              Réf: {b.booking_ref} · {formatBookingSlot(b, "long")}
             </DialogDescription>
           </DialogHeader>
 

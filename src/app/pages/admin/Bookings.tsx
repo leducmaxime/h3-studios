@@ -39,7 +39,7 @@ import { CancelBookingDialog } from "@/components/admin/refund";
 import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary, isBookingPast, isKeepBalanceDue } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, displayPaymentStatusLabel, studioLabel } from "@/lib/labels";
-import { formatPrice, type StudioId } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, type StudioId } from "@/lib/booking";
 import { type DbBooking, type BookingStatus, type BookingWithUser, type BookingSortField, type BookingSortOrder } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 import {
@@ -80,11 +80,6 @@ const STATUS_CLASSES: Record<BookingStatus, string> = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-}
 
 function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: string; dateDirection?: "past" | "upcoming" } {
   const today = new Date();
@@ -519,11 +514,11 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                         </a>
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        {formatDate(booking.date)}
+                        {formatDate(new Date(booking.date + "T00:00:00"), "long")}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm">
-                          {booking.start_time} - {booking.end_time}
+                          {booking.start_time} - {booking.end_time} ({formatDuration(booking.start_time, booking.end_time)})
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">{studioName}</td>

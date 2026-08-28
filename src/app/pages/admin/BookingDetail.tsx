@@ -47,7 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { STUDIOS, formatPrice, slotDurationHours, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
+import { STUDIOS, formatBookingSlot, formatDuration, formatPrice, slotDurationHours, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
 import type { BookingLedgerSummary } from "@/lib/ledger";
 import { formatDbTimestamp } from "@/lib/utils";
@@ -72,17 +72,6 @@ interface BookingWithPromo extends DbBooking {
   loyalty_award_id?: string | null;
 }
 import { generateInvoicePDF, type InvoiceLedgerSummary } from "@/lib/export";
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-}
-
-function formatDuration(startTime: string, endTime: string): string {
-  const hours = slotDurationHours(startTime, endTime);
-  if (hours === 1) return "1 heure";
-  return `${hours} heures`;
-}
 
 const STATUS_CLASSES: Record<BookingStatus, string> = {
   confirmed: "bg-green-500/15 text-green-400 border-green-500/30",
@@ -582,7 +571,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           </a>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{booking.booking_ref}</h1>
-            <p className="text-sm text-zinc-400 mt-0.5">{formatDate(booking.date)}</p>
+            <p className="text-sm text-zinc-400 mt-0.5">{formatBookingSlot(booking, "long")}</p>
           </div>
         </div>
         <Badge className={`${STATUS_CLASSES[booking.status]} px-4 py-1.5 text-sm font-medium`}>

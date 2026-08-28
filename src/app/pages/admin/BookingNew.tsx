@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { STUDIOS, generateBookingRef, formatPrice, slotDurationSlots, type StudioId, type GroupType } from "@/lib/booking";
+import { STUDIOS, formatBookingSlot, formatDate, generateBookingRef, formatPrice, slotDurationSlots, type StudioId, type GroupType } from "@/lib/booking";
 import { type DbUser, type DbEquipment } from "@/lib/db-types";
 import { parseAmountInput } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
@@ -47,10 +47,6 @@ import { type PromoCode } from "@/lib/booking";
 interface UserSearchResult {
   data: DbUser[];
   total: number;
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
 const CLIENT_TYPE_OPTIONS: { value: ClientType; label: string }[] = [
@@ -525,7 +521,7 @@ export function AdminBookingNew() {
       });
       const json = (await res.json()) as { success: boolean; data?: { id: string }; error?: string };
       if (json.success && json.data) {
-        toast.success("Réservation créée");
+        toast.success(`Réservation créée — ${formatBookingSlot({ date, start_time: startTime, end_time: endTime })}`);
         window.location.href = `/admin/bookings/${json.data.id}`;
       } else {
         toast.error(json.error || "Erreur lors de la création");
@@ -759,7 +755,7 @@ export function AdminBookingNew() {
                     )}
                     <div>
                       <p className="text-xs text-zinc-500">Inscrit le</p>
-                      <p className="text-sm">{formatDate(selectedUser.created_at)}</p>
+                      <p className="text-sm">{formatDate(new Date(selectedUser.created_at), "short")}</p>
                     </div>
                     <div>
                       <p className="text-xs text-zinc-500">Total réservations</p>

@@ -35,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatDateISO, getParisDateISO } from "@/lib/utils";
 import { formatSiret, resolveUserClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
-import { formatPrice, type StudioId } from "@/lib/booking";
+import { formatDate, formatDuration, formatPrice, type StudioId } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
 import { type DbUser, type DbPromoCode, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot, type UserBookingInsights, type AdminPaymentRow } from "@/lib/db-types";
@@ -50,11 +50,6 @@ import {
 } from "@/lib/loyalty-code-display";
 import { LoyaltyCodeResendButton } from "@/components/admin/LoyaltyCodeResendButton";
 import { LoyaltyCodeExpiryEditor } from "@/components/admin/LoyaltyCodeExpiryEditor";
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-}
 
 // Vocabulaire des codes fidélité (statut, portée, éligibilité au renvoi) :
 // voir src/lib/loyalty-code-display.ts, partagé avec Pricing.tsx.
@@ -637,7 +632,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <>
                     <p className="text-lg font-semibold">{formatNextBookingWhen(user.ops.nextBooking.date)}</p>
                     <p className="mt-1 text-xs text-zinc-400">
-                      {studioLabel(user.ops.nextBooking.studio_id)} · {user.ops.nextBooking.start_time.slice(0, 5)}–{user.ops.nextBooking.end_time.slice(0, 5)}
+                      {studioLabel(user.ops.nextBooking.studio_id)} · {user.ops.nextBooking.start_time.slice(0, 5)}–{user.ops.nextBooking.end_time.slice(0, 5)} ({formatDuration(user.ops.nextBooking.start_time, user.ops.nextBooking.end_time)})
                     </p>
                     <a
                       href={`/admin/bookings/${user.ops.nextBooking.id}`}
@@ -852,7 +847,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         <Calendar className="h-5 w-5 text-zinc-400" />
                         <div>
                           <p className="text-xs text-zinc-500">Inscrit le</p>
-                          <p>{formatDate(user.created_at)}</p>
+                          <p>{formatDate(new Date(user.created_at), "short")}</p>
                         </div>
                       </div>
                     </div>
@@ -1200,7 +1195,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-zinc-400">
-                                  {formatDate(code.created_at)}
+                                  {formatDate(new Date(code.created_at), "short")}
                                 </td>
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-1.5">
@@ -1209,7 +1204,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                                         status === "expired" ? "text-red-400" : "text-zinc-400"
                                       }`}
                                     >
-                                      {code.expires_at ? formatDate(code.expires_at) : "—"}
+                                      {code.expires_at ? formatDate(new Date(code.expires_at), "short") : "—"}
                                     </span>
                                     {isSuperAdmin && (
                                       <LoyaltyCodeExpiryEditor
@@ -1281,7 +1276,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Client depuis</span>
-                    <span className="text-sm font-medium">{firstBookingDate ? formatDate(firstBookingDate) : "—"}</span>
+                    <span className="text-sm font-medium">{firstBookingDate ? formatDate(new Date(firstBookingDate), "short") : "—"}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Fréquence</span>
@@ -1293,7 +1288,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Dernière réservation</span>
-                    <span className="text-sm font-medium">{lastBookingDate ? formatDate(lastBookingDate) : "—"}</span>
+                    <span className="text-sm font-medium">{lastBookingDate ? formatDate(new Date(lastBookingDate), "short") : "—"}</span>
                   </div>
                   <div className="border-t border-zinc-800 pt-3 flex items-center justify-between">
                     <span className="text-zinc-400 text-sm">Jour préféré</span>
@@ -1484,9 +1479,12 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline block">
                               {b.booking_ref}
                             </a>
-                            <span className="text-xs text-zinc-500">{formatDate(b.date)}</span>
+                            <span className="text-xs text-zinc-500">{formatDate(new Date(b.date + "T00:00:00"), "short")}</span>
                           </td>
-                          <td className="px-4 py-3 text-sm">{b.start_time} - {b.end_time}</td>
+                          <td className="px-4 py-3 text-sm">
+                             {b.start_time} - {b.end_time}
+                             <span className="ml-1 text-xs text-zinc-500">({formatDuration(b.start_time, b.end_time)})</span>
+                           </td>
                           <td className="px-4 py-3 text-sm">{studioLabel(b.studio_id)}</td>
                           <td className="px-4 py-3 text-sm">{groupTypeLabel(b.group_type)}</td>
                           <td className="px-4 py-3">
@@ -1569,7 +1567,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     {payments.map((payment) => (
                       <tr key={payment.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
                         <td className="px-4 py-3 text-sm">
-                          {payment.created_at ? formatDate(payment.created_at) : "—"}
+                          {payment.created_at ? formatDate(new Date(payment.created_at), "short") : "—"}
                         </td>
                         <td className="px-4 py-3">
                           {payment.booking_refs ? (
@@ -1580,7 +1578,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             <span className="text-sm text-zinc-500">—</span>
                           )}
                           {payment.booking_date && (
-                            <p className="text-xs text-zinc-500">{formatDate(payment.booking_date)}</p>
+                            <p className="text-xs text-zinc-500">{formatDate(new Date(payment.booking_date + "T00:00:00"), "short")}</p>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm">{paymentMethodLabelShort(payment.method)}</td>

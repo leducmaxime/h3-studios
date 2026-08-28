@@ -20,7 +20,7 @@ import {
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
-import { formatPrice } from "@/lib/booking";
+import { formatBookingSlot, formatPrice } from "@/lib/booking";
 import { Button } from "@/components/ui/button";
 import {
   REFUND_FAILURE_CODE_LABELS,
@@ -46,6 +46,9 @@ interface ApiAuditLog {
   performed_by: string;
   admin_name?: string | null;
   booking_ref?: string | null;
+  booking_date: string | null;
+  booking_start_time: string | null;
+  booking_end_time: string | null;
   user_email?: string | null;
   created_at: string;
 }
@@ -591,6 +594,10 @@ function getIdentityLines(log: ApiAuditLog): string[] {
   const lines: string[] = [];
   if ((log.entity_type === "booking" || log.entity_type === "payment" || log.entity_type === "payments")) {
     lines.push(log.booking_ref ? `Réf. ${log.booking_ref}` : log.entity_type === "booking" ? "Réservation supprimée" : "Référence indisponible");
+    if (log.booking_date && log.booking_start_time && log.booking_end_time) {
+      const slot = formatBookingSlot({ date: log.booking_date, start_time: log.booking_start_time, end_time: log.booking_end_time });
+      if (slot) lines.push(slot);
+    }
   }
   if ((log.entity_type === "booking" || log.entity_type === "user") && log.user_email) {
     lines.push(`Client : ${log.user_email}`);
@@ -625,6 +632,9 @@ function AuditDetailDialog({
   const summaryLines = summarizeLog(log);
   const EntityIcon = entityCfg.icon;
   const isBookingLike = log.entity_type === "booking" || log.entity_type === "payment" || log.entity_type === "payments";
+  const bookingSlot = log.booking_date && log.booking_start_time && log.booking_end_time
+    ? formatBookingSlot({ date: log.booking_date, start_time: log.booking_start_time, end_time: log.booking_end_time })
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -649,9 +659,15 @@ function AuditDetailDialog({
                   {entityCfg.label}
                 </Badge>
                 {isBookingLike && log.booking_ref ? (
-                  <span className="text-xs text-zinc-300">Réf. {log.booking_ref}</span>
+                  <>
+                    <span className="text-xs text-zinc-300">Réf. {log.booking_ref}</span>
+                    {bookingSlot && <span className="text-xs text-zinc-400">{bookingSlot}</span>}
+                  </>
                 ) : (
-                  <span className="font-mono text-xs text-zinc-500">{log.entity_id}</span>
+                  <>
+                    <span className="font-mono text-xs text-zinc-500">{log.entity_id}</span>
+                    {bookingSlot && <span className="text-xs text-zinc-400">{bookingSlot}</span>}
+                  </>
                 )}
               </div>
             </div>
