@@ -509,7 +509,10 @@ function summarizeLog(log: ApiAuditLog): string[] {
     case "pricing:update":
       return compact([
         money(obj.price_per_half_hour) && `Nouveau tarif : ${money(obj.price_per_half_hour)} / 30 min`,
-        str("effective_from") && `Version du ${formatDateFr(str("effective_from")!)}`,
+        str("effective_from") &&
+          (str("effective_from") === "1970-01-01"
+            ? "Grille d'origine"
+            : `Version du ${formatDateFr(str("effective_from")!)}`),
       ]);
     case "pricing:schedule":
       return compact([str("effective_from") && `Grille programmée au ${formatDateFr(str("effective_from")!)} — ${num("count")} tarifs.`]);

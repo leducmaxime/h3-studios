@@ -135,6 +135,13 @@ function splitPricingVersions(
   };
 }
 
+/**
+ * Date de rétro-remplissage de la migration 0014 : les tarifs antérieurs au
+ * versionnement portent l'epoch Unix. Ce n'est pas une date métier, on ne
+ * l'affiche donc jamais telle quelle.
+ */
+const LEGACY_EFFECTIVE_FROM = "1970-01-01";
+
 function formatEffectiveDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("fr-FR", {
@@ -944,7 +951,9 @@ function PricingTab() {
                 <Badge>Grille active</Badge>
               </div>
               <p className="text-sm text-zinc-400">
-                Appliqués depuis le {formatEffectiveDate(active.effectiveFrom)}
+                {active.effectiveFrom === LEGACY_EFFECTIVE_FROM
+                  ? "Grille d'origine, appliquée depuis l'ouverture"
+                  : `Appliqués depuis le ${formatEffectiveDate(active.effectiveFrom)}`}
               </p>
             </div>
           </div>
