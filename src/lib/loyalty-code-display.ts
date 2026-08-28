@@ -29,16 +29,12 @@ export function loyaltyStatusBadgeProps(status: LoyaltyCodeStatus): { label: str
 }
 
 /**
- * `scope` détermine où s'applique la remise : `first_booking` (toujours les
- * pourcentages) ne joue que sur la 1re séance du panier, `cart` (toujours les
- * montants fixes) joue sur le total. On l'affiche toujours à côté du montant
- * plutôt que dans une colonne à part.
+ * Montant seul, sans mention de portée. La colonne `scope` continue de régir
+ * le calcul (`first_booking` pour les pourcentages, `cart` pour les montants
+ * fixes) mais n'est plus affichée, ni ici ni dans l'email envoyé au client.
  */
 export function formatLoyaltyDiscount(promo: DbPromoCode): string {
-  const scope = promo.scope ?? (promo.type === "percentage" ? "first_booking" : "cart");
-  const scopeLabel = scope === "cart" ? "panier" : "1ʳᵉ séance";
-  const valueLabel = promo.type === "percentage" ? `${promo.value} %` : `${promo.value}€ TTC`;
-  return `-${valueLabel} (${scopeLabel})`;
+  return promo.type === "percentage" ? `-${promo.value} %` : `-${promo.value}€ TTC`;
 }
 
 /**
