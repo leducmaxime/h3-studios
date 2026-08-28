@@ -16,6 +16,7 @@ import {
   Building2,
   Euro,
   Settings,
+  Info,
 } from "lucide-react";
 import {
   LineChart,
@@ -859,15 +860,58 @@ function ChartViewport({ children }: { children: React.ReactElement }) {
   );
 }
 
-function ChartCard({ title, action, children, className = "" }: { title: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
+function ChartCard({
+  title,
+  subtitle,
+  action,
+  children,
+  className = "",
+}: {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div className={`rounded-xl border border-zinc-800 bg-zinc-900 p-4 ${className}`}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <h3 className="text-sm font-medium text-zinc-400">{title}</h3>
+        <div>
+          <h3 className="flex items-center gap-1.5 text-sm font-medium text-zinc-400">{title}</h3>
+          {subtitle && <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>}
+        </div>
         {action}
       </div>
       {children}
     </div>
+  );
+}
+
+// Petit indice contextuel (icône "i") pour expliquer un chiffre sans alourdir
+// le tableau de bord d'un pavé de texte permanent. Même mécanique d'ouverture
+// que DurationLegendHint (survol souris, tap tactile natif) mais un déclencheur
+// plus discret pour un titre de carte plutôt qu'une légende.
+function InfoHint({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-600 transition-colors hover:text-zinc-300 focus-visible:text-zinc-300 focus-visible:outline-none"
+        onPointerEnter={(e) => { if (e.pointerType === "mouse") setOpen(true); }}
+        onPointerLeave={(e) => { if (e.pointerType === "mouse") setOpen(false); }}
+        aria-label="Explication"
+      >
+        <Info className="h-3.5 w-3.5" />
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        collisionPadding={12}
+        className="w-64 rounded-lg border-zinc-700 bg-zinc-900 p-3 text-xs leading-relaxed text-zinc-300 shadow-xl"
+      >
+        <p>{text}</p>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -922,7 +966,7 @@ function PaymentPieTooltip({
   total,
 }: {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; payload: { count: number } }>;
+  payload?: Array<{ name: string; value: number; payload: { count: number; revenue: number } }>;
   total: number;
 }) {
   if (!active || !payload?.length) return null;
@@ -934,6 +978,7 @@ function PaymentPieTooltip({
     <div className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 shadow-xl">
       <p className="mb-1 text-sm font-medium text-zinc-100">{entry.name}</p>
       <p className="text-xs text-zinc-400">{count} paiements · {pct}%</p>
+      <p className="text-xs text-primary">{formatPrice(entry.payload.revenue)}</p>
     </div>
   );
 }
@@ -2173,11 +2218,20 @@ export function AdminDashboard() {
               })()}
             </ChartCard>
 
-            {/* Dernière ligne de la grille 2 colonnes : "Méthodes de paiement"
-                à gauche, "Top 5 des meilleurs clients" à droite. */}
+            {/* Dernière ligne de la grille 2 colonnes : "Encaissements par moyen
+                de paiement" à gauche, "Top 5 des meilleurs clients" à droite.
+                Daté de l'encaissement (paid_at), pas de la séance — ce chiffre
+                diverge donc volontairement du "CA réservé" plus haut. L'écart
+                est le reste dû, déjà affiché sous "Au recouvrement". */}
             <div>
               <ChartCard
-                title="Méthodes de paiement"
+                title={
+                  <>
+                    Encaissements par moyen de paiement
+                    <InfoHint text="Daté du paiement, pas de la séance : un encaissement peut tomber hors de la période où la réservation a été faite, ou inversement. Ce total diffère donc normalement du CA réservé ci-dessus — l'écart correspond au solde affiché sous « Au recouvrement »." />
+                  </>
+                }
+                subtitle={stats ? `${rangeSubtitle} · date d'encaissement` : undefined}
                 className="h-full"
                 action={
                   <div className="inline-flex shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
@@ -2199,54 +2253,68 @@ export function AdminDashboard() {
               >
                 {(() => {
                   const totalCount = displayedPaymentData.reduce((acc, p) => acc + p.count, 0);
+                  const totalRevenue = displayedPaymentData.reduce((acc, p) => acc + p.revenue, 0);
                   const labels = displayedPaymentData.map((p) => {
                     const pct = totalCount > 0 ? Math.round((p.count / totalCount) * 100) : 0;
-                    return { method: p.method, count: p.count, pct };
+                    return { method: p.method, count: p.count, revenue: p.revenue, pct };
                   });
 
                   return (
-                    <div className="flex flex-col gap-4 lg:h-[280px] lg:flex-row lg:items-center">
-                      <div className="h-[190px] w-full lg:h-full lg:w-1/2">
-                        <ChartViewport>
-                          <PieChart>
-                            <Pie
-                              data={displayedPaymentData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius="58%"
-                              outerRadius="85%"
-                              paddingAngle={3}
-                              dataKey="count"
-                              nameKey="method"
-                              labelLine={false}
-                              label={renderPiePercentLabel}
-                            >
-                              {displayedPaymentData.map((p, i) => (
-                                <Cell key={p.key} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<PaymentPieTooltip total={totalCount} />} />
-                          </PieChart>
-                        </ChartViewport>
-                      </div>
+                    <>
+                      <div className="flex flex-col gap-4 lg:h-[280px] lg:flex-row lg:items-center">
+                        <div className="h-[190px] w-full lg:h-full lg:w-1/2">
+                          <ChartViewport>
+                            <PieChart>
+                              <Pie
+                                data={displayedPaymentData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius="58%"
+                                outerRadius="85%"
+                                paddingAngle={3}
+                                dataKey="count"
+                                nameKey="method"
+                                labelLine={false}
+                                label={renderPiePercentLabel}
+                              >
+                                {displayedPaymentData.map((p, i) => (
+                                  <Cell key={p.key} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip content={<PaymentPieTooltip total={totalCount} />} />
+                            </PieChart>
+                          </ChartViewport>
+                        </div>
 
-                      <div className="w-full lg:w-1/2">
-                        <div className="space-y-2">
-                          {labels.map((l, i) => (
-                            <div key={l.method} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="h-2.5 w-2.5 rounded-full"
-                                  style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
-                                />
-                                <span className="text-sm text-zinc-300">{l.method}</span>
+                        <div className="w-full lg:w-1/2">
+                          <div className="space-y-2">
+                            {labels.map((l, i) => (
+                              <div key={l.method} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full"
+                                    style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                                  />
+                                  <span className="text-sm text-zinc-300">{l.method}</span>
+                                </div>
+                                <span className="text-sm text-zinc-200">
+                                  {formatPrice(l.revenue)} <span className="text-zinc-500">· {l.count} · {l.pct}%</span>
+                                </span>
                               </div>
-                              <span className="text-sm text-zinc-200">{l.count} · {l.pct}%</span>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                      <div className="mt-3 flex flex-col gap-1 border-t border-zinc-800 pt-3 sm:flex-row sm:items-baseline sm:justify-between">
+                        <p className="text-xs text-zinc-400">Total encaissé sur la période</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xl font-bold text-primary">{formatPrice(totalRevenue)}</span>
+                          {stats && (
+                            <span className="text-xs text-zinc-500">vs. CA réservé {formatPrice(stats.rangeRevenue)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </>
                   );
                   })()}
               </ChartCard>

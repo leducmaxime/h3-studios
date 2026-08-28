@@ -50,12 +50,6 @@ export function allocateCollectPayments(
   if (due.length === 0) return { error: "Aucune réservation à encaisser" };
   if (entries.length === 0) return { error: "Ajoutez au moins un paiement" };
 
-  const totalDue = sumAmounts(due.map((booking) => ({ amount: booking.remaining })));
-  const totalPaid = sumAmounts(entries);
-  if (totalPaid > totalDue + 0.005) {
-    return { error: "Le montant dépasse le reste dû" };
-  }
-
   const allocations: CollectAllocation[] = [];
   let paymentIndex = 0;
   let paymentLeft = entries[0]?.amount ?? 0;

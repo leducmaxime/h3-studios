@@ -1,5 +1,5 @@
 import { render, route, layout } from "rwsdk/router";
-import { bookingAllowsCollection, getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage, isBookingPast } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage, isBookingPast, round2 } from "@/lib/booking-totals";
 import { allocateCollectPayments, isCollectMethod, type CollectPaymentInput } from "@/lib/recouvrement-collect";
 import { groupTypeLabel, paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, CLIENT_TYPE_RULES, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
@@ -2960,8 +2960,16 @@ const app = defineApp([
         }
 
         const ledger = await getBookingLedger(env.DB, params.id);
-        if (body.amount > ledger.balance + 0.005) {
-          return jsonError("Le montant dépasse le reste dû", 400);
+        // Le sur-paiement est autorise : l'argent est reellement entre en caisse.
+        // Le waterfall n'alloue jamais au-dela du du, l'excedent reste non
+        // affecte sur le mouvement. Meme regle que l'encaissement groupe.
+        //
+        // En revanche on refuse une reservation deja soldee : sans rien a
+        // imputer, le mouvement serait cree sans aucune allocation, donc
+        // orphelin et introuvable depuis la fiche client. Un trop-percu sur une
+        // reservation soldee se traite par remboursement.
+        if (ledger.balance <= 0.005) {
+          return jsonError("Cette réservation est déjà soldée : aucun montant à imputer", 400);
         }
         const allocation = allocateWaterfall([{
           id: booking.id,
@@ -2970,7 +2978,6 @@ const app = defineApp([
           start_time: booking.start_time,
           remaining: ledger.balance,
         }], body.amount);
-        if (allocation.unallocated > 0.005) return jsonError("Impossible d'allouer le paiement", 400);
 
         const result = await recordMovement(env.DB, {
           amount: body.amount,
@@ -3426,18 +3433,28 @@ const app = defineApp([
       const paymentIds: string[] = [];
       const performedBy = request.headers.get("X-Admin-User-Id") || "admin";
       const createdAt = new Date().toISOString().replace("T", " ").slice(0, 19);
-      const statements = allocation.flatMap((line) => {
+      let allocationIndex = 0;
+      const statements = payments.flatMap((payment) => {
         const paymentId = generateId();
         paymentIds.push(paymentId);
+        let paymentLeft = round2(payment.amount);
+        const paymentAllocations: typeof allocation = [];
+        while (allocationIndex < allocation.length && paymentLeft > 0.005) {
+          const line = allocation[allocationIndex];
+          if (line.method !== payment.method || line.amount > paymentLeft + 0.005) break;
+          paymentAllocations.push(line);
+          paymentLeft = round2(paymentLeft - line.amount);
+          allocationIndex += 1;
+        }
         return [
           env.DB.prepare(
             `INSERT INTO payments (id, amount, method, status, paid_at, external_ref, parent_id, reason, performed_by, created_at)
              VALUES (?, ?, ?, 'settled', ?, NULL, NULL, NULL, ?, ?)`,
-          ).bind(paymentId, line.amount, line.method, createdAt, performedBy, createdAt),
-          env.DB.prepare(
+          ).bind(paymentId, round2(payment.amount), payment.method, createdAt, performedBy, createdAt),
+          ...paymentAllocations.map((line) => env.DB.prepare(
             `INSERT INTO payment_allocations (id, payment_id, booking_id, amount, created_at)
              VALUES (?, ?, ?, ?, ?)`,
-          ).bind(generateId(), paymentId, line.bookingId, line.amount, createdAt),
+          ).bind(generateId(), paymentId, line.bookingId, line.amount, createdAt)),
         ];
       });
       await env.DB.batch(statements);
@@ -3445,7 +3462,7 @@ const app = defineApp([
         await recomputeBookingPaymentStatus(env.DB, bookingId);
       }
 
-      const collectedAmount = allocation.reduce((sum, line) => sum + line.amount, 0);
+      const collectedAmount = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
       await addAuditLog(
         env.DB,
         "user",

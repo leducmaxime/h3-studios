@@ -49,15 +49,32 @@ describe("allocateCollectPayments", () => {
     expect(result).toEqual([{ bookingId: "a", amount: 20, method: "cash" }]);
   });
 
-  // Le sur-paiement reste refusé : un trop-perçu doit passer par un
-  // remboursement, jamais être absorbé silencieusement dans une allocation.
-  it("refuse un montant supérieur au reste dû", () => {
-    expect(
-      allocateCollectPayments(
-        [{ id: "a", remaining: 40 }],
-        [{ amount: 60, method: "cash" }],
-      ),
-    ).toEqual({ error: "Le montant dépasse le reste dû" });
+  it("accepte un sur-paiement et laisse l'excedent non affecte", () => {
+    const result = allocateCollectPayments(
+      [{ id: "a", remaining: 40 }],
+      [{ amount: 60, method: "cash" }],
+    );
+    // 40 € sont affectés, 20 € restent non affectés : aucune réservation n'est sur-allouée.
+    expect(result).toEqual([{ bookingId: "a", amount: 40, method: "cash" }]);
+  });
+
+  it("répartit le sur-paiement multi-méthodes sur la dernière méthode", () => {
+    const result = allocateCollectPayments(
+      [
+        { id: "a", remaining: 120 },
+        { id: "b", remaining: 80 },
+      ],
+      [
+        { amount: 150, method: "cash" },
+        { amount: 100, method: "check" },
+      ],
+    );
+    // 200 € dus sont affectés ; les 50 € excédentaires du chèque restent non affectés.
+    expect(result).toEqual([
+      { bookingId: "a", amount: 120, method: "cash" },
+      { bookingId: "b", amount: 30, method: "cash" },
+      { bookingId: "b", amount: 50, method: "check" },
+    ]);
   });
 
   it("rejects an empty payment list", () => {

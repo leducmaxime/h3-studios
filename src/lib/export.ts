@@ -705,17 +705,22 @@ export async function generateDashboardReportPDF(
 
   separator(20);
 
-  sectionHeader("Indicateurs cl\u00E9s", 120);
+  sectionHeader("Indicateurs cl\u00E9s", 145);
 
   const tax = splitTtc(stats.revenue);
   const equipPct = stats.revenue > 0 ? Math.round((stats.equipmentRevenue / stats.revenue) * 100) : 0;
   const occupancyLabel = stats.occupancyRate % 1 === 0
     ? stats.occupancyRate.toFixed(0)
     : stats.occupancyRate.toFixed(1);
+  // Trésorerie : somme des encaissements datés du paiement (paid_at), à ne pas
+  // confondre avec le CA réservé ci-dessous (daté de la séance). Dérivé de la
+  // ventilation par moyen de paiement plutôt que stocké séparément, pour
+  // rester garanti cohérent avec le détail affiché plus bas.
+  const totalCollected = stats.paymentMethods.reduce((sum, p) => sum + p.revenue, 0);
 
   const kpis = [
     ["R\u00E9servations:", `${stats.bookingCount} \u00B7 ${stats.bookedDurationLabel}`],
-    ["CA r\u00E9serv\u00E9:", `${stats.revenue.toFixed(2)} \u20AC TTC`],
+    ["CA r\u00E9serv\u00E9 (prestations):", `${stats.revenue.toFixed(2)} \u20AC TTC`],
     ["  HT:", `${tax.ht.toFixed(2)} \u20AC`],
     ["  TVA 20%:", `${tax.vat.toFixed(2)} \u20AC`],
     ["  dont options:", `${stats.equipmentRevenue.toFixed(2)} \u20AC TTC (${equipPct}%)`],
@@ -726,6 +731,7 @@ export async function generateDashboardReportPDF(
     ["Occupation:", `${occupancyLabel}% \u00B7 ${stats.occupancyBookedLabel} / ${stats.occupancyOpenLabel}`],
     ["Sur place \u00E0 encaisser:", `${stats.pendingPayments} \u00B7 ${stats.pendingAmount.toFixed(2)} \u20AC TTC`],
     ["Au recouvrement:", `${stats.overduePayments} \u00B7 ${stats.overdueAmount.toFixed(2)} \u20AC TTC`],
+    ["Encaissements (tr\u00E9sorerie):", `${totalCollected.toFixed(2)} \u20AC TTC \u00B7 date de paiement`],
   ];
 
   kpis.forEach(([label, value]) => {
@@ -734,7 +740,23 @@ export async function generateDashboardReportPDF(
     y += 7;
   });
 
-  y += 10;
+  y += 3;
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(
+    "CA r\u00E9serv\u00E9 et encaissements mesurent des choses diff\u00E9rentes : le premier est dat\u00E9 de la",
+    25,
+    y,
+  );
+  y += 5;
+  doc.text(
+    "s\u00E9ance, le second du paiement. L'\u00E9cart correspond au solde \u00AB\u00A0Au recouvrement\u00A0\u00BB ci-dessus.",
+    25,
+    y,
+  );
+  doc.setTextColor(0);
+  doc.setFontSize(11);
+  y += 12;
 
   if (charts?.revenue) insertChart(charts.revenue);
 
@@ -766,7 +788,13 @@ export async function generateDashboardReportPDF(
   if (charts?.clientsType) insertChart(charts.clientsType);
 
   separator();
-  sectionHeader("Moyens de paiement", 20 + Math.max(stats.paymentMethods.length, stats.paymentChannels.length, 1) * 7 + 20);
+  sectionHeader("Encaissements par moyen de paiement", 30 + Math.max(stats.paymentMethods.length, stats.paymentChannels.length, 1) * 7 + 20);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text("Dat\u00E9 du paiement, pas de la s\u00E9ance \u2014 ne pas confondre avec le CA r\u00E9serv\u00E9.", 25, y);
+  doc.setTextColor(0);
+  doc.setFontSize(11);
+  y += 8;
   doc.setFont("helvetica", "bold");
   doc.text("Tous", 25, y);
   y += 7;

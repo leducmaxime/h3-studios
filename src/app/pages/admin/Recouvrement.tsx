@@ -6,24 +6,13 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { formatPrice } from "@/lib/booking";
-import { getDisplayStatus, parseAmountInput, round2 } from "@/lib/booking-totals";
+import { getDisplayStatus } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, studioLabel } from "@/lib/labels";
-import { formatTaxBreakdown } from "@/lib/tax";
-import { amountsMatch, type CollectMethod } from "@/lib/recouvrement-collect";
-import { buildClientGroupIdentity, groupBookingsByBand } from "@/lib/recouvrement-display";
+import { buildClientGroupIdentity } from "@/lib/recouvrement-display";
 import type { BookingStatus, OverdueBooking } from "@/lib/db-types";
 import { subscribe } from "@/lib/navigation-events";
+import { GroupCollectDialog } from "@/app/pages/admin/Payments";
 
 const VIEW_STORAGE_KEY = "h3-admin-recouvrement-view";
 
@@ -49,12 +38,6 @@ interface ClientGroup {
   phone: string | null;
   bookings: OverdueBooking[];
   remaining: number;
-}
-
-interface CollectEntry {
-  id: string;
-  amount: string;
-  method: CollectMethod;
 }
 
 const STATUS_CLASSES: Record<BookingStatus, string> = {
@@ -131,10 +114,9 @@ export function AdminRecouvrement() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
-  const [collectGroup, setCollectGroup] = useState<ClientGroup | null>(null);
-  const [collectScopeKey, setCollectScopeKey] = useState<string | null>(null);
-  const [collectEntries, setCollectEntries] = useState<CollectEntry[]>([]);
-  const [collectLoading, setCollectLoading] = useState(false);
+  const [groupCollectOpen, setGroupCollectOpen] = useState(false);
+  const [groupCollectUserId, setGroupCollectUserId] = useState<string | null>(null);
+  const [groupCollectClientLabel, setGroupCollectClientLabel] = useState<string | null>(null);
 
   const fetchOverdue = useCallback(async () => {
     setLoading(true);
@@ -246,96 +228,9 @@ export function AdminRecouvrement() {
       toast.error("Impossible d'encaisser un client sans fiche");
       return;
     }
-    setCollectGroup(group);
-    setCollectScopeKey("all");
-    setCollectEntries([
-      {
-        id: crypto.randomUUID(),
-        amount: group.remaining.toFixed(2).replace(".", ","),
-        method: "cash",
-      },
-    ]);
-  };
-
-  const collectScopes = useMemo(
-    () => groupBookingsByBand(collectGroup?.bookings ?? []),
-    [collectGroup],
-  );
-
-  const selectedCollectScope = useMemo(() => {
-    if (!collectGroup || collectScopeKey === "all") {
-      return collectGroup
-        ? { bookings: collectGroup.bookings, remaining: collectGroup.remaining }
-        : null;
-    }
-    return collectScopes.find((scope) => scope.key === collectScopeKey) ?? {
-      bookings: collectGroup.bookings,
-      remaining: collectGroup.remaining,
-    };
-  }, [collectGroup, collectScopeKey, collectScopes]);
-
-  const changeCollectScope = (scopeKey: string) => {
-    if (!collectGroup) return;
-    const scope = scopeKey === "all"
-      ? { remaining: collectGroup.remaining }
-      : collectScopes.find((candidate) => candidate.key === scopeKey);
-    if (!scope) return;
-    setCollectScopeKey(scopeKey);
-    setCollectEntries([
-      { id: crypto.randomUUID(), amount: scope.remaining.toFixed(2).replace(".", ","), method: "cash" },
-    ]);
-  };
-
-  const collectTotals = useMemo(() => {
-    const remainingStart = selectedCollectScope?.remaining ?? 0;
-    const parsed = collectEntries.map((entry) => {
-      const amount = parseAmountInput(entry.amount);
-      return { method: entry.method, amount: Number.isFinite(amount) && amount > 0 ? amount : 0 };
-    });
-    const totalAmount = round2(parsed.reduce((sum, entry) => sum + entry.amount, 0));
-    return {
-      remainingStart,
-      totalAmount,
-      remainingAfter: round2(remainingStart - totalAmount),
-      exact: amountsMatch(remainingStart, totalAmount),
-    };
-  }, [collectEntries, selectedCollectScope]);
-
-  const submitCollect = async () => {
-    if (!collectGroup) return;
-    if (!collectTotals.exact) {
-      toast.error("Le total doit égaler exactement le reste dû");
-      return;
-    }
-    const payments = collectEntries
-      .map((entry) => ({ method: entry.method, amount: parseAmountInput(entry.amount) }))
-      .filter((entry) => Number.isFinite(entry.amount) && entry.amount > 0);
-    setCollectLoading(true);
-    try {
-      const res = await fetch("/api/admin/recouvrement/collect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: collectGroup.userId,
-          bookingIds: selectedCollectScope?.bookings.map((booking) => booking.id) ?? [],
-          payments,
-        }),
-      });
-      const json = (await res.json()) as { success: boolean; error?: string };
-      if (!json.success) {
-        toast.error(json.error || "Erreur lors de l'encaissement");
-        return;
-      }
-      toast.success(`${selectedCollectScope?.bookings.length ?? 0} réservation(s) soldée(s)`);
-      setCollectGroup(null);
-      setCollectScopeKey(null);
-      await fetchOverdue();
-    } catch (error) {
-      console.error("Collect overdue error:", error);
-      toast.error("Erreur réseau");
-    } finally {
-      setCollectLoading(false);
-    }
+    setGroupCollectUserId(group.userId);
+    setGroupCollectClientLabel(group.name);
+    setGroupCollectOpen(true);
   };
 
   return (
@@ -501,182 +396,19 @@ export function AdminRecouvrement() {
         </div>
       )}
 
-      <Dialog
-        open={collectGroup !== null}
+      <GroupCollectDialog
+        open={groupCollectOpen}
         onOpenChange={(open) => {
+          setGroupCollectOpen(open);
           if (!open) {
-            setCollectGroup(null);
-            setCollectScopeKey(null);
+            setGroupCollectUserId(null);
+            setGroupCollectClientLabel(null);
           }
         }}
-      >
-        <DialogContent className="border-zinc-800 bg-zinc-900 sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Encaisser le solde</DialogTitle>
-            <DialogDescription>
-              {collectGroup ? (
-                <>
-                  <span>
-                    {collectGroup.name} · {selectedCollectScope?.bookings.length ?? 0} réservation
-                    {(selectedCollectScope?.bookings.length ?? 0) === 1 ? "" : "s"}
-                  </span>
-                  <span className="mt-1 block">
-                    Reste dû :{" "}
-                    <span className="font-semibold text-foreground">{formatPrice(collectTotals.remainingStart)}</span>
-                    {(() => {
-                      const tax = formatTaxBreakdown(collectTotals.remainingStart);
-                      return (
-                        <span className="ml-2 text-xs text-zinc-500">
-                          (HT {tax.ht} · TVA 20% {tax.vat})
-                        </span>
-                      );
-                    })()}
-                  </span>
-                </>
-              ) : (
-                "Chargement..."
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {collectGroup && (
-            <div className="space-y-3">
-              {collectScopes.length > 1 && (
-                <fieldset>
-                  <legend className="mb-2 text-xs font-medium text-zinc-400">Quoi encaisser</legend>
-                  <div className="space-y-1.5">
-                    {[
-                      { key: "all", label: "Tout le client", bookings: collectGroup.bookings, remaining: collectGroup.remaining },
-                      ...collectScopes,
-                    ].map((scope) => (
-                      <button
-                        key={scope.key}
-                        type="button"
-                        role="radio"
-                        aria-checked={collectScopeKey === scope.key}
-                        onClick={() => changeCollectScope(scope.key)}
-                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
-                          collectScopeKey === scope.key
-                            ? "border-primary bg-primary/10"
-                            : "border-zinc-800 bg-zinc-950/40 hover:border-zinc-700"
-                        }`}
-                      >
-                        <span className="min-w-0 truncate font-medium">{scope.label}</span>
-                        <span className="shrink-0 text-xs text-zinc-400">
-                          {scope.bookings.length} réservation{scope.bookings.length === 1 ? "" : "s"} · {formatPrice(scope.remaining)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
-              )}
-              <div className="max-h-40 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/40">
-                {selectedCollectScope?.bookings.map((booking) => (
-                  <div key={booking.id} className="flex items-center justify-between gap-3 border-b border-zinc-800/80 px-3 py-2 last:border-b-0">
-                    <div className="min-w-0">
-                      <p className="font-mono text-xs text-primary">{booking.booking_ref}</p>
-                      <p className="text-xs text-zinc-500">
-                        {formatDate(booking.date)} · {booking.start_time}–{booking.end_time}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-sm font-medium text-red-400">{formatPrice(booking.remaining)}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-400">Paiements saisis</span>
-                  <span className="font-semibold">{formatPrice(collectTotals.totalAmount)}</span>
-                </div>
-                <div className="mt-1 text-right text-xs text-zinc-500">
-                  Reste: {formatPrice(collectTotals.remainingAfter)}
-                </div>
-                {!collectTotals.exact && (
-                  <p className="mt-2 text-xs text-destructive">
-                    Le total doit égaler exactement {formatPrice(collectTotals.remainingStart)}
-                  </p>
-                )}
-              </div>
-
-              {collectEntries.map((entry, idx) => (
-                <div key={entry.id} className="grid grid-cols-12 gap-2">
-                  <div className="col-span-5">
-                    <Label className="text-xs text-zinc-400">Montant (€ TTC)</Label>
-                    <Input
-                      value={entry.amount}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setCollectEntries((prev) => prev.map((item, i) => (i === idx ? { ...item, amount: value } : item)));
-                      }}
-                      placeholder="0,00"
-                      className="border-zinc-700 bg-zinc-800"
-                      inputMode="decimal"
-                    />
-                  </div>
-                  <div className="col-span-5">
-                    <Label className="text-xs text-zinc-400">Type</Label>
-                    <select
-                      value={entry.method}
-                      onChange={(event) => {
-                        const value = event.target.value as CollectMethod;
-                        setCollectEntries((prev) => prev.map((item, i) => (i === idx ? { ...item, method: value } : item)));
-                      }}
-                      className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-                    >
-                      <option value="cash">Espèces</option>
-                      <option value="card">CB</option>
-                      <option value="transfer">Virement</option>
-                      <option value="check">Chèque</option>
-                    </select>
-                  </div>
-                  <div className="col-span-2 flex items-end justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setCollectEntries((prev) => prev.filter((_, i) => i !== idx))}
-                      disabled={collectEntries.length === 1 || collectLoading}
-                      className="text-zinc-400"
-                    >
-                      Retirer
-                    </Button>
-                  </div>
-                </div>
-              ))}
-
-              <Button
-                type="button"
-                variant="outline"
-                className="border-zinc-700"
-                onClick={() => setCollectEntries((prev) => [...prev, { id: crypto.randomUUID(), amount: "", method: "cash" }])}
-                disabled={collectLoading}
-              >
-                Ajouter un paiement
-              </Button>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setCollectGroup(null);
-                setCollectScopeKey(null);
-              }}
-              className="border-zinc-700"
-              disabled={collectLoading}
-            >
-              Annuler
-            </Button>
-            <Button type="button" onClick={submitCollect} disabled={collectLoading || !collectGroup || !selectedCollectScope || !collectTotals.exact}>
-              {collectLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Solder {selectedCollectScope?.bookings.length ?? 0} réservation{(selectedCollectScope?.bookings.length ?? 0) === 1 ? "" : "s"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        userId={groupCollectUserId}
+        clientLabel={groupCollectClientLabel}
+        onSettled={fetchOverdue}
+      />
     </div>
   );
 }

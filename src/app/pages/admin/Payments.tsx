@@ -46,13 +46,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatPrice } from "@/lib/booking";
-import { bookingAllowsCollection, getBookingAmountDue, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
+import { formatBookingSlot, formatPrice } from "@/lib/booking";
+import { isBookingPast, parseAmountInput, round2 } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { exportAllocationsCSV, exportCollectionsCSV, type AllocationExportRow } from "@/lib/export";
 import { RefundPaymentDialog } from "@/components/admin/refund";
 import { paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
-import type { DbPayment } from "@/lib/db-types";
+import { allocateCollectPayments } from "@/lib/recouvrement-collect";
+import type { DbPayment, OverdueBooking } from "@/lib/db-types";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -90,41 +91,6 @@ interface PaymentsResponse {
       refundedAmount: number;
     };
   };
-}
-
-type BookingPaymentMethod = "card" | "cash" | null;
-
-interface CollectBooking {
-  booking_ref: string;
-  status?: string;
-  keep_balance_due?: number | boolean | null;
-  base_price: number;
-  equipment_price: number;
-  total_price: number;
-  promo_discount: number;
-  promo_code?: string | null;
-  promo_code_type?: string | null;
-  promo_code_value?: number | null;
-  payment_method: BookingPaymentMethod;
-  band_name?: string | null;
-  user_name?: string | null;
-  user_band_name?: string | null;
-}
-
-interface CollectContext {
-  bookingId: string;
-  bookingRef: string | null;
-  userName: string | null;
-  totalPrice: number;
-  totalPaid: number;
-  remaining: number;
-  bookingPaymentMethod: BookingPaymentMethod;
-  promoCode: string | null;
-  promoCodeType: string | null;
-  promoCodeValue: number | null;
-  promoDiscount: number;
-  booking: CollectBooking;
-  overpayment: number;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -378,11 +344,13 @@ function PaymentActions({
   onMarkPaid,
   onRefund,
   onDelete,
+  onCollect,
 }: {
   payment: ApiPayment;
   onMarkPaid: (id: string) => void;
   onRefund: (payment: ApiPayment) => void;
   onDelete: (payment: ApiPayment) => void;
+  onCollect: (payment: ApiPayment) => void;
 }) {
   const canPay = payment.status === "pending";
   const canRefund =
@@ -390,7 +358,8 @@ function PaymentActions({
     payment.refundable_amount > 0.004 &&
     (payment.method !== "card" || !!payment.external_ref?.startsWith("cs_"));
   const canDelete = payment.payment_type === "on-site";
-  if (!canPay && !canRefund && !canDelete) return null;
+  const canCollect = Boolean(payment.user_id);
+  if (!canPay && !canRefund && !canDelete && !canCollect) return null;
 
   return (
     <DropdownMenu>
@@ -401,6 +370,13 @@ function PaymentActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="border-zinc-800 bg-zinc-900">
+        {canCollect && (
+          <DropdownMenuItem onClick={() => onCollect(payment)}>
+            <Banknote className="h-4 w-4 text-primary" />
+            <span>Encaisser ce client</span>
+          </DropdownMenuItem>
+        )}
+        {canCollect && (canDelete || canPay || canRefund) && <DropdownMenuSeparator />}
         {canDelete && (
           <DropdownMenuItem variant="destructive" onClick={() => onDelete(payment)}>
             <Trash2 className="h-4 w-4" />
@@ -426,6 +402,423 @@ function PaymentActions({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// ─── Group Collect Dialog (waterfall multi-booking) ─────────────────────────────
+//
+// Encaisse un montant global (une ou plusieurs méthodes) pour un client, réparti
+// sur plusieurs réservations sélectionnées selon la même règle que le serveur :
+// waterfall, réservation la plus ancienne d'abord (date, heure, référence), chaque
+// réservation soldée avant de passer à la suivante. Le calcul est partagé avec le
+// serveur via `allocateCollectPayments`, afin que la prévisualisation reste sa
+// source de vérité.
+
+interface RecouvrementLookupResponse {
+  success: boolean;
+  data?: { bookings: OverdueBooking[]; totalCount: number; totalRemaining: number };
+  error?: string;
+}
+
+function sortBookingsForWaterfall(bookings: OverdueBooking[]): OverdueBooking[] {
+  return [...bookings].sort((a, b) =>
+    a.date.localeCompare(b.date) ||
+    a.start_time.localeCompare(b.start_time) ||
+    a.booking_ref.localeCompare(b.booking_ref),
+  );
+}
+
+interface WaterfallRow {
+  id: string;
+  due: number;
+  allocated: number;
+}
+
+function BookingCheckRow({
+  booking,
+  checked,
+  onToggle,
+}: {
+  booking: OverdueBooking;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 border-b border-zinc-800/60 px-3 py-2 last:border-b-0 hover:bg-zinc-800/40">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onToggle}
+        className="h-4 w-4 shrink-0 rounded border-zinc-600 accent-primary"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="font-mono text-xs text-primary">{booking.booking_ref}</p>
+        <p className="truncate text-xs text-zinc-500">
+          {formatBookingSlot(booking)}
+          {booking.band_name ? ` · ${booking.band_name}` : ""}
+        </p>
+      </div>
+      <p className="shrink-0 text-sm font-medium text-red-400">{formatPrice(booking.remaining)}</p>
+    </label>
+  );
+}
+
+export function GroupCollectDialog({
+  open,
+  onOpenChange,
+  userId,
+  clientLabel,
+  onSettled,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  userId: string | null;
+  clientLabel?: string | null;
+  onSettled?: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [bookings, setBookings] = useState<OverdueBooking[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [entries, setEntries] = useState<CollectEntry[]>([
+    { id: crypto.randomUUID(), amount: "", method: "cash" },
+  ]);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open || !userId) return;
+    let cancelled = false;
+    setLoading(true);
+    setBookings([]);
+    setSelectedIds(new Set());
+    setEntries([{ id: crypto.randomUUID(), amount: "", method: "cash" }]);
+
+    fetch(`/api/admin/recouvrement?userId=${encodeURIComponent(userId)}&includeUpcoming=true`)
+      .then((res) => res.json() as Promise<RecouvrementLookupResponse>)
+      .then((json) => {
+        if (cancelled) return;
+        if (!json.success || !json.data) {
+          toast.error(json.error || "Impossible de charger les réservations du client");
+          return;
+        }
+        const fetched = json.data.bookings;
+        setBookings(fetched);
+        // Par défaut : les séances déjà terminées sont pré-sélectionnées (le cas
+        // "recouvrement" classique). Les séances à venir restent décochées — les
+        // inclure change ce que l'encaissement solde, ça doit être un choix
+        // explicite de l'opérateur, jamais un effet de bord de l'ouverture du dialogue.
+        const due = fetched.filter((b) => isBookingPast(b));
+        const defaultTotal = round2(due.reduce((sum, b) => sum + Math.max(0, b.remaining), 0));
+        setSelectedIds(new Set(due.map((b) => b.id)));
+        setEntries([{
+          id: crypto.randomUUID(),
+          amount: defaultTotal > 0 ? defaultTotal.toFixed(2).replace(".", ",") : "",
+          method: "cash",
+        }]);
+      })
+      .catch(() => { if (!cancelled) toast.error("Erreur réseau"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [open, userId]);
+
+  const { past, upcoming } = useMemo(() => {
+    const past: OverdueBooking[] = [];
+    const upcoming: OverdueBooking[] = [];
+    for (const booking of bookings) (isBookingPast(booking) ? past : upcoming).push(booking);
+    return { past, upcoming };
+  }, [bookings]);
+
+  const toggleBooking = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelectedIds((prev) => (prev.size === bookings.length ? new Set() : new Set(bookings.map((b) => b.id))));
+  };
+
+  const bookingsById = useMemo(() => new Map(bookings.map((b) => [b.id, b])), [bookings]);
+  const selectedBookings = useMemo(
+    () => sortBookingsForWaterfall(bookings.filter((b) => selectedIds.has(b.id))),
+    [bookings, selectedIds],
+  );
+  const totalDueSelected = useMemo(
+    () => round2(selectedBookings.reduce((sum, b) => sum + Math.max(0, b.remaining), 0)),
+    [selectedBookings],
+  );
+
+  const parsedEntries = useMemo(
+    () => entries
+      .map((e) => ({ method: e.method, amount: parseAmountInput(e.amount) }))
+      .filter((e) => Number.isFinite(e.amount) && e.amount > 0),
+    [entries],
+  );
+  const totalAmount = useMemo(() => round2(parsedEntries.reduce((sum, e) => sum + e.amount, 0)), [parsedEntries]);
+  const preview = useMemo(() => {
+    const rows = selectedBookings.map((booking) => ({
+      id: booking.id,
+      due: round2(Math.max(0, booking.remaining)),
+      allocated: 0,
+    }));
+    const allocation = allocateCollectPayments(
+      selectedBookings.map((booking) => ({ id: booking.id, remaining: booking.remaining })),
+      parsedEntries,
+    );
+    if ("error" in allocation) return { rows, unallocated: totalAmount };
+
+    const allocatedByBooking = new Map<string, number>();
+    for (const line of allocation) {
+      allocatedByBooking.set(line.bookingId, round2((allocatedByBooking.get(line.bookingId) ?? 0) + line.amount));
+    }
+    const allocatedTotal = allocation.reduce((sum, line) => sum + line.amount, 0);
+    return {
+      rows: rows.map((row) => ({ ...row, allocated: allocatedByBooking.get(row.id) ?? 0 })),
+      unallocated: round2(Math.max(0, totalAmount - allocatedTotal)),
+    };
+  }, [selectedBookings, parsedEntries, totalAmount]);
+
+  const matchSelectionAmount = () => {
+    setEntries((prev) => [{
+      id: prev[0]?.id ?? crypto.randomUUID(),
+      amount: totalDueSelected > 0 ? totalDueSelected.toFixed(2).replace(".", ",") : "",
+      method: prev[0]?.method ?? "cash",
+    }]);
+  };
+
+  async function handleSubmit() {
+    if (!userId || selectedBookings.length === 0 || totalAmount <= 0.005) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/recouvrement/collect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          bookingIds: selectedBookings.map((b) => b.id),
+          payments: parsedEntries,
+        }),
+      });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (!json.success) {
+        toast.error(json.error || "Erreur lors de l'encaissement");
+        return;
+      }
+
+      const fullCount = preview.rows.filter((r) => r.allocated >= r.due - 0.005).length;
+      const partialCount = preview.rows.filter((r) => r.allocated > 0.005 && r.allocated < r.due - 0.005).length;
+      const parts = [`${fullCount} réservation${fullCount === 1 ? "" : "s"} soldée${fullCount === 1 ? "" : "s"}`];
+      if (partialCount > 0) parts.push(`${partialCount} partielle${partialCount === 1 ? "" : "s"}`);
+      if (preview.unallocated > 0.005) parts.push(`${formatPrice(preview.unallocated)} non affecté`);
+      toast.success(parts.join(" · "));
+      onOpenChange(false);
+      onSettled?.();
+    } catch (error) {
+      console.error("Group collect error:", error);
+      toast.error("Erreur réseau");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const dueTax = formatTaxBreakdown(totalDueSelected);
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!submitting) onOpenChange(next); }}>
+      <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Encaisser un client</DialogTitle>
+          <DialogDescription>
+            {userId ? (
+              <>
+                {clientLabel || "Client"} · {selectedBookings.length} réservation{selectedBookings.length === 1 ? "" : "s"} sélectionnée{selectedBookings.length === 1 ? "" : "s"}
+                <span className="mt-1 block">
+                  Dû (sélection) : <span className="font-semibold text-foreground">{formatPrice(totalDueSelected)}</span>
+                  <span className="ml-2 text-xs text-zinc-500">(HT {dueTax.ht} · TVA 20% {dueTax.vat})</span>
+                </span>
+              </>
+            ) : "—"}
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-10 text-zinc-400">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Chargement…
+          </div>
+        ) : bookings.length === 0 ? (
+          <p className="py-6 text-center text-sm text-zinc-500">Aucune réservation avec un solde dû pour ce client.</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40">
+              <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Réservations</span>
+                <button type="button" onClick={toggleAll} className="text-xs text-primary hover:underline">
+                  {selectedIds.size === bookings.length ? "Tout désélectionner" : "Tout sélectionner"}
+                </button>
+              </div>
+              <div className="max-h-52 overflow-y-auto">
+                {past.length > 0 && (
+                  <>
+                    <p className="px-3 pt-2 text-[10px] font-medium uppercase tracking-wide text-zinc-600">Terminées</p>
+                    {past.map((b) => (
+                      <BookingCheckRow key={b.id} booking={b} checked={selectedIds.has(b.id)} onToggle={() => toggleBooking(b.id)} />
+                    ))}
+                  </>
+                )}
+                {upcoming.length > 0 && (
+                  <>
+                    <p className="px-3 pt-2 text-[10px] font-medium uppercase tracking-wide text-zinc-600">À venir</p>
+                    {upcoming.map((b) => (
+                      <BookingCheckRow key={b.id} booking={b} checked={selectedIds.has(b.id)} onToggle={() => toggleBooking(b.id)} />
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {entries.map((entry, idx) => (
+              <div key={entry.id} className="grid grid-cols-12 gap-2">
+                <div className="col-span-5">
+                  <Label className="text-xs text-zinc-400">Montant (€ TTC)</Label>
+                  <Input
+                    value={entry.amount}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setEntries((prev) => prev.map((p, i) => (i === idx ? { ...p, amount: v } : p)));
+                    }}
+                    placeholder="0,00"
+                    className="border-zinc-700 bg-zinc-800"
+                    inputMode="decimal"
+                  />
+                </div>
+                <div className="col-span-5">
+                  <Label className="text-xs text-zinc-400">Type</Label>
+                  <select
+                    value={entry.method}
+                    onChange={(e) => {
+                      const v = e.target.value as CollectEntry["method"];
+                      setEntries((prev) => prev.map((p, i) => (i === idx ? { ...p, method: v } : p)));
+                    }}
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+                  >
+                    <option value="cash">Espèces</option>
+                    <option value="card">CB</option>
+                    <option value="transfer">Virement</option>
+                    <option value="check">Chèque</option>
+                  </select>
+                </div>
+                <div className="col-span-2 flex items-end justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEntries((prev) => prev.filter((_, i) => i !== idx))}
+                    disabled={entries.length === 1 || submitting}
+                    className="text-zinc-400"
+                  >
+                    Retirer
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-zinc-700"
+                onClick={() => setEntries((prev) => [...prev, { id: crypto.randomUUID(), amount: "", method: "cash" }])}
+                disabled={submitting}
+              >
+                Ajouter un paiement
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-xs text-zinc-400"
+                onClick={matchSelectionAmount}
+                disabled={submitting || selectedBookings.length === 0}
+              >
+                Ajuster au montant dû de la sélection
+              </Button>
+            </div>
+
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-400">Montant saisi</span>
+                <span className="font-semibold">{formatPrice(totalAmount)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
+                <span>Dû (sélection) : {formatPrice(totalDueSelected)}</span>
+                <span>Reste après encaissement : {formatPrice(Math.max(0, round2(totalDueSelected - (totalAmount - preview.unallocated))))}</span>
+              </div>
+            </div>
+
+            {totalAmount > 0.005 && selectedBookings.length > 0 && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40">
+                <p className="border-b border-zinc-800 px-3 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Ventilation prévisionnelle · plus ancienne réservation d'abord
+                </p>
+                <div className="divide-y divide-zinc-800/80">
+                  {preview.rows.map((row) => {
+                    const booking = bookingsById.get(row.id);
+                    if (!booking) return null;
+                    const isFull = row.allocated >= row.due - 0.005;
+                    const isPartial = !isFull && row.allocated > 0.005;
+                    return (
+                      <div key={row.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="font-mono text-xs text-primary">{booking.booking_ref}</p>
+                          <p className="truncate text-xs text-zinc-500">{formatBookingSlot(booking)}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-medium">
+                            {formatPrice(row.allocated)} <span className="text-zinc-500">/ {formatPrice(row.due)}</span>
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className={
+                              isFull
+                                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
+                                : isPartial
+                                  ? "border-amber-500/30 bg-amber-500/15 text-amber-400"
+                                  : "border-zinc-700 text-zinc-400"
+                            }
+                          >
+                            {isFull ? "Soldée" : isPartial ? `Partielle · reste ${formatPrice(row.due - row.allocated)}` : "Non réglée"}
+                          </Badge>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {preview.unallocated > 0.005 && (
+                  <div className="border-t border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                    Excédent non affecté : <span className="font-semibold">{formatPrice(preview.unallocated)}</span> — enregistré mais non rattaché à une réservation.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-zinc-700" disabled={submitting}>
+            Annuler
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting || loading || selectedBookings.length === 0 || totalAmount <= 0.005}
+          >
+            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Encaisser {formatPrice(totalAmount)}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -461,45 +854,11 @@ export function AdminPayments() {
   const [refundOpen, setRefundOpen] = useState(false);
   const [refundBookingOptions, setRefundBookingOptions] = useState<Array<{ id: string; ref: string }>>([]);
 
-  const [collectOpen, setCollectOpen] = useState(false);
-  const [collectLoading, setCollectLoading] = useState(false);
-  const [collectContext, setCollectContext] = useState<CollectContext | null>(null);
-  const [collectEntries, setCollectEntries] = useState<CollectEntry[]>([
-    { id: crypto.randomUUID(), amount: "", method: "cash" },
-  ]);
-  const [discountInput, setDiscountInput] = useState("");
-  const [discountSaving, setDiscountSaving] = useState(false);
+  const [groupCollectOpen, setGroupCollectOpen] = useState(false);
+  const [groupCollectUserId, setGroupCollectUserId] = useState<string | null>(null);
+  const [groupCollectClientLabel, setGroupCollectClientLabel] = useState<string | null>(null);
 
   const [serverStats, setServerStats] = useState<{ paidCount: number; paidAmount: number; refundedCount: number; refundedAmount: number } | null>(null);
-
-  const collectTotals = useMemo(() => {
-    const entries = collectEntries.map((e) => {
-      const n = parseFloat(e.amount.replace(/\s/g, "").replace(",", "."));
-      const amount = Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
-      return { amount, method: e.method };
-    });
-
-    const totalAmount = entries.reduce((acc, e) => acc + (e.amount > 0 ? e.amount : 0), 0);
-    const cashAmount = entries.reduce((acc, e) => acc + (e.amount > 0 && e.method === "cash" ? e.amount : 0), 0);
-    const cardAmount = entries.reduce((acc, e) => acc + (e.amount > 0 && e.method === "card" ? e.amount : 0), 0);
-    const transferAmount = entries.reduce((acc, e) => acc + (e.amount > 0 && e.method === "transfer" ? e.amount : 0), 0);
-    const checkAmount = entries.reduce((acc, e) => acc + (e.amount > 0 && e.method === "check" ? e.amount : 0), 0);
-
-    const remainingStart = collectContext?.remaining ?? 0;
-    const remainingAfter = remainingStart - totalAmount;
-    const overpayAmount = totalAmount > remainingStart ? totalAmount - remainingStart : 0;
-
-    return {
-      totalAmount,
-      cashAmount,
-      cardAmount,
-      transferAmount,
-      checkAmount,
-      remainingStart,
-      remainingAfter,
-      overpayAmount,
-    };
-  }, [collectEntries, collectContext]);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -573,154 +932,11 @@ export function AdminPayments() {
     }
   }
 
-  async function openCollectDialog(bookingId: string) {
-    setCollectLoading(true);
-    try {
-      const [bRes, pRes] = await Promise.all([
-        fetch(`/api/admin/bookings/${bookingId}`),
-        fetch(`/api/admin/bookings/${bookingId}/payments`),
-      ]);
-      if (!bRes.ok) throw new Error("Failed to fetch booking");
-      if (!pRes.ok) throw new Error("Failed to fetch booking payments");
-
-      const bJson = (await bRes.json()) as { success: boolean; data: any; error?: string };
-      const pJson = (await pRes.json()) as { success: boolean; data: any; error?: string };
-      if (!bJson.success) throw new Error(bJson.error || "Booking fetch failed");
-      if (!pJson.success) throw new Error(pJson.error || "Payments fetch failed");
-
-      const booking = bJson.data as CollectBooking;
-      // Une réservation annulée ne peut être encaissée que si son solde a été conservé.
-      if (!bookingAllowsCollection(booking)) {
-        toast.error("Cette réservation est annulée — aucun encaissement possible");
-        return;
-      }
-      const ledger = pJson.data as { balance?: number; settled?: number };
-      const totalPaid = ledger.settled ?? 0;
-      const finalTotal = getBookingAmountDue(booking);
-      const remaining = ledger.balance ?? Math.max(finalTotal - totalPaid, 0);
-
-      if (remaining <= 0 && !getManualDiscountEligibility(booking).allowed) {
-        toast.success("La réservation est déjà soldée");
-        return;
-      }
-
-      setCollectContext({
-        bookingId,
-        bookingRef: booking.booking_ref,
-        userName: booking.band_name || booking.user_name || null,
-        totalPrice: finalTotal,
-        totalPaid,
-        remaining,
-        bookingPaymentMethod: booking.payment_method || null,
-        promoCode: booking.promo_code || null,
-        promoCodeType: booking.promo_code_type || null,
-        promoCodeValue: booking.promo_code_value ?? null,
-        promoDiscount: booking.promo_discount || 0,
-        booking,
-        overpayment: Math.max(0, -remaining),
-      });
-      setDiscountInput(String(booking.promo_discount || 0));
-
-      setCollectEntries([
-        {
-          id: crypto.randomUUID(),
-          amount: remaining > 0 ? remaining.toFixed(2).replace(".", ",") : "",
-          method: booking.payment_method === "card" ? "card" : "cash",
-        },
-      ]);
-      setCollectOpen(true);
-    } catch (error) {
-      console.error("Open collect dialog error:", error);
-      toast.error("Impossible de charger la réservation");
-    } finally {
-      setCollectLoading(false);
-    }
-  }
-
-  async function applyCollectDiscount() {
-    if (!collectContext) return;
-    const eligibility = getManualDiscountEligibility(collectContext.booking);
-    if (!eligibility.allowed) { toast.error(getManualDiscountBlockMessage(eligibility.reason)); return; }
-    const amount = parseAmountInput(discountInput);
-    if (!Number.isFinite(amount) || amount < 0 || amount > collectContext.booking.total_price) { toast.error("Montant invalide"); return; }
-    setDiscountSaving(true);
-    try {
-      const res = await fetch(`/api/admin/bookings/${collectContext.bookingId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ promo_discount: amount }) });
-      const json = await res.json() as { success: boolean; error?: string };
-      if (!json.success) { toast.error(json.error || "Erreur"); return; }
-      await openCollectDialog(collectContext.bookingId);
-      fetchPayments();
-      toast.success("Remise appliquée");
-    } catch { toast.error("Erreur réseau"); } finally { setDiscountSaving(false); }
-  }
-
-  function addCollectEntry() {
-    setCollectEntries((prev) => [...prev, { id: crypto.randomUUID(), amount: "", method: "cash" }]);
-  }
-
-  function removeCollectEntry(idx: number) {
-    setCollectEntries((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  async function submitCollectPayments() {
-    if (!collectContext) return;
-
-    if (collectContext.bookingPaymentMethod === "card") {
-      const hasNonCard = collectEntries.some((e) => e.method !== "card" && e.amount.trim() !== "");
-      if (hasNonCard) {
-        toast.error("En ligne, les paiements sont uniquement par CB");
-        return;
-      }
-    }
-
-    const parsed = collectEntries
-      .map((e) => {
-        const n = parseFloat(e.amount.replace(/\s/g, "").replace(",", "."));
-        const amount = Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
-        return { method: e.method, amount };
-      })
-      .filter((e) => e.amount > 0);
-
-    if (parsed.length === 0) {
-      toast.error("Ajoutez au moins un paiement");
-      return;
-    }
-
-    const totalToAdd = parsed.reduce((acc, p) => acc + p.amount, 0);
-    if (totalToAdd > collectContext.remaining) {
-      toast.error(`Le total dépasse le reste à payer (${formatPrice(collectContext.remaining)})`);
-      return;
-    }
-
-    setCollectLoading(true);
-    try {
-      for (const p of parsed) {
-        const res = await fetch(`/api/admin/bookings/${collectContext.bookingId}/payments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: p.amount,
-            method: p.method,
-          }),
-        });
-        const json = (await res.json()) as { success: boolean; error?: string };
-        if (!json.success) {
-          toast.error(json.error || "Erreur lors de l'ajout d'un paiement");
-          return;
-        }
-      }
-
-      toast.success("Paiement(s) enregistré(s)");
-      setCollectOpen(false);
-      setCollectContext(null);
-      setCollectEntries([{ id: crypto.randomUUID(), amount: "", method: "cash" }]);
-      fetchPayments();
-    } catch (error) {
-      console.error("Submit collect payments error:", error);
-      toast.error("Erreur réseau");
-    } finally {
-      setCollectLoading(false);
-    }
+  function openGroupCollect(payment: ApiPayment) {
+    if (!payment.user_id) return;
+    setGroupCollectUserId(payment.user_id);
+    setGroupCollectClientLabel(payment.user_name);
+    setGroupCollectOpen(true);
   }
 
   async function openRefundDialog(payment: ApiPayment) {
@@ -1131,6 +1347,7 @@ export function AdminPayments() {
                         onMarkPaid={handleMarkPaid}
                         onRefund={openRefundDialog}
                         onDelete={openDeleteDialog}
+                        onCollect={openGroupCollect}
                       />
                     </td>
                   </tr>
@@ -1195,171 +1412,19 @@ export function AdminPayments() {
         onConfirm={handleDeletePayment}
       />
 
-      <Dialog
-        open={collectOpen}
+      <GroupCollectDialog
+        open={groupCollectOpen}
         onOpenChange={(open) => {
+          setGroupCollectOpen(open);
           if (!open) {
-            setCollectOpen(false);
-            setCollectContext(null);
-            setCollectEntries([{ id: crypto.randomUUID(), amount: "", method: "cash" }]);
+            setGroupCollectUserId(null);
+            setGroupCollectClientLabel(null);
           }
         }}
-      >
-        <DialogContent className="border-zinc-800 bg-zinc-900">
-          <DialogHeader>
-            <DialogTitle>Ajouter un ou plusieurs paiements</DialogTitle>
-            <DialogDescription>
-              {collectContext ? (
-                <>
-                  {collectContext.userName || collectContext.bookingRef} · Reste à payer :{" "}
-                  <span className="font-semibold text-foreground">{formatPrice(collectTotals.remainingStart)}</span>
-                  {(() => {
-                    const tax = formatTaxBreakdown(collectTotals.remainingStart);
-                    return (
-                      <span className="ml-2 text-xs text-zinc-500">
-                        (HT {tax.ht} · TVA 20% {tax.vat})
-                      </span>
-                    );
-                  })()}
-                  {collectContext.promoCode && (
-                    <span className="ml-2 text-xs text-primary">
-                      Promo: {collectContext.promoCode}
-                      {collectContext.promoCodeType && collectContext.promoCodeValue != null && (
-                        <> ({collectContext.promoCodeType === "percentage" ? `-${collectContext.promoCodeValue}%` : `-${formatPrice(collectContext.promoCodeValue)}`})</>
-                      )}
-                      {collectContext.promoDiscount > 0 && <> · -{formatPrice(collectContext.promoDiscount)} appliqué</>}
-                    </span>
-                  )}
-                </>
-              ) : (
-                "Chargement..."
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            {collectContext && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-zinc-400 !mb-0">Remise manuelle</Label>
-                  <Input value={discountInput} onChange={(e) => setDiscountInput(e.target.value)} className="h-7 w-24 border-zinc-700 bg-zinc-800 text-xs" inputMode="decimal" />
-                  <Button type="button" size="sm" onClick={applyCollectDiscount} disabled={discountSaving} className="h-7 text-xs">Appliquer</Button>
-                </div>
-                {collectContext.promoCode && (
-                  <p className="text-xs text-zinc-500">Cette remise remplacera le code promo {collectContext.promoCode}.</p>
-                )}
-              </div>
-            )}
-            {collectContext && collectContext.overpayment > 0 && (
-              <p className="text-xs text-amber-400">Trop-perçu : {formatPrice(collectContext.overpayment)} — utiliser le remboursement.</p>
-            )}
-            {collectContext && (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-400">Paiements saisis</span>
-                  <span className="font-semibold text-foreground">{formatPrice(collectTotals.totalAmount)}</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
-                  <span>
-                    Espèces: {formatPrice(collectTotals.cashAmount)} · CB: {formatPrice(collectTotals.cardAmount)} · Virement:{" "}
-                    {formatPrice(collectTotals.transferAmount)} · Chèque: {formatPrice(collectTotals.checkAmount)}
-                  </span>
-                  <span>Reste: {formatPrice(collectTotals.remainingAfter)}</span>
-                </div>
-                {collectTotals.overpayAmount > 0 && (
-                  <p className="mt-2 text-xs text-destructive">
-                    Le total dépasse le reste à payer de {formatPrice(collectTotals.overpayAmount)}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {collectEntries.map((entry, idx) => (
-              <div key={entry.id} className="grid grid-cols-12 gap-2">
-                <div className="col-span-5">
-                  <Label className="text-xs text-zinc-400">Montant (€ TTC)</Label>
-                  <Input
-                    value={entry.amount}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setCollectEntries((prev) => prev.map((p, i) => (i === idx ? { ...p, amount: v } : p)));
-                    }}
-                    placeholder="0,00"
-                    className="border-zinc-700 bg-zinc-800"
-                    inputMode="decimal"
-                  />
-                </div>
-
-                <div className="col-span-5">
-                  <Label className="text-xs text-zinc-400">Type</Label>
-                  <select
-                    value={entry.method}
-                    onChange={(e) => {
-                      const v = e.target.value as "cash" | "card" | "transfer" | "check";
-                      setCollectEntries((prev) => prev.map((p, i) => (i === idx ? { ...p, method: v } : p)));
-                    }}
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-                  >
-                    {collectContext?.bookingPaymentMethod === "card" ? (
-                      <option value="card">CB</option>
-                    ) : (
-                      <>
-                        <option value="cash">Espèces</option>
-                        <option value="card">CB</option>
-                        <option value="transfer">Virement</option>
-                        <option value="check">Chèque</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div className="col-span-2 flex items-end justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeCollectEntry(idx)}
-                    disabled={collectEntries.length === 1 || collectLoading}
-                    className="text-zinc-400"
-                  >
-                    Retirer
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            <Button
-              type="button"
-              variant="outline"
-              className="border-zinc-700"
-              onClick={addCollectEntry}
-              disabled={collectLoading}
-            >
-              Ajouter un paiement
-            </Button>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setCollectOpen(false)}
-              className="border-zinc-700"
-              disabled={collectLoading}
-            >
-              Annuler
-            </Button>
-            <Button
-              type="button"
-              onClick={submitCollectPayments}
-              disabled={collectLoading || !collectContext || collectTotals.overpayAmount > 0}
-            >
-              {collectLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Enregistrer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        userId={groupCollectUserId}
+        clientLabel={groupCollectClientLabel}
+        onSettled={fetchPayments}
+      />
     </div>
   );
 }
