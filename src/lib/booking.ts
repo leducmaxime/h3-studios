@@ -229,6 +229,7 @@ export interface PromoCode {
   description: string;
   minTotal?: number; // Montant minimum pour appliquer
   round_mode?: "down" | "up" | "none";
+  scope?: "cart" | "first_booking";
 }
 const PROMO_CODES: PromoCode[] = [
   { code: "BIENVENUE", type: "percentage", value: 10, description: "10% de réduction" },

@@ -4,15 +4,20 @@ import { useState } from "react";
 import { Tag, Check, X, Loader2 } from "lucide-react";
 
 import { type PromoCode } from "@/lib/booking";
+import { loadUserPreferences } from "@/lib/user-prefs";
+import type { PromoCartLine } from "@/lib/db";
+import { getParisDateISO } from "@/lib/utils";
 
 interface PromoCodeInputProps {
   total: number;
+  cartLines?: PromoCartLine[];
+  email?: string | null;
   appliedPromo: PromoCode | null;
   onApply: (promo: PromoCode, discount: number) => void;
   onRemove: () => void;
 }
 
-export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: PromoCodeInputProps) {
+export function PromoCodeInput({ total, cartLines, email, appliedPromo, onApply, onRemove }: PromoCodeInputProps) {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
@@ -22,10 +27,20 @@ export function PromoCodeInput({ total, appliedPromo, onApply, onRemove }: Promo
     setIsValidating(true);
     setError(null);
     try {
+      const storedState = typeof window !== "undefined" ? localStorage.getItem("h3-studios-booking-state-v2") : null;
+      const storedCart = storedState
+        ? (JSON.parse(storedState) as { cart?: Array<{ bookingRef: string; date: string; startTime: string; price: number }> }).cart
+        : null;
+      const resolvedCartLines = cartLines?.length
+        ? cartLines
+        : storedCart?.length
+        ? storedCart.map((booking) => ({ ref: booking.bookingRef, date: getParisDateISO(new Date(booking.date)), startTime: booking.startTime, subtotal: booking.price }))
+        : [{ ref: "cart", date: "", startTime: "", subtotal: total }];
+      const resolvedEmail = email ?? loadUserPreferences()?.userEmail ?? null;
       const res = await fetch("/api/promo-codes/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: code.trim(), total }),
+        body: JSON.stringify({ code: code.trim(), cart: resolvedCartLines, email: resolvedEmail }),
       });
       const json = await res.json() as { success: boolean; data?: { valid: boolean; promo?: PromoCode; discount?: number; error?: string } };
       const data = json.data;

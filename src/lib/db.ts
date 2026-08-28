@@ -38,6 +38,13 @@ import { computeClientBookingInsights, type BookingStatSource } from "./user-boo
 
 export { isPromoCodeExpired } from "./utils";
 
+export interface PromoCartLine {
+  ref: string;
+  date: string;
+  startTime: string;
+  subtotal: number;
+}
+
 export function buildLoyaltyCountsQuery(userId: string, nowValue: { dateISO: string; hours: number; minutes: number }): { sql: string; params: unknown[] } {
   const direction = dateDirectionCondition("past", nowValue);
   const lastAwardEnd = `(SELECT MAX(${sqlBookingEndInstant("a")}) FROM bookings a WHERE a.user_id = b.user_id AND a.status != 'cancelled' AND a.loyalty_award_id IS NOT NULL)`;
@@ -1778,29 +1785,95 @@ export async function updatePromoCode(
 export async function validatePromoCode(
   db: D1Database,
   code: string,
-  total: number,
-): Promise<{ valid: boolean; promo?: DbPromoCode; roundedDiscount?: number; error?: string }> {
+  cart: PromoCartLine[],
+  userId: string | null,
+): Promise<{
+  valid: boolean;
+  promo?: DbPromoCode;
+  roundedDiscount?: number;
+  allocations?: Array<{ ref: string; discount: number }>;
+  error?: string;
+}> {
+  const normalizedCode = code.trim().toUpperCase();
   const promo = await db.prepare(
-    "SELECT * FROM promo_codes WHERE code = ? AND is_active = 1", 
-  ).bind(code.trim().toUpperCase()).first<DbPromoCode>();
-  if (!promo) return { valid: false, error: "Code promo invalide" };
+    "SELECT * FROM promo_codes WHERE code = ? AND is_active = 1 AND (user_id IS NULL OR user_id = ?)",
+  ).bind(normalizedCode, userId).first<DbPromoCode>();
+  if (!promo) {
+    // An unidentified caller may be told to identify themselves only when the
+    // code is genuinely nominative. A known-but-wrong owner gets the neutral
+    // response below so the endpoint remains an existence oracle only for the
+    // explicitly required login/email case.
+    if (userId === null) {
+      const nominative = await db.prepare(
+        "SELECT 1 FROM promo_codes WHERE code = ? AND is_active = 1 AND user_id IS NOT NULL",
+      ).bind(normalizedCode).first();
+      if (nominative) return { valid: false, error: "Connectez-vous ou renseignez votre email pour utiliser ce code." };
+    }
+    return { valid: false, error: "Code promo invalide" };
+  }
+
+  const cartTotal = cart.reduce((sum, line) => sum + Math.max(0, Number(line.subtotal) || 0), 0);
+  const orderedCart = [...cart].sort((a, b) =>
+    a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime) || a.ref.localeCompare(b.ref),
+  );
+  const scope = promo.scope === "first_booking" ? "first_booking" : "cart";
+  const discountBase = scope === "first_booking"
+    ? Math.max(0, Number(orderedCart[0]?.subtotal) || 0)
+    : cartTotal;
+
   // Expiration
   if (isPromoCodeExpired(promo.expires_at, getParisDateISO())) return { valid: false, error: "Code promo expiré" };
   // Usage limit
   if (promo.max_usage !== null && promo.usage_count >= promo.max_usage) return { valid: false, error: "Code promo épuisé" };
   // Minimum amount
-  if (promo.min_total > 0 && total < promo.min_total) return { valid: false, error: `Montant minimum de ${promo.min_total}€ TTC requis` };
+  if (promo.min_total > 0 && cartTotal < promo.min_total) return { valid: false, error: `Montant minimum de ${promo.min_total}€ TTC requis` };
   
   // Calculer la réduction
   let discount = promo.value;
   if (promo.type === "percentage") {
-    discount = (total * promo.value) / 100;
+    discount = (discountBase * promo.value) / 100;
   }
 
   // Appliquer l'arrondi configuré
-  const finalDiscount = applyDiscountRounding(discount, promo.round_mode ?? "none");
+  const finalDiscount = Math.min(discountBase, applyDiscountRounding(discount, promo.round_mode ?? "none"));
+  let remaining = finalDiscount;
+  const allocations: Array<{ ref: string; discount: number }> = cart.map((line) => ({ ref: line.ref, discount: 0 }));
+  const allocationOrder = scope === "first_booking" ? orderedCart.slice(0, 1) : cart;
+  for (const line of allocationOrder) {
+    const allocation = Math.min(remaining, Math.max(0, Number(line.subtotal) || 0));
+    const target = allocations.find((item) => item.ref === line.ref);
+    if (target) target.discount = allocation;
+    remaining -= allocation;
+  }
 
-  return { valid: true, promo, roundedDiscount: finalDiscount };
+  return { valid: true, promo, roundedDiscount: finalDiscount, allocations };
+}
+
+/** Atomically records one public promo validation attempt for the current minute. */
+export async function claimPromoValidationAttempt(
+  db: D1Database,
+  key: string,
+  nowMs = Date.now(),
+  maxAttempts = 10,
+): Promise<boolean> {
+  const windowStart = Math.floor(nowMs / 60_000) * 60_000;
+  await db.prepare(
+    "DELETE FROM promo_validation_attempts WHERE window_start < ?",
+  ).bind(windowStart).run();
+  const result = await db.prepare(
+    `INSERT INTO promo_validation_attempts (key, window_start, attempt_count)
+       VALUES (?, ?, 1)
+       ON CONFLICT(key) DO UPDATE SET
+         window_start = excluded.window_start,
+         attempt_count = CASE
+           WHEN promo_validation_attempts.window_start = excluded.window_start
+             THEN promo_validation_attempts.attempt_count + 1
+           ELSE 1
+         END
+       WHERE promo_validation_attempts.window_start != excluded.window_start
+          OR promo_validation_attempts.attempt_count < ?`,
+  ).bind(key, windowStart, maxAttempts).run();
+  return result.meta.changes === 1;
 }
 
 /** Claim one promo-code use atomically before granting its discount. */

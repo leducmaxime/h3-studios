@@ -205,7 +205,11 @@ export function AdminBookingNew() {
       const res = await fetch("/api/promo-codes/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: appliedPromo.code, total: currentSubtotal }),
+        body: JSON.stringify({
+          code: appliedPromo.code,
+          email: selectedUser?.email ?? null,
+          cart: [{ ref: "admin-booking", date, startTime, subtotal: currentSubtotal }],
+        }),
       });
       const json = await res.json() as { success: boolean; data?: { valid: boolean; discount?: number; error?: string } };
       if (json.data?.valid && json.data.discount !== undefined) {
@@ -219,7 +223,7 @@ export function AdminBookingNew() {
     } catch {
       // Silent error - keep current discount on network error
     }
-  }, [appliedPromo]);
+  }, [appliedPromo, date, startTime, selectedUser]);
 
 
 
@@ -1208,6 +1212,8 @@ export function AdminBookingNew() {
                 {estimatedPrice !== null && estimatedPrice > 0 && (
                   <PromoCodeInput
                     total={estimatedPrice + promoDiscount}
+                    cartLines={[{ ref: "admin-booking", date, startTime, subtotal: estimatedPrice + promoDiscount }]}
+                    email={selectedUser?.email}
                     appliedPromo={appliedPromo}
                     onApply={(promo, discount) => {
                       setAppliedPromo(promo);

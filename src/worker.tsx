@@ -150,6 +150,7 @@ import {
   claimLoyaltyRewardEmail,
   claimPromoCodeUsage,
   releasePromoCodeUsage,
+  claimPromoValidationAttempt,
 } from "@/lib/db";
 import { getLoyaltyProgress, readLoyaltyConfig, isLoyaltyConfigured, validateLoyaltySettings, computeLoyaltyDiscount } from "@/lib/loyalty";
 import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
@@ -1424,7 +1425,12 @@ const app = defineApp([
         // remise de fidélité, qui n'est donc évaluée qu'à défaut de code.
         if (body.promoCode) {
           // Validate promo on full cart subtotal
-          const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), cartSubtotal);
+          const promoCartLines = prevRefs
+            .map((ref) => previousBookings.find((booking) => booking.booking_ref === ref))
+            .filter((booking): booking is DbBooking => Boolean(booking))
+            .map((booking) => ({ ref: booking.booking_ref, date: booking.date, startTime: booking.start_time, subtotal: booking.base_price + booking.equipment_price }));
+          promoCartLines.push({ ref: body.bookingRef, date: body.date, startTime: body.startTime, subtotal: serverTotalPrice });
+          const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), promoCartLines, userId);
           if (!promoValidation.valid) {
             return jsonError(promoValidation.error || "Code promo invalide", 400);
           }
@@ -1446,25 +1452,15 @@ const app = defineApp([
           promoType = promoValidation.promo?.type || null;
           promoValue = promoValidation.promo?.value;
 
-          // Allocate greedily in cart order: previous bookings first (refs order),
-          // then this booking.
-          let remaining = discountTotal;
-          const allocations: Array<{ ref: string; id: string | null; discount: number }> = [];
-
-          for (const ref of prevRefs) {
-            const b = previousBookings.find((pb) => pb.booking_ref === ref);
-            if (b) {
-              const subtotal = (b.base_price || 0) + (b.equipment_price || 0);
-              const alloc = Math.min(remaining, subtotal);
-              allocations.push({ ref, id: b.id, discount: alloc });
-              remaining -= alloc;
-            }
-          }
-
-          // Current booking allocation
-          const currentAlloc = Math.min(remaining, serverTotalPrice);
-          allocations.push({ ref: body.bookingRef, id: null, discount: currentAlloc });
-          remaining -= currentAlloc;
+          // The server's allocation is authoritative: the same values are used
+          // for the stored previous bookings and this request's booking.
+          const allocations: Array<{ ref: string; id: string | null; discount: number }> = (promoValidation.allocations ?? []).map((allocation) => ({
+            ref: allocation.ref,
+            id: allocation.ref === body.bookingRef
+              ? null
+              : previousBookings.find((booking) => booking.booking_ref === allocation.ref)?.id ?? null,
+            discount: allocation.discount,
+          }));
 
           // Update previous bookings' promo fields
           for (const alloc of allocations) {
@@ -1526,7 +1522,7 @@ const app = defineApp([
         // but set discount to zero (authoritative allocation happens on last request)
         promoType = null; // will be set when the last request recomputes
         // Still validate the promo code for early error detection
-        const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), serverTotalPrice);
+        const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), [{ ref: body.bookingRef, date: body.date, startTime: body.startTime, subtotal: serverTotalPrice }], userId);
         if (promoValidation.valid) {
           promoType = promoValidation.promo?.type || null;
           promoValue = promoValidation.promo?.value;
@@ -1845,22 +1841,44 @@ const app = defineApp([
   route("/api/promo-codes/validate", async ({ request }) => {
     if (request.method !== "POST") return jsonError("Method not allowed", 405);
     try {
-      const body = await request.json() as { code: string; total: number };
-      if (!body.code || typeof body.total !== "number") return jsonError("Paramètres invalides", 400);
-      const result = await validatePromoCode(env.DB, body.code, body.total);
+      const ip = request.headers.get("CF-Connecting-IP")
+        || request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim()
+        || "unknown";
+      const allowed = await claimPromoValidationAttempt(env.DB, ip);
+      if (!allowed) return jsonError("Trop de tentatives. Réessayez plus tard.", 429);
+
+      const body = await request.json() as {
+        code?: string;
+        total?: number;
+        email?: string;
+        cart?: Array<{ ref: string; date: string; startTime: string; subtotal: number }>;
+      };
+      if (!body.code) return jsonError("Paramètres invalides", 400);
+      // Pas de repli sur un `total` scalaire : replier un panier multi-créneaux
+      // sur une ligne unique ferait calculer une remise `first_booking` sur le
+      // panier entier, et ce repli serait forçable par une requête forgée.
+      const cart = Array.isArray(body.cart) && body.cart.length > 0 ? body.cart : null;
+      if (!cart) return jsonError("Paramètres invalides", 400);
+
+      const token = getClientSessionToken(request);
+      const sessionUser = token ? await validateClientSession(env.DB, token) : null;
+      let previewUserId = sessionUser?.id ?? null;
+      if (!previewUserId && typeof body.email === "string" && body.email.trim()) {
+        const existingUser = await getUserByEmail(env.DB, body.email);
+        previewUserId = existingUser?.id ?? null;
+      }
+
+      const result = await validatePromoCode(env.DB, body.code, cart, previewUserId);
       if (!result.valid || !result.promo) {
         return jsonSuccess({ valid: false, error: result.error });
       }
       const p = result.promo;
       const description = p.type === "percentage" ? `${p.value}% de réduction` : `${p.value}€ TTC de réduction`;
-      // Utiliser la réduction arrondie si disponible
-      const discount = result.roundedDiscount ?? (p.type === "percentage"
-        ? body.total * p.value / 100
-        : Math.min(p.value, body.total));
       return jsonSuccess({
         valid: true,
-        promo: { code: p.code, type: p.type, value: p.value, description, minTotal: p.min_total > 0 ? p.min_total : undefined, round_mode: p.round_mode ?? "none" },
-        discount,
+        promo: { code: p.code, type: p.type, value: p.value, description, minTotal: p.min_total > 0 ? p.min_total : undefined, round_mode: p.round_mode ?? "none", scope: p.scope ?? "cart" },
+        discount: result.roundedDiscount ?? 0,
+        allocations: result.allocations,
       });
     } catch (error) {
       console.error("POST /api/promo-codes/validate error:", error);

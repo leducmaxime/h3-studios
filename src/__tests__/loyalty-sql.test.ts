@@ -1,6 +1,6 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { describe, expect, it, beforeEach } from "vitest";
-import { buildDueLoyaltyRewardCandidatesQuery, buildLoyaltyCountsQuery, claimLoyaltyAward, claimLoyaltyRewardEmail, claimPromoCodeUsage, getUserLoyaltyCounts, getUserLoyaltyDiscountTotal, releasePromoCodeUsage } from "@/lib/db";
+import { buildDueLoyaltyRewardCandidatesQuery, buildLoyaltyCountsQuery, claimLoyaltyAward, claimLoyaltyRewardEmail, claimPromoCodeUsage, claimPromoValidationAttempt, getUserLoyaltyCounts, getUserLoyaltyDiscountTotal, releasePromoCodeUsage, validatePromoCode } from "@/lib/db";
 import { getBookingAmountDue } from "@/lib/booking-totals";
 import { getLoyaltyProgress } from "@/lib/loyalty";
 import { isPromoCodeExpired } from "@/lib/utils";
@@ -19,7 +19,8 @@ let db: D1Memory;
 beforeEach(() => {
   sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, name TEXT DEFAULT '', first_name TEXT, is_blocked INTEGER DEFAULT 0, loyalty_enabled INTEGER DEFAULT 0, loyalty_discount_type TEXT, loyalty_discount_value REAL DEFAULT 0, loyalty_threshold INTEGER DEFAULT 0, loyalty_notified_award_index INTEGER DEFAULT 0, loyalty_emails_opt_out INTEGER DEFAULT 0, loyalty_code_validity_days INTEGER DEFAULT 60, loyalty_cycle_start TEXT, updated_at TEXT);
-    CREATE TABLE promo_codes (code TEXT PRIMARY KEY, is_active INTEGER DEFAULT 1, usage_count INTEGER DEFAULT 0, max_usage INTEGER, expires_at TEXT, used_at TEXT);
+    CREATE TABLE promo_codes (id TEXT PRIMARY KEY, code TEXT UNIQUE, type TEXT, value REAL DEFAULT 0, min_total REAL DEFAULT 0, is_active INTEGER DEFAULT 1, expires_at TEXT, usage_count INTEGER DEFAULT 0, max_usage INTEGER, round_mode TEXT DEFAULT 'none', created_at TEXT, user_id TEXT, scope TEXT DEFAULT 'cart', used_at TEXT);
+    CREATE TABLE promo_validation_attempts (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE bookings (id TEXT PRIMARY KEY, user_id TEXT, date TEXT, start_time TEXT, end_time TEXT, status TEXT, promo_discount REAL DEFAULT 0, loyalty_award_id TEXT, base_price REAL DEFAULT 0, equipment_price REAL DEFAULT 0, total_price REAL DEFAULT 0, updated_at TEXT);`);
   db = new D1Memory(sqlite);
   sqlite.prepare("INSERT INTO users (id,email,name,first_name,is_blocked,loyalty_enabled,loyalty_discount_type,loyalty_discount_value,loyalty_threshold,loyalty_notified_award_index,loyalty_emails_opt_out) VALUES ('u','u@example.com','User',NULL,0,1,'fixed',10,3,0,0)").run();
@@ -145,6 +146,57 @@ describe("fidélité — SQL D1", () => {
     const q = buildLoyaltyCountsQuery("u", now);
     const counts = sqlite.prepare(q.sql).get(...(q.params as SQLInputValue[])) as { past_since_award: number };
     expect(counts.past_since_award).toBe(1);
+  });
+
+  it("filtre les codes nominatifs tout en acceptant les codes globaux", async () => {
+    const cart = [{ ref: "booking", date: "2026-08-20", startTime: "10:00", subtotal: 20 }];
+    sqlite.prepare("INSERT INTO promo_codes (id,code,type,value,min_total,is_active,usage_count,max_usage,round_mode,user_id) VALUES ('global','GLOBAL','fixed',5,0,1,0,NULL,'none',NULL), ('owned','OWNED','fixed',5,0,1,0,NULL,'none','owner')").run();
+
+    await expect(validatePromoCode(db as unknown as D1Database, "global", cart, "other")).resolves.toMatchObject({ valid: true });
+    await expect(validatePromoCode(db as unknown as D1Database, "owned", cart, "owner")).resolves.toMatchObject({ valid: true });
+    await expect(validatePromoCode(db as unknown as D1Database, "owned", cart, "other")).resolves.toEqual({ valid: false, error: "Code promo invalide" });
+    await expect(validatePromoCode(db as unknown as D1Database, "owned", cart, null)).resolves.toEqual({ valid: false, error: "Connectez-vous ou renseignez votre email pour utiliser ce code." });
+  });
+
+  it("calcule la remise pourcentage sur la première réservation chronologique, pas celle envoyée en premier", async () => {
+    sqlite.prepare("INSERT INTO promo_codes (id,code,type,value,min_total,is_active,usage_count,max_usage,round_mode,scope) VALUES ('first','FIRST','percentage',50,0,1,0,NULL,'none','first_booking')").run();
+    const cart = [
+      { ref: "expensive-late", date: "2026-08-22", startTime: "10:00", subtotal: 100 },
+      { ref: "cheap-early", date: "2026-08-20", startTime: "10:00", subtotal: 20 },
+    ];
+    const result = await validatePromoCode(db as unknown as D1Database, "first", cart, "u");
+    expect(result.roundedDiscount).toBe(10);
+    expect(result.allocations).toEqual([
+      { ref: "expensive-late", discount: 0 },
+      { ref: "cheap-early", discount: 10 },
+    ]);
+  });
+
+  it("départage les créneaux identiques par booking_ref", async () => {
+    sqlite.prepare("INSERT INTO promo_codes (id,code,type,value,min_total,is_active,usage_count,max_usage,round_mode,scope) VALUES ('tie','TIE','percentage',50,0,1,0,NULL,'none','first_booking')").run();
+    const result = await validatePromoCode(db as unknown as D1Database, "tie", [
+      { ref: "Z-ref", date: "2026-08-20", startTime: "10:00", subtotal: 100 },
+      { ref: "A-ref", date: "2026-08-20", startTime: "10:00", subtotal: 20 },
+    ], "u");
+    expect(result.allocations).toEqual([{ ref: "Z-ref", discount: 0 }, { ref: "A-ref", discount: 10 }]);
+  });
+
+  it("conserve le calcul cart pour un code fixe", async () => {
+    sqlite.prepare("INSERT INTO promo_codes (id,code,type,value,min_total,is_active,usage_count,max_usage,round_mode,scope) VALUES ('cart','CART','fixed',30,0,1,0,NULL,'none','cart')").run();
+    const result = await validatePromoCode(db as unknown as D1Database, "cart", [
+      { ref: "first", date: "2026-08-20", startTime: "10:00", subtotal: 20 },
+      { ref: "second", date: "2026-08-21", startTime: "10:00", subtotal: 40 },
+    ], "u");
+    expect(result.roundedDiscount).toBe(30);
+    expect(result.allocations).toEqual([{ ref: "first", discount: 20 }, { ref: "second", discount: 10 }]);
+  });
+
+  it("refuse la 11e tentative de preview dans la même fenêtre", async () => {
+    const window = 1_700_000_000_000;
+    for (let i = 0; i < 10; i++) {
+      expect(await claimPromoValidationAttempt(db as unknown as D1Database, "203.0.113.10", window)).toBe(true);
+    }
+    expect(await claimPromoValidationAttempt(db as unknown as D1Database, "203.0.113.10", window)).toBe(false);
   });
 
   it("réclamation concurrente : la seconde avec expectedAwardsGranted échoue et la ligne reste inchangée", async () => {

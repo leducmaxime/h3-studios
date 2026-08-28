@@ -18,6 +18,7 @@ import { BookingOptionsStep } from "@/components/booking/BookingOptionsStep";
 import { StickyBookingCTA } from "@/components/booking/StickyBookingCTA";
 import { formatDate, formatDuration, calculateEquipmentPrice, setPublicHolidays, setPeakStartHour, STUDIOS, TIME_SLOTS, slotDurationHours, sortBookingsByStart, type StudioId, type GroupType, type CompletedBooking } from "@/lib/booking";
 import { calculatePrice } from "@/lib/pricing";
+import { getParisDateISO } from "@/lib/utils";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { TaxBreakdown } from "@/components/common/TaxBreakdown";
 import { Price } from "@/components/common/Price";
@@ -189,6 +190,20 @@ export function Reservation({ step }: ReservationProps) {
   const displayPrices = useMemo(
     () => Object.fromEntries(state.cart.map(b => [b.id, recomputeCartItemPrice(b)])),
     [state.cart, recomputeCartItemPrice],
+  );
+
+  // Lignes du panier transmises à la validation de code promo. On s'appuie sur
+  // l'état en mémoire plutôt que sur une relecture de localStorage : le serveur
+  // a besoin de (date, heure) par ligne pour situer la première réservation
+  // d'un code au périmètre « une seule séance ».
+  const promoCartLines = useMemo(
+    () => state.cart.map(b => ({
+      ref: b.bookingRef,
+      date: getParisDateISO(new Date(b.date)),
+      startTime: b.startTime,
+      subtotal: displayPrices[b.id] ?? recomputeCartItemPrice(b),
+    })),
+    [state.cart, displayPrices, recomputeCartItemPrice],
   );
 
   // Show cart banner when adding a new booking and cart has items (only on booking steps participants/creneau;
@@ -481,6 +496,7 @@ export function Reservation({ step }: ReservationProps) {
                       <div className="flex h-full flex-col justify-center rounded-xl border border-white/10 bg-white/5 p-4">
                         <PromoCodeInput
                           total={cartTotal}
+                          cartLines={promoCartLines}
                           appliedPromo={state.appliedPromo}
                           onApply={applyPromo}
                           onRemove={removePromo}
