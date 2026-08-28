@@ -1140,7 +1140,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     <div className="border-t border-zinc-800 pt-4">
                       <p className="text-xs text-zinc-500">
                         Seules les réservations passées, confirmées ou terminées, sont comptées ; les annulations et les absences sont exclues.
-                        La remise n'est pas cumulable : une remise manuelle ou un code promo sur une réservation est prioritaire.
+                        Une fois le palier atteint, le code est envoyé par email au passage automatique de 6h, puis le compteur repart de zéro :
+                        les réservations excédentaires ne sont pas reportées sur le cycle suivant.
+                        La remise ne s'applique pas d'elle-même, le client saisit son code en réservant : elle exclut tout autre code promo,
+                        et une remise manuelle ajoutée sur la réservation la remplace.
                       </p>
                     </div>
                   </div>
