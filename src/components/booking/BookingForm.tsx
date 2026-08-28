@@ -317,7 +317,13 @@ function AccountCreationCard({ createAccount, accountPassword, accountPasswordCo
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4 lg:p-5">
+    <div
+      className={`rounded-xl border p-4 transition-colors lg:p-5 ${
+        createAccount
+          ? "border-primary/40 bg-primary/10"
+          : "border-primary/20 bg-primary/[0.05] hover:border-primary/30"
+      }`}
+    >
       <label htmlFor="createAccount" className="flex cursor-pointer items-start gap-3">
         <input
           id="createAccount"
@@ -326,9 +332,18 @@ function AccountCreationCard({ createAccount, accountPassword, accountPasswordCo
           onChange={(e) => handleCreateAccountToggle(e.target.checked)}
           className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/30 accent-primary"
         />
-        <span className="text-sm font-medium text-white/80">
-          Créer mon compte pour gérer mes réservations{" "}
-          <span className="font-normal text-white/40">(optionnel)</span>
+        <span className="flex flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-white/80">
+              Créer mon compte pour gérer mes réservations
+            </span>
+            <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+              Recommandé
+            </span>
+          </span>
+          <span className="text-xs leading-relaxed text-white/45">
+            Suivez vos réservations, retrouvez votre historique et réservez plus vite la prochaine fois.
+          </span>
         </span>
       </label>
 
