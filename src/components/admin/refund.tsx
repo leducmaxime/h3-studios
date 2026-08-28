@@ -47,7 +47,6 @@ export const REFUND_FAILURE_CODE_LABELS: Record<RefundFailureCode, string> = {
   stripe_error: "Erreur Stripe",
   stripe_unconfirmed: "Non confirmé par Stripe",
   ledger_write_failed: "Remboursement accepté, enregistrement à relancer",
-  reconciled: "Remboursement déjà existant chez Stripe",
   already_applied: "Déjà enregistré",
 };
 
@@ -90,8 +89,8 @@ function centsLte(a: number, b: number): boolean {
 /** Contexte additionnel par code d'échec — le message serveur prime toujours. */
 function failureHint(outcome: RefundOutcome): string | null {
   switch (outcome.code) {
-    case "reconciled":
-      return "Ne relancez pas la même demande : vérifiez d'abord le solde remboursable du paiement.";
+    case "already_applied":
+      return "Ne relancez pas la même demande : ce remboursement est déjà enregistré. Vérifiez le solde remboursable du paiement.";
     case "stripe_unconfirmed":
       return outcome.stripeRefundStatus === "requires_action"
         ? "Le montant est réservé chez Stripe et déjà déduit du solde remboursable."

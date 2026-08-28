@@ -226,7 +226,16 @@ describe("Stripe refunds — signed ledger invariant", () => {
     const { deps, calls } = makeDeps(db, { list: result([accepted("re_other", 1000), accepted("re_dash", 500)]) });
     const outcome = await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
     expect(outcome.ok).toBe(true); expect(calls.create).toHaveLength(1);
+    expect(outcome.unattributedAmount).toBe(15);
     expect((await refundRows(db)).some((row) => row.external_ref === "re_other" || row.external_ref === "re_dash")).toBe(false);
+  });
+
+  it("signale les remboursements Dashboard non attribués sans les intégrer", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
+    const { deps } = makeDeps(db, { list: result([accepted("re_dash", 500)]) });
+    const outcome = await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    expect(outcome.unattributedAmount).toBe(5);
+    expect((await refundRows(db)).some((row) => row.external_ref === "re_dash")).toBe(false);
   });
 
   it("heals an owned pending refund reported failed and does not count it", async () => {
@@ -235,6 +244,17 @@ describe("Stripe refunds — signed ledger invariant", () => {
     const outcome = await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
     expect(outcome.code).toBe("stripe_error"); expect(calls.create).toHaveLength(0);
     expect((await refundRows(db))[0]).toMatchObject({ external_ref: "re_old", status: "failed" });
+    const audits = (await db.prepare("SELECT action, entity_id FROM audit_logs").bind().all<Row>()).results;
+    expect(audits.some((audit) => audit.action === "refund-reconciled")).toBe(true);
+  });
+
+  it("refuse de rembourser un encaissement non acquis", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite);
+    seedPayment(sqlite, "p_pending", "b1", 30, "card", "cs_p", "pending");
+    const outcome = await refundAllocation(makeDeps(db).deps, { paymentId: "p_pending", bookingId: "b1", amount: 10 });
+    expect(outcome.code).toBe("not_collected");
+    expect(await refundRows(db, "p_pending")).toHaveLength(0);
+    expect(await getRefundableCardTotal(db, "b1")).toBe(0);
   });
 
   it("computes refundable card total from positive and negative allocations", async () => {

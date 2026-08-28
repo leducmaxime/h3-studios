@@ -29,7 +29,6 @@ export type RefundFailureCode =
   | "stripe_error"
   | "stripe_unconfirmed"
   | "ledger_write_failed"
-  | "reconciled"
   | "already_applied";
 
 export interface RefundOutcome {
@@ -283,9 +282,15 @@ export async function refundAllocation(
   // Stripe metadata is not an ownership boundary.
   let reconciledMovement: DbPayment | null = null;
   let reconciledRefund: StripeRefund | null = null;
+  let unattributedCents = 0;
+  const reconciliationExtra = (): Partial<RefundOutcome> =>
+    unattributedCents > 0 ? { unattributedAmount: round2(unattributedCents / 100) } : {};
   for (const refund of listed.data) {
     const owned = await findMovementByExternalRef(deps.db, refund.id);
-    if (!owned || owned.parent_id !== paymentId) continue;
+    if (!owned || owned.parent_id !== paymentId) {
+      if (!owned && isRefundCommitted(refund)) unattributedCents += refund.amount;
+      continue;
+    }
     const allocation = await deps.db.prepare(
       "SELECT 1 AS found FROM payment_allocations WHERE payment_id = ? AND booking_id = ?",
     ).bind(owned.id, bookingId).first<{ found: number }>();
@@ -329,12 +334,14 @@ export async function refundAllocation(
         stripeRefundId: reconciledRefund.id,
         stripeRefundStatus: reconciledRefund.status ?? undefined,
         code: "already_applied",
+        ...reconciliationExtra(),
       };
     }
     if (reconciledRefund.status === "requires_action") {
       return baseOutcome("stripe_unconfirmed", "Stripe a créé le remboursement mais attend des coordonnées bancaires. Ne relancez pas : traitez-le depuis le Dashboard Stripe.", after, {
         stripeRefundId: reconciledRefund.id,
         stripeRefundStatus: reconciledRefund.status,
+        ...reconciliationExtra(),
       });
     }
     // A locally-owned failed refund has been healed. Do not immediately issue
@@ -342,6 +349,7 @@ export async function refundAllocation(
     return baseOutcome("stripe_error", "Stripe n'a pas confirmé le remboursement.", after, {
       stripeRefundId: reconciledRefund.id,
       stripeRefundStatus: reconciledRefund.status ?? undefined,
+      ...reconciliationExtra(),
     });
   }
 
@@ -356,7 +364,7 @@ export async function refundAllocation(
     if (amount > refundable + 0.005) {
       const message = "Montant supérieur au montant remboursable";
       await auditFailure("amount_exceeds_refundable", message);
-      return baseOutcome("amount_exceeds_refundable", message, available);
+      return baseOutcome("amount_exceeds_refundable", message, available, reconciliationExtra());
     }
 
     try {
@@ -378,7 +386,7 @@ export async function refundAllocation(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Échec de l'écriture du grand livre";
       await auditFailure("ledger_write_failed", message);
-      return baseOutcome("ledger_write_failed", message, available);
+      return baseOutcome("ledger_write_failed", message, available, reconciliationExtra());
     }
   }
 
@@ -405,7 +413,7 @@ export async function refundAllocation(
       : created.error.message;
     await auditFailure("stripe_error", message);
     return baseOutcome("stripe_error", message,
-      await getRefundableAfter(deps.db, paymentId, bookingId));
+      await getRefundableAfter(deps.db, paymentId, bookingId), reconciliationExtra());
   }
 
   const refund = created.data;
@@ -423,7 +431,7 @@ export async function refundAllocation(
       "ledger_write_failed",
       `Stripe a accepté le remboursement (${refund.id}) mais l'enregistrement local a échoué. Relancez l'opération.`,
       await getRefundableAfter(deps.db, paymentId, bookingId),
-      { stripeRefundId: refund.id, stripeRefundStatus: refund.status ?? undefined },
+      { stripeRefundId: refund.id, stripeRefundStatus: refund.status ?? undefined, ...reconciliationExtra() },
     );
   }
   // Once external_ref has been written, a retry is harmless even if one of
@@ -451,7 +459,7 @@ export async function refundAllocation(
         ? "Stripe a créé le remboursement mais attend des coordonnées bancaires. Ne relancez pas : traitez-le depuis le Dashboard Stripe."
         : "Stripe n'a pas confirmé le remboursement.",
       refundableAfter,
-      { stripeRefundId: refund.id, stripeRefundStatus: refund.status ?? undefined },
+      { stripeRefundId: refund.id, stripeRefundStatus: refund.status ?? undefined, ...reconciliationExtra() },
     );
   }
 
@@ -463,6 +471,7 @@ export async function refundAllocation(
     refundableAfter,
     stripeRefundId: refund.id,
     stripeRefundStatus: refund.status ?? undefined,
+    ...reconciliationExtra(),
   };
 }
 

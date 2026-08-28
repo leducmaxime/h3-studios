@@ -520,4 +520,33 @@ describe("M2 — one movement per Checkout session", () => {
     });
     expect(state.sentPayloads).toHaveLength(1);
   });
+
+  it("n'envoie aucun email si l'écriture du mouvement échoue, et rejoue sans doublon", async () => {
+    const { deps, state } = makeDeps();
+    state.bookings = [
+      makeBooking({ booking_ref: "a", base_price: 23, equipment_price: 0, total_price: 23, promo_discount: 0, status: "confirmed" }),
+      makeBooking({ booking_ref: "b", base_price: 30, equipment_price: 0, total_price: 30, promo_discount: 0, status: "confirmed" }),
+    ];
+
+    let fail = true;
+    const origComplete = deps.completeSessionPayment;
+    deps.completeSessionPayment = async (data) => {
+      if (fail) {
+        fail = false;
+        throw new Error("simulated crash during ledger write");
+      }
+      return origComplete(data);
+    };
+
+    await expect(finalizePaidCheckoutSession(paidSession, ["a", "b"], deps))
+      .rejects.toThrow("simulated crash");
+    expect(state.payments).toHaveLength(0);
+    expect(state.sentPayloads).toHaveLength(0);
+
+    const retry = await finalizePaidCheckoutSession(paidSession, ["a", "b"], deps);
+    expect(retry.status).toBe("finalized");
+    if (retry.status === "finalized") expect(retry.paymentInserted).toBe(true);
+    expect(state.payments).toHaveLength(1);
+    expect(state.sentPayloads).toHaveLength(1);
+  });
 });

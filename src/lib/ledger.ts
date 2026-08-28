@@ -195,13 +195,24 @@ export async function upsertCheckoutPayment(db: D1Database, input: {
   return { inserted, movementId: movement.id };
 }
 
-/** Plafond restant d'une allocation, réservations pending incluses pour les enfants. */
+/**
+ * Plafond restant d'une allocation.
+ *
+ * Deux règles de statut, volontairement différentes :
+ * - le mouvement PARENT doit être `settled` : on ne rembourse que de l'argent
+ *   réellement encaissé. Un encaissement `pending` n'est pas remboursable.
+ * - les mouvements ENFANTS comptent en `settled` ET `pending` : une demande de
+ *   remboursement en cours réserve la capacité et empêche une double demande
+ *   concurrente.
+ */
 export async function refundableForAllocation(
   db: D1Database, paymentId: string, bookingId: string,
 ): Promise<number> {
   const row = await db.prepare(
     `SELECT COALESCE((SELECT SUM(a.amount) FROM payment_allocations a
-                       WHERE a.payment_id = ? AND a.booking_id = ?), 0)
+                        JOIN payments parent ON parent.id = a.payment_id
+                       WHERE a.payment_id = ? AND a.booking_id = ?
+                         AND parent.status = 'settled'), 0)
              + COALESCE((SELECT SUM(c.amount)
                          FROM payment_allocations c
                          JOIN payments child ON child.id = c.payment_id
