@@ -52,7 +52,6 @@ export function Reservation({ step }: ReservationProps) {
     refetchPricing,
     gridFor,
     cartTotal,
-    loyaltyPreviewDiscount,
     canConfirmBooking,
     bookingFieldIssues,
     submitError,
@@ -185,7 +184,7 @@ export function Reservation({ step }: ReservationProps) {
     return timePrice + (booking.equipmentPrice || 0);
   }, [gridFor]);
 
-  const liveNet = Math.max(0, cartTotal - state.promoDiscount - loyaltyPreviewDiscount);
+  const liveNet = Math.max(0, cartTotal - state.promoDiscount);
   const confirmedNet = Math.max(0, state.confirmedNetTotal ?? liveNet);
   const displayPrices = useMemo(
     () => Object.fromEntries(state.cart.map(b => [b.id, recomputeCartItemPrice(b)])),
@@ -505,7 +504,7 @@ export function Reservation({ step }: ReservationProps) {
 
                       <div className="rounded-xl bg-primary/10 p-4">
                         <div className="space-y-2">
-                          {(state.promoDiscount > 0 || loyaltyPreviewDiscount > 0) && (
+                          {state.promoDiscount > 0 && (
                             <>
                               <div className="flex items-center justify-between text-sm text-white/70">
                                 <span>Sous-total</span>
@@ -518,12 +517,6 @@ export function Reservation({ step }: ReservationProps) {
                                 </div>
                               )}
                             </>
-                          )}
-                          {loyaltyPreviewDiscount > 0 && (
-                            <div className="flex items-center justify-between text-sm text-green-400">
-                              <span>Remise fidélité</span>
-                              <span>-<Price amount={loyaltyPreviewDiscount} /></span>
-                            </div>
                           )}
                           <TaxBreakdown ttc={liveNet} />
                           <div className="flex items-center justify-between">
@@ -575,7 +568,6 @@ export function Reservation({ step }: ReservationProps) {
                 subtotal={cartTotal}
                 promoCode={state.appliedPromo?.code}
                 promoDiscount={state.promoDiscount}
-                loyaltyDiscount={loyaltyPreviewDiscount}
                 acceptedCgv={state.acceptedCgv}
                 onAcceptedCgvChange={setAcceptedCgv}
                 allowOnSitePayment={allowCash}
@@ -606,7 +598,6 @@ export function Reservation({ step }: ReservationProps) {
                 subtotal={cartTotal}
                 promoCode={state.appliedPromo?.code}
                 promoDiscount={state.promoDiscount}
-                loyaltyDiscount={loyaltyPreviewDiscount}
                 acceptedCgv={state.acceptedCgv}
                 onAcceptedCgvChange={setAcceptedCgv}
                 allowOnSitePayment={allowCash}

@@ -5,7 +5,6 @@ import { formatDateISO, getParisDateISO } from "@/lib/utils";
 import type { PricingData } from "@/lib/pricing";
 import type { ClientUser } from "@/lib/client-user";
 import { calculatePrice } from "@/lib/pricing";
-import { computeLoyaltyDiscount, type LoyaltyDiscountType } from "@/lib/loyalty";
 import { usePricing } from "./usePricing";
 import { useEquipment } from "./useEquipment";
 import { getClientAuthState, login as authLogin, logout as authLogout, refresh as refreshClientAuth, useClientAuth } from "@/lib/client-auth-store";
@@ -442,7 +441,6 @@ export function useBookingWithRouter(urlStep?: string) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [cashNotAllowed, setCashNotAllowed] = useState(false);
-  const [loyaltyPreview, setLoyaltyPreview] = useState<{ configured: boolean; type: LoyaltyDiscountType; value: number; threshold: number; isDue: boolean } | null>(null);
   const { pricing: pricingData, loading: pricingLoading, error: pricingError, refetch: refetchPricing, gridFor } = usePricing();
   const allowCash = pricingLoading ? false : (pricingData?.allowCash ?? true);
   const { equipment: availableEquipment } = useEquipment();
@@ -1291,31 +1289,6 @@ export function useBookingWithRouter(urlStep?: string) {
     }, 0);
   }, [state.cart, gridFor]);
 
-  useEffect(() => {
-    if (!clientUser) {
-      setLoyaltyPreview(null);
-      return;
-    }
-    let active = true;
-    fetch("/api/client/loyalty")
-      .then((res) => res.ok ? res.json() : null)
-      .then((raw) => {
-        const json = raw as { success?: boolean; data?: { configured?: boolean; type?: LoyaltyDiscountType | null; value?: number; threshold?: number; isDue?: boolean } } | null;
-        if (!active) return;
-        const data = json?.success === true ? json.data : undefined;
-        setLoyaltyPreview(data?.configured && data.isDue && (data.type === "percentage" || data.type === "fixed")
-          ? { configured: true, type: data.type, value: Number(data.value) || 0, threshold: Number(data.threshold) || 0, isDue: true }
-          : null);
-      })
-      .catch(() => { if (active) setLoyaltyPreview(null); });
-    return () => { active = false; };
-  }, [clientUser]);
-
-  const loyaltyPreviewDiscount = useMemo(() => {
-    if (!loyaltyPreview || state.promoDiscount > 0) return 0;
-    return computeLoyaltyDiscount({ enabled: true, type: loyaltyPreview.type, value: loyaltyPreview.value, threshold: loyaltyPreview.threshold }, cartTotal);
-  }, [loyaltyPreview, state.promoDiscount, cartTotal]);
-
   const clearSubmitError = useCallback(() => setSubmitError(null), []);
 
   const canProceedToStudio = state.startTime !== null && state.endTime !== null;
@@ -1362,7 +1335,6 @@ export function useBookingWithRouter(urlStep?: string) {
     refetchPricing,
     gridFor,
     cartTotal,
-    loyaltyPreviewDiscount,
     canProceedToStudio,
     canConfirmBooking,
     bookingFieldIssues,

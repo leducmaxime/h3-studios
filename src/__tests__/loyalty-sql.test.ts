@@ -11,6 +11,7 @@ import {
   validatePromoCode,
 } from "@/lib/db";
 import { addDaysToDateISO, generateLoyaltyCode } from "@/lib/loyalty";
+import { getParisDateISO } from "@/lib/utils";
 
 const now = { dateISO: "2026-08-20", hours: 20, minutes: 0 };
 
@@ -101,8 +102,38 @@ describe("fidélité — codes nominatif", () => {
       userId: "u", type: "percentage", value: 15, threshold: 2,
       cycleEnd: "2026-08-20 12:00:00", validityDays: 60,
     });
-    expect(promo).toMatchObject({ user_id: "u", source: "loyalty", scope: "cart", max_usage: 1, expires_at: "2026-10-19", cycle_end: "2026-08-20 12:00:00" });
+    expect(promo).toMatchObject({ user_id: "u", source: "loyalty", max_usage: 1, cycle_end: "2026-08-20 12:00:00" });
     expect(promo.code).toMatch(/^FID-[0-9A-HJKMNP-TV-Z]{8}$/);
+  });
+
+  it("applique un pourcentage à la première séance et un montant fixe au panier", async () => {
+    const percentage = await createLoyaltyPromoCode(db as unknown as D1Database, {
+      userId: "u", type: "percentage", value: 15, threshold: 2,
+      cycleEnd: "2026-08-20 12:00:00", validityDays: 60,
+    });
+    const fixed = await createLoyaltyPromoCode(db as unknown as D1Database, {
+      userId: "u", type: "fixed", value: 15, threshold: 2,
+      cycleEnd: "2026-08-20 12:00:00", validityDays: 60,
+    });
+    expect(percentage.scope).toBe("first_booking");
+    expect(fixed.scope).toBe("cart");
+  });
+
+  it("fait courir la validité depuis l'émission, pas depuis la fin du cycle", async () => {
+    // Une fidélité activée rétroactivement a une fin de cycle très ancienne :
+    // la dater depuis le cycle livrerait un code déjà expiré.
+    const promo = await createLoyaltyPromoCode(db as unknown as D1Database, {
+      userId: "u", type: "fixed", value: 15, threshold: 2,
+      cycleEnd: "2020-01-01 12:00:00", validityDays: 60,
+    });
+    expect(promo.expires_at).toBe(addDaysToDateISO(getParisDateISO(), 60));
+    expect(promo.expires_at! > getParisDateISO()).toBe(true);
+  });
+
+  it("n'élit pas un client fidélité sans aucune réservation éligible", () => {
+    sqlite.prepare("UPDATE users SET loyalty_threshold=1, loyalty_cycle_start=NULL WHERE id='u'").run();
+    const query = buildDueLoyaltyCodeCandidatesQuery(now, 200);
+    expect(sqlite.prepare(query.sql).all(...(query.params as SQLInputValue[]))).toHaveLength(0);
   });
 
   it("filtre les codes nominatifs par propriétaire", async () => {

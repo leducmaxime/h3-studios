@@ -75,8 +75,12 @@ export function buildDueLoyaltyCodeCandidatesQuery(
       ),
       booking_counts AS (
         SELECT u.id,
-               COUNT(CASE WHEN u.loyalty_cycle_start IS NULL OR eb.booking_end > u.loyalty_cycle_start THEN 1 END) AS cycle_bookings,
-               MAX(CASE WHEN u.loyalty_cycle_start IS NULL OR eb.booking_end > u.loyalty_cycle_start THEN eb.booking_end END) AS cycle_end
+               -- eb.booking_end IS NOT NULL est indispensable : la jointure
+               -- externe produit une ligne fantôme pour un client sans
+               -- réservation éligible, que le CASE compterait comme 1 dès que
+               -- loyalty_cycle_start est NULL.
+               COUNT(CASE WHEN eb.booking_end IS NOT NULL AND (u.loyalty_cycle_start IS NULL OR eb.booking_end > u.loyalty_cycle_start) THEN 1 END) AS cycle_bookings,
+               MAX(CASE WHEN eb.booking_end IS NOT NULL AND (u.loyalty_cycle_start IS NULL OR eb.booking_end > u.loyalty_cycle_start) THEN eb.booking_end END) AS cycle_end
         FROM loyalty_users u
         LEFT JOIN eligible_bookings eb ON eb.user_id = u.id
         GROUP BY u.id
@@ -140,15 +144,22 @@ export async function createLoyaltyPromoCode(
   db: D1Database,
   args: { userId: string; type: "percentage" | "fixed"; value: number; threshold: number; cycleEnd: string; validityDays: number },
 ): Promise<DbPromoCode> {
-  const expiresAt = addDaysToDateISO(args.cycleEnd, args.validityDays);
+  // La validité court à partir du jour d'émission, jamais depuis la fin du
+  // cycle : celle-ci est par définition passée, et peut l'être de plusieurs
+  // mois (fidélité activée rétroactivement), ce qui livrerait un code déjà
+  // expiré.
+  const expiresAt = addDaysToDateISO(getParisDateISO(), args.validityDays);
+  // Règle métier : un pourcentage ne s'applique qu'à la première séance du
+  // panier, un montant fixe s'impute sur le panier entier.
+  const scope = args.type === "percentage" ? "first_booking" : "cart";
   for (let attempt = 0; attempt < 8; attempt++) {
     const id = generateId();
     const code = generateLoyaltyCode();
     try {
       await db.prepare(`
         INSERT INTO promo_codes (id, code, type, value, min_total, is_active, expires_at, usage_count, max_usage, round_mode, created_at, user_id, source, scope, notified_at, cycle_end)
-        VALUES (?, ?, ?, ?, 0, 1, ?, 0, 1, 'none', ?, ?, 'loyalty', 'cart', NULL, ?)
-      `).bind(id, code, args.type, args.value, expiresAt, now(), args.userId, args.cycleEnd).run();
+        VALUES (?, ?, ?, ?, 0, 1, ?, 0, 1, 'none', ?, ?, 'loyalty', ?, NULL, ?)
+      `).bind(id, code, args.type, args.value, expiresAt, now(), args.userId, scope, args.cycleEnd).run();
       const promo = await db.prepare("SELECT * FROM promo_codes WHERE id = ?").bind(id).first<DbPromoCode>();
       if (!promo) throw new Error("Code fidélité introuvable après création");
       return promo;

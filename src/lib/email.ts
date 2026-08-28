@@ -793,15 +793,18 @@ export async function sendPasswordResetEmail(
 }
 
 /* ------------------------------------------------------------------------ */
-/* Récompense fidélité débloquée                                             */
+/* Code fidélité                                                             */
 /* ------------------------------------------------------------------------ */
 
-export interface LoyaltyRewardEmailData {
+export interface LoyaltyCodeEmailData {
   clientName: string;
   clientEmail: string;
+  code: string;
   discountType: "percentage" | "fixed";
   discountValue: number;
+  scope: "first_booking" | "cart";
   threshold: number;
+  expiresAt: string;
   bookingUrl: string;
 }
 
@@ -815,15 +818,29 @@ function pluralizeRepetitions(count: number): string {
   return `${count} répétition${count > 1 ? "s" : ""}`;
 }
 
-export function loyaltyRewardEmailSubject(data: LoyaltyRewardEmailData): string {
-  const discountLabel = formatLoyaltyDiscountValue(data.discountType, data.discountValue);
-  return `Votre remise fidélité : ${discountLabel} sur votre prochaine réservation`;
+/** Court libellé de portée pour le héros — doit se lire d'un coup d'œil à côté de la valeur. */
+function loyaltyScopeLabel(scope: "first_booking" | "cart"): string {
+  return scope === "first_booking" ? "sur votre première séance" : "sur votre prochaine réservation";
 }
 
-export function buildLoyaltyRewardEmailHtml(data: LoyaltyRewardEmailData): string {
+/** Consigne d'utilisation détaillée — répète volontairement la portée pour lever toute ambiguïté. */
+function loyaltyUsageBody(scope: "first_booking" | "cart"): string {
+  return scope === "first_booking"
+    ? "Saisissez ce code dans votre panier lors de votre première réservation. La remise s'applique uniquement sur cette première séance."
+    : "Saisissez ce code dans votre panier au moment de réserver. La remise s'applique sur le total de votre prochaine réservation.";
+}
+
+export function loyaltyCodeEmailSubject(data: LoyaltyCodeEmailData): string {
+  const discountLabel = formatLoyaltyDiscountValue(data.discountType, data.discountValue);
+  return `Votre code fidélité : ${discountLabel} ${loyaltyScopeLabel(data.scope)}`;
+}
+
+export function buildLoyaltyCodeEmailHtml(data: LoyaltyCodeEmailData): string {
   const discountLabel = formatLoyaltyDiscountValue(data.discountType, data.discountValue);
   const threshold = Math.max(1, Math.round(data.threshold) || 1);
-  const preheader = `Votre remise fidélité de ${discountLabel.replace("-", "")} vous attend sur votre prochaine réservation. Elle s'applique automatiquement, sans code à saisir.`;
+  const scopeLabel = loyaltyScopeLabel(data.scope);
+  const expiresLabel = formatDateFrench(data.expiresAt);
+  const preheader = `Un code fidélité personnel vous attend : ${discountLabel} ${scopeLabel}, valable jusqu'au ${expiresLabel}.`;
 
   return `
 <!DOCTYPE html>
@@ -831,7 +848,7 @@ export function buildLoyaltyRewardEmailHtml(data: LoyaltyRewardEmailData): strin
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Récompense fidélité débloquée - H3 Studios</title>
+  <title>Votre code fidélité - H3 Studios</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:#0a0a0a;">
@@ -846,7 +863,7 @@ export function buildLoyaltyRewardEmailHtml(data: LoyaltyRewardEmailData): strin
           <tr>
             <td style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%);padding:40px 30px;text-align:center;border-bottom:2px solid #facc15;">
               <img src="${COMPANY.siteUrl}/images/logo-email.png" alt="H3 Studios" width="180" style="display:block;margin:0 auto 16px;" />
-              <p style="margin:0;color:#facc15;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Récompense fidélité</p>
+              <p style="margin:0;color:#facc15;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;">Code fidélité</p>
             </td>
           </tr>
 
@@ -860,23 +877,34 @@ export function buildLoyaltyRewardEmailHtml(data: LoyaltyRewardEmailData): strin
               </p>
 
               <!-- Hero: discount value -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
                 <tr>
                   <td style="background-color:#1a1a1a;border:1px solid #facc15;border-radius:14px;padding:32px 20px;text-align:center;">
                     <p style="margin:0 0 10px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Votre remise fidélité</p>
                     <p style="margin:0 0 6px 0;color:#facc15;font-size:56px;font-weight:800;line-height:1;">${discountLabel}</p>
-                    <p style="margin:0;color:#dddddd;font-size:14px;">sur votre prochaine réservation</p>
+                    <p style="margin:0;color:#dddddd;font-size:14px;">${scopeLabel}</p>
                   </td>
                 </tr>
               </table>
 
-              <!-- Automatic application reassurance -->
+              <!-- Code -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#1a1a1a;border:2px dashed #facc15;border-radius:14px;padding:26px 20px;text-align:center;">
+                    <p style="margin:0 0 10px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Votre code personnel</p>
+                    <p style="margin:0 0 12px 0;color:#ffffff;font-size:26px;font-weight:700;letter-spacing:3px;font-family:'Courier New',monospace;word-break:break-all;">${data.code}</p>
+                    <p style="margin:0;color:#888888;font-size:12px;">Valable jusqu'au ${expiresLabel}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- How to use -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
                 <tr>
                   <td align="center" style="background-color:#1a1a1a;border:1px solid #2a2a2a;border-top:3px solid #facc15;border-radius:10px;padding:18px 20px;text-align:center;">
-                    <p style="margin:0 0 6px 0;color:#facc15;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Rien à faire de votre côté</p>
+                    <p style="margin:0 0 6px 0;color:#facc15;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Comment l'utiliser</p>
                     <p style="margin:0;color:#aaaaaa;font-size:13px;line-height:1.6;">
-                      Votre remise s'applique automatiquement dès votre prochaine réservation. Pas de code à saisir, pas de démarche à faire : elle sera déduite directement de votre panier au moment de réserver.
+                      ${loyaltyUsageBody(data.scope)}
                     </p>
                   </td>
                 </tr>
@@ -961,13 +989,13 @@ export function buildLoyaltyRewardEmailHtml(data: LoyaltyRewardEmailData): strin
   `.trim();
 }
 
-export async function sendLoyaltyRewardEmail(
+export async function sendLoyaltyCodeEmail(
   apiKey: string,
-  data: LoyaltyRewardEmailData,
+  data: LoyaltyCodeEmailData,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const html = buildLoyaltyRewardEmailHtml(data);
-    const subject = loyaltyRewardEmailSubject(data);
+    const html = buildLoyaltyCodeEmailHtml(data);
+    const subject = loyaltyCodeEmailSubject(data);
 
     const resendResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -986,13 +1014,13 @@ export async function sendLoyaltyRewardEmail(
 
     if (!resendResponse.ok) {
       const errorData = await resendResponse.text();
-      console.error("Resend API error (loyalty reward):", errorData);
+      console.error("Resend API error (loyalty code):", errorData);
       return { success: false, error: errorData };
     }
 
     return { success: true };
   } catch (error) {
-    console.error("Error sending loyalty reward email:", error);
+    console.error("Error sending loyalty code email:", error);
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }

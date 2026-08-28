@@ -6117,7 +6117,9 @@ async function sendDueLoyaltyCodeEmails(db: D1Database, apiKey: string): Promise
         code: promo.code,
         discountType: candidate.loyalty_discount_type,
         discountValue: candidate.loyalty_discount_value,
-        scope: "cart",
+        // Portée lue sur le code réellement émis : l'email ne doit jamais
+        // annoncer une règle différente de celle qui sera appliquée au panier.
+        scope: promo.scope === "first_booking" ? "first_booking" : "cart",
         threshold: candidate.loyalty_threshold,
         expiresAt: promo.expires_at || "",
         bookingUrl: `${COMPANY.siteUrl}/reservation`,
