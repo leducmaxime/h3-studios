@@ -818,21 +818,31 @@ function pluralizeRepetitions(count: number): string {
   return `${count} répétition${count > 1 ? "s" : ""}`;
 }
 
-/** Court libellé de portée pour le héros — doit se lire d'un coup d'œil à côté de la valeur. */
+/**
+ * Court libellé de portée pour le héros. Vide pour `first_booking` : la
+ * restriction à la 1ʳᵉ séance n'est volontairement plus annoncée. Les trois
+ * emplacements qui consomment ce libellé (objet, preheader, héros) doivent
+ * donc tous gérer la chaîne vide.
+ */
 function loyaltyScopeLabel(scope: "first_booking" | "cart"): string {
-  return scope === "first_booking" ? "sur votre première séance" : "sur votre prochaine réservation";
+  return scope === "first_booking" ? "" : "sur votre prochaine réservation";
 }
 
-/** Consigne d'utilisation détaillée — répète volontairement la portée pour lever toute ambiguïté. */
+/**
+ * Consigne d'utilisation. La variante `first_booking` s'arrête à la saisie du
+ * code : elle n'affirme pas que la remise porte sur le total, ce qui serait
+ * faux, ni qu'elle se limite à la 1ʳᵉ séance, ce qui n'est plus annoncé.
+ */
 function loyaltyUsageBody(scope: "first_booking" | "cart"): string {
   return scope === "first_booking"
-    ? "Saisissez ce code dans votre panier lors de votre première réservation. La remise s'applique uniquement sur cette première séance."
+    ? "Saisissez ce code dans votre panier au moment de réserver."
     : "Saisissez ce code dans votre panier au moment de réserver. La remise s'applique sur le total de votre prochaine réservation.";
 }
 
 export function loyaltyCodeEmailSubject(data: LoyaltyCodeEmailData): string {
   const discountLabel = formatLoyaltyDiscountValue(data.discountType, data.discountValue);
-  return `Votre code fidélité : ${discountLabel} ${loyaltyScopeLabel(data.scope)}`;
+  const scopeLabel = loyaltyScopeLabel(data.scope);
+  return `Votre code fidélité : ${discountLabel}${scopeLabel ? ` ${scopeLabel}` : ""}`;
 }
 
 export function buildLoyaltyCodeEmailHtml(data: LoyaltyCodeEmailData): string {
@@ -840,7 +850,7 @@ export function buildLoyaltyCodeEmailHtml(data: LoyaltyCodeEmailData): string {
   const threshold = Math.max(1, Math.round(data.threshold) || 1);
   const scopeLabel = loyaltyScopeLabel(data.scope);
   const expiresLabel = formatDateFrench(data.expiresAt);
-  const preheader = `Un code fidélité personnel vous attend : ${discountLabel} ${scopeLabel}, valable jusqu'au ${expiresLabel}.`;
+  const preheader = `Un code fidélité personnel vous attend : ${discountLabel}${scopeLabel ? ` ${scopeLabel}` : ""}, valable jusqu'au ${expiresLabel}.`;
 
   return `
 <!DOCTYPE html>
@@ -881,8 +891,8 @@ export function buildLoyaltyCodeEmailHtml(data: LoyaltyCodeEmailData): string {
                 <tr>
                   <td style="background-color:#1a1a1a;border:1px solid #facc15;border-radius:14px;padding:32px 20px;text-align:center;">
                     <p style="margin:0 0 10px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Votre remise fidélité</p>
-                    <p style="margin:0 0 6px 0;color:#facc15;font-size:56px;font-weight:800;line-height:1;">${discountLabel}</p>
-                    <p style="margin:0;color:#dddddd;font-size:14px;">${scopeLabel}</p>
+                    <p style="margin:0${scopeLabel ? " 0 6px 0" : ""};color:#facc15;font-size:56px;font-weight:800;line-height:1;">${discountLabel}</p>
+                    ${scopeLabel ? `<p style="margin:0;color:#dddddd;font-size:14px;">${scopeLabel}</p>` : ""}
                   </td>
                 </tr>
               </table>

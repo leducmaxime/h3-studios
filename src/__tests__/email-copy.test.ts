@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildCancellationEmailHtml,
   buildEmailHtml,
+  buildLoyaltyCodeEmailHtml,
   daysUntilDate,
+  loyaltyCodeEmailSubject,
   reminderEmailSubject,
   reminderHeading,
   reminderWhenPhrase,
@@ -216,5 +218,45 @@ describe("booking reminder copy", () => {
       ...baseEmail,
       reminder: { whenPhrase: "dans 5 jours", remainingDue: 0 },
     })).toContain("dans 5 jours");
+  });
+});
+
+describe("loyalty code email copy", () => {
+  const baseLoyalty = {
+    clientName: "Estelle",
+    clientEmail: "estelle@example.com",
+    code: "FID-36SNQFJ7",
+    threshold: 2,
+    expiresAt: "2026-10-27",
+    bookingUrl: "https://h3-studios.fr/reservation",
+  };
+
+  const percentage = { ...baseLoyalty, discountType: "percentage" as const, discountValue: 50, scope: "first_booking" as const };
+  const fixed = { ...baseLoyalty, discountType: "fixed" as const, discountValue: 10, scope: "cart" as const };
+
+  // Décision produit : la limitation à la 1ʳᵉ séance n'est plus annoncée au
+  // client, alors qu'elle reste appliquée au panier. Ce test verrouille
+  // l'absence de la mention, pas la règle métier.
+  it("n'annonce aucune restriction de portée pour un pourcentage", () => {
+    const html = buildLoyaltyCodeEmailHtml(percentage);
+    expect(html).not.toMatch(/première/i);
+    expect(html).toContain("Saisissez ce code dans votre panier au moment de réserver.");
+    expect(html).not.toContain("La remise s'applique");
+    expect(loyaltyCodeEmailSubject(percentage)).toBe("Votre code fidélité : -50 %");
+  });
+
+  it("ne laisse ni ponctuation orpheline ni paragraphe vide sans libellé de portée", () => {
+    const html = buildLoyaltyCodeEmailHtml(percentage);
+    const hero = /<!-- Hero: discount value -->[\s\S]*?<\/table>/.exec(html)?.[0] ?? "";
+    expect(hero).toContain("-50 %");
+    expect(hero).not.toMatch(/>\s*<\/p>/);
+    expect(html).toContain("vous attend : -50 %, valable jusqu'au");
+  });
+
+  it("conserve la portée panier pour un montant fixe", () => {
+    const html = buildLoyaltyCodeEmailHtml(fixed);
+    expect(html).toContain("sur votre prochaine réservation");
+    expect(html).toContain("La remise s'applique sur le total de votre prochaine réservation.");
+    expect(loyaltyCodeEmailSubject(fixed)).toBe("Votre code fidélité : -10 € sur votre prochaine réservation");
   });
 });
