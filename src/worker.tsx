@@ -148,6 +148,8 @@ import {
   claimLoyaltyAward,
   getDueLoyaltyRewardCandidates,
   claimLoyaltyRewardEmail,
+  claimPromoCodeUsage,
+  releasePromoCodeUsage,
 } from "@/lib/db";
 import { getLoyaltyProgress, readLoyaltyConfig, isLoyaltyConfigured, validateLoyaltySettings, computeLoyaltyDiscount } from "@/lib/loyalty";
 import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
@@ -1389,6 +1391,8 @@ const app = defineApp([
       let loyaltyExpectedAwardsGranted = 0;
       let promoType: string | null = null;
       let promoValue: number | undefined = undefined;
+      let promoUsageClaimed = false;
+      let promoUsageCode: string | null = null;
 
       if (body.isLastInCart) {
         // Last cart request with a promo code: full cart recompute
@@ -1423,6 +1427,18 @@ const app = defineApp([
           const promoValidation = await validatePromoCode(env.DB, body.promoCode.trim().toUpperCase(), cartSubtotal);
           if (!promoValidation.valid) {
             return jsonError(promoValidation.error || "Code promo invalide", 400);
+          }
+
+          // Réclamation avant toute écriture de remise. Redondant avec la garde
+          // englobante `isLastInCart` (ligne 1397) — conservé volontairement :
+          // la consommation du code ne doit jamais dépendre d'un seul garde,
+          // `isLastInCart` étant un champ fourni par le navigateur.
+          if (body.isLastInCart) {
+            const normalizedPromoCode = body.promoCode.trim().toUpperCase();
+            const claimed = await claimPromoCodeUsage(env.DB, normalizedPromoCode, getParisDateISO());
+            if (!claimed) return jsonError("Code promo invalide, expiré ou épuisé", 400);
+            promoUsageClaimed = true;
+            promoUsageCode = normalizedPromoCode;
           }
 
           const discountTotal = Math.min(promoValidation.roundedDiscount || 0, cartSubtotal);
@@ -1563,7 +1579,19 @@ const app = defineApp([
         cancel_reason: null,
       };
 
-      const booking = await createBooking(env.DB, createBookingData) as unknown as DbBooking;
+      let booking: DbBooking;
+      try {
+        booking = await createBooking(env.DB, createBookingData) as unknown as DbBooking;
+      } catch (error) {
+        if (promoUsageClaimed && promoUsageCode) {
+          try {
+            await releasePromoCodeUsage(env.DB, promoUsageCode);
+          } catch (rollbackError) {
+            console.error(`Failed to compensate promo claim for ${promoUsageCode}:`, rollbackError);
+          }
+        }
+        throw error;
+      }
 
       // La réclamation est la seule garde de concurrence ; aucune écriture de
       // remise fidélité ne doit précéder cette instruction atomique.
@@ -1608,12 +1636,6 @@ const app = defineApp([
           status: "paid",
           paid_at: new Date().toISOString(),
         });
-      }
-
-      if (body.promoCode) {
-        await env.DB.prepare(
-          "UPDATE promo_codes SET usage_count = usage_count + 1 WHERE code = ?",
-        ).bind(body.promoCode.trim().toUpperCase()).run();
       }
 
       // ── Email (consolidated on last cart request) ─────────────────────────

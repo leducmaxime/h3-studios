@@ -153,6 +153,8 @@ export interface DbUser {
   loyalty_threshold: number;
   loyalty_notified_award_index: number;
   loyalty_emails_opt_out: number;
+  loyalty_code_validity_days?: number | null;
+  loyalty_cycle_start?: string | null;
   /**
    * Agrégats d'export calculés côté serveur par `getUsers` (issue #61).
    * Optionnels : `getUserById` / `getUserByEmail` ne les renvoient pas.
@@ -367,6 +369,13 @@ export interface DbPromoCode {
   max_usage: number | null;
   round_mode: "down" | "up" | "none";
   created_at: string;
+  user_id?: string | null;
+  source?: "manual" | "loyalty" | null;
+  scope?: "cart" | "first_booking" | null;
+  used_at?: string | null;
+  used_booking_ref?: string | null;
+  notified_at?: string | null;
+  cycle_end?: string | null;
 }
 
 // --- Opening Hours ---

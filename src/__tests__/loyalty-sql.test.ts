@@ -1,8 +1,9 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { describe, expect, it, beforeEach } from "vitest";
-import { buildDueLoyaltyRewardCandidatesQuery, buildLoyaltyCountsQuery, claimLoyaltyAward, claimLoyaltyRewardEmail, getUserLoyaltyCounts, getUserLoyaltyDiscountTotal } from "@/lib/db";
+import { buildDueLoyaltyRewardCandidatesQuery, buildLoyaltyCountsQuery, claimLoyaltyAward, claimLoyaltyRewardEmail, claimPromoCodeUsage, getUserLoyaltyCounts, getUserLoyaltyDiscountTotal, releasePromoCodeUsage } from "@/lib/db";
 import { getBookingAmountDue } from "@/lib/booking-totals";
 import { getLoyaltyProgress } from "@/lib/loyalty";
+import { isPromoCodeExpired } from "@/lib/utils";
 
 const now = { dateISO: "2026-08-20", hours: 20, minutes: 0 };
 class D1Memory {
@@ -17,7 +18,8 @@ let sqlite: DatabaseSync;
 let db: D1Memory;
 beforeEach(() => {
   sqlite = new DatabaseSync(":memory:");
-  sqlite.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, name TEXT DEFAULT '', first_name TEXT, is_blocked INTEGER DEFAULT 0, loyalty_enabled INTEGER DEFAULT 0, loyalty_discount_type TEXT, loyalty_discount_value REAL DEFAULT 0, loyalty_threshold INTEGER DEFAULT 0, loyalty_notified_award_index INTEGER DEFAULT 0, loyalty_emails_opt_out INTEGER DEFAULT 0, updated_at TEXT);
+  sqlite.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, name TEXT DEFAULT '', first_name TEXT, is_blocked INTEGER DEFAULT 0, loyalty_enabled INTEGER DEFAULT 0, loyalty_discount_type TEXT, loyalty_discount_value REAL DEFAULT 0, loyalty_threshold INTEGER DEFAULT 0, loyalty_notified_award_index INTEGER DEFAULT 0, loyalty_emails_opt_out INTEGER DEFAULT 0, loyalty_code_validity_days INTEGER DEFAULT 60, loyalty_cycle_start TEXT, updated_at TEXT);
+    CREATE TABLE promo_codes (code TEXT PRIMARY KEY, is_active INTEGER DEFAULT 1, usage_count INTEGER DEFAULT 0, max_usage INTEGER, expires_at TEXT, used_at TEXT);
     CREATE TABLE bookings (id TEXT PRIMARY KEY, user_id TEXT, date TEXT, start_time TEXT, end_time TEXT, status TEXT, promo_discount REAL DEFAULT 0, loyalty_award_id TEXT, base_price REAL DEFAULT 0, equipment_price REAL DEFAULT 0, total_price REAL DEFAULT 0, updated_at TEXT);`);
   db = new D1Memory(sqlite);
   sqlite.prepare("INSERT INTO users (id,email,name,first_name,is_blocked,loyalty_enabled,loyalty_discount_type,loyalty_discount_value,loyalty_threshold,loyalty_notified_award_index,loyalty_emails_opt_out) VALUES ('u','u@example.com','User',NULL,0,1,'fixed',10,3,0,0)").run();
@@ -103,6 +105,46 @@ describe("fidélité — SQL D1", () => {
     expect(await claimLoyaltyRewardEmail(db as unknown as D1Database, { userId: "u", awardIndex: 1 })).toBe(true);
     expect(await claimLoyaltyRewardEmail(db as unknown as D1Database, { userId: "u", awardIndex: 1 })).toBe(false);
     expect(sqlite.prepare("SELECT loyalty_notified_award_index FROM users WHERE id='u'").get()).toEqual({ loyalty_notified_award_index: 1 });
+  });
+
+  it("interprète l'expiration en date de Paris, sans dépendre du fuseau de la machine", () => {
+    expect(isPromoCodeExpired("2026-08-27", "2026-08-27")).toBe(false);
+    expect(isPromoCodeExpired("2026-08-27", "2026-08-28")).toBe(true);
+    expect(isPromoCodeExpired("2026-08-27T23:59:59.000Z", "2026-08-27")).toBe(false);
+    expect(isPromoCodeExpired("2026-08-27T23:59:59.000Z", "2026-08-28")).toBe(true);
+    expect(isPromoCodeExpired(null, "2099-01-01")).toBe(false);
+  });
+
+  it("réclame atomiquement un code à usage unique et compense le claim", async () => {
+    sqlite.prepare("INSERT INTO promo_codes (code,is_active,usage_count,max_usage,expires_at) VALUES ('ONCE',1,0,1,'2026-08-27')").run();
+    expect(await claimPromoCodeUsage(db as unknown as D1Database, "once", "2026-08-27")).toBe(true);
+    expect(await claimPromoCodeUsage(db as unknown as D1Database, "once", "2026-08-27")).toBe(false);
+    await releasePromoCodeUsage(db as unknown as D1Database, "once");
+    expect(sqlite.prepare("SELECT usage_count FROM promo_codes WHERE code='ONCE'").get()).toEqual({ usage_count: 0 });
+  });
+
+  it("utilise pour le backfill le même instant de fin que la requête de fidélité", () => {
+    add("award-midnight", "2000-01-02", "confirmed", "award-2");
+    sqlite.prepare("UPDATE bookings SET end_time='00:00' WHERE id='award-midnight'").run();
+    add("after-award", "2000-01-03");
+
+    sqlite.prepare(`UPDATE users SET loyalty_cycle_start = (
+      SELECT MAX(datetime(b.date, '+' || (
+        CASE
+          WHEN b.end_time = '00:00' THEN 1440
+          WHEN (CAST(substr(b.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.end_time, 4, 2) AS INTEGER)) <= (CAST(substr(b.start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.start_time, 4, 2) AS INTEGER))
+            THEN (CAST(substr(b.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.end_time, 4, 2) AS INTEGER)) + 1440
+          ELSE (CAST(substr(b.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.end_time, 4, 2) AS INTEGER))
+        END
+      ) || ' minutes'))
+      FROM bookings b
+      WHERE b.user_id = users.id AND b.status != 'cancelled' AND b.loyalty_award_id IS NOT NULL
+    ) WHERE loyalty_enabled = 1`).run();
+
+    expect(sqlite.prepare("SELECT loyalty_cycle_start FROM users WHERE id='u'").get()).toEqual({ loyalty_cycle_start: "2000-01-03 00:00:00" });
+    const q = buildLoyaltyCountsQuery("u", now);
+    const counts = sqlite.prepare(q.sql).get(...(q.params as SQLInputValue[])) as { past_since_award: number };
+    expect(counts.past_since_award).toBe(1);
   });
 
   it("réclamation concurrente : la seconde avec expectedAwardsGranted échoue et la ligne reste inchangée", async () => {

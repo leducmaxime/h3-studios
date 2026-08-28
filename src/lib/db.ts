@@ -31,10 +31,12 @@ import {
   type UserOpsSnapshot,
   type UserBookingInsights,
 } from "./db-types";
-import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon } from "./utils";
+import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon, isPromoCodeExpired } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type StudioId } from "./booking";
 import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
 import { computeClientBookingInsights, type BookingStatSource } from "./user-booking-stats";
+
+export { isPromoCodeExpired } from "./utils";
 
 export function buildLoyaltyCountsQuery(userId: string, nowValue: { dateISO: string; hours: number; minutes: number }): { sql: string; params: unknown[] } {
   const direction = dateDirectionCondition("past", nowValue);
@@ -1783,7 +1785,7 @@ export async function validatePromoCode(
   ).bind(code.trim().toUpperCase()).first<DbPromoCode>();
   if (!promo) return { valid: false, error: "Code promo invalide" };
   // Expiration
-  if (promo.expires_at && new Date(promo.expires_at) < new Date(now())) return { valid: false, error: "Code promo expiré" };
+  if (isPromoCodeExpired(promo.expires_at, getParisDateISO())) return { valid: false, error: "Code promo expiré" };
   // Usage limit
   if (promo.max_usage !== null && promo.usage_count >= promo.max_usage) return { valid: false, error: "Code promo épuisé" };
   // Minimum amount
@@ -1799,6 +1801,29 @@ export async function validatePromoCode(
   const finalDiscount = applyDiscountRounding(discount, promo.round_mode ?? "none");
 
   return { valid: true, promo, roundedDiscount: finalDiscount };
+}
+
+/** Claim one promo-code use atomically before granting its discount. */
+export async function claimPromoCodeUsage(
+  db: D1Database,
+  code: string,
+  parisDateISO = getParisDateISO(),
+): Promise<boolean> {
+  const result = await db.prepare(
+    `UPDATE promo_codes
+        SET usage_count = usage_count + 1, used_at = ?
+      WHERE code = ? AND is_active = 1
+        AND (max_usage IS NULL OR usage_count < max_usage)
+        AND (expires_at IS NULL OR ? <= substr(expires_at, 1, 10))`,
+  ).bind(now(), code.trim().toUpperCase(), parisDateISO).run();
+  return result.meta.changes === 1;
+}
+
+/** Compensate a promo claim when the booking INSERT fails. */
+export async function releasePromoCodeUsage(db: D1Database, code: string): Promise<void> {
+  await db.prepare(
+    "UPDATE promo_codes SET usage_count = MAX(0, usage_count - 1) WHERE code = ?",
+  ).bind(code.trim().toUpperCase()).run();
 }
 
 // ─── Opening Hours ───────────────────────────────────────────────────────────

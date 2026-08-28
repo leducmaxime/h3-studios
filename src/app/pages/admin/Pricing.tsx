@@ -46,7 +46,7 @@ import {
 import { STUDIOS, type StudioId } from "@/lib/booking";
 import { type DbPricing, type DbPromoCode } from "@/lib/db-types";
 import { groupTypeLabel } from "@/lib/labels";
-import { getParisDateISO } from "@/lib/utils";
+import { getParisDateISO, isPromoCodeExpired } from "@/lib/utils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1584,9 +1584,7 @@ function PromoCodesTab() {
               </thead>
               <tbody>
                 {promoCodes.map((promo) => {
-                  const isExpired = promo.expires_at
-                    ? new Date(promo.expires_at) < new Date()
-                    : false;
+                  const isExpired = isPromoCodeExpired(promo.expires_at, getParisDateISO());
                   const isMaxUsed = promo.max_usage !== null
                     ? promo.usage_count >= promo.max_usage
                     : false;
