@@ -550,7 +550,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     : `${(user.loyalty_discount_value ?? 0).toLocaleString("fr-FR")} %`;
   const loyaltyThreshold = user.loyalty_threshold ?? 0;
   const loyaltyProgress = user.loyalty ?? null;
-  const loyaltyProgressPct = loyaltyProgress && loyaltyProgress.threshold > 0
+  const loyaltyProgressPct = loyaltyProgress
+    && Number.isFinite(loyaltyProgress.threshold)
+    && loyaltyProgress.threshold > 0
+    && Number.isFinite(loyaltyProgress.counter)
     ? loyaltyProgress.isDue
       ? 100
       : Math.min(100, Math.round((loyaltyProgress.counter / loyaltyProgress.threshold) * 100))

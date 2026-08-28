@@ -149,6 +149,7 @@ import {
   getBookingsByRefs,
   resolveStatsRange,
   getUserLoyaltyDiscountTotal,
+  getUserLoyaltyProgress,
   getDueLoyaltyCodeCandidates,
   claimLoyaltyCycleStart,
   createLoyaltyPromoCode,
@@ -3268,9 +3269,10 @@ const app = defineApp([
       try {
         const user = await getUserById(env.DB, id);
         if (!user) return jsonError("Utilisateur introuvable", 404);
-        const [loyaltyCodes, totalDiscountGranted, ops, insights] = await Promise.all([
+        const [loyaltyCodes, totalDiscountGranted, loyaltyProgress, ops, insights] = await Promise.all([
           getLoyaltyPromoCodes(env.DB, id),
           getUserLoyaltyDiscountTotal(env.DB, id),
+          getUserLoyaltyProgress(env.DB, id),
           getUserOpsSnapshot(env.DB, id),
           getUserBookingInsights(env.DB, id),
         ]);
@@ -3281,6 +3283,11 @@ const app = defineApp([
             discountType: user.loyalty_discount_type,
             discountValue: user.loyalty_discount_value,
             threshold: user.loyalty_threshold,
+            pastEligibleBookings: loyaltyProgress.pastEligibleBookings,
+            counter: loyaltyProgress.counter,
+            remainingToNextAward: loyaltyProgress.remainingToNextAward,
+            isDue: loyaltyProgress.isDue,
+            awardsGranted: loyaltyCodes.length,
             validityDays: user.loyalty_code_validity_days ?? 60,
             codes: loyaltyCodes,
             totalDiscountGranted,
@@ -5670,12 +5677,18 @@ const app = defineApp([
     const user = token ? await validateClientSession(env.DB, token) : null;
     if (!user) return jsonError("Authentification requise", 401);
     const loyaltyUser = await getUserById(env.DB, user.id);
-    const codes = await getLoyaltyPromoCodes(env.DB, user.id);
+    const [codes, loyaltyProgress] = await Promise.all([
+      getLoyaltyPromoCodes(env.DB, user.id),
+      getUserLoyaltyProgress(env.DB, user.id),
+    ]);
     return jsonSuccess({
       configured: loyaltyUser?.loyalty_enabled === 1,
       type: loyaltyUser?.loyalty_discount_type ?? null,
       value: loyaltyUser?.loyalty_discount_value ?? 0,
       threshold: loyaltyUser?.loyalty_threshold ?? 0,
+      counter: loyaltyProgress.counter,
+      remainingToNextAward: loyaltyProgress.remainingToNextAward,
+      isDue: loyaltyProgress.isDue,
       codes,
     });
   }),

@@ -196,6 +196,69 @@ export async function getUserLoyaltyDiscountTotal(db: D1Database, userId: string
   ).bind(userId).first<{ total: number }>();
   return Number(row?.total) || 0;
 }
+
+/** Construit le comptage des réservations fidélité passées, par cycle et au total. */
+export function buildUserLoyaltyProgressQuery(
+  nowValue: { dateISO: string; hours: number; minutes: number },
+  userId: string,
+): { sql: string; params: unknown[] } {
+  const direction = dateDirectionCondition("past", nowValue);
+  return {
+    sql: `WITH eligible_bookings AS (
+        SELECT b.user_id, ${sqlBookingEndInstant("b")} AS booking_end
+        FROM bookings b
+        WHERE ${direction.sql}
+          AND b.status IN ('confirmed','completed')
+      )
+      SELECT COALESCE(u.loyalty_threshold, 0) AS threshold,
+             u.loyalty_cycle_start AS cycle_start,
+             COUNT(eb.booking_end) AS past_eligible_bookings,
+             COUNT(CASE WHEN eb.booking_end IS NOT NULL
+                        AND (u.loyalty_cycle_start IS NULL OR eb.booking_end > u.loyalty_cycle_start)
+                        THEN 1 END) AS counter
+      FROM users u
+      LEFT JOIN eligible_bookings eb ON eb.user_id = u.id
+      WHERE u.id = ?
+      GROUP BY u.id, u.loyalty_threshold, u.loyalty_cycle_start`,
+    params: [...direction.params, userId],
+  };
+}
+
+/** Compte les réservations éligibles passées et l'avancement du cycle fidélité. */
+export async function getUserLoyaltyProgress(
+  db: D1Database,
+  userId: string,
+): Promise<{
+  pastEligibleBookings: number;
+  counter: number;
+  remainingToNextAward: number;
+  isDue: boolean;
+  threshold: number;
+}> {
+  const query = buildUserLoyaltyProgressQuery(getParisNow(), userId);
+  const row = await db.prepare(query.sql).bind(...query.params).first<{
+    threshold: number;
+    past_eligible_bookings: number;
+    counter: number;
+  }>();
+  const toFiniteCount = (value: unknown): number => {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, number) : 0;
+  };
+  const rawThreshold = Number(row?.threshold);
+  const threshold = Number.isFinite(rawThreshold) ? rawThreshold : 0;
+  const pastEligibleBookings = toFiniteCount(row?.past_eligible_bookings);
+  const counter = toFiniteCount(row?.counter);
+  const isDue = threshold > 0 && counter >= threshold;
+
+  return {
+    pastEligibleBookings,
+    counter,
+    remainingToNextAward: threshold > 0 ? Math.max(0, threshold - counter) : 0,
+    isDue,
+    threshold,
+  };
+}
 /** Normalise "00:00" en "24:00" pour les comparaisons de strings SQL.
  *  "00:00" est plus petit que toutes les heures en string compare,
  *  ce qui casse les gardes start_time < ? AND end_time > ?. */

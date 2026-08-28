@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildLoyaltyCodeEmailData,
   buildDueLoyaltyCodeCandidatesQuery,
+  buildUserLoyaltyProgressQuery,
   claimLoyaltyCycleStart,
   claimPromoCodeUsage,
   claimPromoValidationAttempt,
   createLoyaltyPromoCode,
   getUserLoyaltyDiscountTotal,
+  getUserLoyaltyProgress,
   getLoyaltyPromoResendError,
   getLoyaltyPromoResendClientError,
   markLoyaltyPromoCodeResent,
@@ -166,6 +168,50 @@ describe("fidélité — codes nominatif", () => {
     sqlite.prepare("UPDATE users SET loyalty_threshold=1, loyalty_cycle_start=NULL WHERE id='u'").run();
     const query = buildDueLoyaltyCodeCandidatesQuery(now, 200);
     expect(sqlite.prepare(query.sql).all(...(query.params as SQLInputValue[]))).toHaveLength(0);
+  });
+
+  it("compte le total et le cycle courant avec les mêmes critères que le cron", async () => {
+    addBooking("one", "2000-01-01");
+    addBooking("two", "2000-01-02", "completed");
+    sqlite.prepare("UPDATE users SET loyalty_threshold=3, loyalty_cycle_start='2000-01-01 12:00:00' WHERE id='u'").run();
+
+    const query = buildUserLoyaltyProgressQuery(now, "u");
+    expect(query.sql).toContain("b.status IN ('confirmed','completed')");
+    expect(query.sql).toContain("u.loyalty_cycle_start IS NULL OR eb.booking_end > u.loyalty_cycle_start");
+    await expect(getUserLoyaltyProgress(db as unknown as D1Database, "u")).resolves.toEqual({
+      pastEligibleBookings: 2,
+      counter: 1,
+      remainingToNextAward: 2,
+      isDue: false,
+      threshold: 3,
+    });
+  });
+
+  it("déclare une remise due quand le compteur dépasse le seuil", async () => {
+    addBooking("one", "2000-01-01");
+    addBooking("two", "2000-01-02");
+    addBooking("three", "2000-01-03");
+    sqlite.prepare("UPDATE users SET loyalty_threshold=2 WHERE id='u'").run();
+
+    await expect(getUserLoyaltyProgress(db as unknown as D1Database, "u")).resolves.toMatchObject({
+      pastEligibleBookings: 3,
+      counter: 3,
+      remainingToNextAward: 0,
+      isDue: true,
+      threshold: 2,
+    });
+  });
+
+  it("renvoie zéro pour un seuil nul sans réservation", async () => {
+    sqlite.prepare("UPDATE users SET loyalty_threshold=0 WHERE id='u'").run();
+
+    await expect(getUserLoyaltyProgress(db as unknown as D1Database, "u")).resolves.toEqual({
+      pastEligibleBookings: 0,
+      counter: 0,
+      remainingToNextAward: 0,
+      isDue: false,
+      threshold: 0,
+    });
   });
 
   it("filtre les codes nominatifs par propriétaire", async () => {

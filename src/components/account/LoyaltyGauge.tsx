@@ -17,9 +17,13 @@ export function LoyaltyGauge({ loyalty }: { loyalty: LoyaltyData }) {
   const reward = loyalty.type === "fixed"
     ? <Price amount={loyalty.value} />
     : `-${loyalty.value.toLocaleString("fr-FR")}%`;
-  const progress = loyalty.isDue
-    ? 100
-    : Math.min(100, Math.round((loyalty.counter / loyalty.threshold) * 100));
+  const progress = !Number.isFinite(loyalty.threshold)
+    || loyalty.threshold <= 0
+    || !Number.isFinite(loyalty.counter)
+    ? 0
+    : loyalty.isDue
+      ? 100
+      : Math.min(100, Math.round((loyalty.counter / loyalty.threshold) * 100));
 
   return (
     <section>
