@@ -61,6 +61,10 @@ const SEARCH_SQL = `
     )
   ORDER BY b.date ASC, b.start_time ASC`;
 
+// Variante includeUpcoming=true : le CTE et l'expression de solde restent
+// identiques, seule la borne temporelle des séances est levée.
+const UPCOMING_LIST_SQL = LIST_SQL.replace(sessionEndedSql, "1 = 1");
+
 beforeAll(() => {
   db = new DatabaseSync(":memory:");
   db.exec(`
@@ -179,5 +183,16 @@ describe("recouvrement overdue (no date range)", () => {
     const byRef = "%H3-PART%";
     const searchedByRef = db.prepare(SEARCH_SQL).all(today, today, now, byRef, byRef, byRef, byRef, byRef, byRef) as Array<{ id: string }>;
     expect(searchedByRef.map((row) => row.id)).toEqual(["partial"]);
+  });
+
+  it("includes future unpaid sessions when includeUpcoming is enabled", () => {
+    db.exec("DELETE FROM bookings; DELETE FROM payments; DELETE FROM users;");
+    addUser("u1", { name: "Alice Martin" });
+    add("ended", "2026-08-19", "12:00", { user: "u1" });
+    add("future", "2026-08-21", "12:00", { user: "u1", total: 30, paid: 10 });
+
+    const rows = db.prepare(UPCOMING_LIST_SQL).all() as Array<{ id: string; remaining: number }>;
+    expect(rows.map((row) => row.id)).toEqual(["ended", "future"]);
+    expect(rows.find((row) => row.id === "future")?.remaining).toBe(20);
   });
 });

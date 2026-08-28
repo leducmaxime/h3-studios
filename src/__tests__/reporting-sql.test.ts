@@ -36,7 +36,8 @@ beforeAll(() => {
       amount REAL,
       method TEXT,
       status TEXT,
-      external_ref TEXT
+      external_ref TEXT,
+      paid_at TEXT
     );
     CREATE TABLE payment_allocations (
       id TEXT PRIMARY KEY,
@@ -47,15 +48,17 @@ beforeAll(() => {
   `);
 });
 
-function insertBooking(id: string, total: number, discount: number, opts: { status?: string; payment_status?: string; payment_method?: string } = {}) {
+function insertBooking(id: string, total: number, discount: number, opts: { status?: string; payment_status?: string; payment_method?: string; date?: string } = {}) {
   db.prepare(
-    "INSERT INTO bookings (id, date, total_price, promo_discount, payment_status, payment_method, status) VALUES (?, '2026-01-05', ?, ?, ?, ?, ?)",
-  ).run(id, total, discount, opts.payment_status ?? "pay-on-site", opts.payment_method ?? "cash", opts.status ?? "confirmed");
+    "INSERT INTO bookings (id, date, total_price, promo_discount, payment_status, payment_method, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).run(id, opts.date ?? "2026-01-05", total, discount, opts.payment_status ?? "pay-on-site", opts.payment_method ?? "cash", opts.status ?? "confirmed");
 }
 
-function insertPayment(id: string, bookingId: string, amount: number, status = "paid") {
+function insertPayment(id: string, bookingId: string, amount: number, status = "paid", opts: { paidAt?: string; externalRef?: string } = {}) {
   const movementStatus = status === "paid" ? "settled" : status;
-  db.prepare("INSERT INTO payments (id, amount, method, status) VALUES (?, ?, 'cash', ?)").run(id, amount, movementStatus);
+  db.prepare("INSERT INTO payments (id, amount, method, status, external_ref, paid_at) VALUES (?, ?, 'cash', ?, ?, ?)").run(
+    id, amount, movementStatus, opts.externalRef ?? null, opts.paidAt ?? "2026-01-05 12:00:00",
+  );
   db.prepare("INSERT INTO payment_allocations (id, payment_id, booking_id, amount) VALUES (?, ?, ?, ?)").run(`${id}-${bookingId}`, id, bookingId, amount);
 }
 
@@ -260,5 +263,39 @@ describe("reporting SQL — ledger revenue does not multiply shared movements", 
         AND EXISTS (SELECT 1 FROM payment_allocations a WHERE a.payment_id = p.id)
     `).get() as { collections: number; revenue: number };
     expect(row).toEqual({ collections: 1, revenue: 250 });
+  });
+});
+
+describe("reporting SQL — treasury uses collection date", () => {
+  const TREASURY_SQL = `
+    SELECT
+      CASE WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
+           WHEN p.method = 'card' THEN 'card-onsite'
+           ELSE p.method END AS method,
+      COUNT(*) AS count,
+      COALESCE(SUM(p.amount), 0) AS revenue
+    FROM payments p
+    WHERE p.status = 'settled'
+      AND p.paid_at >= ? AND p.paid_at <= ?
+    GROUP BY 1
+  `;
+  const BOOKING_REVENUE_SQL = `
+    SELECT COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) AS revenue
+    FROM bookings
+    WHERE date >= ? AND date <= ? AND status != 'cancelled'
+  `;
+
+  it("puts a January collection for a March session in January treasury, while CA stays in March", () => {
+    db.exec("DELETE FROM payment_allocations; DELETE FROM payments; DELETE FROM bookings;");
+    insertBooking("march", 100, 0, { date: "2026-03-05" });
+    insertPayment("jan-payment", "march", 100, "paid", { paidAt: "2026-01-15 12:00:00" });
+
+    const treasury = db.prepare(TREASURY_SQL).all("2026-01-01", "2026-01-31") as Array<{ method: string; count: number; revenue: number }>;
+    expect(treasury).toEqual([{ method: "cash", count: 1, revenue: 100 }]);
+
+    const januaryRevenue = db.prepare(BOOKING_REVENUE_SQL).get("2026-01-01", "2026-01-31") as { revenue: number };
+    const marchRevenue = db.prepare(BOOKING_REVENUE_SQL).get("2026-03-01", "2026-03-31") as { revenue: number };
+    expect(januaryRevenue.revenue).toBe(0); // Le CA reste rattaché à la date de séance.
+    expect(marchRevenue.revenue).toBe(100); // Le règlement anticipé ne déplace pas le CA produit.
   });
 });

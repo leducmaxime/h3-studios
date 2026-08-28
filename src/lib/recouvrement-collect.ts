@@ -52,8 +52,8 @@ export function allocateCollectPayments(
 
   const totalDue = sumAmounts(due.map((booking) => ({ amount: booking.remaining })));
   const totalPaid = sumAmounts(entries);
-  if (!amountsMatch(totalDue, totalPaid)) {
-    return { error: "Le total doit égaler exactement le reste dû" };
+  if (totalPaid > totalDue + 0.005) {
+    return { error: "Le montant dépasse le reste dû" };
   }
 
   const allocations: CollectAllocation[] = [];
@@ -62,14 +62,13 @@ export function allocateCollectPayments(
 
   for (const booking of due) {
     let left = booking.remaining;
-    while (left > 0.005) {
+    while (left > 0.005 && paymentIndex < entries.length) {
       while (paymentLeft <= 0.005) {
         paymentIndex += 1;
-        if (paymentIndex >= entries.length) {
-          return { error: "Le total doit égaler exactement le reste dû" };
-        }
+        if (paymentIndex >= entries.length) break;
         paymentLeft = entries[paymentIndex].amount;
       }
+      if (paymentIndex >= entries.length) break;
       const amount = round2(Math.min(left, paymentLeft));
       if (amount <= 0) break;
       allocations.push({

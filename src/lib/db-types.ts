@@ -420,6 +420,9 @@ export interface DbAuditLog {
 export interface DbAuditLogWithDetails extends DbAuditLog {
   admin_name?: string | null;
   booking_ref?: string | null;
+  booking_date: string | null;
+  booking_start_time: string | null;
+  booking_end_time: string | null;
   user_email?: string | null;
 }
 

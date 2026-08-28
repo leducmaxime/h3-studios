@@ -2092,6 +2092,7 @@ export async function getAuditLogs(
   const offset = (page - 1) * limit;
   const result = await db.prepare(
     `SELECT a.*, au.name as admin_name, b.booking_ref as booking_ref,
+            b.date as booking_date, b.start_time as booking_start_time, b.end_time as booking_end_time,
             COALESCE(booking_user.email, entity_user.email) as user_email
      FROM audit_logs a
      LEFT JOIN admin_users au ON a.performed_by = au.id
@@ -2466,13 +2467,15 @@ export async function getDashboardStats(
 
 export async function getOverdueBookings(
   db: D1Database,
-  opts?: { search?: string; userId?: string },
+  opts?: { search?: string; userId?: string; includeUpcoming?: boolean },
 ): Promise<OverdueBookingsResult> {
   const today = getParisDateISO();
   const parisNow = getParisNow();
   const nowHHMM = `${String(parisNow.hours).padStart(2, "0")}:${String(parisNow.minutes).padStart(2, "0")}`;
   const remainingExpr = `(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) - COALESCE(paid.paid_amount, 0))`;
-  const sessionEndedSql = `(b.date < ? OR (b.date = ? AND CASE WHEN b.end_time = '00:00' THEN '24:00' ELSE b.end_time END <= ?))`;
+  const sessionEndedSql = opts?.includeUpcoming
+    ? "1 = 1"
+    : `(b.date < ? OR (b.date = ? AND CASE WHEN b.end_time = '00:00' THEN '24:00' ELSE b.end_time END <= ?))`;
 
   const search = opts?.search?.trim() ?? "";
   const searchSql = search
@@ -2484,7 +2487,11 @@ export async function getOverdueBookings(
   const searchParams = search ? Array<string>(6).fill(`%${search}%`) : [];
   const userId = opts?.userId?.trim() ?? "";
   const userSql = userId ? "AND b.user_id = ?" : "";
-  const filterParams = [today, today, nowHHMM, ...searchParams, ...(userId ? [userId] : [])];
+  const filterParams = [
+    ...(opts?.includeUpcoming ? [] : [today, today, nowHHMM]),
+    ...searchParams,
+    ...(userId ? [userId] : []),
+  ];
 
   const [aggregateResult, listResult] = await db.batch([
     db.prepare(
@@ -2678,6 +2685,7 @@ export async function getMonthlyReportData(
   const to = new Date(Date.UTC(year, month, 0, 12, 0, 0));
   const rangeFrom = getParisDateISO(from);
   const rangeTo = getParisDateISO(to);
+  const paymentRangeTo = `${rangeTo} 23:59:59`;
 
   const [
     revenueResult,
@@ -2711,13 +2719,17 @@ export async function getMonthlyReportData(
 
     // Payment methods
     db.prepare(
-      `SELECT p.method, COUNT(DISTINCT p.id) as count, COALESCE(SUM(a.amount), 0) as revenue
+      `SELECT
+         CASE WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
+              WHEN p.method = 'card' THEN 'card-onsite'
+              ELSE p.method END AS method,
+         COUNT(*) as count,
+         COALESCE(SUM(p.amount), 0) as revenue
        FROM payments p
-       JOIN payment_allocations a ON a.payment_id = p.id
-        JOIN bookings b ON b.id = a.booking_id
-       WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled' AND p.status = 'settled'
-       GROUP BY p.method`,
-    ).bind(rangeFrom, rangeTo),
+       WHERE p.status = 'settled'
+         AND p.paid_at >= ? AND p.paid_at <= ?
+       GROUP BY 1`,
+    ).bind(rangeFrom, paymentRangeTo),
 
     // Top 5 clients
     db.prepare(

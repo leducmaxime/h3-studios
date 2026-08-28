@@ -3378,7 +3378,8 @@ const app = defineApp([
       const url = new URL(request.url);
       const search = url.searchParams.get("search") ?? undefined;
       const userId = url.searchParams.get("userId") ?? undefined;
-      const result = await getOverdueBookings(env.DB, { search, userId });
+      const includeUpcoming = url.searchParams.get("includeUpcoming") === "true";
+      const result = await getOverdueBookings(env.DB, { search, userId, includeUpcoming });
       return jsonSuccess(result);
     } catch (error) {
       console.error("GET /api/admin/recouvrement error:", error);
@@ -3408,7 +3409,8 @@ const app = defineApp([
         payments.push({ amount, method: payment.method });
       }
 
-      const overdue = await getOverdueBookings(env.DB, { userId });
+      // La collecte peut être déclenchée depuis la liste incluant les séances à venir.
+      const overdue = await getOverdueBookings(env.DB, { userId, includeUpcoming: true });
       const requested = new Set(bookingIds);
       const selected = overdue.bookings.filter((booking) => requested.has(booking.id));
       if (selected.length !== bookingIds.length) {
@@ -3443,7 +3445,7 @@ const app = defineApp([
         await recomputeBookingPaymentStatus(env.DB, bookingId);
       }
 
-      const collectedAmount = selected.reduce((sum, booking) => sum + booking.remaining, 0);
+      const collectedAmount = allocation.reduce((sum, line) => sum + line.amount, 0);
       await addAuditLog(
         env.DB,
         "user",
@@ -4860,6 +4862,7 @@ const app = defineApp([
         dateFrom,
         dateTo,
       });
+      const paymentRangeTo = `${toStr} 23:59:59`;
 
       const occupancyStmt = env.DB.prepare(
         `SELECT date, studio_id, start_time, end_time
@@ -4926,27 +4929,18 @@ const app = defineApp([
            WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled'
            GROUP BY 1`,
         ).bind(fromStr, toStr),
-        env.DB.prepare(
-          `SELECT
-            CASE
-              WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
-              WHEN p.method = 'card' THEN 'card-onsite'
-              ELSE p.method
-            END AS method,
-            COUNT(DISTINCT p.id) as count,
-            COALESCE(SUM(a.amount), 0) as revenue
-          FROM payments p
-          JOIN payment_allocations a ON a.payment_id = p.id
-          JOIN bookings b ON b.id = a.booking_id
-          WHERE b.date >= ? AND b.date <= ?
-            AND b.status != 'cancelled'
-            AND p.status = 'settled'
-          GROUP BY CASE
-            WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
-            WHEN p.method = 'card' THEN 'card-onsite'
-            ELSE p.method
-          END`,
-        ).bind(fromStr, toStr),
+         env.DB.prepare(
+           `SELECT
+             CASE WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
+                  WHEN p.method = 'card' THEN 'card-onsite'
+                  ELSE p.method END AS method,
+             COUNT(*) as count,
+             COALESCE(SUM(p.amount), 0) as revenue
+           FROM payments p
+           WHERE p.status = 'settled'
+             AND p.paid_at >= ? AND p.paid_at <= ?
+           GROUP BY 1`,
+         ).bind(fromStr, paymentRangeTo),
         env.DB.prepare(
           `SELECT
             COUNT(*) as count,

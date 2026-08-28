@@ -781,6 +781,31 @@ export function formatDate(date: Date, format: "short" | "long" = "long"): strin
   return date.toLocaleDateString("fr-FR", options);
 }
 
+/**
+ * Libellé canonique d'un créneau de réservation, pour tout l'admin.
+ *
+ *   short → "sam. 14 mars · 18:00–21:00 (3h)"
+ *   long  → "samedi 14 mars 2026 · 18:00–21:00 (3h)"
+ *
+ * Source unique : n'ajoutez pas de variante locale dans un écran. Les écrans
+ * qui en avaient une divergeaient déjà (« 3 heures » ici, « 3h30 » là).
+ *
+ * `date` est au format `YYYY-MM-DD` : les composants sont parsés explicitement
+ * pour éviter tout décalage de fuseau (`new Date("2026-03-14")` est interprété
+ * en UTC et peut reculer d'un jour selon le fuseau d'exécution).
+ */
+export function formatBookingSlot(
+  booking: { date: string; start_time: string; end_time: string },
+  format: "short" | "long" = "short",
+): string {
+  const [y, m, d] = booking.date.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const label = formatDate(new Date(y, m - 1, d), format);
+  const range = `${booking.start_time}–${booking.end_time === "00:00" ? "00:00" : booking.end_time}`;
+  const duration = formatDuration(booking.start_time, booking.end_time);
+  return duration ? `${label} · ${range} (${duration})` : `${label} · ${range}`;
+}
+
 export { formatPrice } from "./tax";
 
 export function generateBookingRef(): string {
