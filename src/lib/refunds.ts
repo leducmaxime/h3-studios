@@ -1,18 +1,21 @@
-import type { DbPayment } from "./db-types";
+import type { DbPayment, MovementStatus } from "./db-types";
 import {
   addAuditLog,
   getPaymentById,
-  getPaymentRefunds,
   recomputeBookingPaymentStatus,
-  recomputePaymentRefundState,
-  upsertPaymentRefund,
 } from "./db";
 import * as realStripe from "./stripe";
 import {
   isRefundCommitted,
   isRefundLedgerAccepted,
+  type StripeRefund,
   type StripeResult,
 } from "./stripe";
+import {
+  getBookingLedger,
+  recordMovement,
+  refundableForAllocation,
+} from "./ledger";
 import { round2 } from "./booking-totals";
 
 export type RefundFailureCode =
@@ -43,6 +46,12 @@ export interface RefundOutcome {
   message?: string;
 }
 
+export interface RefundBatchOutcome {
+  refunded: number;
+  outcomes: RefundOutcome[];
+  errors: RefundOutcome[];
+}
+
 export interface StripeRefundPort {
   createRefund: typeof realStripe.createRefund;
   listRefundsForPaymentIntent: typeof realStripe.listRefundsForPaymentIntent;
@@ -57,12 +66,19 @@ export interface RefundDeps {
   now?: () => string;
 }
 
+/**
+ * Compute the remaining amount of one allocation.
+ *
+ * The values are euros (the ledger is a REAL ledger), despite the historical
+ * helper name.  In particular, the first argument is the allocation amount,
+ * not the amount of the parent movement.
+ */
 function computeRefundableCents(
-  paymentAmountCents: number,
-  ledgerCents: number,
-  committedCents: number,
+  allocationAmount: number,
+  ledgerRefunded: number,
+  committedRefunded: number,
 ): number {
-  return Math.max(0, paymentAmountCents - Math.max(ledgerCents, committedCents));
+  return Math.max(0, round2(allocationAmount - Math.max(ledgerRefunded, committedRefunded)));
 }
 
 async function callPort<T>(
@@ -81,62 +97,110 @@ async function callPort<T>(
   }
 }
 
-/** Retourne le total encore remboursable des paiements carte encaissés. */
-export function getRefundableCardTotal(
-  payments: Pick<DbPayment, "method" | "status" | "amount" | "refunded_amount">[],
-): number {
-  const cents = payments
-    .filter((payment) =>
-      payment.method === "card" &&
-      (payment.status === "paid" || payment.status === "partial-refund"),
-    )
-    .reduce(
-      (sum, payment) => sum + Math.max(0, Math.round((payment.amount - payment.refunded_amount) * 100)),
-      0,
-    );
-  return round2(cents / 100);
+function movementStatusForStripe(refund: Pick<StripeRefund, "status">): MovementStatus {
+  if (refund.status === "succeeded" || refund.status === "pending") return "settled";
+  if (refund.status === "requires_action") return "pending";
+  return "failed";
 }
 
-/** Rembourse une ligne carte après confirmation de Stripe. */
-export async function refundCardPayment(
-  deps: RefundDeps,
+async function updateRefundMovement(
+  db: D1Database,
+  movementId: string,
+  status: MovementStatus,
+  externalRef: string | null,
+  paidAt: string | null,
+): Promise<void> {
+  await db.prepare(
+    "UPDATE payments SET external_ref = ?, status = ?, paid_at = ? WHERE id = ?",
+  ).bind(externalRef, status, paidAt, movementId).run();
+}
+
+async function findPendingRefund(
+  db: D1Database,
   paymentId: string,
-  amount: number,
-  reason?: string,
+  bookingId: string,
+): Promise<(DbPayment & { allocated: number }) | null> {
+  return db.prepare(
+    `SELECT p.*, a.amount AS allocated
+     FROM payments p
+     JOIN payment_allocations a ON a.payment_id = p.id
+     WHERE p.parent_id = ? AND p.status = 'pending'
+       AND p.method = 'card' AND a.booking_id = ? AND a.amount < 0
+     ORDER BY p.created_at DESC, p.id DESC
+     LIMIT 1`,
+  ).bind(paymentId, bookingId).first<DbPayment & { allocated: number }>();
+}
+
+async function findMovementByExternalRef(
+  db: D1Database,
+  externalRef: string,
+): Promise<DbPayment | null> {
+  return db.prepare("SELECT * FROM payments WHERE external_ref = ?").bind(externalRef).first<DbPayment>();
+}
+
+async function getRefundableAfter(
+  db: D1Database,
+  paymentId: string,
+  bookingId: string,
+): Promise<number> {
+  return round2(await refundableForAllocation(db, paymentId, bookingId));
+}
+
+async function getAllocationAmount(
+  db: D1Database,
+  paymentId: string,
+  bookingId: string,
+): Promise<number> {
+  const row = await db.prepare(
+    "SELECT COALESCE(SUM(amount), 0) AS amount FROM payment_allocations WHERE payment_id = ? AND booking_id = ?",
+  ).bind(paymentId, bookingId).first<{ amount: number }>();
+  return Math.max(0, round2(Number(row?.amount) || 0));
+}
+
+/** Total encore remboursable par carte pour une réservation. */
+export async function getRefundableCardTotal(
+  db: D1Database,
+  bookingId: string,
+): Promise<number> {
+  const summary = await getBookingLedger(db, bookingId);
+  return round2(summary.movements
+    .filter((movement) => movement.method === "card")
+    .reduce((sum, movement) => sum + (movement.refundable || 0), 0));
+}
+
+/**
+ * Rembourse une allocation carte.
+ *
+ * A pending negative movement is deliberately created before the first
+ * Stripe request.  Its id is consequently the stable Stripe idempotency key,
+ * and its allocation immediately reserves the amount against concurrent
+ * refund attempts.
+ */
+export async function refundAllocation(
+  deps: RefundDeps,
+  input: { paymentId: string; bookingId: string; amount: number; reason?: string },
 ): Promise<RefundOutcome> {
+  const { paymentId, bookingId } = input;
+  const amount = round2(Number(input.amount));
   const stripe = deps.stripe ?? realStripe;
   const now = deps.now ?? (() => new Date().toISOString());
-  let payment = await getPaymentById(deps.db, paymentId);
-  let existingCommittedCents = 0;
-  if (payment) {
-    const reserved = await deps.db.prepare(
-      "SELECT COALESCE(SUM(amount_cents), 0) as cents FROM payment_refunds WHERE payment_id = ? AND status IN ('succeeded', 'pending', 'requires_action')",
-    ).bind(paymentId).first<{ cents: number }>();
-    existingCommittedCents = Math.round(reserved?.cents ?? 0);
-  }
+  const payment = await getPaymentById(deps.db, paymentId);
 
   const auditFailure = async (code: RefundFailureCode, message: string) => {
-    if (payment) {
-      await addAuditLog(deps.db, "payment", paymentId, "refund-failed", { code, message }, deps.performedBy);
-    }
+    await addAuditLog(deps.db, "payment", paymentId, "refund-failed", { code, message }, deps.performedBy);
   };
 
   const baseOutcome = (
     code: RefundFailureCode,
     message: string,
+    refundableAfter = 0,
     extra: Partial<RefundOutcome> = {},
   ): RefundOutcome => ({
     ok: false,
     paymentId,
     requestedAmount: amount,
     refundedAmount: 0,
-    refundableAfter: payment
-      ? round2(computeRefundableCents(
-        Math.round(payment.amount * 100),
-        Math.round(payment.refunded_amount * 100),
-        existingCommittedCents,
-      ) / 100)
-      : 0,
+    refundableAfter,
     code,
     message,
     ...extra,
@@ -148,7 +212,7 @@ export async function refundCardPayment(
     await auditFailure("not_card", message);
     return baseOutcome("not_card", message);
   }
-  if (payment.status !== "paid" && payment.status !== "partial-refund") {
+  if (payment.status !== "settled" || payment.amount <= 0) {
     const message = "Ce paiement n'est pas encaissé";
     await auditFailure("not_collected", message);
     return baseOutcome("not_collected", message);
@@ -158,232 +222,258 @@ export async function refundCardPayment(
     await auditFailure("stripe_not_configured", message);
     return baseOutcome("stripe_not_configured", message);
   }
-  if (!payment.stripe_event_id?.startsWith("cs_")) {
+  if (!payment.external_ref?.startsWith("cs_")) {
     const message = "Référence Stripe introuvable";
     await auditFailure("no_stripe_reference", message);
     return baseOutcome("no_stripe_reference", message);
   }
-  const stripeSessionId = payment.stripe_event_id;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    const message = "Le montant doit être supérieur à zéro";
+    await auditFailure("amount_invalid", message);
+    return baseOutcome("amount_invalid", message);
+  }
 
+  // A retry after Stripe accepted the refund reuses the already-created
+  // movement.  Do this lookup before applying the allocation ceiling: the
+  // pending allocation itself is part of that ceiling.
+  let movement = await findPendingRefund(deps.db, paymentId, bookingId);
+  if (movement) {
+    const reservedAmount = round2(Math.abs(Number(movement.allocated)));
+    if (Math.abs(reservedAmount - amount) > 0.005) {
+      const available = await getRefundableAfter(deps.db, paymentId, bookingId);
+      const message = "Une opération de remboursement est déjà en cours pour cette allocation.";
+      await auditFailure("amount_exceeds_refundable", message);
+      return baseOutcome("amount_exceeds_refundable", message, available);
+    }
+  }
+
+  const stripeSessionId = payment.external_ref;
   const session = await callPort(() =>
     stripe.retrievePaymentIntentIdForSession(deps.secretKey!, stripeSessionId),
   );
-  if (!session.ok) {
-    await auditFailure("stripe_error", session.error.message);
-    return baseOutcome("stripe_error", session.error.message);
-  }
-  if (!session.data) {
-    const message = "PaymentIntent Stripe introuvable";
-    await auditFailure("no_stripe_reference", message);
-    return baseOutcome("no_stripe_reference", message);
+  if (!session.ok || !session.data) {
+    const message = !session.ok ? session.error.message : "PaymentIntent Stripe introuvable";
+    await auditFailure(session.ok ? "no_stripe_reference" : "stripe_error", message);
+    return baseOutcome(session.ok ? "no_stripe_reference" : "stripe_error", message,
+      await getRefundableAfter(deps.db, paymentId, bookingId));
   }
 
   const listed = await callPort(() =>
     stripe.listRefundsForPaymentIntent(deps.secretKey!, session.data!),
   );
   if (!listed.ok) {
-    await auditFailure("stripe_error", listed.error.message);
-    return baseOutcome("stripe_error", listed.error.message);
+    // Fail-closed strict : la réconciliation a échoué, donc l'état Stripe est
+    // INCONNU. On n'écrit rien.
+    //
+    // Ne pas créer ici de « réservation » pending : aucun POST n'a été émis
+    // (calls.create = 0), il n'existe donc aucun état Stripe contre lequel une
+    // clé d'idempotence protégerait. Un tel mouvement ne sécuriserait rien et
+    // amputerait durablement le plafond remboursable — pire, la garde de
+    // montant en tête de fonction bloquerait ensuite toute demande d'un montant
+    // différent, verrouillant la réservation après une simple panne réseau.
+    //
+    // Un rejeu ultérieur repart d'une réconciliation propre.
+    const message = listed.error.message;
+    await auditFailure("stripe_error", message);
+    return baseOutcome("stripe_error", message,
+      await getRefundableAfter(deps.db, paymentId, bookingId));
   }
 
-  const refundedBefore = payment.refunded_amount;
-  let unattributedCents = 0;
-  const reconciledRefundIds: string[] = [];
-  let anyInserted = false;
-  let discoveredCommittedCents = 0;
-
-  // Les remboursements possédés sont toujours upsertés pour assurer la guérison bidirectionnelle.
+  // Reconciliation is intentionally keyed only by the local external_ref.
+  // Stripe metadata is not an ownership boundary.
+  let reconciledMovement: DbPayment | null = null;
+  let reconciledRefund: StripeRefund | null = null;
   for (const refund of listed.data) {
-    const owner = refund.metadata?.payment_id;
-    if (owner === paymentId) {
-      reconciledRefundIds.push(refund.id);
-      const upserted = await upsertPaymentRefund(deps.db, {
-        stripeRefundId: refund.id,
-        paymentId,
-        bookingId: payment.booking_id,
-        amountCents: refund.amount,
-        status: refund.status ?? "",
-        performedBy: deps.performedBy,
-        now: now(),
-      });
-      if (upserted.inserted) {
-        anyInserted = true;
-        if (isRefundCommitted(refund)) discoveredCommittedCents += refund.amount;
-      }
-    } else if (!owner?.trim() && isRefundCommitted(refund)) {
-      unattributedCents += refund.amount;
+    const owned = await findMovementByExternalRef(deps.db, refund.id);
+    if (!owned || owned.parent_id !== paymentId) continue;
+    const allocation = await deps.db.prepare(
+      "SELECT 1 AS found FROM payment_allocations WHERE payment_id = ? AND booking_id = ?",
+    ).bind(owned.id, bookingId).first<{ found: number }>();
+    if (!allocation) continue;
+
+    const status = movementStatusForStripe(refund);
+    await updateRefundMovement(
+      deps.db,
+      owned.id,
+      status,
+      refund.id,
+      status === "settled" ? now() : owned.paid_at,
+    );
+    try {
+      await addAuditLog(deps.db, "payment", owned.id, "refund-reconciled", {
+        stripe_refund_id: refund.id,
+        stripe_refund_status: refund.status,
+        movement_status: status,
+      }, deps.performedBy);
+    } catch {
+      // Reconciliation of the movement itself remains authoritative.
+    }
+    if (isRefundCommitted(refund)) {
+      await recomputeBookingPaymentStatus(deps.db, bookingId);
+    }
+    if (owned.id === movement?.id || !movement) {
+      reconciledMovement = owned;
+      reconciledRefund = refund;
     }
   }
 
-  const reconciledState = await recomputePaymentRefundState(deps.db, paymentId);
-  if (
-    anyInserted || reconciledState.refundedAmount !== refundedBefore
-  ) {
-    await addAuditLog(deps.db, "payment", paymentId, "refund-reconciled", {
-      stripe_refund_ids: reconciledRefundIds,
-      refunded_before: refundedBefore,
-      refunded_after: reconciledState.refundedAmount,
-    }, deps.performedBy);
-  }
-
-  payment = await getPaymentById(deps.db, paymentId) ?? payment;
-  const refunds = await getPaymentRefunds(deps.db, paymentId);
-  const ledgerCents = refunds
-    .filter((refund) => refund.status === "succeeded" || refund.status === "pending")
-    .reduce((sum, refund) => sum + refund.amount_cents, 0);
-  const committedCents = refunds
-    .filter((refund) =>
-      refund.status === "succeeded" ||
-      refund.status === "pending" ||
-      refund.status === "requires_action",
-    )
-    .reduce((sum, refund) => sum + refund.amount_cents, 0);
-  const amountCents = Math.round(amount * 100);
-  const refundableCents = computeRefundableCents(
-    Math.round(payment.amount * 100),
-    ledgerCents,
-    committedCents,
-  );
-  const refundableAfter = () => round2(computeRefundableCents(
-    Math.round(payment!.amount * 100),
-    ledgerCents,
-    committedCents,
-  ) / 100);
-  const fail = async (
-    code: RefundFailureCode,
-    message: string,
-    extra: Partial<RefundOutcome> = {},
-  ): Promise<RefundOutcome> => {
-    await addAuditLog(deps.db, "payment", paymentId, "refund-failed", { code, message }, deps.performedBy);
-    return baseOutcome(code, message, {
-      refundableAfter: refundableAfter(),
-      unattributedAmount: unattributedCents / 100,
-      ...extra,
+  if (reconciledMovement && reconciledRefund) {
+    const after = await getRefundableAfter(deps.db, paymentId, bookingId);
+    if (isRefundLedgerAccepted(reconciledRefund)) {
+      return {
+        ok: false,
+        paymentId,
+        requestedAmount: amount,
+        refundedAmount: 0,
+        refundableAfter: after,
+        stripeRefundId: reconciledRefund.id,
+        stripeRefundStatus: reconciledRefund.status ?? undefined,
+        code: "already_applied",
+      };
+    }
+    if (reconciledRefund.status === "requires_action") {
+      return baseOutcome("stripe_unconfirmed", "Stripe a créé le remboursement mais attend des coordonnées bancaires. Ne relancez pas : traitez-le depuis le Dashboard Stripe.", after, {
+        stripeRefundId: reconciledRefund.id,
+        stripeRefundStatus: reconciledRefund.status,
+      });
+    }
+    // A locally-owned failed refund has been healed. Do not immediately issue
+    // another refund during this reconciliation pass.
+    return baseOutcome("stripe_error", "Stripe n'a pas confirmé le remboursement.", after, {
+      stripeRefundId: reconciledRefund.id,
+      stripeRefundStatus: reconciledRefund.status ?? undefined,
     });
-  };
-
-  if (discoveredCommittedCents > 0) {
-    const reconciledAmount = discoveredCommittedCents / 100;
-    const message = `Un remboursement de ${reconciledAmount} € TTC existait déjà chez Stripe et vient d'être enregistré. Vérifiez le solde avant toute nouvelle demande.`;
-    return fail("reconciled", message, { reconciledAmount });
   }
 
-  if (amountCents <= 0) return fail("amount_invalid", "Le montant doit être supérieur à zéro");
-  if (amountCents > refundableCents) {
-    return fail("amount_exceeds_refundable", "Montant supérieur au montant remboursable");
+  if (!movement) {
+    const available = await getRefundableAfter(deps.db, paymentId, bookingId);
+    // The ceiling is the selected allocation, never the whole parent
+    // movement. `refundableForAllocation` already includes settled/pending
+    // child movements in its second operand.
+    const allocationAmount = await getAllocationAmount(deps.db, paymentId, bookingId);
+    const refundedBefore = round2(Math.max(0, allocationAmount - available));
+    const refundable = computeRefundableCents(allocationAmount, refundedBefore, refundedBefore);
+    if (amount > refundable + 0.005) {
+      const message = "Montant supérieur au montant remboursable";
+      await auditFailure("amount_exceeds_refundable", message);
+      return baseOutcome("amount_exceeds_refundable", message, available);
+    }
+
+    try {
+      const created = await recordMovement(deps.db, {
+        id: crypto.randomUUID(),
+        amount: -amount,
+        method: "card",
+        status: "pending",
+        external_ref: null,
+        parent_id: paymentId,
+        reason: input.reason ?? null,
+        performed_by: deps.performedBy,
+        allocations: [{ booking_id: bookingId, amount: -amount }],
+      });
+      movement = await deps.db.prepare("SELECT * FROM payments WHERE id = ?")
+        .bind(created.id).first<DbPayment & { allocated: number }>();
+      if (!movement) throw new Error("Mouvement de remboursement introuvable après insertion");
+      movement.allocated = -amount;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Échec de l'écriture du grand livre";
+      await auditFailure("ledger_write_failed", message);
+      return baseOutcome("ledger_write_failed", message, available);
+    }
   }
+
+  const movementId = movement.id;
 
   const created = await callPort(() =>
     stripe.createRefund(deps.secretKey!, {
       paymentIntentId: session.data!,
-      amountCents,
-      idempotencyKey: `refund:${paymentId}:${ledgerCents}:${amountCents}`,
+      amountCents: Math.round(amount * 100),
+      idempotencyKey: `refund:${movementId}`,
       metadata: {
         payment_id: paymentId,
-        booking_id: payment.booking_id,
+        booking_id: bookingId,
         admin_user_id: deps.performedBy,
       },
     }),
   );
+
   if (!created.ok) {
+    const uncertain = created.error.code === "network_error" || created.error.httpStatus === 409 || created.error.code === "idempotency_key_in_use";
+    if (!uncertain) await updateRefundMovement(deps.db, movementId, "failed", null, null);
     const message = created.error.httpStatus === 409 || created.error.code === "idempotency_key_in_use"
-      ? "Une opération de remboursement est déjà en cours pour ce paiement. Actualisez la page dans quelques instants."
+      ? "Une opération de remboursement est déjà en cours pour ce mouvement. Actualisez la page dans quelques instants."
       : created.error.message;
-    return fail("stripe_error", message);
+    await auditFailure("stripe_error", message);
+    return baseOutcome("stripe_error", message,
+      await getRefundableAfter(deps.db, paymentId, bookingId));
   }
 
   const refund = created.data;
-  if (!isRefundLedgerAccepted(refund)) {
-    if (refund.status === "requires_action" && typeof refund.id === "string" && refund.id.length > 0) {
-      await upsertPaymentRefund(deps.db, {
-        stripeRefundId: refund.id,
-        paymentId,
-        bookingId: payment.booking_id,
-        amountCents: refund.amount,
-        status: refund.status,
-        reason,
-        performedBy: deps.performedBy,
-        now: now(),
-      });
-    }
-    const message = refund.status === "requires_action"
-      ? "Stripe a créé le remboursement mais attend des coordonnées bancaires. Ne relancez pas : traitez-le depuis le Dashboard Stripe."
-      : "Stripe n'a pas confirmé le remboursement.";
-    return fail("stripe_unconfirmed", message, {
-      stripeRefundId: refund.id,
-      stripeRefundStatus: refund.status ?? undefined,
-    });
-  }
-
+  const status = movementStatusForStripe(refund);
   try {
+    await updateRefundMovement(
+      deps.db,
+      movementId,
+      status,
+      refund.id,
+      status === "settled" ? now() : null,
+    );
+  } catch {
+    return baseOutcome(
+      "ledger_write_failed",
+      `Stripe a accepté le remboursement (${refund.id}) mais l'enregistrement local a échoué. Relancez l'opération.`,
+      await getRefundableAfter(deps.db, paymentId, bookingId),
+      { stripeRefundId: refund.id, stripeRefundStatus: refund.status ?? undefined },
+    );
+  }
+  // Once external_ref has been written, a retry is harmless even if one of
+  // these bookkeeping side effects fails: it will find this movement again.
+  try {
+    await recomputeBookingPaymentStatus(deps.db, bookingId);
     await addAuditLog(deps.db, "payment", paymentId, "refund-stripe-accepted", {
       stripe_refund_id: refund.id,
       stripe_refund_status: refund.status,
       amount,
       payment_id: paymentId,
+      booking_id: bookingId,
     }, deps.performedBy);
-    const result = await upsertPaymentRefund(deps.db, {
-      stripeRefundId: refund.id,
-      paymentId,
-      bookingId: payment.booking_id,
-      amountCents: refund.amount,
-      status: refund.status ?? "",
-      reason,
-      performedBy: deps.performedBy,
-      now: now(),
-    });
-    const state = await recomputePaymentRefundState(deps.db, paymentId);
-    await recomputeBookingPaymentStatus(deps.db, payment.booking_id);
-    await addAuditLog(deps.db, "payment", paymentId, "refund", {
-      amount,
-      total: state.refundedAmount,
-      stripe_refund_id: refund.id,
-      stripe_refund_status: refund.status,
-      reason,
-    }, deps.performedBy);
-    const appliedAmount = result.inserted ? refund.amount / 100 : 0;
-    const refundableAfterAmount = round2(computeRefundableCents(
-      Math.round(payment.amount * 100),
-      ledgerCents + (result.inserted ? refund.amount : 0),
-      committedCents + (result.inserted ? refund.amount : 0),
-    ) / 100);
-    return {
-      ok: true,
-      paymentId,
-      requestedAmount: amount,
-      refundedAmount: appliedAmount,
-      refundableAfter: refundableAfterAmount,
-      stripeRefundId: refund.id,
-      stripeRefundStatus: refund.status ?? undefined,
-      unattributedAmount: unattributedCents / 100,
-      code: result.inserted ? undefined : "already_applied",
-    };
   } catch {
-    return {
-      ...baseOutcome(
-        "ledger_write_failed",
-        `Stripe a accepté le remboursement (${refund.id}) mais l'enregistrement local a échoué. Relancez l'opération.`,
-        {
-          stripeRefundId: refund.id,
-          stripeRefundStatus: refund.status ?? undefined,
-          refundableAfter: refundableAfter(),
-          unattributedAmount: unattributedCents / 100,
-        },
-      ),
-      ok: false,
-    };
+    // The movement is already durably reconciled.  Do not turn an audit or
+    // derived-status failure into a retry that could be mistaken for a new
+    // refund request.
   }
+
+  const refundableAfter = await getRefundableAfter(deps.db, paymentId, bookingId);
+  if (!isRefundLedgerAccepted(refund)) {
+    return baseOutcome(
+      "stripe_unconfirmed",
+      refund.status === "requires_action"
+        ? "Stripe a créé le remboursement mais attend des coordonnées bancaires. Ne relancez pas : traitez-le depuis le Dashboard Stripe."
+        : "Stripe n'a pas confirmé le remboursement.",
+      refundableAfter,
+      { stripeRefundId: refund.id, stripeRefundStatus: refund.status ?? undefined },
+    );
+  }
+
+  return {
+    ok: true,
+    paymentId,
+    requestedAmount: amount,
+    refundedAmount: amount,
+    refundableAfter,
+    stripeRefundId: refund.id,
+    stripeRefundStatus: refund.status ?? undefined,
+  };
 }
 
-/** Rembourse séquentiellement les lignes explicitement sélectionnées. */
+/** Rembourse en lot les allocations explicitement sélectionnées. */
 export async function refundPayments(
   deps: RefundDeps,
-  items: { paymentId: string; amount: number }[],
-  reason?: string,
-) {
+  items: { paymentId: string; bookingId: string; amount: number; reason?: string }[],
+): Promise<RefundBatchOutcome> {
   const outcomes: RefundOutcome[] = [];
   for (const item of items) {
-    outcomes.push(await refundCardPayment(deps, item.paymentId, item.amount, reason));
+    outcomes.push(await refundAllocation(deps, item));
   }
   return {
     refunded: round2(outcomes.reduce((sum, outcome) => sum + (outcome.ok ? outcome.refundedAmount : 0), 0)),

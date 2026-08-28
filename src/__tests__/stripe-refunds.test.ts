@@ -21,14 +21,14 @@ describe("Stripe refund transport", () => {
     await createRefund("sk_test", {
       paymentIntentId: "pi_1",
       amountCents: 1250,
-      idempotencyKey: "refund:p1:0:1250",
+      idempotencyKey: "refund:movement-1",
       metadata: { payment_id: "p1", booking_id: "b1" },
     });
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.stripe.com/v1/refunds");
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("refund:p1:0:1250");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("refund:movement-1");
     expect(init.body).toContain("payment_intent=pi_1");
     expect(init.body).toContain("amount=1250");
     expect(init.body).toContain("metadata%5Bpayment_id%5D=p1");

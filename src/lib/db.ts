@@ -18,9 +18,9 @@ import {
   type AuditLogFilters,
   type BookingStatus,
   type DbPaymentStatus,
+  type MovementStatus,
+  type PaymentMethod,
   type DbPaymentConfirmation,
-  type DbPaymentRefund,
-  type DbPaymentWithRefund,
   type CreateBooking,
   type DashboardStats,
   type OverdueBooking,
@@ -33,10 +33,16 @@ import {
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon, isPromoCodeExpired } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type StudioId } from "./booking";
-import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
+import { applyDiscountRounding } from "./booking-totals";
 import { computeClientBookingInsights, type BookingStatSource } from "./user-booking-stats";
 import { addDaysToDateISO, generateLoyaltyCode } from "./loyalty";
 import type { LoyaltyCodeEmailData } from "./email";
+import {
+  getBookingLedger,
+  recordMovement,
+  reverseMovement,
+  upsertCheckoutPayment,
+} from "./ledger";
 
 export { isPromoCodeExpired } from "./utils";
 
@@ -313,9 +319,11 @@ export function dateDirectionCondition(
 }
 
 const PAID_BY_BOOKING_CTE = `paid_by_booking AS (
-  SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-  FROM payments
-  GROUP BY booking_id
+  SELECT a.booking_id, COALESCE(SUM(a.amount), 0) as paid_amount
+  FROM payment_allocations a
+  JOIN payments p ON p.id = a.payment_id
+  WHERE p.status = 'settled'
+  GROUP BY a.booking_id
 )`;
 
 function generateId(): string {
@@ -1160,33 +1168,54 @@ function buildPaymentsCTE(): string {
     WITH payments_enriched AS (
       SELECT
         p.id as id,
-        p.booking_id as booking_id,
         p.amount as amount,
-        CASE
-          WHEN p.method IN ('cheque', 'check') THEN 'check'
-          ELSE p.method
-        END as method,
+        p.method as method,
         p.status as status,
-        p.refunded_amount as refunded_amount,
         p.paid_at as paid_at,
+        p.external_ref as external_ref,
+        p.parent_id as parent_id,
+        p.reason as reason,
+        p.performed_by as performed_by,
         p.created_at as created_at,
-        p.stripe_event_id as stripe_event_id,
-        COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0) as refund_reserved_cents,
-        MAX(0, ROUND(p.amount * 100) - COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0)) / 100.0 as refundable_amount,
-        COALESCE((SELECT SUM(amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status = 'pending'), 0) as refund_pending_cents,
-        b.booking_ref as booking_ref,
-        COALESCE(NULLIF(TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')), ''), u.name) as user_name,
-        u.band_name as user_band_name,
-        u.id as user_id,
-        b.date as booking_date,
-        CASE
-          WHEN b.payment_status = 'pay-on-site' THEN 'on-site'
-          WHEN p.method = 'card' THEN 'online'
-          ELSE 'on-site'
-        END as payment_type
+        COALESCE((SELECT GROUP_CONCAT(booking_ref, ', ') FROM (
+          SELECT b.booking_ref
+          FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
+          WHERE a.payment_id = p.id
+          ORDER BY b.date ASC, b.id ASC
+        ) ordered_bookings), '') as booking_refs,
+        (SELECT COUNT(*) FROM payment_allocations a WHERE a.payment_id = p.id) as allocation_count,
+        COALESCE((SELECT SUM(a.amount) FROM payment_allocations a WHERE a.payment_id = p.id), 0) as allocated_amount,
+        p.amount - COALESCE((SELECT SUM(a.amount) FROM payment_allocations a WHERE a.payment_id = p.id), 0) as unallocated_amount,
+        CASE WHEN p.status = 'settled' AND p.amount > 0 THEN COALESCE((
+          SELECT SUM(CASE WHEN a.amount + COALESCE((SELECT SUM(c.amount)
+            FROM payment_allocations c JOIN payments child ON child.id = c.payment_id
+            WHERE child.parent_id = p.id AND c.booking_id = a.booking_id
+              AND child.status IN ('settled', 'pending')), 0) > 0
+            THEN a.amount + COALESCE((SELECT SUM(c.amount)
+              FROM payment_allocations c JOIN payments child ON child.id = c.payment_id
+              WHERE child.parent_id = p.id AND c.booking_id = a.booking_id
+                AND child.status IN ('settled', 'pending')), 0)
+            ELSE 0 END)
+          FROM payment_allocations a
+          WHERE a.payment_id = p.id
+        ), 0) ELSE 0 END as refundable_amount,
+        (SELECT COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.name)
+         FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
+         LEFT JOIN users u ON u.id = b.user_id
+         WHERE a.payment_id = p.id ORDER BY b.date ASC, b.id ASC LIMIT 1) as user_name,
+        (SELECT u.band_name
+         FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
+         LEFT JOIN users u ON u.id = b.user_id
+         WHERE a.payment_id = p.id ORDER BY b.date ASC, b.id ASC LIMIT 1) as user_band_name,
+        (SELECT u.id
+         FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
+         LEFT JOIN users u ON u.id = b.user_id
+         WHERE a.payment_id = p.id ORDER BY b.date ASC, b.id ASC LIMIT 1) as user_id,
+        (SELECT b.date
+         FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
+         WHERE a.payment_id = p.id ORDER BY b.date ASC, b.id ASC LIMIT 1) as booking_date,
+        CASE WHEN p.external_ref LIKE 'cs_%' THEN 'online' ELSE 'on-site' END as payment_type
       FROM payments p
-      JOIN bookings b ON b.id = p.booking_id
-      LEFT JOIN users u ON u.id = b.user_id
     )
   `;
 }
@@ -1203,42 +1232,53 @@ export async function getPayments(
   const statusParams: unknown[] = [];
 
   if (filters.status) {
-    if (filters.status === "refunded") {
-      statusConditions.push("status IN ('refunded', 'partial-refund')");
-    } else {
-      statusConditions.push("status = ?");
-      statusParams.push(filters.status);
-    }
+    statusConditions.push("pe.status = ?");
+    statusParams.push(filters.status);
   }
 
   if (filters.method) {
-    conditions.push("method = ?");
+    conditions.push("pe.method = ?");
     params.push(filters.method);
   }
 
   if (filters.paymentType) {
-    conditions.push("payment_type = ?");
+    conditions.push("pe.payment_type = ?");
     params.push(filters.paymentType);
   }
 
   if (filters.search) {
-    conditions.push("(booking_ref LIKE ? OR user_name LIKE ? OR user_band_name LIKE ?)");
+    conditions.push(`EXISTS (
+      SELECT 1 FROM payment_allocations a
+      JOIN bookings b ON b.id = a.booking_id
+      LEFT JOIN users u ON u.id = b.user_id
+      WHERE a.payment_id = pe.id
+        AND (b.booking_ref LIKE ? OR u.name LIKE ? OR u.band_name LIKE ?)
+    )`);
     const term = `%${filters.search}%`;
     params.push(term, term, term);
   }
 
   if (filters.userId) {
-    conditions.push("user_id = ?");
+    conditions.push(`EXISTS (
+      SELECT 1 FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
+      WHERE a.payment_id = pe.id AND b.user_id = ?
+    )`);
     params.push(filters.userId);
   }
 
   if (filters.dateFrom) {
-    conditions.push("booking_date >= ?");
+    conditions.push(`EXISTS (
+      SELECT 1 FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
+      WHERE a.payment_id = pe.id AND b.date >= ?
+    )`);
     params.push(filters.dateFrom);
   }
 
   if (filters.dateTo) {
-    conditions.push("booking_date <= ?");
+    conditions.push(`EXISTS (
+      SELECT 1 FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
+      WHERE a.payment_id = pe.id AND b.date <= ?
+    )`);
     params.push(filters.dateTo);
   }
 
@@ -1255,7 +1295,7 @@ export async function getPayments(
 
   const countResult = await db.prepare(
     `${buildPaymentsCTE()}
-      SELECT COUNT(*) as total FROM payments_enriched ${where}
+      SELECT COUNT(*) as total FROM payments_enriched pe ${where}
     `,
   ).bind(...listParams).first<{ total: number }>();
   const total = countResult?.total ?? 0;
@@ -1263,21 +1303,21 @@ export async function getPayments(
   const statsResult = await db.prepare(
     `${buildPaymentsCTE()}
       SELECT
-        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
-        COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pendingAmount,
-        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paidCount,
-        COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) as paidAmount,
-        COUNT(CASE WHEN status IN ('refunded', 'partial-refund') THEN 1 END) as refundedCount,
-        COALESCE(SUM(CASE WHEN status IN ('refunded', 'partial-refund') THEN COALESCE(refunded_amount, 0) ELSE 0 END), 0) as refundedAmount
-      FROM payments_enriched ${statsWhere}
+        COUNT(CASE WHEN pe.status = 'pending' THEN 1 END) as pendingCount,
+        COALESCE(SUM(CASE WHEN pe.status = 'pending' THEN pe.amount ELSE 0 END), 0) as pendingAmount,
+        COUNT(CASE WHEN pe.status = 'settled' THEN 1 END) as paidCount,
+        COALESCE(SUM(CASE WHEN pe.status = 'settled' THEN pe.amount ELSE 0 END), 0) as paidAmount,
+        COUNT(CASE WHEN pe.status = 'settled' AND pe.amount < 0 THEN 1 END) as refundedCount,
+        COALESCE(SUM(CASE WHEN pe.status = 'settled' AND pe.amount < 0 THEN pe.amount ELSE 0 END), 0) as refundedAmount
+      FROM payments_enriched pe ${statsWhere}
     `,
   ).bind(...params).first<{ pendingCount: number; pendingAmount: number; paidCount: number; paidAmount: number; refundedCount: number; refundedAmount: number }>();
 
   const offset = (page - 1) * limit;
   const result = await db.prepare(
     `${buildPaymentsCTE()}
-      SELECT * FROM payments_enriched ${where}
-      ORDER BY ${safeSortBy} ${safeSortOrder}, created_at DESC
+      SELECT * FROM payments_enriched pe ${where}
+      ORDER BY pe.${safeSortBy} ${safeSortOrder}, pe.created_at DESC
       LIMIT ? OFFSET ?
     `,
   ).bind(...listParams, limit, offset).all<AdminPaymentRow>();
@@ -1301,26 +1341,8 @@ export async function getPayments(
 export async function getPaymentsByBookingId(
   db: D1Database,
   bookingId: string,
-): Promise<DbPaymentWithRefund[]> {
-  const result = await db.prepare(
-    `SELECT
-      p.id as id,
-      p.booking_id as booking_id,
-      p.amount as amount,
-      CASE WHEN p.method IN ('cheque', 'check') THEN 'check' ELSE p.method END as method,
-      p.status as status,
-      p.refunded_amount as refunded_amount,
-      p.paid_at as paid_at,
-      p.created_at as created_at,
-      p.stripe_event_id as stripe_event_id,
-      COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0) as refund_reserved_cents,
-      CASE WHEN p.status IN ('paid', 'refunded', 'partial-refund') THEN MAX(0, ROUND(p.amount * 100) - MAX(COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0), ROUND(p.refunded_amount * 100))) / 100.0 ELSE 0 END as refundable_amount
-      ,COALESCE((SELECT SUM(amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status = 'pending'), 0) as refund_pending_cents
-    FROM payments p
-    WHERE p.booking_id = ?
-    ORDER BY p.created_at ASC`,
-  ).bind(bookingId).all<DbPaymentWithRefund>();
-  return result.results;
+): Promise<Awaited<ReturnType<typeof getBookingLedger>>["movements"]> {
+  return (await getBookingLedger(db, bookingId)).movements;
 }
 
 /**
@@ -1338,16 +1360,19 @@ export async function recomputeBookingPaymentStatus(db: D1Database, bookingId: s
   if (!booking) return;
 
   const payments = await db.prepare(
-    "SELECT amount, status, refunded_amount FROM payments WHERE booking_id = ?"
-  ).bind(bookingId).all<{ amount: number; status: string; refunded_amount: number }>();
+    `SELECT a.amount
+     FROM payment_allocations a
+     JOIN payments p ON p.id = a.payment_id
+     WHERE a.booking_id = ? AND p.status = 'settled'`
+  ).bind(bookingId).all<{ amount: number }>();
 
   const rows = payments.results || [];
   const totalCollected = rows
-    .filter(p => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
+    .filter(p => Number(p.amount) > 0)
     .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const totalRefunded = rows
-    .filter(p => p.status === "refunded" || p.status === "partial-refund")
-    .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
+    .filter(p => Number(p.amount) < 0)
+    .reduce((acc, p) => acc - (Number(p.amount) || 0), 0);
   const netPaid = totalCollected - totalRefunded;
 
   // Convention pré-remise simplifiée (audit Phase 7B : zéro ligne post-remise)
@@ -1384,24 +1409,15 @@ export async function addPayment(
     stripe_event_id?: string | null;
   }
 ): Promise<{ success: boolean; id: string }> {
-  const id = generateId();
-  const timestamp = now();
-  
-  await db.prepare(
-    `INSERT INTO payments (id, booking_id, amount, method, status, refunded_amount, paid_at, created_at, stripe_event_id)
-     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)`
-  ).bind(
-    id, 
-    data.booking_id, 
-    data.amount, 
-    data.method, 
-    data.status, 
-    data.paid_at || (data.status === "paid" ? timestamp : null),
-    timestamp,
-    data.stripe_event_id || null
-  ).run();
-
-  await recomputeBookingPaymentStatus(db, data.booking_id);
+  const result = await recordMovement(db, {
+    amount: data.amount,
+    method: data.method as PaymentMethod,
+    status: data.status as MovementStatus,
+    paid_at: data.paid_at,
+    external_ref: data.stripe_event_id,
+    allocations: [{ booking_id: data.booking_id, amount: data.amount }],
+  });
+  const id = result.id;
   await addAuditLog(db, "payment", id, "create", { bookingId: data.booking_id, amount: data.amount, method: data.method });
 
   return { success: true, id };
@@ -1409,7 +1425,7 @@ export async function addPayment(
 
 /**
  * Insertion de paiement idempotente (INSERT OR IGNORE) clé sur
- * (booking_id, stripe_event_id) — utilisé par le finaliseur de session Stripe
+ * (external_ref) — utilisé par le finaliseur de session Stripe
  * pour compléter les paiements sans doublon, y compris après un échec partiel
  * puis un retry (webhook + flux de récupération). Retourne `inserted: false`
  * quand la ligne existait déjà.
@@ -1425,30 +1441,26 @@ export async function addPaymentIdempotent(
     stripe_event_id?: string | null;
   }
 ): Promise<{ inserted: boolean }> {
-  const id = generateId();
-  const timestamp = now();
-
-  const result = await db.prepare(
-    `INSERT OR IGNORE INTO payments (id, booking_id, amount, method, status, refunded_amount, paid_at, created_at, stripe_event_id)
-     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)`
-  ).bind(
-    id,
-    data.booking_id,
-    data.amount,
-    data.method,
-    data.status,
-    data.paid_at || (data.status === "paid" ? timestamp : null),
-    timestamp,
-    data.stripe_event_id || null,
-  ).run();
-
-  if ((result.meta?.changes ?? 0) === 0) {
-    return { inserted: false };
+  if (data.stripe_event_id) {
+    const result = await upsertCheckoutPayment(db, {
+      sessionId: data.stripe_event_id,
+      amount: data.amount,
+      paidAt: data.paid_at ?? now(),
+      allocations: [{ booking_id: data.booking_id, amount: data.amount }],
+    });
+    if (result.inserted) {
+      await addAuditLog(db, "payment", result.movementId, "create", { bookingId: data.booking_id, amount: data.amount, method: data.method });
+    }
+    return { inserted: result.inserted };
   }
-
-  await recomputeBookingPaymentStatus(db, data.booking_id);
-  await addAuditLog(db, "payment", id, "create", { bookingId: data.booking_id, amount: data.amount, method: data.method });
-
+  const result = await recordMovement(db, {
+    amount: data.amount,
+    method: data.method as PaymentMethod,
+    status: data.status as MovementStatus,
+    paid_at: data.paid_at,
+    allocations: [{ booking_id: data.booking_id, amount: data.amount }],
+  });
+  await addAuditLog(db, "payment", result.id, "create", { bookingId: data.booking_id, amount: data.amount, method: data.method });
   return { inserted: true };
 }
 
@@ -1458,24 +1470,20 @@ export async function markPaymentPaid(
 ): Promise<{ success: boolean; error?: string }> {
   const payment = await db.prepare("SELECT * FROM payments WHERE id = ?").bind(paymentId).first<DbPayment>();
   if (!payment) return { success: false, error: "Paiement introuvable" };
-
-  const booking = await db.prepare("SELECT total_price, promo_discount, payment_status FROM bookings WHERE id = ?")
-    .bind(payment.booking_id)
-    .first<{ total_price: number; promo_discount: number; payment_status: string | null }>();
-  if (!booking) return { success: false, error: "Réservation introuvable" };
+  if (payment.status !== "pending") return { success: false, error: "Le mouvement n'est pas en attente" };
 
   const timestamp = now();
 
-  await db.prepare("UPDATE payments SET status = 'paid', paid_at = ? WHERE id = ?")
+  await db.prepare("UPDATE payments SET status = 'settled', paid_at = ? WHERE id = ? AND status = 'pending'")
     .bind(timestamp, paymentId)
     .run();
 
-  await db.prepare("UPDATE bookings SET updated_at = ? WHERE id = ?")
-    .bind(timestamp, payment.booking_id)
-    .run();
-
-  await recomputeBookingPaymentStatus(db, payment.booking_id);
-  await addAuditLog(db, "payment", paymentId, "mark-paid", { bookingId: payment.booking_id });
+  const allocations = await db.prepare("SELECT booking_id FROM payment_allocations WHERE payment_id = ?")
+    .bind(paymentId).all<{ booking_id: string }>();
+  for (const bookingId of [...new Set(allocations.results.map((row) => row.booking_id))]) {
+    await recomputeBookingPaymentStatus(db, bookingId);
+  }
+  await addAuditLog(db, "payment", paymentId, "mark-paid", { bookingIds: [...new Set(allocations.results.map((row) => row.booking_id))] });
 
   return { success: true };
 }
@@ -1484,137 +1492,17 @@ export async function getPaymentById(db: D1Database, paymentId: string): Promise
   return db.prepare("SELECT * FROM payments WHERE id = ?").bind(paymentId).first<DbPayment>();
 }
 
-export async function upsertPaymentRefund(db: D1Database, refund: { stripeRefundId: string; paymentId: string; bookingId: string; amountCents: number; status: string; reason?: string; performedBy?: string; now: string }): Promise<{ inserted: boolean }> {
-  const result = await db.prepare(`INSERT INTO payment_refunds (stripe_refund_id, payment_id, booking_id, amount_cents, status, reason, performed_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stripe_refund_id) DO NOTHING`)
-    .bind(refund.stripeRefundId, refund.paymentId, refund.bookingId, Math.round(refund.amountCents), refund.status, refund.reason ?? null, refund.performedBy ?? null, refund.now, refund.now).run();
-  await db.prepare("UPDATE payment_refunds SET status = ?, updated_at = ? WHERE stripe_refund_id = ?")
-    .bind(refund.status, refund.now, refund.stripeRefundId).run();
-  return { inserted: (result.meta?.changes ?? 0) > 0 };
-}
-
-export async function recomputePaymentRefundState(db: D1Database, paymentId: string): Promise<{ refundedAmount: number; status: DbPaymentStatus }> {
-  const payment = await getPaymentById(db, paymentId);
-  if (!payment) throw new Error("Paiement introuvable");
-  const sum = await db.prepare("SELECT COALESCE(SUM(amount_cents), 0) as cents FROM payment_refunds WHERE payment_id = ? AND status IN ('succeeded', 'pending')").bind(paymentId).first<{ cents: number }>();
-  const ledgerCents = Math.round(sum?.cents ?? 0);
-  const refundedAmount = ledgerCents / 100;
-  let status = payment.status;
-  if (status === "paid" || status === "refunded" || status === "partial-refund") {
-    const amountCents = Math.round(payment.amount * 100);
-    status = ledgerCents <= 0 ? "paid" : ledgerCents >= amountCents ? "refunded" : "partial-refund";
-    await db.prepare("UPDATE payments SET refunded_amount = ?, status = ? WHERE id = ?").bind(refundedAmount, status, paymentId).run();
-  }
-  return { refundedAmount, status };
-}
-
-export async function getPaymentRefunds(db: D1Database, paymentId: string): Promise<DbPaymentRefund[]> {
-  const result = await db.prepare("SELECT * FROM payment_refunds WHERE payment_id = ? ORDER BY created_at ASC").bind(paymentId).all<DbPaymentRefund>();
-  return result.results;
-}
-
-export async function refundPayment(
-  db: D1Database,
-  paymentId: string,
-  amount: number,
-): Promise<{ success: boolean; error?: string }> {
-  const payment = await db.prepare("SELECT * FROM payments WHERE id = ?").bind(paymentId).first<DbPayment>();
-  if (!payment) return { success: false, error: "Paiement introuvable" };
-
-  if (payment.method === "card") {
-    return { success: false, error: "Les paiements carte doivent être remboursés via Stripe" };
-  }
-
-  if (amount > payment.amount - payment.refunded_amount) {
-    return { success: false, error: "Montant de remboursement trop élevé" };
-  }
-
-  const newRefunded = Math.round((payment.refunded_amount + amount) * 100) / 100;
-  const newStatus: DbPaymentStatus = newRefunded >= payment.amount - 0.005 ? "refunded" : "partial-refund";
-
-  await db.prepare(
-    "UPDATE payments SET refunded_amount = ?, status = ? WHERE id = ?",
-  ).bind(newRefunded, newStatus, paymentId).run();
-
-  await recomputeBookingPaymentStatus(db, payment.booking_id);
-  await addAuditLog(db, "payment", paymentId, "refund", { amount, total: newRefunded });
-
-  return { success: true };
-}
-
-export async function updatePayment(
-  db: D1Database,
-  paymentId: string,
-  data: { amount?: number; method?: string },
-): Promise<{ success: boolean; error?: string }> {
-  const payment = await db.prepare(`
-    SELECT p.*, b.payment_status as booking_payment_status
-    FROM payments p
-    JOIN bookings b ON b.id = p.booking_id
-    WHERE p.id = ?
-  `).bind(paymentId).first<DbPayment & { booking_payment_status: string }>();
-
-  if (!payment) return { success: false, error: "Paiement introuvable" };
-
-  const paymentType = payment.booking_payment_status === "pay-on-site"
-    ? "on-site"
-    : (payment.method === "card" ? "online" : "on-site");
-
-  if (paymentType === "online") return { success: false, error: "Impossible de modifier un paiement en ligne" };
-
-  const validMethods = ["card", "cash", "transfer", "check"];
-  if (data.method && !validMethods.includes(data.method)) {
-    return { success: false, error: "Méthode de paiement invalide" };
-  }
-  if (data.amount !== undefined && data.amount <= 0) {
-    return { success: false, error: "Le montant doit être supérieur à 0" };
-  }
-
-  if (data.amount !== undefined) {
-    const booking = await db.prepare("SELECT base_price, equipment_price, total_price, promo_discount FROM bookings WHERE id = ?")
-      .bind(payment.booking_id).first<{ base_price: number; equipment_price: number; total_price: number; promo_discount: number }>();
-    if (booking) {
-      const maxAmount = getBookingAmountDue(booking);
-      if (data.amount > maxAmount) {
-        return { success: false, error: `Le montant ne peut pas dépasser le prix de la réservation (${maxAmount}€ TTC)` };
-      }
-    }
-  }
-
-  const newAmount = data.amount ?? payment.amount;
-  const newMethod = data.method ?? payment.method;
-
-  await db.prepare(
-    "UPDATE payments SET amount = ?, method = ? WHERE id = ?",
-  ).bind(newAmount, newMethod, paymentId).run();
-
-  await recomputeBookingPaymentStatus(db, payment.booking_id);
-  await addAuditLog(db, "payment", paymentId, "update", { amount: newAmount, method: newMethod, previousAmount: payment.amount, previousMethod: payment.method });
-
-  return { success: true };
-}
-
 export async function deletePayment(
   db: D1Database,
   paymentId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const payment = await db.prepare(`
-    SELECT p.*, b.payment_status as booking_payment_status, b.total_price, b.promo_discount
-    FROM payments p
-    JOIN bookings b ON b.id = p.booking_id
-    WHERE p.id = ?
-  `).bind(paymentId).first<DbPayment & { booking_payment_status: string; total_price: number; promo_discount: number }>();
-
-  if (!payment) return { success: false, error: "Paiement introuvable" };
-
-  const isOnline = payment.booking_payment_status !== "pay-on-site" && payment.method === "card";
-  if (isOnline) return { success: false, error: "Impossible de supprimer un paiement en ligne" };
-
-  await db.prepare("DELETE FROM payments WHERE id = ?").bind(paymentId).run();
-
-  await recomputeBookingPaymentStatus(db, payment.booking_id);
-  await addAuditLog(db, "payment", paymentId, "delete", { bookingId: payment.booking_id, amount: payment.amount });
-
-  return { success: true };
+  try {
+    const result = await reverseMovement(db, paymentId, "correction", "system");
+    await addAuditLog(db, "payment", result.id, "correction", { parentId: paymentId });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Impossible de contre-passer le mouvement" };
+  }
 }
 
 // ─── Blocked Slots ───────────────────────────────────────────────────────────
@@ -2209,7 +2097,7 @@ export async function getAuditLogs(
      LEFT JOIN admin_users au ON a.performed_by = au.id
      LEFT JOIN payments p ON a.entity_type = 'payment' AND p.id = a.entity_id
      LEFT JOIN bookings b ON (a.entity_type = 'booking' AND b.id = a.entity_id)
-                          OR (a.entity_type = 'payment' AND b.id = p.booking_id)
+                          OR (a.entity_type = 'payment' AND b.id = (SELECT pa.booking_id FROM payment_allocations pa WHERE pa.payment_id = p.id ORDER BY pa.created_at ASC, pa.id ASC LIMIT 1))
      LEFT JOIN users booking_user ON b.user_id = booking_user.id
      LEFT JOIN users entity_user ON a.entity_type = 'user' AND entity_user.id = a.entity_id
      ${where} ORDER BY a.${orderColumn} ${orderDirection} LIMIT ? OFFSET ?`,
@@ -2823,10 +2711,11 @@ export async function getMonthlyReportData(
 
     // Payment methods
     db.prepare(
-      `SELECT p.method, COUNT(*) as count, COALESCE(SUM(p.amount - COALESCE(p.refunded_amount, 0)), 0) as revenue
+      `SELECT p.method, COUNT(DISTINCT p.id) as count, COALESCE(SUM(a.amount), 0) as revenue
        FROM payments p
-       JOIN bookings b ON b.id = p.booking_id
-       WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled' AND p.status IN ('paid', 'refunded', 'partial-refund')
+       JOIN payment_allocations a ON a.payment_id = p.id
+        JOIN bookings b ON b.id = a.booking_id
+       WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled' AND p.status = 'settled'
        GROUP BY p.method`,
     ).bind(rangeFrom, rangeTo),
 

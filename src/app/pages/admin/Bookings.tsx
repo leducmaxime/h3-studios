@@ -482,7 +482,7 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                     const remaining = booking.remaining;
                     paymentBadge = (
                       <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
-                        {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : displayPaymentStatusLabel(displayPaymentStatus)}
+                        {remaining != null && Math.abs(remaining) > 0.005 ? `Reste ${formatPrice(remaining)}` : displayPaymentStatusLabel(displayPaymentStatus)}
                       </Badge>
                     );
                   }

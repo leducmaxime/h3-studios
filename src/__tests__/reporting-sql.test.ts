@@ -33,10 +33,16 @@ beforeAll(() => {
     );
     CREATE TABLE payments (
       id TEXT PRIMARY KEY,
-      booking_id TEXT,
       amount REAL,
+      method TEXT,
       status TEXT,
-      refunded_amount REAL DEFAULT 0
+      external_ref TEXT
+    );
+    CREATE TABLE payment_allocations (
+      id TEXT PRIMARY KEY,
+      payment_id TEXT NOT NULL,
+      booking_id TEXT NOT NULL,
+      amount REAL NOT NULL
     );
   `);
 });
@@ -48,7 +54,9 @@ function insertBooking(id: string, total: number, discount: number, opts: { stat
 }
 
 function insertPayment(id: string, bookingId: string, amount: number, status = "paid") {
-  db.prepare("INSERT INTO payments (id, booking_id, amount, status) VALUES (?, ?, ?, ?)").run(id, bookingId, amount, status);
+  const movementStatus = status === "paid" ? "settled" : status;
+  db.prepare("INSERT INTO payments (id, amount, method, status) VALUES (?, ?, 'cash', ?)").run(id, amount, movementStatus);
+  db.prepare("INSERT INTO payment_allocations (id, payment_id, booking_id, amount) VALUES (?, ?, ?, ?)").run(`${id}-${bookingId}`, id, bookingId, amount);
 }
 
 describe("reporting SQL — max_price per-row clamp (M1)", () => {
@@ -81,8 +89,10 @@ describe("reporting SQL — max_price per-row clamp (M1)", () => {
 describe("reporting SQL — monthly-report unpaid net due (M2)", () => {
   const NET_DUE_SQL = `
     WITH paid_by_booking AS (
-      SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid','refunded','partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-      FROM payments GROUP BY booking_id
+      SELECT a.booking_id, COALESCE(SUM(a.amount), 0) as paid_amount
+      FROM payment_allocations a JOIN payments p ON p.id = a.payment_id
+      WHERE p.status = 'settled'
+      GROUP BY a.booking_id
     )
     SELECT
       MAX(b.total_price - COALESCE(b.promo_discount, 0) - COALESCE(paid.paid_amount, 0), 0) as amount
@@ -192,8 +202,10 @@ describe("reporting SQL — dashboard cancellations", () => {
 describe("reporting SQL — dashboard overdue predicate", () => {
   const SQL = `
     WITH paid_by_booking AS (
-      SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-      FROM payments GROUP BY booking_id
+      SELECT a.booking_id, COALESCE(SUM(a.amount), 0) as paid_amount
+      FROM payment_allocations a JOIN payments p ON p.id = a.payment_id
+      WHERE p.status = 'settled'
+      GROUP BY a.booking_id
     )
     SELECT COUNT(*) as count, COALESCE(SUM((MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) - COALESCE(paid.paid_amount, 0))), 0) as total
     FROM bookings b LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
@@ -225,5 +237,28 @@ describe("reporting SQL — dashboard overdue predicate", () => {
     const row = db.prepare(SQL).get("2026-08-01", "2026-08-31", "2026-08-20", "2026-08-20", "15:00") as { count: number; total: number };
     expect(row.count).toBe(4); // at, yesterday, kept, no-show; tiny and fully-paid rows are excluded
     expect(row.total).toBe(40);
+  });
+});
+
+describe("reporting SQL — ledger revenue does not multiply shared movements", () => {
+  it("counts one 250€ collection once when it covers three bookings", () => {
+    db.exec("DELETE FROM payment_allocations; DELETE FROM payments; DELETE FROM bookings;");
+    insertBooking("a", 250, 0);
+    insertBooking("b", 250, 0);
+    insertBooking("c", 250, 0);
+    db.prepare("INSERT INTO payments (id, amount, method, status) VALUES ('shared', 250, 'cash', 'settled')").run();
+    for (const id of ["a", "b", "c"]) {
+      db.prepare("INSERT INTO payment_allocations (id, payment_id, booking_id, amount) VALUES (?, 'shared', ?, ?)").run(`alloc-${id}`, id, id === "a" ? 100 : id === "b" ? 80 : 70);
+    }
+
+    // Revenue is a movement-level aggregate. Joining allocations directly and
+    // summing p.amount would incorrectly report 750€.
+    const row = db.prepare(`
+      SELECT COUNT(*) AS collections, COALESCE(SUM(p.amount), 0) AS revenue
+      FROM payments p
+      WHERE p.status = 'settled'
+        AND EXISTS (SELECT 1 FROM payment_allocations a WHERE a.payment_id = p.id)
+    `).get() as { collections: number; revenue: number };
+    expect(row).toEqual({ collections: 1, revenue: 250 });
   });
 });

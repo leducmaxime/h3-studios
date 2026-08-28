@@ -3,7 +3,7 @@ import { formatPrice, resolveEquipmentDisplay, bookingEndMinutes, clockMinutes }
 import { getBookingAmountDue } from "./booking-totals";
 import { formatDateISO } from "./utils";
 import { formatSiret, resolveBookingClientIdentity, resolveUserClientIdentity } from "./client-identity";
-import { storedPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
+import { storedPaymentStatusLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel } from "@/lib/labels";
 import { roundCents, splitTtc } from "@/lib/tax";
 import type { ReportChartsPngs } from "@/lib/report-charts";
 import { COMPANY, companyRcs } from "@/lib/company";
@@ -209,62 +209,97 @@ export function exportUsersCSV(users: DbUser[]): void {
 
 // ─── Payments Export ─────────────────────────────────────────────────────────
 
-interface PaymentWithDetails extends DbPayment {
-  booking_ref?: string | null;
-  user_name?: string | null;
-  user_band_name?: string | null;
-  payment_type?: "on-site" | "online" | null;
+export interface CollectionExportRow extends DbPayment {
+  booking_refs?: string | null;
+  allocation_count?: number | null;
+  unallocated_amount?: number | null;
 }
 
-export function exportPaymentsCSV(payments: PaymentWithDetails[]): void {
+/** Export de trésorerie : une ligne par mouvement du grand livre. */
+export function exportCollectionsCSV(payments: CollectionExportRow[]): void {
   const headers = [
-    "Réf. réservation",
-    "Client",
-    "Groupe",
-    "Type paiement",
+    "Date",
     "Méthode",
-    "Statut",
-    "Montant TTC (EUR)",
-    "Montant HT (EUR)",
-    "TVA 20% (EUR)",
-    "Remboursé TTC (EUR)",
-    "Remboursé HT (EUR)",
-    "TVA 20% remboursée (EUR)",
-    "Date paiement",
+    "Montant (EUR)",
+    "Réf. externe",
+    "Nombre de réservations",
+    "Références réservation",
+    "Non affecté (EUR)",
   ];
 
   const rows = payments.map((payment) => {
-    const amount = splitTtc(payment.amount);
-    const refunded = splitTtc(payment.refunded_amount);
     return [
-      escapeCSV(payment.booking_ref || "—"),
-      escapeCSV(payment.user_name || "—"),
-      escapeCSV(payment.user_band_name || "—"),
-      escapeCSV(payment.payment_type ? paymentTypeLabel(payment.payment_type) : "—"),
+      escapeCSV(payment.paid_at ? formatDateForCSV(payment.paid_at) : formatDateForCSV(payment.created_at)),
       escapeCSV(paymentMethodLabel(payment.method)),
-      escapeCSV(paymentRecordStatusLabel(payment.status)),
-      escapeCSV(formatPriceForCSV(amount.ttc)),
-      escapeCSV(formatPriceForCSV(amount.ht)),
-      escapeCSV(formatPriceForCSV(amount.vat)),
-      escapeCSV(formatPriceForCSV(refunded.ttc)),
-      escapeCSV(formatPriceForCSV(refunded.ht)),
-      escapeCSV(formatPriceForCSV(refunded.vat)),
-      escapeCSV(payment.paid_at ? formatDateForCSV(payment.paid_at) : "—"),
+      escapeCSV(formatPriceForCSV(payment.amount)),
+      escapeCSV(payment.external_ref || "—"),
+      escapeCSV(payment.allocation_count ?? 0),
+      escapeCSV(payment.booking_refs || "—"),
+      escapeCSV(formatPriceForCSV(payment.unallocated_amount ?? 0)),
     ].join(",");
   });
 
   const csv = [headers.join(","), ...rows].join("\n");
   const timestamp = formatDateISO(new Date());
-  downloadCSV(`h3-paiements-${timestamp}.csv`, csv);
+  downloadCSV(`h3-encaissements-${timestamp}.csv`, csv);
+}
+
+export interface AllocationExportRow {
+  payment_id: string;
+  booking_id: string;
+  /** Montant de l'allocation, et non le montant du mouvement parent. */
+  amount: number;
+  booking_ref: string;
+  booking_date: string;
+  user_name: string | null;
+  method: DbPayment["method"];
+  paid_at: string | null;
+}
+
+/** Export analytique : une ligne par allocation, avec sa TVA de prestation. */
+export function exportAllocationsCSV(allocations: AllocationExportRow[]): void {
+  const headers = [
+    "Réf. réservation",
+    "Date de séance",
+    "Client",
+    "Montant TTC (EUR)",
+    "Montant HT (EUR)",
+    "TVA 20% (EUR)",
+    "Méthode",
+    "Date d'encaissement",
+  ];
+
+  const rows = allocations.map((allocation) => {
+    const amount = splitTtc(allocation.amount);
+    return [
+      escapeCSV(allocation.booking_ref),
+      escapeCSV(formatDateForCSV(allocation.booking_date)),
+      escapeCSV(allocation.user_name || "—"),
+      escapeCSV(formatPriceForCSV(amount.ttc)),
+      escapeCSV(formatPriceForCSV(amount.ht)),
+      escapeCSV(formatPriceForCSV(amount.vat)),
+      escapeCSV(paymentMethodLabel(allocation.method)),
+      escapeCSV(allocation.paid_at ? formatDateForCSV(allocation.paid_at) : "—"),
+    ].join(",");
+  });
+
+  const csv = [headers.join(","), ...rows].join("\n");
+  const timestamp = formatDateISO(new Date());
+  downloadCSV(`h3-affectations-${timestamp}.csv`, csv);
 }
 
 // ─── PDF Invoice Export ───────────────────────────────────────────────────────
 
 interface InvoiceBooking extends DbBooking {}
 
+export interface InvoiceLedgerSummary {
+  allocations: Array<DbPayment & { allocated: number }>;
+  firstPayment: DbPayment | null;
+}
+
 export async function generateInvoicePDF(
   booking: InvoiceBooking,
-  payment: DbPayment | null,
+  ledger: InvoiceLedgerSummary | null,
   user: DbUser,
   equipmentNames?: Record<string, string>
 ): Promise<void> {
@@ -476,12 +511,15 @@ export async function generateInvoicePDF(
   doc.setFont("helvetica", "normal");
   
   // Une facture ne doit jamais afficher « — » pour le moyen de paiement.
+  const payment = ledger?.firstPayment ?? null;
   const paymentMethodDisplay = booking.payment_method
     ? paymentMethodLabel(booking.payment_method)
     : payment
       ? paymentMethodLabel(payment.method)
       : "Espèces";
-  const paymentStatusDisplay = payment ? paymentRecordStatusLabel(payment.status) : "En attente";
+  const paymentStatusDisplay = payment
+    ? paymentRecordStatusLabel(payment.status, { amount: payment.amount })
+    : "En attente";
 
   doc.text(`Méthode de paiement: ${paymentMethodDisplay}`, 20, y);
   y += 5;

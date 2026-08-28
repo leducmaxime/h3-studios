@@ -1,19 +1,12 @@
 import type { BookingQuote } from "./booking";
-import { getBookingGrossTotal, getBookingOverpayment } from "./booking-totals";
-import type { DbPayment } from "./db-types";
+import { getBookingGrossTotal, round2 } from "./booking-totals";
+import type { BookingLedgerSummary } from "./ledger";
 
 type BookingAmounts = {
   base_price: number;
   equipment_price: number;
   total_price: number;
   promo_discount?: number | null;
-};
-
-type PaymentForProposal = {
-  amount: number;
-  status: DbPayment["status"];
-  refunded_amount: number;
-  method: string;
 };
 
 /**
@@ -59,10 +52,12 @@ export function buildRescheduleAmountAudit(oldAmounts: BookingAmounts, newAmount
  * an operator, who can use the existing partial-refund endpoint after review.
  */
 export function getOperatorProposedRescheduleRefund(
-  booking: BookingAmounts,
-  payments: PaymentForProposal[],
+  ledger: Pick<BookingLedgerSummary, "balance" | "movements">,
 ): { amount: number; mode: "operator-proposed" } | null {
-  if (!payments.some((payment) => payment.method === "card")) return null;
-  const amount = getBookingOverpayment({ ...booking, promo_discount: Number(booking.promo_discount) || 0 }, payments);
+  if (!ledger.movements.some((movement) => movement.method === "card")) return null;
+  // Le solde du grand livre est signé : négatif = sur-appliqué, donc trop-perçu.
+  // `ledger.due` reflète déjà les montants de la réservation reprogrammée,
+  // il n'y a rien à recalculer côté appelant.
+  const amount = round2(Math.max(0, -ledger.balance));
   return amount > 0 ? { amount, mode: "operator-proposed" } : null;
 }

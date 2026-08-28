@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatPrice } from "@/lib/booking";
-import { getBookingBalance, parseAmountInput } from "@/lib/booking-totals";
+import { getBookingAmountDue, parseAmountInput } from "@/lib/booking-totals";
 import type { DbBooking, DbPayment } from "@/lib/db-types";
 import type { RefundFailureCode, RefundOutcome } from "@/lib/refunds";
 import { paymentMethodLabel } from "@/lib/labels";
@@ -31,9 +31,9 @@ import { paymentMethodLabel } from "@/lib/labels";
 
 /** Ligne de paiement enrichie des colonnes calculées côté SQL. */
 export type PaymentRefundInfo = DbPayment & {
-  refund_reserved_cents?: number;
+  allocated?: number;
+  refundable?: number;
   refundable_amount?: number | null;
-  refund_pending_cents?: number;
 };
 
 export const REFUND_FAILURE_CODE_LABELS: Record<RefundFailureCode, string> = {
@@ -62,7 +62,7 @@ export const STRIPE_REFUND_STATUS_LABELS: Record<"pending" | "requires_action" |
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 export function hasStripeReference(p: PaymentRefundInfo): boolean {
-  return !!p.stripe_event_id?.startsWith("cs_");
+  return !!p.external_ref?.startsWith("cs_");
 }
 
 /** Un paiement est remboursable via Stripe : carte + référence session + solde. */
@@ -70,19 +70,17 @@ export function isStripeRefundable(p: PaymentRefundInfo): boolean {
   return (
     p.method === "card" &&
     hasStripeReference(p) &&
-    (p.status === "paid" || p.status === "partial-refund") &&
-    (p.refundable_amount ?? 0) > 0.004
+    p.status === "settled" &&
+    p.amount > 0.005 &&
+    refundableCap(p) > 0.004
   );
 }
 
 /**
- * Plafond de remboursement. Pour la carte : refundable_amount calculé en SQL
- * (amount − remboursements engagés chez Stripe). Hors carte : solde du grand
- * livre local (amount − refunded_amount).
+ * Plafond de remboursement sur l'allocation de la réservation ciblée.
  */
 export function refundableCap(p: PaymentRefundInfo): number {
-  if (p.method === "card") return Math.max(0, round2(p.refundable_amount ?? 0));
-  return Math.max(0, round2(p.amount - p.refunded_amount));
+  return Math.max(0, round2(p.refundable ?? p.refundable_amount ?? 0));
 }
 
 function centsLte(a: number, b: number): boolean {
@@ -177,6 +175,7 @@ export function CancelBookingDialog({
   );
   const [reason, setReason] = useState("");
   const [payments, setPayments] = useState<PaymentRefundInfo[]>([]);
+  const [ledgerBalance, setLedgerBalance] = useState<number | null>(null);
   const [booking, setBooking] = useState<DbBooking | null>(null);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -204,6 +203,7 @@ export function CancelBookingDialog({
     setResult(null);
     setSubmitting(false);
     setBooking(null);
+    setLedgerBalance(null);
     setLoadingPayments(true);
     fetch(`/api/admin/bookings/${bookingId}`)
       .then((r) => r.json())
@@ -215,11 +215,13 @@ export function CancelBookingDialog({
     fetch(`/api/admin/bookings/${bookingId}/payments`)
       .then((r) => r.json())
       .then((raw: unknown) => {
-        const json = raw as { success: boolean; data?: PaymentRefundInfo[] };
+        const json = raw as { success: boolean; data?: PaymentRefundInfo[] | { balance: number; movements: PaymentRefundInfo[] } };
         if (json.success && json.data) {
-          setPayments(json.data);
+          const movements = Array.isArray(json.data) ? json.data : json.data.movements;
+          setLedgerBalance(Array.isArray(json.data) ? null : json.data.balance);
+          setPayments(movements);
           const prefill: Record<string, string> = {};
-          for (const p of json.data) {
+          for (const p of movements) {
             if (isStripeRefundable(p)) {
               prefill[p.id] = refundableCap(p).toFixed(2).replace(".", ",");
             }
@@ -231,9 +233,7 @@ export function CancelBookingDialog({
       .finally(() => setLoadingPayments(false));
   }, [open, bookingId, bookingRef]);
 
-  const collected = payments.filter(
-    (p) => p.status === "paid" || p.status === "partial-refund",
-  );
+  const collected = payments.filter((p) => p.status === "settled" && p.amount > 0.005);
   const refundableRows = collected.filter(isStripeRefundable);
   const blockedRows = collected.filter((p) => !isStripeRefundable(p));
   const refundableTotal = round2(
@@ -266,7 +266,11 @@ export function CancelBookingDialog({
 
   // Solde restant dû (null tant que la réservation n'est pas chargée) : s'il
   // est positif, « Sans remboursement » exige un sous-choix explicite.
-  const remaining = booking ? getBookingBalance(booking, payments) : null;
+  const remaining = ledgerBalance ?? (booking
+    ? round2(getBookingAmountDue(booking) - payments
+      .filter((payment) => payment.status === "settled")
+      .reduce((sum, payment) => sum + payment.amount, 0))
+    : null);
   const balanceChoiceRequired = remaining !== null && remaining > 0;
 
   const canConfirm =
@@ -543,8 +547,6 @@ export function CancelBookingDialog({
                                 {formatPrice(p.amount)}
                               </p>
                               <p className="text-xs text-zinc-500">
-                                {p.refunded_amount > 0 &&
-                                  `dont ${formatPrice(p.refunded_amount)} déjà remboursés · `}
                                 Remboursable : {formatPrice(refundableCap(p))}
                               </p>
                             </div>
@@ -647,11 +649,15 @@ export function CancelBookingDialog({
 
 export function RefundPaymentDialog({
   payment,
+  bookingId,
+  bookingOptions,
   open,
   onOpenChange,
   onSettled,
 }: {
   payment: PaymentRefundInfo | null;
+  bookingId: string | null;
+  bookingOptions?: Array<{ id: string; ref: string }>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Appelé après chaque réponse du serveur (le parent rafraîchit ses données). */
@@ -664,6 +670,7 @@ export function RefundPaymentDialog({
   // Après un échec, le serveur renvoie refundableAfter : c'est la valeur la
   // plus fraîche (la réconciliation a pu déplacer le plafond).
   const [capOverride, setCapOverride] = useState<number | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(bookingId);
 
   const isCard = payment?.method === "card";
   const blockedCard = !!payment && isCard && !hasStripeReference(payment);
@@ -676,22 +683,17 @@ export function RefundPaymentDialog({
       setFailure(null);
       setFallbackError(null);
       setCapOverride(null);
+      setSelectedBookingId(bookingId);
     }
-  }, [open, payment]);
+  }, [open, payment, bookingId]);
 
   const parsed = parseAmountInput(amount);
   const isValid =
     Number.isFinite(parsed) && parsed > 0 && centsLte(parsed, cap);
 
-  // Un remboursement requires_action compte dans le plafond (réservé) mais pas
-  // dans refunded_amount : l'écart signale une action attendue côté Stripe.
-  const reservedBeyondLedger = payment
-    ? (payment.refund_reserved_cents ?? 0) > Math.round(payment.refunded_amount * 100)
-    : false;
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!payment || !isValid || submitting) return;
+    if (!payment || !selectedBookingId || !isValid || submitting) return;
     setSubmitting(true);
     setFailure(null);
     setFallbackError(null);
@@ -699,7 +701,7 @@ export function RefundPaymentDialog({
       const res = await fetch(`/api/admin/payments/${payment.id}/refund`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: parsed }),
+        body: JSON.stringify({ bookingId: selectedBookingId, amount: parsed }),
       });
       const json = (await res.json()) as {
         success: boolean;
@@ -758,9 +760,6 @@ export function RefundPaymentDialog({
               <>
                 {paymentMethodLabel(payment.method)} ·{" "}
                 {formatPrice(payment.amount)}
-                {payment.refunded_amount > 0 && (
-                  <> · déjà remboursé : {formatPrice(payment.refunded_amount)}</>
-                )}
                 <br />
                 Solde remboursable :{" "}
                 <span className="font-semibold text-foreground">
@@ -795,13 +794,21 @@ export function RefundPaymentDialog({
                 : "Remboursement manuel : l'argent est rendu au client, puis enregistré ici."}
             </p>
 
-            {reservedBeyondLedger && (
-              <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                <p className="text-xs text-amber-300">
-                  Un remboursement précédent attend une action dans le Dashboard
-                  Stripe. Son montant est déjà déduit du solde remboursable.
-                </p>
+            {bookingOptions && bookingOptions.length > 1 && (
+              <div className="space-y-2">
+                <Label htmlFor="refund-booking">Réservation</Label>
+                <select
+                  id="refund-booking"
+                  value={selectedBookingId ?? ""}
+                  onChange={(e) => setSelectedBookingId(e.target.value || null)}
+                  disabled={submitting}
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+                >
+                  <option value="">Choisir une réservation</option>
+                  {bookingOptions.map((option) => (
+                    <option key={option.id} value={option.id}>{option.ref}</option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -851,7 +858,7 @@ export function RefundPaymentDialog({
               <Button
                 type="submit"
                 variant="destructive"
-                disabled={!isValid || submitting}
+                disabled={!selectedBookingId || !isValid || submitting}
               >
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Rembourser{isValid ? ` ${formatPrice(parsed)}` : ""}

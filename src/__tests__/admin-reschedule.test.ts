@@ -5,6 +5,7 @@ import {
   deriveRescheduledAmounts,
   getOperatorProposedRescheduleRefund,
 } from "@/lib/admin-reschedule";
+import type { BookingLedgerSummary } from "@/lib/ledger";
 
 const existing = { base_price: 16, equipment_price: 0, total_price: 16, promo_discount: 0 };
 
@@ -74,8 +75,10 @@ describe("admin reschedule server amounts", () => {
 
   it("proposes, but does not automatically execute, a card refund after a lower repriced total", () => {
     const proposal = getOperatorProposedRescheduleRefund(
-      { ...existing, total_price: 10 },
-      [{ amount: 16, status: "paid", refunded_amount: 0, method: "card" }],
+      {
+        balance: -6,
+        movements: [{ method: "card" } as BookingLedgerSummary["movements"][number]],
+      } satisfies Pick<BookingLedgerSummary, "balance" | "movements">,
     );
     expect(proposal).toEqual({ amount: 6, mode: "operator-proposed" });
   });

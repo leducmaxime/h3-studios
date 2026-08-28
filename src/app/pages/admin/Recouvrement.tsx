@@ -590,7 +590,7 @@ export function AdminRecouvrement() {
                   <span className="font-semibold">{formatPrice(collectTotals.totalAmount)}</span>
                 </div>
                 <div className="mt-1 text-right text-xs text-zinc-500">
-                  Reste: {formatPrice(Math.max(0, collectTotals.remainingAfter))}
+                  Reste: {formatPrice(collectTotals.remainingAfter)}
                 </div>
                 {!collectTotals.exact && (
                   <p className="mt-2 text-xs text-destructive">

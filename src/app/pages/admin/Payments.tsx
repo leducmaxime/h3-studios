@@ -15,7 +15,6 @@ import {
   MoreHorizontal,
   Loader2,
   Search,
-  Pencil,
   Trash2,
   Download,
 } from "lucide-react";
@@ -48,32 +47,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatPrice } from "@/lib/booking";
-import { bookingAllowsCollection, getBookingAmountDue, getBookingOverpayment, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getManualDiscountEligibility, getManualDiscountBlockMessage, parseAmountInput } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
-import { exportPaymentsCSV } from "@/lib/export";
+import { exportAllocationsCSV, exportCollectionsCSV, type AllocationExportRow } from "@/lib/export";
 import { RefundPaymentDialog } from "@/components/admin/refund";
-import { PAYMENT_RECORD_STATUS_LABELS, paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
+import { paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
+import type { DbPayment } from "@/lib/db-types";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
-interface ApiPayment {
+interface ApiPayment extends DbPayment {
   id: string;
-  booking_id: string;
   amount: number;
   method: "card" | "cash" | "transfer" | "check";
   payment_type: "on-site" | "online";
-  status: "pending" | "paid" | "refunded" | "partial-refund";
-  refunded_amount: number;
+  status: "pending" | "settled" | "failed";
   paid_at: string | null;
   created_at: string;
-  booking_ref: string | null;
+  external_ref: string | null;
+  booking_refs: string;
+  allocation_count: number;
+  allocated_amount: number;
+  unallocated_amount: number;
+  refundable_amount: number;
   user_name: string | null;
   user_band_name: string | null;
   user_id: string | null;
   booking_date: string | null;
-  stripe_event_id: string | null;
-  refund_reserved_cents: number;
-  refundable_amount: number | null;
 }
 
 interface PaymentsResponse {
@@ -165,110 +165,154 @@ interface CollectEntry {
   method: "cash" | "card" | "transfer" | "check";
 }
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-> = {
-  pending: { label: PAYMENT_RECORD_STATUS_LABELS.pending, variant: "outline" },
-  paid: { label: PAYMENT_RECORD_STATUS_LABELS.paid, variant: "default" },
-  refunded: { label: PAYMENT_RECORD_STATUS_LABELS.refunded, variant: "destructive" },
-  "partial-refund": { label: PAYMENT_RECORD_STATUS_LABELS["partial-refund"], variant: "secondary" },
-};
+interface BookingExportLookup {
+  id: string;
+  booking_ref: string;
+  user_name?: string | null;
+}
+
+interface BookingExportDetail {
+  date: string;
+  user_id?: string | null;
+  user_name?: string | null;
+}
+
+interface LedgerExportMovement extends DbPayment {
+  allocated?: number | null;
+}
+
+interface BookingLedgerExportResponse {
+  success: boolean;
+  data?: { movements?: LedgerExportMovement[] } | LedgerExportMovement[];
+}
+
+function statusConfig(payment: ApiPayment): { label: string; variant: "default" | "secondary" | "destructive" | "outline" } {
+  if (payment.status === "settled" && payment.amount < -0.005) {
+    return { label: paymentRecordStatusLabel(payment.status, { amount: payment.amount }), variant: "destructive" };
+  }
+  if (payment.status === "settled") {
+    const partial = payment.refundable_amount > 0.005 && payment.refundable_amount < payment.amount - 0.005;
+    return {
+      label: paymentRecordStatusLabel(payment.status, { amount: payment.amount, refundableAmount: payment.refundable_amount }),
+      variant: partial ? "secondary" : "default",
+    };
+  }
+  return { label: paymentRecordStatusLabel(payment.status), variant: "outline" };
+}
 
 const PAYMENT_METHOD_ICONS: Record<string, typeof CreditCard> = {
   card: CreditCard,
   cash: Banknote,
   transfer: Landmark,
   check: FileText,
-  cheque: FileText,
 };
 
-// ─── Edit Payment Dialog ────────────────────────────────────────────────────────
+async function buildAllocationExportRows(payments: ApiPayment[]): Promise<{
+  rows: AllocationExportRow[];
+  missing: string[];
+}> {
+  const missing: string[] = [];
+  const refs = [...new Set(
+    payments.flatMap((payment) => payment.booking_refs.split(",").map((ref) => ref.trim()).filter(Boolean)),
+  )];
+  const bookings = new Map<string, BookingExportLookup>();
 
-function EditPaymentDialog({
-  payment,
-  open,
-  onOpenChange,
-  onConfirm,
-}: {
-  payment: ApiPayment | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (paymentId: string, amount: number, method: string) => void;
-}) {
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<"cash" | "card" | "transfer" | "check">("cash");
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (open && payment) {
-      setAmount(payment.amount.toFixed(2).replace(".", ","));
-      setMethod((payment.method as "cash" | "card" | "transfer" | "check") || "cash");
-      setSubmitting(false);
+  await Promise.all(refs.map(async (ref) => {
+    try {
+      const response = await fetch(`/api/admin/bookings?search=${encodeURIComponent(ref)}&all=true`);
+      const json = await response.json() as {
+        success?: boolean;
+        data?: { data?: BookingExportLookup[] };
+      };
+      const match = json.data?.data?.find((booking) => booking.booking_ref === ref);
+      if (json.success && match) bookings.set(ref, match);
+      else missing.push(`réservation ${ref} introuvable`);
+    } catch {
+      missing.push(`réservation ${ref} non accessible`);
     }
-  }, [open, payment]);
+  }));
 
-  const parsedAmount = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
-  const isValid = !isNaN(parsedAmount) && parsedAmount > 0;
+  const details = new Map<string, { detail: BookingExportDetail; movements: LedgerExportMovement[]; userName: string | null }>();
+  await Promise.all([...bookings.values()].map(async (lookup) => {
+    try {
+      const [bookingResponse, ledgerResponse] = await Promise.all([
+        fetch(`/api/admin/bookings/${lookup.id}`),
+        fetch(`/api/admin/bookings/${lookup.id}/payments`),
+      ]);
+      const bookingJson = await bookingResponse.json() as { success?: boolean; data?: BookingExportDetail };
+      const ledgerJson = await ledgerResponse.json() as BookingLedgerExportResponse;
+      const movements = ledgerJson.success
+        ? Array.isArray(ledgerJson.data) ? ledgerJson.data : ledgerJson.data?.movements
+        : undefined;
+      if (!bookingJson.success || !bookingJson.data || !movements) {
+        missing.push(`ventilation de la réservation ${lookup.booking_ref} indisponible`);
+        return;
+      }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!payment || !isValid) return;
-    setSubmitting(true);
-    onConfirm(payment.id, parsedAmount, method);
+      let userName = bookingJson.data.user_name ?? lookup.user_name ?? null;
+      if (!userName && bookingJson.data.user_id) {
+        try {
+          const userResponse = await fetch(`/api/admin/users/${bookingJson.data.user_id}`);
+          const userJson = await userResponse.json() as { success?: boolean; data?: { name?: string | null } };
+          userName = userJson.success ? userJson.data?.name ?? null : null;
+        } catch {
+          // Le nom client est facultatif pour le rapprochement comptable.
+        }
+      }
+      details.set(lookup.id, { detail: bookingJson.data, movements, userName });
+    } catch {
+      missing.push(`ventilation de la réservation ${lookup.booking_ref} non accessible`);
+    }
+  }));
+
+  const rows: AllocationExportRow[] = [];
+  const allocatedByPayment = new Map<string, number>();
+  for (const payment of payments) {
+    const paymentRefs = [...new Set(payment.booking_refs.split(",").map((ref) => ref.trim()).filter(Boolean))];
+    for (const ref of paymentRefs) {
+      const lookup = bookings.get(ref);
+      const data = lookup ? details.get(lookup.id) : undefined;
+      const movement = data?.movements.find((candidate) => candidate.id === payment.id);
+      if (!lookup || !data || !movement || typeof movement.allocated !== "number") {
+        if (payment.allocated_amount > 0.005) {
+          missing.push(`allocation du mouvement ${payment.id} vers ${ref || "sans réservation"}`);
+        }
+        continue;
+      }
+      if (Math.abs(movement.allocated) <= 0.005) continue;
+      rows.push({
+        payment_id: payment.id,
+        booking_id: lookup.id,
+        amount: movement.allocated,
+        booking_ref: ref,
+        booking_date: data.detail.date,
+        user_name: data.userName,
+        method: movement.method,
+        paid_at: movement.paid_at,
+      });
+      allocatedByPayment.set(payment.id, (allocatedByPayment.get(payment.id) ?? 0) + movement.allocated);
+    }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-zinc-800 bg-zinc-900">
-        <DialogHeader>
-          <DialogTitle>Modifier le paiement</DialogTitle>
-          <DialogDescription>
-            {payment && <>Réservation <span className="font-semibold text-foreground">{payment.booking_ref}</span></>}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-amount">Montant (€ TTC)</Label>
-            <Input
-              id="edit-amount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="border-zinc-700 bg-zinc-800"
-              autoFocus
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-method">Mode de paiement</Label>
-            <Select value={method} onValueChange={(v) => setMethod(v as "cash" | "card" | "transfer" | "check")}>
-              <SelectTrigger id="edit-method" className="bg-zinc-800 border-zinc-700">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-800">
-                <SelectItem value="card">Carte Bancaire</SelectItem>
-                <SelectItem value="cash">Espèces</SelectItem>
-                <SelectItem value="transfer">Virement</SelectItem>
-                <SelectItem value="check">Chèque</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-zinc-700">
-              Annuler
-            </Button>
-            <Button type="submit" disabled={!isValid || submitting}>
-              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Enregistrer
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+  for (const payment of payments) {
+    const actual = allocatedByPayment.get(payment.id) ?? 0;
+    if (Math.abs(actual - payment.allocated_amount) > 0.005) {
+      missing.push(
+        `mouvement ${payment.id}: allocations ${actual.toFixed(2)} € au lieu de ${payment.allocated_amount.toFixed(2)} €`,
+      );
+    }
+  }
+
+  const collectionTotal = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const unallocatedTotal = payments.reduce((sum, payment) => sum + (payment.unallocated_amount ?? 0), 0);
+  const allocationTotal = rows.reduce((sum, allocation) => sum + allocation.amount, 0);
+  if (Math.abs(allocationTotal + unallocatedTotal - collectionTotal) > 0.005) {
+    missing.push(
+      `contrôle croisé: ventilation ${allocationTotal.toFixed(2)} € + non affecté ${unallocatedTotal.toFixed(2)} € ≠ encaissements ${collectionTotal.toFixed(2)} €`,
+    );
+  }
+
+  return { rows, missing: [...new Set(missing)] };
 }
 
 // ─── Delete Payment Dialog ──────────────────────────────────────────────────────
@@ -300,14 +344,14 @@ function DeletePaymentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-zinc-800 bg-zinc-900">
         <DialogHeader>
-          <DialogTitle>Supprimer le paiement</DialogTitle>
+          <DialogTitle>Contre-passer le paiement</DialogTitle>
           <DialogDescription>
             {payment && (
               <>
-                Êtes-vous sûr de vouloir supprimer le paiement de{" "}
+                Êtes-vous sûr de vouloir contre-passer le paiement de{" "}
                 <span className="font-semibold text-foreground">{formatPrice(payment.amount)}</span>{" "}
                 ({payment.method}) pour la réservation{" "}
-                <span className="font-semibold text-foreground">{payment.booking_ref}</span> ?{" "}
+                <span className="font-semibold text-foreground">{payment.booking_refs || "—"}</span> ?{" "}
                 Cette action est irréversible.
               </>
             )}
@@ -319,7 +363,7 @@ function DeletePaymentDialog({
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={submitting}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Supprimer
+            Contre-passer
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -333,34 +377,20 @@ function PaymentActions({
   payment,
   onMarkPaid,
   onRefund,
-  onAddPayment,
-  onEdit,
   onDelete,
 }: {
   payment: ApiPayment;
   onMarkPaid: (id: string) => void;
   onRefund: (payment: ApiPayment) => void;
-  onAddPayment: (bookingId: string) => void;
-  onEdit: (payment: ApiPayment) => void;
   onDelete: (payment: ApiPayment) => void;
 }) {
   const canPay = payment.status === "pending";
-  // Le plafond vient de refundable_amount pour la carte (solde encore
-  // remboursable chez Stripe), du grand livre pour les autres méthodes.
-  // Une ligne partiellement remboursée reste remboursable. Une carte sans
-  // référence Stripe ne peut pas être remboursée depuis l'application.
-  const refundCap = payment.method === "card"
-    ? (payment.refundable_amount ?? 0)
-    : payment.amount - payment.refunded_amount;
   const canRefund =
-    (payment.status === "paid" || payment.status === "partial-refund") &&
-    refundCap > 0.004 &&
-    (payment.method !== "card" || !!payment.stripe_event_id?.startsWith("cs_"));
-  const canEdit = payment.payment_type === "on-site";
+    payment.status === "settled" && payment.amount > 0.005 &&
+    payment.refundable_amount > 0.004 &&
+    (payment.method !== "card" || !!payment.external_ref?.startsWith("cs_"));
   const canDelete = payment.payment_type === "on-site";
-  const canAddPayment = !!payment.booking_id;
-
-  if (!canPay && !canRefund && !canAddPayment && !canEdit && !canDelete) return null;
+  if (!canPay && !canRefund && !canDelete) return null;
 
   return (
     <DropdownMenu>
@@ -371,27 +401,13 @@ function PaymentActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="border-zinc-800 bg-zinc-900">
-        {canEdit && (
-          <DropdownMenuItem onClick={() => onEdit(payment)}>
-            <Pencil className="h-4 w-4" />
-            <span>Modifier</span>
-          </DropdownMenuItem>
-        )}
-        {canEdit && (canAddPayment || canPay || canRefund || canDelete) && <DropdownMenuSeparator />}
         {canDelete && (
           <DropdownMenuItem variant="destructive" onClick={() => onDelete(payment)}>
             <Trash2 className="h-4 w-4" />
-            <span>Supprimer</span>
+            <span>Contre-passer</span>
           </DropdownMenuItem>
         )}
-        {canDelete && (canAddPayment || canPay || canRefund) && <DropdownMenuSeparator />}
-        {canAddPayment && (
-          <DropdownMenuItem onClick={() => onAddPayment(payment.booking_id)}>
-            <Banknote className="h-4 w-4" />
-            <span>Ajouter un paiement</span>
-          </DropdownMenuItem>
-        )}
-        {canAddPayment && (canPay || canRefund) && <DropdownMenuSeparator />}
+        {canDelete && (canPay || canRefund) && <DropdownMenuSeparator />}
         {canPay && (
           <DropdownMenuItem onClick={() => onMarkPaid(payment.id)}>
             <Check className="h-4 w-4 text-green-400" />
@@ -420,7 +436,7 @@ export function AdminPayments() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "pending" | "paid" | "refunded"
+    "all" | "pending" | "settled" | "failed"
   >("all");
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<"all" | "on-site" | "online">("all");
   const [methodFilter, setMethodFilter] = useState<"all" | "card" | "cash" | "transfer" | "check">(
@@ -434,9 +450,6 @@ export function AdminPayments() {
   const [page, setPage] = useState(1);
   const perPage = 20;
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingPayment, setEditingPayment] = useState<ApiPayment | null>(null);
-
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingPayment, setDeletingPayment] = useState<ApiPayment | null>(null);
 
@@ -446,6 +459,7 @@ export function AdminPayments() {
   // Refund dialog state
   const [refundTarget, setRefundTarget] = useState<ApiPayment | null>(null);
   const [refundOpen, setRefundOpen] = useState(false);
+  const [refundBookingOptions, setRefundBookingOptions] = useState<Array<{ id: string; ref: string }>>([]);
 
   const [collectOpen, setCollectOpen] = useState(false);
   const [collectLoading, setCollectLoading] = useState(false);
@@ -472,7 +486,7 @@ export function AdminPayments() {
     const checkAmount = entries.reduce((acc, e) => acc + (e.amount > 0 && e.method === "check" ? e.amount : 0), 0);
 
     const remainingStart = collectContext?.remaining ?? 0;
-    const remainingAfter = Math.max(remainingStart - totalAmount, 0);
+    const remainingAfter = remainingStart - totalAmount;
     const overpayAmount = totalAmount > remainingStart ? totalAmount - remainingStart : 0;
 
     return {
@@ -536,17 +550,8 @@ export function AdminPayments() {
   const totalPages = Math.ceil(total / perPage);
 
   const stats = useMemo(() => {
-    if (serverStats) return serverStats;
-    // Fallback sur page courante si pas encore chargé
-    const paid = payments.filter((p) => p.status === "paid");
-    const refunded = payments.filter((p) => p.status === "refunded" || p.status === "partial-refund");
-    return {
-      paidCount: paid.length,
-      paidAmount: paid.reduce((acc, p) => acc + p.amount, 0),
-      refundedCount: refunded.length,
-      refundedAmount: refunded.reduce((acc, p) => acc + (p.refunded_amount ?? 0), 0),
-    };
-  }, [serverStats, payments]);
+    return serverStats ?? { paidCount: 0, paidAmount: 0, refundedCount: 0, refundedAmount: 0 };
+  }, [serverStats]);
 
   // ─── Actions ────────────────────────────────────────────────────────────────
 
@@ -579,7 +584,7 @@ export function AdminPayments() {
       if (!pRes.ok) throw new Error("Failed to fetch booking payments");
 
       const bJson = (await bRes.json()) as { success: boolean; data: any; error?: string };
-      const pJson = (await pRes.json()) as { success: boolean; data: any[]; error?: string };
+      const pJson = (await pRes.json()) as { success: boolean; data: any; error?: string };
       if (!bJson.success) throw new Error(bJson.error || "Booking fetch failed");
       if (!pJson.success) throw new Error(pJson.error || "Payments fetch failed");
 
@@ -589,10 +594,10 @@ export function AdminPayments() {
         toast.error("Cette réservation est annulée — aucun encaissement possible");
         return;
       }
-      const paymentsRows = pJson.data as Array<{ amount: number; status: string }>;
-      const totalPaid = paymentsRows.reduce((acc, p) => (p.status === "paid" ? acc + p.amount : acc), 0);
+      const ledger = pJson.data as { balance?: number; settled?: number };
+      const totalPaid = ledger.settled ?? 0;
       const finalTotal = getBookingAmountDue(booking);
-      const remaining = Math.max(finalTotal - totalPaid, 0);
+      const remaining = ledger.balance ?? Math.max(finalTotal - totalPaid, 0);
 
       if (remaining <= 0 && !getManualDiscountEligibility(booking).allowed) {
         toast.success("La réservation est déjà soldée");
@@ -612,7 +617,7 @@ export function AdminPayments() {
         promoCodeValue: booking.promo_code_value ?? null,
         promoDiscount: booking.promo_discount || 0,
         booking,
-        overpayment: getBookingOverpayment(booking, pJson.data),
+        overpayment: Math.max(0, -remaining),
       });
       setDiscountInput(String(booking.promo_discount || 0));
 
@@ -696,7 +701,6 @@ export function AdminPayments() {
           body: JSON.stringify({
             amount: p.amount,
             method: p.method,
-            status: "paid",
           }),
         });
         const json = (await res.json()) as { success: boolean; error?: string };
@@ -719,35 +723,21 @@ export function AdminPayments() {
     }
   }
 
-  function openRefundDialog(payment: ApiPayment) {
+  async function openRefundDialog(payment: ApiPayment) {
+    const refs = payment.booking_refs.split(",").map((ref) => ref.trim()).filter(Boolean);
+    const options: Array<{ id: string; ref: string }> = [];
+    await Promise.all(refs.map(async (ref) => {
+      try {
+        const response = await fetch(`/api/admin/bookings?search=${encodeURIComponent(ref)}&all=true`);
+        const json = await response.json() as { success?: boolean; data?: { data?: Array<{ id: string; booking_ref: string }> } };
+        const match = json.data?.data?.find((booking) => booking.booking_ref === ref);
+        if (match) options.push({ id: match.id, ref: match.booking_ref });
+      } catch { /* the dialog remains unavailable until a reservation is selected */ }
+    }));
     setRefundTarget(payment);
+    setRefundBookingOptions(options);
     setRefundOpen(true);
   }
-
-  const openEditDialog = (payment: ApiPayment) => {
-    setEditingPayment(payment);
-    setEditDialogOpen(true);
-  };
-
-  const handleEditPayment = async (paymentId: string, amount: number, method: string) => {
-    try {
-      const res = await fetch(`/api/admin/payments/${paymentId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, method }),
-      });
-      const json = await res.json() as { success: boolean; error?: string };
-      if (json.success) {
-        toast.success("Paiement modifié");
-        setEditDialogOpen(false);
-        fetchPayments();
-      } else {
-        toast.error(json.error || "Erreur lors de la modification");
-      }
-    } catch {
-      toast.error("Erreur réseau");
-    }
-  };
 
   const openDeleteDialog = (payment: ApiPayment) => {
     setDeletingPayment(payment);
@@ -761,7 +751,7 @@ export function AdminPayments() {
       });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
-        toast.success("Paiement supprimé");
+        toast.success("Paiement contre-passé");
         setDeleteDialogOpen(false);
         fetchPayments();
       } else {
@@ -772,7 +762,7 @@ export function AdminPayments() {
     }
   };
 
-  async function handleExportCSV() {
+  async function handleExportCollections() {
     const params = new URLSearchParams();
     params.set("all", "true");
     if (statusFilter !== "all") params.set("status", statusFilter);
@@ -792,13 +782,53 @@ export function AdminPayments() {
       const res = await fetch(`/api/admin/payments?${params}`);
       const json = (await res.json()) as PaymentsResponse;
       if (json.success) {
-        exportPaymentsCSV(json.data.data);
+        exportCollectionsCSV(json.data.data);
         toast.success(`${json.data.data.length} paiement(s) exporté(s)`);
       } else {
         toast.error("Erreur lors de l'export");
       }
     } catch {
       toast.error("Erreur réseau lors de l'export");
+    }
+  }
+
+  async function handleExportAllocations() {
+    const params = new URLSearchParams();
+    params.set("all", "true");
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (paymentTypeFilter !== "all") params.set("paymentType", paymentTypeFilter);
+    if (methodFilter !== "all") params.set("method", methodFilter);
+    if (search) params.set("search", search);
+    params.set("sortBy", sortBy);
+    params.set("sortOrder", sortOrder);
+
+    const dateParams = dateFilter === "custom"
+      ? { dateFrom: customDateFrom || undefined, dateTo: customDateTo || undefined }
+      : getDateFilterParams(dateFilter);
+    if (dateParams.dateFrom) params.set("dateFrom", dateParams.dateFrom);
+    if (dateParams.dateTo) params.set("dateTo", dateParams.dateTo);
+
+    try {
+      const res = await fetch(`/api/admin/payments?${params}`);
+      const json = (await res.json()) as PaymentsResponse;
+      if (!json.success) {
+        toast.error("Erreur lors du chargement de la ventilation");
+        return;
+      }
+      const result = await buildAllocationExportRows(json.data.data);
+      if (result.missing.length > 0) {
+        const details = result.missing.slice(0, 3).join(" ; ");
+        console.error("Allocation export incomplete:", result.missing);
+        toast.error(
+          `Ventilation incomplète — aucun fichier généré. ${details}. Les allocations détaillées doivent être fournies par /api/admin/bookings/:id/payments.`,
+        );
+        return;
+      }
+      exportAllocationsCSV(result.rows);
+      toast.success(`${result.rows.length} allocation(s) exportée(s)`);
+    } catch (error) {
+      console.error("Allocation export error:", error);
+      toast.error("Erreur réseau lors de l'export de la ventilation");
     }
   }
 
@@ -822,23 +852,29 @@ export function AdminPayments() {
             {total} paiement(s) au total
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleExportCSV}>
-          <Download className="mr-2 h-4 w-4" />
-          Exporter CSV
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCollections}>
+            <Download className="mr-2 h-4 w-4" />
+            Exporter les encaissements
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportAllocations}>
+            <Download className="mr-2 h-4 w-4" />
+            Exporter la ventilation
+          </Button>
+        </div>
       </div>
 
       {/* Stats cards */}
       <div className="grid gap-4 sm:grid-cols-2">
         <button
           type="button"
-          aria-pressed={statusFilter === "paid"}
+          aria-pressed={statusFilter === "settled"}
           onClick={() => {
-            setStatusFilter((current) => (current === "paid" ? "all" : "paid"));
+            setStatusFilter((current) => (current === "settled" ? "all" : "settled"));
             setPage(1);
           }}
           className={`rounded-xl border bg-zinc-900 p-4 text-left transition-colors hover:border-zinc-600 ${
-            statusFilter === "paid" ? "border-green-400/50" : "border-zinc-800"
+            statusFilter === "settled" ? "border-green-400/50" : "border-zinc-800"
           }`}
         >
           <p className="text-sm text-zinc-400">Payés</p>
@@ -849,25 +885,15 @@ export function AdminPayments() {
             {formatPrice(stats.paidAmount)}
           </p>
         </button>
-        <button
-          type="button"
-          aria-pressed={statusFilter === "refunded"}
-          onClick={() => {
-            setStatusFilter((current) => (current === "refunded" ? "all" : "refunded"));
-            setPage(1);
-          }}
-          className={`rounded-xl border bg-zinc-900 p-4 text-left transition-colors hover:border-zinc-600 ${
-            statusFilter === "refunded" ? "border-red-400/50" : "border-zinc-800"
-          }`}
-        >
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left">
           <p className="text-sm text-zinc-400">Remboursés</p>
           <p className="mt-1 text-2xl font-bold text-red-400">
             {stats.refundedCount}
           </p>
           <p className="text-sm text-zinc-500">
-            {formatPrice(stats.refundedAmount)}
+            {formatPrice(Math.abs(stats.refundedAmount))}
           </p>
-        </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -918,8 +944,8 @@ export function AdminPayments() {
           >
             <option value="all">Statut</option>
             <option value="pending">En attente</option>
-            <option value="paid">Payé</option>
-            <option value="refunded">Remboursé</option>
+            <option value="settled">Payé</option>
+            <option value="failed">Échec</option>
           </select>
           <select
             value={paymentTypeFilter}
@@ -1026,15 +1052,13 @@ export function AdminPayments() {
                     {sortBy === "booking_date" && (sortOrder === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
                   </button>
                 </th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-zinc-400">Non affecté</th>
                 <th className="w-16 px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
               {payments.map((payment: ApiPayment) => {
-                const statusCfg = STATUS_CONFIG[payment.status] || {
-                  label: paymentRecordStatusLabel(payment.status),
-                  variant: "outline" as const,
-                };
+                const statusCfg = statusConfig(payment);
 
                 return (
                   <tr
@@ -1042,10 +1066,8 @@ export function AdminPayments() {
                     className="bg-zinc-900/50 hover:bg-zinc-800/50"
                   >
                     <td className="px-4 py-3">
-                      {payment.booking_ref && payment.booking_id ? (
-                        <a href={`/admin/bookings/${payment.booking_id}`} className="font-mono text-sm text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
-                          {payment.booking_ref}
-                        </a>
+                      {payment.booking_refs ? (
+                        <span className="font-mono text-sm text-primary">{payment.booking_refs}</span>
                       ) : (
                         "—"
                       )}
@@ -1055,7 +1077,7 @@ export function AdminPayments() {
                         <a href={`/admin/users/${payment.user_id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
                           {payment.user_name}
                         </a>
-                      ) : payment.booking_id ? (
+                      ) : payment.booking_refs ? (
                         <span className="text-zinc-500">Compte supprimé</span>
                       ) : (
                         "—"
@@ -1092,11 +1114,6 @@ export function AdminPayments() {
                       <p className="font-medium">
                         {formatPrice(payment.amount)}
                       </p>
-                      {payment.refunded_amount > 0 && (
-                        <p className="text-xs text-red-400">
-                          -{formatPrice(payment.refunded_amount)}
-                        </p>
-                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-zinc-400">
                       {payment.paid_at
@@ -1105,13 +1122,14 @@ export function AdminPayments() {
                           ? formatDate(payment.booking_date)
                           : "—"}
                     </td>
+                    <td className="px-4 py-3 text-right text-sm">
+                      {Math.abs(payment.unallocated_amount) > 0.005 ? formatPrice(payment.unallocated_amount) : "—"}
+                    </td>
                     <td className="px-4 py-3">
                       <PaymentActions
                         payment={payment}
                         onMarkPaid={handleMarkPaid}
                         onRefund={openRefundDialog}
-                        onAddPayment={openCollectDialog}
-                        onEdit={openEditDialog}
                         onDelete={openDeleteDialog}
                       />
                     </td>
@@ -1121,7 +1139,7 @@ export function AdminPayments() {
               {payments.length === 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-8 text-center text-zinc-500"
                   >
                     Aucun paiement trouvé
@@ -1163,16 +1181,11 @@ export function AdminPayments() {
       {/* Refund Dialog */}
       <RefundPaymentDialog
         payment={refundTarget}
+        bookingId={refundBookingOptions.length === 1 ? refundBookingOptions[0].id : null}
+        bookingOptions={refundBookingOptions}
         open={refundOpen}
         onOpenChange={setRefundOpen}
         onSettled={fetchPayments}
-      />
-
-      <EditPaymentDialog
-        payment={editingPayment}
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        onConfirm={handleEditPayment}
       />
 
       <DeletePaymentDialog

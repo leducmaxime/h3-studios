@@ -38,7 +38,7 @@ import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientTy
 import { formatPrice, type StudioId } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
-import { type DbUser, type DbPromoCode, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot, type UserBookingInsights } from "@/lib/db-types";
+import { type DbUser, type DbPromoCode, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot, type UserBookingInsights, type AdminPaymentRow } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 import { formatDurationHours } from "@/lib/user-booking-stats";
 import { formatCountRate, formatNextBookingWhen } from "@/lib/user-ops-snapshot";
@@ -59,18 +59,7 @@ function formatDate(dateStr: string): string {
 // Vocabulaire des codes fidélité (statut, portée, éligibilité au renvoi) :
 // voir src/lib/loyalty-code-display.ts, partagé avec Pricing.tsx.
 
-interface ClientPaymentRow {
-  id: string;
-  booking_id: string;
-  amount: number;
-  method: string;
-  payment_type: "on-site" | "online";
-  status: "pending" | "paid" | "refunded" | "partial-refund";
-  refunded_amount: number;
-  created_at: string;
-  booking_ref: string | null;
-  booking_date: string | null;
-}
+interface ClientPaymentRow extends AdminPaymentRow {}
 
 // ─── Remise de fidélité (issue #48) ───────────────────────────────────────
 // `loyalty` est calculé par GET /api/admin/users/:id et n'appartient pas à
@@ -482,8 +471,8 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     if (statusFilter !== "all" && b.status !== statusFilter) return false;
     if (studioFilter !== "all" && b.studio_id !== studioFilter) return false;
     if (paymentStatusFilter !== "all") {
-      if (paymentStatusFilter === "paid" && b.payment_status !== "paid") return false;
-      if (paymentStatusFilter === "remaining" && b.payment_status === "paid") return false;
+      if (paymentStatusFilter === "paid" && (b.remaining ?? 0) > 0.005) return false;
+      if (paymentStatusFilter === "remaining" && (b.remaining ?? 0) <= 0.005) return false;
     }
     if (dateFilter !== "all") {
       if (dateFilter === "today" && b.date !== today) return false;
@@ -1531,7 +1520,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                               const remaining = b.remaining;
                               return (
                                 <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">
-                                  {remaining != null && remaining > 0 ? `Reste ${formatPrice(remaining)}` : displayPaymentStatusLabel(payDisplay)}
+                                  {remaining != null && Math.abs(remaining) > 0.005 ? `Reste ${formatPrice(remaining)}` : displayPaymentStatusLabel(payDisplay)}
                                 </Badge>
                               );
                             })()}
@@ -1583,10 +1572,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                           {payment.created_at ? formatDate(payment.created_at) : "—"}
                         </td>
                         <td className="px-4 py-3">
-                          {payment.booking_id ? (
-                            <a href={`/admin/bookings/${payment.booking_id}`} className="font-mono text-sm text-primary hover:underline">
-                              {payment.booking_ref || payment.booking_id}
-                            </a>
+                          {payment.booking_refs ? (
+                            <span className="font-mono text-sm text-primary">
+                              {payment.booking_refs}
+                            </span>
                           ) : (
                             <span className="text-sm text-zinc-500">—</span>
                           )}
@@ -1598,18 +1587,15 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         <td className="px-4 py-3 text-sm">{paymentTypeLabel(payment.payment_type)}</td>
                         <td className="px-4 py-3">
                           <Badge className={`text-xs ${
-                            payment.status === "paid" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
+                            payment.status === "settled" && payment.amount > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
                             payment.status === "pending" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
                             "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
                           }`}>
-                            {paymentRecordStatusLabel(payment.status)}
+                            {paymentRecordStatusLabel(payment.status, { amount: payment.amount, refundableAmount: payment.refundable_amount })}
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <span className="font-medium">{formatPrice(payment.amount)}</span>
-                          {payment.refunded_amount > 0 && (
-                            <p className="text-xs text-zinc-500">-{formatPrice(payment.refunded_amount)}</p>
-                          )}
                         </td>
                       </tr>
                     ))}

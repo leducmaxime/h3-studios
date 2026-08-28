@@ -46,7 +46,7 @@ import { CancelBookingDialog } from "@/components/admin/refund";
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
 import { STUDIOS, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, parseBookingEquipmentLines, setOpeningHours, type StudioId, type GroupType } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
-import { getBookingAmountDue, isKeepBalanceDue } from "@/lib/booking-totals";
+import { getBookingAmountDue } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { useEquipment } from "@/components/booking/useEquipment";
 import { groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel, bookingStatusLabel } from "@/lib/labels";
@@ -71,6 +71,11 @@ interface DbPayment {
   status: string;
   paid_at: string | null;
   created_at: string;
+}
+
+interface CalendarLedgerSummary {
+  balance: number;
+  movements: DbPayment[];
 }
 
 interface CalendarBooking {
@@ -368,8 +373,9 @@ export function AdminCalendar() {
       setLoadingPayments(true);
       fetch(`/api/admin/bookings/${selectedBooking.id}/payments`)
         .then((res) => res.json())
-        .then((json: any) => {
-          if (json.success) setBookingPayments(json.data);
+        .then((raw: unknown) => {
+          const json = raw as { success: boolean; data: CalendarLedgerSummary | DbPayment[] };
+          if (json.success) setBookingPayments(Array.isArray(json.data) ? json.data : json.data.movements);
         })
         .catch(console.error)
         .finally(() => setLoadingPayments(false));
@@ -404,7 +410,6 @@ export function AdminCalendar() {
         body: JSON.stringify({
           amount,
           method: newPayment.method,
-          status: "paid", // Direct payments from admin are usually already paid
         }),
       });
       const json = await res.json() as { success: boolean; error?: string };
@@ -692,8 +697,9 @@ export function AdminCalendar() {
 
   function getPaymentStatusColor(booking: CalendarBooking): { bg: string; text: string; border: string } {
     const isNoShow = booking.status === "no-show";
-    const border = isNoShow ? "border-red-500/70" : booking.payment_status === "paid" ? "border-emerald-500/30" : "border-orange-500/30";
-    if (booking.payment_status === "paid") {
+    const isPaid = booking.remaining != null ? booking.remaining <= 0.005 : booking.payment_status === "paid";
+    const border = isNoShow ? "border-red-500/70" : isPaid ? "border-emerald-500/30" : "border-orange-500/30";
+    if (isPaid) {
       return { bg: "bg-emerald-500/15", text: "text-emerald-400", border };
     }
     return { bg: "bg-orange-500/15", text: "text-orange-400", border };
@@ -1348,9 +1354,9 @@ export function AdminCalendar() {
     const b = selectedBooking;
     const studioName = studioLabel(b.studio_id);
 
-    const totalPaid = bookingPayments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
     const finalTotal = getBookingAmountDue({ ...b, promo_discount: b.promo_discount ?? 0 });
-    const balance = isKeepBalanceDue(b) && b.remaining != null ? b.remaining : finalTotal - totalPaid;
+    const balance = b.remaining ?? finalTotal;
+    const totalPaid = finalTotal - balance;
 
     return (
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
@@ -1481,14 +1487,14 @@ export function AdminCalendar() {
                   bookingPayments.map((p) => (
                     <div key={p.id} className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-800/40 p-2 text-xs">
                       <div className="flex items-center gap-2">
-                        {p.status === "paid" ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Clock className="h-3 w-3 text-amber-500" />}
+                        {p.status === "settled" && p.amount > 0 ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Clock className="h-3 w-3 text-amber-500" />}
                         <div>
                           <p className="font-medium text-zinc-200">{formatPrice(p.amount)} · {paymentMethodLabel(p.method)}</p>
                           <p className="text-[10px] text-zinc-500">{formatDbTimestamp(p.created_at, { day: "numeric", month: "short" })}</p>
                         </div>
                       </div>
                       <Badge variant="secondary" className="text-[9px] h-4">
-                        {paymentRecordStatusLabel(p.status)}
+                        {paymentRecordStatusLabel(p.status as "pending" | "settled" | "failed", { amount: p.amount })}
                       </Badge>
                     </div>
                   ))

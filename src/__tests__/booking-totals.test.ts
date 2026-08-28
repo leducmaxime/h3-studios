@@ -7,11 +7,20 @@ import {
   getDisplayStatus,
   getDisplayPaymentStatus,
   getDisplayPaymentStatusFromSummary,
+  getTotalCurrentlyPaid,
+  getTotalCollected,
   getTotalRefunded,
   getManualDiscountEligibility,
-  getBookingOverpayment,
   shouldShowDisplayPaymentStatus,
 } from "@/lib/booking-totals";
+import type { BookingLedgerSummary } from "@/lib/ledger";
+
+const movement = (amount: number, status: "pending" | "settled" | "failed" = "settled") => ({
+  id: `movement-${amount}-${status}`, amount, allocated: amount, status,
+} as never);
+const ledger = (balance: number, movements: unknown[] = []): BookingLedgerSummary => ({
+  bookingId: "b1", due: balance, settled: 0, balance, refunded: 0, movements: movements as never,
+});
 
 describe("manual discounts", () => {
   const b = (extra = {}) => ({ status: "confirmed" as const, promo_code: null, base_price: 50, equipment_price: 0, total_price: 50, promo_discount: 0, ...extra });
@@ -23,9 +32,11 @@ describe("manual discounts", () => {
     expect(getManualDiscountEligibility(b({ payment_status: "paid" }))).toEqual({ allowed: true });
     expect(getManualDiscountEligibility(b({ promo_code: "X", promo_discount: 10 }))).toEqual({ allowed: true });
   });
-  it("calculates overpayment from net collected payments", () => {
-    expect(getBookingOverpayment(b({ promo_discount: 10 }), [{ amount: 50, status: "paid", refunded_amount: 0 }])).toBe(10);
-    expect(getBookingOverpayment(b({ promo_discount: 10 }), [{ amount: 40, status: "paid", refunded_amount: 0 }])).toBe(0);
+  it("calculates net collected amounts from signed ledger allocations", () => {
+    const summary = ledger(0, [movement(50), movement(-40)]);
+    expect(getTotalCurrentlyPaid(summary)).toBe(10);
+    expect(getTotalCollected(summary)).toBe(50);
+    expect(getTotalRefunded(summary)).toBe(40);
   });
   it("treats empty and null promo codes as eligible", () => {
     expect(getManualDiscountEligibility(b({ promo_code: "" }))).toEqual({ allowed: true });
@@ -132,81 +143,19 @@ describe("getBookingAmountDue", () => {
 // ─── getBookingBalance ───────────────────────────────────────────────────────
 
 describe("getBookingBalance", () => {
-  it("returns full amount when no payments", () => {
-    const booking = {
-      base_price: 50,
-      equipment_price: 10,
-      total_price: 60,
-      promo_discount: 10,
-    };
-    expect(getBookingBalance(booking, [])).toBe(50);
+  it("returns the signed balance supplied by the ledger", () => {
+    expect(getBookingBalance(ledger(50))).toBe(50);
+    expect(getBookingBalance(ledger(10, [movement(50), movement(-40)]))).toBe(10);
   });
 
-  it("subtracts paid payments", () => {
-    const booking = {
-      base_price: 50,
-      equipment_price: 10,
-      total_price: 60,
-      promo_discount: 0,
-    };
-    const payments = [
-      { amount: 20, refunded_amount: 0, status: "paid" as const },
-      { amount: 30, refunded_amount: 0, status: "paid" as const },
-    ];
-    expect(getBookingBalance(booking, payments)).toBe(10);
+  it("preserves overpayment as a signed negative balance", () => {
+    expect(getBookingBalance(ledger(-5, [movement(65)]))).toBe(-5);
   });
 
-  it("ignores non-paid payments (pending/refunded)", () => {
-    const booking = {
-      base_price: 50,
-      equipment_price: 10,
-      total_price: 60,
-      promo_discount: 0,
-    };
-    const payments = [
-      { amount: 20, refunded_amount: 0, status: "paid" as const },
-      { amount: 15, refunded_amount: 0, status: "pending" as const },
-      { amount: 10, refunded_amount: 10, status: "refunded" as const },
-    ];
-    expect(getBookingBalance(booking, payments)).toBe(40);
-  });
-
-  it("returns 0 when overpaid", () => {
-    const booking = {
-      base_price: 50,
-      equipment_price: 10,
-      total_price: 60,
-      promo_discount: 0,
-    };
-    const payments = [
-      { amount: 60, refunded_amount: 0, status: "paid" as const },
-      { amount: 10, refunded_amount: 0, status: "paid" as const },
-    ];
-    expect(getBookingBalance(booking, payments)).toBe(0);
-  });
-
-  it("handles partial payment with discount", () => {
-    const booking = {
-      base_price: 50,
-      equipment_price: 10,
-      total_price: 60,
-      promo_discount: 20,
-    };
-    const payments = [{ amount: 20, refunded_amount: 0, status: "paid" as const }];
-    expect(getBookingBalance(booking, payments)).toBe(20);
-  });
-
-  it("accounts for refunded payments while preserving unchanged no-refund behavior", () => {
-    const booking = {
-      base_price: 50,
-      equipment_price: 10,
-      total_price: 60,
-      promo_discount: 0,
-    };
-    const refundedPayments = [{ amount: 60, refunded_amount: 60, status: "refunded" as const }];
-    const unchangedPayments = [{ amount: 60, refunded_amount: 0, status: "paid" as const }];
-    expect(getBookingBalance(booking, refundedPayments)).toBe(60);
-    expect(getBookingBalance(booking, unchangedPayments)).toBe(0);
+  it("includes settled negative movements and ignores pending ones", () => {
+    const summary = ledger(40, [movement(20), movement(-10), movement(-5, "pending")]);
+    expect(getBookingBalance(summary)).toBe(40);
+    expect(getTotalCurrentlyPaid(summary)).toBe(10);
   });
 });
 
@@ -291,8 +240,8 @@ describe("total invariant (23€ gross / 20€ discount)", () => {
   });
 
   it("keeps balance consistent with the single 3€ due", () => {
-    expect(getBookingBalance(booking, [])).toBe(3);
-    expect(getBookingBalance(booking, [{ amount: 3, refunded_amount: 0, status: "paid" as const }])).toBe(0);
+    expect(getBookingBalance(ledger(3))).toBe(3);
+    expect(getBookingBalance(ledger(0, [movement(3)]))).toBe(0);
   });
 });
 
@@ -309,7 +258,7 @@ describe("getDisplayPaymentStatus", () => {
   it("cancelled + unpaid (pay-on-site) → Annulée, never an amount due", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
-      [],
+      ledger(23),
     );
     expect(status).toBe("cancelled");
   });
@@ -317,7 +266,7 @@ describe("getDisplayPaymentStatus", () => {
   it("cancelled + keep_balance_due + unpaid → Reste à payer", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site", keep_balance_due: 1 },
-      [],
+      ledger(23),
     );
     expect(status).toBe("pay-on-site");
   });
@@ -325,7 +274,7 @@ describe("getDisplayPaymentStatus", () => {
   it("cancelled + keep_balance_due + later collected → Payé", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site", keep_balance_due: 1 },
-      [{ amount: 23, status: "paid" as const, refunded_amount: 0 }],
+      ledger(0, [movement(23)]),
     );
     expect(status).toBe("paid");
   });
@@ -333,7 +282,7 @@ describe("getDisplayPaymentStatus", () => {
   it("cancelled + keep_balance_due + partial payment → Reste à payer", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site", keep_balance_due: 1 },
-      [{ amount: 10, status: "paid" as const, refunded_amount: 0 }],
+      ledger(13, [movement(10)]),
     );
     expect(status).toBe("pay-on-site");
   });
@@ -341,7 +290,7 @@ describe("getDisplayPaymentStatus", () => {
   it("cancelled + prior payment → Payée avant annulation", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
-      [{ amount: 10, status: "paid" as const, refunded_amount: 0 }],
+      ledger(13, [movement(10)]),
     );
     expect(status).toBe("paid-before-cancel");
   });
@@ -351,7 +300,7 @@ describe("getDisplayPaymentStatus", () => {
     // montant n'apparaît plus dans "paid"), mais il a bien été collecté.
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
-      [{ amount: 23, status: "refunded" as const, refunded_amount: 23 }],
+      ledger(23, [movement(23), movement(-23)]),
     );
     expect(status).toBe("refunded");
   });
@@ -359,9 +308,7 @@ describe("getDisplayPaymentStatus", () => {
   it("cancelled + partial refund → Payée avant annulation (not refunded)", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
-      [
-        { amount: 23, status: "partial-refund" as const, refunded_amount: 10 },
-      ],
+      ledger(10, [movement(23), movement(-10)]),
     );
     expect(status).toBe("paid-before-cancel");
   });
@@ -369,10 +316,7 @@ describe("getDisplayPaymentStatus", () => {
   it("cancelled + partially refunded with still-paid remainder → Payée avant annulation", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "cancelled" as const, payment_status: "pay-on-site" },
-      [
-        { amount: 23, status: "paid" as const, refunded_amount: 0 },
-        { amount: 23, status: "partial-refund" as const, refunded_amount: 10 },
-      ],
+      ledger(13, [movement(23), movement(-10)]),
     );
     expect(status).toBe("paid-before-cancel");
   });
@@ -380,7 +324,7 @@ describe("getDisplayPaymentStatus", () => {
   it("active paid booking → Payé", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "confirmed" as const, payment_status: "paid" },
-      [{ amount: 23, status: "paid" as const, refunded_amount: 0 }],
+      ledger(0, [movement(23)]),
     );
     expect(status).toBe("paid");
   });
@@ -388,7 +332,7 @@ describe("getDisplayPaymentStatus", () => {
   it("active pay-on-site booking → pay-on-site (orange due allowed)", () => {
     const status = getDisplayPaymentStatus(
       { ...base, status: "confirmed" as const, payment_status: "pay-on-site" },
-      [],
+      ledger(23),
     );
     expect(status).toBe("pay-on-site");
   });
@@ -422,14 +366,10 @@ describe("shouldShowDisplayPaymentStatus", () => {
 
 describe("getTotalRefunded", () => {
   const payments = [
-    { amount: 20, status: "paid" as const, refunded_amount: 0 },
-    { amount: 10, status: "paid" as const, refunded_amount: 0 },
-    { amount: 5, status: "pending" as const, refunded_amount: 0 },
-    { amount: 30, status: "partial-refund" as const, refunded_amount: 10 },
-    { amount: 20, status: "refunded" as const, refunded_amount: 20 },
+    movement(20), movement(10), movement(5, "pending"), movement(-10), movement(-20),
   ];
 
-  it("sums refunded amounts from refunded/partial-refund records only", () => {
-    expect(getTotalRefunded(payments)).toBe(30);
+  it("sums absolute settled negative movements only", () => {
+    expect(getTotalRefunded(ledger(5, payments))).toBe(30);
   });
 });

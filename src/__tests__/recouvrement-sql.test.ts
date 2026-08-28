@@ -9,9 +9,11 @@ import { DatabaseSync } from "node:sqlite";
 let db: DatabaseSync;
 
 const PAID_BY_BOOKING_CTE = `paid_by_booking AS (
-  SELECT booking_id, COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as paid_amount
-  FROM payments
-  GROUP BY booking_id
+  SELECT a.booking_id, COALESCE(SUM(a.amount), 0) as paid_amount
+  FROM payment_allocations a
+  JOIN payments p ON p.id = a.payment_id
+  WHERE p.status = 'settled'
+  GROUP BY a.booking_id
 )`;
 const remainingExpr = `(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) - COALESCE(paid.paid_amount, 0))`;
 const sessionEndedSql = `(b.date < ? OR (b.date = ? AND CASE WHEN b.end_time = '00:00' THEN '24:00' ELSE b.end_time END <= ?))`;
@@ -86,10 +88,15 @@ beforeAll(() => {
     );
     CREATE TABLE payments (
       id TEXT PRIMARY KEY,
-      booking_id TEXT,
       amount REAL,
-      status TEXT,
-      refunded_amount REAL DEFAULT 0
+      method TEXT,
+      status TEXT
+    );
+    CREATE TABLE payment_allocations (
+      id TEXT PRIMARY KEY,
+      payment_id TEXT NOT NULL,
+      booking_id TEXT NOT NULL,
+      amount REAL NOT NULL
     );
   `);
 });
@@ -128,7 +135,8 @@ function add(
     opts.band ?? null,
   );
   if (opts.paid != null) {
-    db.prepare("INSERT INTO payments (id, booking_id, amount, status) VALUES (?, ?, ?, 'paid')").run(`p-${id}`, id, opts.paid);
+    db.prepare("INSERT INTO payments (id, amount, method, status) VALUES (?, ?, 'cash', 'settled')").run(`p-${id}`, opts.paid);
+    db.prepare("INSERT INTO payment_allocations (id, payment_id, booking_id, amount) VALUES (?, ?, ?, ?)").run(`a-${id}`, `p-${id}`, id, opts.paid);
   }
 }
 

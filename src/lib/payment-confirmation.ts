@@ -1,5 +1,6 @@
 import { getBookingAmountDue, getBookingBalance } from "./booking-totals";
-import type { DbBooking, DbPayment, DbUser } from "./db-types";
+import { allocateWaterfall, type BookingLedgerSummary } from "./ledger";
+import type { DbBooking, DbUser } from "./db-types";
 import { daysUntilDate, reminderWhenPhrase, type BookingConfirmationData, type BookingSlot } from "./email";
 import { parseBookingEquipmentLines } from "./booking";
 
@@ -209,7 +210,7 @@ export function canSendBookingReminder(
 }
 
 export interface BookingReminderEmailInput extends BookingConfirmationEmailInput {
-  payments: Pick<DbPayment, "amount" | "status" | "refunded_amount">[];
+  payments: BookingLedgerSummary;
   whenPhrase: string;
 }
 
@@ -220,7 +221,7 @@ export function buildBookingReminderEmailPayload(
     ...buildBookingConfirmationEmailPayload(input),
     reminder: {
       whenPhrase: input.whenPhrase,
-      remainingDue: getBookingBalance(input.booking, input.payments),
+      remainingDue: getBookingBalance(input.payments),
     },
   };
 }
@@ -231,14 +232,11 @@ export function buildBookingReminderEmailPayload(
 
 export interface FinalizePaidSessionDeps {
   getBookingsByRef: (refs: string[]) => Promise<DbBooking[]>;
-  /** Complétion de paiement idempotente, clé (booking_id, stripe_event_id). */
-  completePayment: (data: {
-    booking_id: string;
+  /** Complétion idempotente d'un mouvement Checkout et de ses allocations. */
+  completeSessionPayment: (data: {
+    sessionId: string;
     amount: number;
-    method: string;
-    status: string;
-    paid_at?: string | null;
-    stripe_event_id?: string | null;
+    allocations: { booking_id: string; amount: number }[];
   }) => Promise<{ inserted: boolean }>;
   addAuditLog: (
     entityType: string,
@@ -263,7 +261,7 @@ export type FinalizeOutcome =
   | { status: "not-paid" }
   | { status: "no-bookings" }
   | { status: "already-finalized" }
-  | { status: "finalized"; paymentsAdded: number; cancelledSkipped: number; emailSent: boolean };
+  | { status: "finalized"; paymentInserted: boolean; cancelledSkipped: number; emailSent: boolean };
 
 export async function finalizePaidCheckoutSession(
   session: CheckoutSessionLike,
@@ -316,23 +314,26 @@ export async function finalizePaidCheckoutSession(
     }, "stripe-webhook");
   }
 
-  // M2 : complétion de paiement idempotente par réservation, à CHAQUE
-  // invocation (webhook, récupération, retry) — clé = session.id (jamais
-  // event.id). Un échec partiel est ainsi réparé par l'invocation suivante
-  // sans doublon (INSERT OR IGNORE sur (booking_id, stripe_event_id)).
-  let paymentsAdded = 0;
-  for (const booking of finalizable) {
-    const bookingDue = getBookingAmountDue(booking);
-    if (bookingDue <= 0) continue; // 0€ : déjà soldée à la création
-    const result = await deps.completePayment({
-      booking_id: booking.id,
-      amount: bookingDue,
-      method: "card",
-      status: "paid",
-      paid_at: deps.nowISO(),
-      stripe_event_id: session.id,
+  // M2 : un seul mouvement Checkout par session, avec une allocation par
+  // réservation. Le mouvement porte le montant réellement encaissé par
+  // Stripe ; la différence éventuelle reste donc explicitement non affectée.
+  const sessionAmount = roundSessionAmount(session.amount_total);
+  const allocatable = finalizable.map((booking) => ({
+    id: booking.id,
+    booking_ref: booking.booking_ref,
+    date: booking.date,
+    start_time: booking.start_time,
+    remaining: getBookingAmountDue(booking),
+  }));
+  const { allocations } = allocateWaterfall(allocatable, sessionAmount);
+  let paymentInserted = false;
+  if (allocations.length > 0) {
+    const result = await deps.completeSessionPayment({
+      sessionId: session.id,
+      amount: sessionAmount,
+      allocations,
     });
-    if (result.inserted) paymentsAdded++;
+    paymentInserted = result.inserted;
   }
 
   // M1 : claim atomique de la livraison email AVANT l'envoi. Seul l'appelant
@@ -362,5 +363,10 @@ export async function finalizePaidCheckoutSession(
     }
   }
 
-  return { status: "finalized", paymentsAdded, cancelledSkipped: cancelled.length, emailSent };
+  return { status: "finalized", paymentInserted, cancelledSkipped: cancelled.length, emailSent };
+}
+
+/** Stripe exposes amount_total in cents; the ledger stores euros as REAL. */
+function roundSessionAmount(amountTotal: number | null | undefined): number {
+  return Math.round((Number(amountTotal) || 0)) / 100;
 }

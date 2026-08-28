@@ -1,4 +1,5 @@
-import type { DbBooking, DbPayment } from "./db-types";
+import type { DbBooking } from "./db-types";
+import type { BookingLedgerSummary } from "./ledger";
 import { getParisNow } from "./utils";
 
 export type PromoRoundMode = "down" | "up" | "none";
@@ -53,24 +54,11 @@ export function getBookingAmountDue(
   return Math.max(0, total - discount);
 }
 
-/**
- * Retourne le solde restant à payer.
- */
+/** Retourne le solde signé du grand livre (dû − net settled). */
 export function getBookingBalance(
-  booking: Pick<DbBooking, "base_price" | "equipment_price" | "total_price" | "promo_discount">,
-  payments: Pick<DbPayment, "amount" | "status" | "refunded_amount">[],
+  ledger: BookingLedgerSummary,
 ): number {
-  const amountDue = getBookingAmountDue(booking);
-  const totalCollected = payments
-    .filter((p) => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
-    .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-  const totalRefunded = payments
-    .filter((p) => p.status === "refunded" || p.status === "partial-refund")
-    .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
-  return Math.max(0, amountDue - totalCollected + totalRefunded);
-}
-export function getBookingOverpayment(booking: Pick<DbBooking, "base_price" | "equipment_price" | "total_price" | "promo_discount">, payments: Pick<DbPayment, "amount" | "status" | "refunded_amount">[]): number {
-  return Math.max(0, getTotalCollected(payments) - getTotalRefunded(payments) - getBookingAmountDue(booking));
+  return round2(ledger.balance);
 }
 
 type ParisClock = { dateISO: string; hours: number; minutes: number };
@@ -156,31 +144,25 @@ export function shouldShowDisplayPaymentStatus(status: DisplayPaymentStatus): bo
   return status !== "cancelled";
 }
 
-/** Somme des paiements réellement encaissés (status 'paid'). */
-export function getTotalCurrentlyPaid(payments: Pick<DbPayment, "amount" | "status">[]): number {
-  return payments
-    .filter((p) => p.status === "paid")
-    .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+/** Solde net actuellement payé : les allocations négatives sont déduites. */
+export function getTotalCurrentlyPaid(ledger: BookingLedgerSummary): number {
+  return round2(ledger.movements
+    .filter((movement) => movement.status === "settled")
+    .reduce((sum, movement) => sum + (Number(movement.allocated) || 0), 0));
 }
 
-/**
- * Somme des montants réellement encaissés à un moment donné (paid, refunded
- * ou partial-refund). Un paiement remboursé change de statut ('refunded' /
- * 'partial-refund') : son montant disparaît donc de `getTotalPaid`, mais il a
- * bien été collecté à un moment — c'est ce total qu'il faut comparer aux
- * remboursements pour présenter "Remboursé" vs "Payée avant annulation".
- */
-export function getTotalCollected(payments: Pick<DbPayment, "amount" | "status">[]): number {
-  return payments
-    .filter((p) => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
-    .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+/** Somme historique des allocations positives settled. */
+export function getTotalCollected(ledger: BookingLedgerSummary): number {
+  return round2(ledger.movements
+    .filter((movement) => movement.status === "settled" && movement.allocated > 0)
+    .reduce((sum, movement) => sum + (Number(movement.allocated) || 0), 0));
 }
 
-/** Somme des montants réellement remboursés (status 'refunded' / 'partial-refund'). */
-export function getTotalRefunded(payments: Pick<DbPayment, "status" | "refunded_amount">[]): number {
-  return payments
-    .filter((p) => p.status === "refunded" || p.status === "partial-refund")
-    .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
+/** Somme absolue des allocations négatives settled. */
+export function getTotalRefunded(ledger: BookingLedgerSummary): number {
+  return round2(ledger.movements
+    .filter((movement) => movement.status === "settled" && movement.allocated < 0)
+    .reduce((sum, movement) => sum - (Number(movement.allocated) || 0), 0));
 }
 
 export type DisplayPaymentStatusOptions = {
@@ -195,28 +177,16 @@ export type DisplayPaymentStatusOptions = {
 export function getDisplayPaymentStatus(
   booking: Pick<DbBooking, "status" | "payment_status"> &
     Partial<Pick<DbBooking, "keep_balance_due" | "base_price" | "equipment_price" | "total_price" | "promo_discount">>,
-  payments: Pick<DbPayment, "amount" | "status" | "refunded_amount">[],
+  ledger: BookingLedgerSummary,
 ): DisplayPaymentStatus {
-  const hasTotals =
-    booking.total_price != null || booking.base_price != null || booking.promo_discount != null;
   return getDisplayPaymentStatusFromSummary(
     booking.status,
     booking.payment_status,
-    getTotalCollected(payments),
-    getTotalRefunded(payments),
+    getTotalCollected(ledger),
+    getTotalRefunded(ledger),
     {
       keepBalanceDue: isKeepBalanceDue(booking),
-      remaining: hasTotals
-        ? getBookingBalance(
-            {
-              base_price: booking.base_price ?? 0,
-              equipment_price: booking.equipment_price ?? 0,
-              total_price: booking.total_price ?? 0,
-              promo_discount: booking.promo_discount ?? 0,
-            },
-            payments,
-          )
-        : 0,
+      remaining: getBookingBalance(ledger),
     },
   );
 }
@@ -224,8 +194,8 @@ export function getDisplayPaymentStatus(
 /**
  * Variante résumé (liste enrichie) : prend les totaux du grand livre déjà
  * calculés côté serveur au lieu de la liste complète des paiements.
- * `totalCollected` = montants encaissés à un moment donné (paid + refunded +
- * partial-refund), `totalRefunded` = remboursements réellement enregistrés.
+ * `totalCollected` = allocations positives settled, `totalRefunded` = valeur
+ * absolue des allocations négatives settled.
  */
 export function getDisplayPaymentStatusFromSummary(
   bookingStatus: string | null | undefined,

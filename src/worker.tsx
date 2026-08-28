@@ -1,5 +1,5 @@
 import { render, route, layout } from "rwsdk/router";
-import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingGrossTotal, getManualDiscountBlockMessage, isBookingPast } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage, isBookingPast } from "@/lib/booking-totals";
 import { allocateCollectPayments, isCollectMethod, type CollectPaymentInput } from "@/lib/recouvrement-collect";
 import { groupTypeLabel, paymentMethodLabelShort, studioLabel } from "@/lib/labels";
 import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, CLIENT_TYPE_RULES, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
@@ -95,16 +95,7 @@ import {
   blockUser,
   mergeUsers,
   getPayments,
-  getPaymentsByBookingId,
-  getPaymentById,
-  addPayment,
-  markPaymentPaid,
-  refundPayment,
-  updatePayment,
-  deletePayment,
   recomputeBookingPaymentStatus,
-  recomputePaymentRefundState,
-  upsertPaymentRefund,
   getBlockedSlots,
   getBlockedSlotsByDateRange,
   addBlockedSlot,
@@ -144,7 +135,6 @@ import {
   getPaymentConfirmation,
   claimPaymentConfirmationEmail,
   releasePaymentConfirmationEmail,
-  addPaymentIdempotent,
   getUserByEmail,
   findOrCreateUserByEmail,
   getBookingsByRefs,
@@ -162,7 +152,14 @@ import {
 } from "@/lib/db";
 import { validateLoyaltySettings } from "@/lib/loyalty";
 import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
-import { refundCardPayment, refundPayments } from "@/lib/refunds";
+import { refundAllocation, refundPayments } from "@/lib/refunds";
+import {
+  allocateWaterfall,
+  getBookingLedger,
+  getBookingLedgerBatch,
+  recordMovement,
+  reverseMovement,
+} from "@/lib/ledger";
 import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, STUDIOS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
@@ -1467,20 +1464,7 @@ const app = defineApp([
                 promo_code: body.promoCode,
                 promo_type: promoType,
               });
-              // Fully discounted previous booking (e.g. 100% promo on a
-              // multi-item cart): 0€ payment record — addPayment triggers
-              // recomputeBookingPaymentStatus which sets "paid" automatically.
-              const prevBooking = previousBookings.find((pb) => pb.id === alloc.id);
-              const prevSubtotal = prevBooking ? (prevBooking.base_price || 0) + (prevBooking.equipment_price || 0) : 0;
-              if (prevBooking && alloc.discount >= prevSubtotal && prevSubtotal > 0 && prevBooking.payment_status !== "paid") {
-                await addPayment(env.DB, {
-                  booking_id: alloc.id,
-                  amount: 0,
-                  method: body.paymentMethod,
-                  status: "paid",
-                  paid_at: new Date().toISOString(),
-                });
-              }
+              await recomputeBookingPaymentStatus(env.DB, alloc.id);
             } else {
               serverPromoDiscount = alloc.discount;
             }
@@ -1556,19 +1540,6 @@ const app = defineApp([
           }
         }
         throw error;
-      }
-
-      // Auto-create a 0€ payment record for fully discounted bookings.
-      // `serverNetTotal` est relu APRÈS la réclamation : un award perdu de
-      // justesse laisse la réservation au prix fort, jamais soldée à 0 €.
-      if (serverNetTotal <= 0) {
-        await addPayment(env.DB, {
-          booking_id: booking.id,
-          amount: 0,
-          method: body.paymentMethod,
-          status: "paid",
-          paid_at: new Date().toISOString(),
-        });
       }
 
       // ── Email (consolidated on last cart request) ─────────────────────────
@@ -2101,29 +2072,28 @@ const app = defineApp([
 
         const result = await getBookings(env.DB, filters, 1, fetchLimit);
 
-        let bookingsWithPaymentStatus = await Promise.all(
-          result.data.map(async (booking) => {
-            const payments = await getPaymentsByBookingId(env.DB, booking.id);
-            const totalCollected = payments
-              .filter((p) => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
-              .reduce((acc, p) => acc + p.amount, 0);
-            const totalRefunded = payments
-              .filter((p) => p.status === "refunded" || p.status === "partial-refund")
-              .reduce((acc, p) => acc + (Number(p.refunded_amount) || 0), 0);
-            const totalPaid = totalCollected - totalRefunded;
-            const finalTotal = getBookingAmountDue(booking);
-            const isFullyPaid = totalPaid >= finalTotal;
+        const ledgers = await getBookingLedgerBatch(env.DB, result.data.map((booking) => booking.id));
+        let bookingsWithPaymentStatus = result.data.map((booking) => {
+          const ledger = ledgers.get(booking.id);
+          const totalCollected = ledger?.movements
+            .filter((movement) => movement.status === "settled" && movement.allocated > 0)
+            .reduce((sum, movement) => sum + movement.allocated, 0) ?? 0;
+          const totalRefunded = ledger?.movements
+            .filter((movement) => movement.status === "settled" && movement.allocated < 0)
+            .reduce((sum, movement) => sum - movement.allocated, 0) ?? 0;
+          const totalPaid = ledger?.settled ?? 0;
+          const finalTotal = getBookingAmountDue(booking);
+          const isFullyPaid = finalTotal <= 0 || totalPaid >= finalTotal - 0.005;
 
-            return {
-              ...booking,
-              payment_status: isFullyPaid ? "paid" : booking.payment_status,
-              total_paid: totalPaid,
-              total_collected: totalCollected,
-              total_refunded: totalRefunded,
-              remaining: Math.max(0, finalTotal - totalPaid),
-            };
-          })
-        );
+          return {
+            ...booking,
+            payment_status: isFullyPaid ? "paid" : booking.payment_status,
+            total_paid: totalPaid,
+            total_collected: totalCollected,
+            total_refunded: totalRefunded,
+            remaining: Math.max(0, ledger?.balance ?? finalTotal),
+          };
+        });
 
         if (paymentStatus === "paid") {
           bookingsWithPaymentStatus = bookingsWithPaymentStatus.filter(
@@ -2648,8 +2618,10 @@ const app = defineApp([
         // Refund policy for a lower online-paid reschedule: operator-proposed.
         // PUT never calls Stripe; it exposes the credit, which the operator can
         // settle through the existing partial-refund endpoint after review.
-        const payments = updated && isReschedule ? await getPaymentsByBookingId(env.DB, id) : [];
-        const refundProposal = updated ? getOperatorProposedRescheduleRefund(updated, payments) : null;
+        const ledger = updated && isReschedule ? await getBookingLedger(env.DB, id) : null;
+        const refundProposal = updated && ledger
+          ? getOperatorProposedRescheduleRefund(ledger)
+          : null;
         return jsonSuccess({
           ...updated,
           ...(isReschedule ? { reschedule_refund_proposal: refundProposal } : {}),
@@ -2671,21 +2643,23 @@ const app = defineApp([
         reason?: string;
         refundMode?: "none" | "refund";
         keepBalanceDue?: boolean;
-        refunds?: { paymentId: string; amount: number }[];
+        refunds?: { paymentId: string; bookingId: string; amount: number; reason?: string }[];
       };
       if (body.refundMode !== "none" && body.refundMode !== "refund") {
         return jsonError("Choix de remboursement requis : 'none' ou 'refund'", 400);
       }
       if (body.refundMode === "refund" && (!Array.isArray(body.refunds) || body.refunds.length === 0 || body.refunds.some((item) =>
-        !item || typeof item.paymentId !== "string" || item.paymentId.trim() === "" || typeof item.amount !== "number" || item.amount <= 0
+        !item || typeof item.paymentId !== "string" || item.paymentId.trim() === "" ||
+        typeof item.bookingId !== "string" || item.bookingId.trim() === "" ||
+        typeof item.amount !== "number" || !Number.isFinite(item.amount) || item.amount <= 0
       ))) {
         return jsonError("Aucun paiement à rembourser n'a été fourni", 400);
       }
       const booking = await getBookingById(env.DB, params.id);
       if (!booking) return jsonError("Réservation introuvable", 404);
 
-      const existingPayments = await getPaymentsByBookingId(env.DB, params.id);
-      const remaining = getBookingBalance(booking, existingPayments);
+      const bookingLedger = await getBookingLedger(env.DB, params.id);
+      const remaining = bookingLedger.balance;
       let keepBalanceDue = 0;
       if (body.refundMode === "none" && remaining > 0.005) {
         if (body.keepBalanceDue !== true && body.keepBalanceDue !== false) {
@@ -2739,9 +2713,13 @@ const app = defineApp([
 
       const updated = await getBookingById(env.DB, params.id);
       if (body.refundMode === "refund") {
-        const payments = await getPaymentsByBookingId(env.DB, params.id);
-        const paymentIds = new Set(payments.map((payment) => payment.id));
-        const ownershipError = body.refunds!.some((refund) => !paymentIds.has(refund.paymentId));
+        const ledger = await getBookingLedger(env.DB, params.id);
+        const ownedAllocations = new Set(
+          ledger.movements.map((movement) => `${movement.id}:${params.id}`),
+        );
+        const ownershipError = body.refunds!.some((refund) =>
+          !ownedAllocations.has(`${refund.paymentId}:${refund.bookingId}`),
+        );
         if (ownershipError) {
           const errorOutcome = {
             ok: false,
@@ -2763,7 +2741,10 @@ const app = defineApp([
             db: env.DB,
             secretKey: env.STRIPE_SECRET_KEY,
             performedBy: request.headers.get("X-Admin-User-Id") || "admin",
-          }, body.refunds!, body.reason);
+          }, body.refunds!.map((item) => ({
+            ...item,
+            reason: item.reason ?? body.reason,
+          })));
         } catch (error) {
           const message = error instanceof Error ? error.message : "Échec du remboursement";
           refund = { refunded: 0, outcomes: [], errors: [{ ok: false, paymentId: "", requestedAmount: 0, refundedAmount: 0, refundableAfter: 0, code: "stripe_error", message }] };
@@ -2876,7 +2857,7 @@ const app = defineApp([
         return jsonError("Envoi d'email indisponible", 503);
       }
 
-      const payments = await getPaymentsByBookingId(env.DB, params.id);
+      const payments = await getBookingLedger(env.DB, params.id);
       const payload = buildBookingReminderEmailPayload({
         booking,
         user: { name: client!.name, email: client!.email!, phone: client!.phone },
@@ -2914,25 +2895,28 @@ const app = defineApp([
       if (!booking) return jsonError("Réservation introuvable", 404);
       if (!bookingAllowsCollection(booking)) return jsonError("Impossible de payer une réservation annulée", 400);
 
-      // Recompute remaining server-side
-      const payments = await getPaymentsByBookingId(env.DB, params.id);
-      const totalPaid = payments
-        .filter((p) => p.status === "paid" || p.status === "refunded" || p.status === "partial-refund")
-        .reduce((acc, p) => acc + p.amount - (Number(p.refunded_amount) || 0), 0);
-      const finalTotal = getBookingAmountDue(booking);
-      const remaining = finalTotal - totalPaid;
+      // Recompute remaining server-side from the signed ledger.
+      const ledger = await getBookingLedger(env.DB, params.id);
+      const remaining = ledger.balance;
 
-      if (remaining <= 0) return jsonError("Cette réservation est déjà soldée", 400);
+      if (remaining <= 0.005) return jsonError("Cette réservation est déjà soldée", 400);
 
-      const paymentResult = await addPayment(env.DB, {
-        booking_id: params.id,
+      const allocation = allocateWaterfall([{
+        id: booking.id,
+        booking_ref: booking.booking_ref,
+        date: booking.date,
+        start_time: booking.start_time,
+        remaining,
+      }], remaining);
+      if (allocation.unallocated > 0.005) return jsonError("Impossible d'allouer le paiement", 400);
+
+      const paymentResult = await recordMovement(env.DB, {
         amount: remaining,
-        method,
-        status: "paid",
+        method: method as "cash" | "transfer" | "check",
+        performed_by: request.headers.get("X-Admin-User-Id") || "admin",
+        allocations: allocation.allocations,
       });
-      if (!paymentResult.success) return jsonError("Échec de l'enregistrement du paiement", 500);
 
-      // payment_status recalculé automatiquement par recomputeBookingPaymentStatus dans addPayment
       await addAuditLog(env.DB, "booking", params.id, "mark-paid", { amount: remaining, method }, request.headers.get("X-Admin-User-Id") || "admin");
       return jsonSuccess({ id: params.id, paymentId: paymentResult.id, amount: remaining });
     } catch (error) {
@@ -2944,8 +2928,8 @@ const app = defineApp([
   route("/api/admin/bookings/:id/payments", async ({ request, params }) => {
     if (request.method === "GET") {
       try {
-        const payments = await getPaymentsByBookingId(env.DB, params.id);
-        return jsonSuccess(payments);
+        const ledger = await getBookingLedger(env.DB, params.id);
+        return jsonSuccess(ledger);
       } catch (error) {
         console.error("GET /api/admin/bookings/:id/payments error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to fetch payments", 500);
@@ -2954,9 +2938,12 @@ const app = defineApp([
 
     if (request.method === "POST") {
       try {
-        const body = await request.json() as { amount: number; method: string; status: string };
-        if (!body.amount || !body.method || !body.status) {
-          return jsonError("Champs obligatoires manquants: amount, method, status", 400);
+        const body = await request.json() as { amount?: number; method?: string; paid_at?: string | null; status?: unknown };
+        if ("status" in body) {
+          return jsonError("Le champ status n'est plus accepté", 400);
+        }
+        if (typeof body.amount !== "number" || !Number.isFinite(body.amount) || body.amount <= 0 || !body.method) {
+          return jsonError("Champs obligatoires manquants: amount (> 0) et method", 400);
         }
 
         const booking = await getBookingById(env.DB, params.id);
@@ -2972,20 +2959,28 @@ const app = defineApp([
           return jsonError("Méthode de paiement invalide", 400);
         }
 
-        // Seuls pending/paid autorisés à la création — les refunds passent par /refund
-        const validStatus = ["pending", "paid"] as const;
-        if (!validStatus.includes(body.status as (typeof validStatus)[number])) {
-          return jsonError("Statut invalide — utiliser 'pending' ou 'paid' (les remboursements passent par /refund)", 400);
+        const ledger = await getBookingLedger(env.DB, params.id);
+        if (body.amount > ledger.balance + 0.005) {
+          return jsonError("Le montant dépasse le reste dû", 400);
         }
+        const allocation = allocateWaterfall([{
+          id: booking.id,
+          booking_ref: booking.booking_ref,
+          date: booking.date,
+          start_time: booking.start_time,
+          remaining: ledger.balance,
+        }], body.amount);
+        if (allocation.unallocated > 0.005) return jsonError("Impossible d'allouer le paiement", 400);
 
-        const result = await addPayment(env.DB, {
-          booking_id: params.id,
+        const result = await recordMovement(env.DB, {
           amount: body.amount,
           method: body.method as (typeof validMethods)[number],
-          status: body.status as (typeof validStatus)[number],
+          paid_at: body.paid_at,
+          performed_by: request.headers.get("X-Admin-User-Id") || "admin",
+          allocations: allocation.allocations,
         });
 
-        return jsonSuccess(result);
+        return jsonSuccess({ success: true, id: result.id, inserted: result.inserted });
       } catch (error) {
         console.error("POST /api/admin/bookings/:id/payments error:", error);
         return jsonError(error instanceof Error ? error.message : "Failed to add payment", 500);
@@ -3427,15 +3422,25 @@ const app = defineApp([
       if ("error" in allocation) return jsonError(allocation.error, 400);
 
       const paymentIds: string[] = [];
-      for (const line of allocation) {
-        const result = await addPayment(env.DB, {
-          booking_id: line.bookingId,
-          amount: line.amount,
-          method: line.method,
-          status: "paid",
-        });
-        if (!result.success) return jsonError("Échec de l'enregistrement du paiement", 500);
-        paymentIds.push(result.id);
+      const performedBy = request.headers.get("X-Admin-User-Id") || "admin";
+      const createdAt = new Date().toISOString().replace("T", " ").slice(0, 19);
+      const statements = allocation.flatMap((line) => {
+        const paymentId = generateId();
+        paymentIds.push(paymentId);
+        return [
+          env.DB.prepare(
+            `INSERT INTO payments (id, amount, method, status, paid_at, external_ref, parent_id, reason, performed_by, created_at)
+             VALUES (?, ?, ?, 'settled', ?, NULL, NULL, NULL, ?, ?)`,
+          ).bind(paymentId, line.amount, line.method, createdAt, performedBy, createdAt),
+          env.DB.prepare(
+            `INSERT INTO payment_allocations (id, payment_id, booking_id, amount, created_at)
+             VALUES (?, ?, ?, ?, ?)`,
+          ).bind(generateId(), paymentId, line.bookingId, line.amount, createdAt),
+        ];
+      });
+      await env.DB.batch(statements);
+      for (const bookingId of [...new Set(allocation.map((line) => line.bookingId))]) {
+        await recomputeBookingPaymentStatus(env.DB, bookingId);
       }
 
       const collectedAmount = selected.reduce((sum, booking) => sum + booking.remaining, 0);
@@ -3463,7 +3468,7 @@ const app = defineApp([
     try {
       const url = new URL(request.url);
       const filters = {} as {
-        status?: "pending" | "paid" | "refunded" | "partial-refund";
+        status?: "pending" | "settled" | "failed";
         method?: "card" | "cash" | "transfer" | "check";
         paymentType?: "on-site" | "online";
         search?: string;
@@ -3508,37 +3513,24 @@ const app = defineApp([
   route("/api/admin/payments/:id", async ({ request, params }) => {
     if (request.method === "DELETE") {
       try {
-        const result = await deletePayment(env.DB, params.id);
-        if (!result.success) {
-          return jsonError(result.error || "Delete failed", 400);
-        }
-        return jsonSuccess({ id: params.id, deleted: true });
+        const reversal = await reverseMovement(
+          env.DB,
+          params.id,
+          "Contre-passation manuelle",
+          request.headers.get("X-Admin-User-Id") || "admin",
+        );
+        await addAuditLog(env.DB, "payment", reversal.id, "correction", {
+          parentId: params.id,
+        }, request.headers.get("X-Admin-User-Id") || "admin");
+        return jsonSuccess({ id: params.id, reversalId: reversal.id, reversed: true });
       } catch (error) {
         console.error("DELETE /api/admin/payments/:id error:", error);
-        return jsonError(error instanceof Error ? error.message : "Failed to delete payment", 500);
+        return jsonError(error instanceof Error ? error.message : "Failed to reverse payment", 400);
       }
     }
 
     if (request.method === "PUT") {
-      try {
-        const body = await request.json() as { amount?: number; method?: string };
-        if (!body.amount && !body.method) {
-          return jsonError("Au moins un champ à modifier est requis (amount ou method)", 400);
-        }
-        if (body.amount !== undefined && (typeof body.amount !== "number" || body.amount <= 0)) {
-          return jsonError("Le montant doit être un nombre positif", 400);
-        }
-
-        const result = await updatePayment(env.DB, params.id, body);
-        if (!result.success) {
-          return jsonError(result.error || "Update failed", 400);
-        }
-
-        return jsonSuccess({ id: params.id, updated: true });
-      } catch (error) {
-        console.error("PUT /api/admin/payments/:id error:", error);
-        return jsonError(error instanceof Error ? error.message : "Failed to update payment", 500);
-      }
+      return jsonError("Les mouvements sont immuables : utilisez DELETE pour créer une contre-passation", 405);
     }
 
     return jsonError("Method not allowed", 405);
@@ -3548,12 +3540,25 @@ const app = defineApp([
     if (request.method !== "PUT") return jsonError("Method not allowed", 405);
 
     try {
-      const result = await markPaymentPaid(env.DB, params.id);
-      if (!result.success) {
-        return jsonError(result.error || "Pay failed", 400);
-      }
+      const movement = await env.DB.prepare(
+        "SELECT id, status FROM payments WHERE id = ?",
+      ).bind(params.id).first<{ id: string; status: string }>();
+      if (!movement) return jsonError("Mouvement introuvable", 404);
+      if (movement.status !== "pending") return jsonError("Le mouvement n'est pas en attente", 400);
 
-      return jsonSuccess({ id: params.id, status: "paid" });
+      const paidAt = new Date().toISOString().replace("T", " ").slice(0, 19);
+      const updated = await env.DB.prepare(
+        "UPDATE payments SET status = 'settled', paid_at = ? WHERE id = ? AND status = 'pending'",
+      ).bind(paidAt, params.id).run();
+      if ((updated.meta?.changes ?? 0) !== 1) return jsonError("Le mouvement n'est plus en attente", 409);
+
+      const allocations = await env.DB.prepare(
+        "SELECT booking_id FROM payment_allocations WHERE payment_id = ?",
+      ).bind(params.id).all<{ booking_id: string }>();
+      const bookingIds = [...new Set(allocations.results.map((row) => row.booking_id))];
+      for (const bookingId of bookingIds) await recomputeBookingPaymentStatus(env.DB, bookingId);
+      await addAuditLog(env.DB, "payment", params.id, "mark-paid", { bookingIds }, request.headers.get("X-Admin-User-Id") || "admin");
+      return jsonSuccess({ id: params.id, status: "settled" });
     } catch (error) {
       console.error("PUT /api/admin/payments/:id/pay error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to mark payment paid", 500);
@@ -3564,29 +3569,28 @@ const app = defineApp([
     if (request.method !== "PUT") return jsonError("Method not allowed", 405);
 
     try {
-      const body = await request.json() as { amount?: number; reason?: string };
-      if (typeof body.amount !== "number" || body.amount <= 0) {
+      const body = await request.json() as { bookingId?: string; amount?: number; reason?: string };
+      if (!body.bookingId?.trim()) {
+        return jsonError("Champ obligatoire manquant: bookingId", 400);
+      }
+      if (typeof body.amount !== "number" || !Number.isFinite(body.amount) || body.amount <= 0) {
         return jsonError("Champ obligatoire manquant: amount (> 0)", 400);
       }
 
-      const payment = await getPaymentById(env.DB, params.id);
-      if (!payment) return jsonError("Paiement introuvable", 404);
-
-      if (payment.method === "card") {
-        const outcome = await refundCardPayment({
-          db: env.DB,
-          secretKey: env.STRIPE_SECRET_KEY,
-          performedBy: request.headers.get("X-Admin-User-Id") || "admin",
-        }, params.id, body.amount, body.reason);
-        if (!outcome.ok) {
-          return jsonResponse({ success: false, error: outcome.message || "Refund failed", code: outcome.code, outcome }, 400);
-        }
-        return jsonSuccess(outcome);
+      const outcome = await refundAllocation({
+        db: env.DB,
+        secretKey: env.STRIPE_SECRET_KEY,
+        performedBy: request.headers.get("X-Admin-User-Id") || "admin",
+      }, {
+        paymentId: params.id,
+        bookingId: body.bookingId,
+        amount: body.amount,
+        reason: body.reason,
+      });
+      if (!outcome.ok) {
+        return jsonResponse({ success: false, error: outcome.message || "Refund failed", code: outcome.code, outcome }, 400);
       }
-
-      const result = await refundPayment(env.DB, params.id, body.amount);
-      if (!result.success) return jsonError(result.error || "Refund failed", 400);
-      return jsonSuccess({ id: params.id, refundedAmount: body.amount, reason: body.reason });
+      return jsonSuccess(outcome);
     } catch (error) {
       console.error("PUT /api/admin/payments/:id/refund error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to refund payment", 500);
@@ -4925,22 +4929,21 @@ const app = defineApp([
         env.DB.prepare(
           `SELECT
             CASE
-              WHEN p.method = 'card' AND (p.stripe_event_id IS NOT NULL OR p.amount = 0) THEN 'card-online'
+              WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
               WHEN p.method = 'card' THEN 'card-onsite'
-              WHEN p.method = 'cheque' THEN 'check'
               ELSE p.method
             END AS method,
-            COUNT(*) as count,
-            COALESCE(SUM(p.amount - COALESCE(p.refunded_amount, 0)), 0) as revenue
+            COUNT(DISTINCT p.id) as count,
+            COALESCE(SUM(a.amount), 0) as revenue
           FROM payments p
-          JOIN bookings b ON b.id = p.booking_id
+          JOIN payment_allocations a ON a.payment_id = p.id
+          JOIN bookings b ON b.id = a.booking_id
           WHERE b.date >= ? AND b.date <= ?
             AND b.status != 'cancelled'
-            AND p.status IN ('paid', 'refunded', 'partial-refund')
+            AND p.status = 'settled'
           GROUP BY CASE
-            WHEN p.method = 'card' AND (p.stripe_event_id IS NOT NULL OR p.amount = 0) THEN 'card-online'
+            WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
             WHEN p.method = 'card' THEN 'card-onsite'
-            WHEN p.method = 'cheque' THEN 'check'
             ELSE p.method
           END`,
         ).bind(fromStr, toStr),
@@ -4948,12 +4951,14 @@ const app = defineApp([
           `SELECT
             COUNT(*) as count,
             COALESCE(SUM(MAX(total_price - COALESCE(promo_discount, 0), 0)), 0) as revenue
-          FROM bookings
-          WHERE date >= ? AND date <= ?
-            AND status != 'cancelled'
-            AND payment_method = 'card'
-            AND payment_status = 'paid'
-            AND id NOT IN (SELECT booking_id FROM payments WHERE status = 'paid')`,
+          FROM bookings b
+          WHERE b.date >= ? AND b.date <= ?
+            AND b.status != 'cancelled'
+            AND b.payment_method = 'card'
+            AND b.payment_status = 'paid'
+            AND NOT EXISTS (
+              SELECT 1 FROM payment_allocations a WHERE a.booking_id = b.id
+            )`,
          ).bind(fromStr, toStr),
          env.DB.prepare(
            `SELECT
@@ -5119,8 +5124,8 @@ const app = defineApp([
       const onSitePayments = (onSitePaidResult.results as unknown as PaymentRow[]);
       const onlineCard = (onlineCardResult.results as unknown as OnlineCardRow[])[0] ?? { count: 0, revenue: 0 };
       const merged: Record<string, { count: number; revenue: number }> = {};
-      // `method` est déjà normalisé par le CASE SQL (card-online / card-onsite,
-      // cheque → check) : aucune normalisation supplémentaire ici.
+      // `method` est déjà normalisé par le CASE SQL (card-online / card-onsite) :
+      // aucune normalisation supplémentaire ici.
       for (const row of onSitePayments) {
         merged[row.method] = {
           count: (merged[row.method]?.count ?? 0) + (row.count ?? 0),
@@ -5859,20 +5864,7 @@ const app = defineApp([
       // à la fiche client de présenter correctement les annulations
       // (Annulée / Payée avant annulation / Remboursé / Reste à payer si dû).
       const bookingIds = bookings.data.map((b) => b.id);
-      let paymentTotals = new Map<string, { totalPaid: number; totalCollected: number; totalRefunded: number }>();
-      if (bookingIds.length > 0) {
-        const placeholders = bookingIds.map(() => "?").join(", ");
-        const rows = await env.DB.prepare(
-          `SELECT booking_id,
-             COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount - refunded_amount ELSE 0 END), 0) as totalPaid,
-             COALESCE(SUM(CASE WHEN status IN ('paid', 'refunded', 'partial-refund') THEN amount ELSE 0 END), 0) as totalCollected,
-             COALESCE(SUM(CASE WHEN status IN ('refunded', 'partial-refund') THEN refunded_amount ELSE 0 END), 0) as totalRefunded
-           FROM payments
-           WHERE booking_id IN (${placeholders})
-           GROUP BY booking_id`,
-        ).bind(...bookingIds).all<{ booking_id: string; totalPaid: number; totalCollected: number; totalRefunded: number }>();
-        paymentTotals = new Map(rows.results.map((r) => [r.booking_id, { totalPaid: r.totalPaid, totalCollected: r.totalCollected, totalRefunded: r.totalRefunded }]));
-      }
+      const paymentTotals = await getBookingLedgerBatch(env.DB, bookingIds);
 
       // Transform past confirmed bookings to completed (same logic as admin API)
       const parisNow = getParisNow();
@@ -5881,14 +5873,20 @@ const app = defineApp([
         if (booking.status === "confirmed" && isBookingPast(booking, parisNow)) {
           b = { ...booking, status: "completed" as const };
         }
-        const totals = paymentTotals.get(b.id);
-        const totalPaid = totals?.totalPaid ?? 0;
+        const ledger = paymentTotals.get(b.id);
+        const totalPaid = ledger?.settled ?? 0;
+        const totalCollected = ledger?.movements
+          .filter((movement) => movement.status === "settled" && movement.allocated > 0)
+          .reduce((sum, movement) => sum + movement.allocated, 0) ?? 0;
+        const totalRefunded = ledger?.movements
+          .filter((movement) => movement.status === "settled" && movement.allocated < 0)
+          .reduce((sum, movement) => sum - movement.allocated, 0) ?? 0;
         return {
           ...b,
           total_paid: totalPaid,
-          total_collected: totals?.totalCollected ?? 0,
-          total_refunded: totals?.totalRefunded ?? 0,
-          remaining: Math.max(0, getBookingAmountDue(b) - totalPaid),
+          total_collected: totalCollected,
+          total_refunded: totalRefunded,
+          remaining: Math.max(0, ledger?.balance ?? getBookingAmountDue(b) - totalPaid),
         };
       });
 
@@ -6071,7 +6069,7 @@ const app = defineApp([
           // montant et le refus de réintégrer une réservation annulée.
           const outcome = await finalizePaidCheckoutSession(session, bookingRefs, buildFinalizeDeps());
           console.log(`Webhook ${event.type} for refs:`, bookingRefs, "outcome:", outcome.status, {
-            paymentsAdded: outcome.status === "finalized" ? outcome.paymentsAdded : undefined,
+            paymentInserted: outcome.status === "finalized" ? outcome.paymentInserted : undefined,
             cancelledSkipped: outcome.status === "finalized" ? outcome.cancelledSkipped : undefined,
             emailSent: outcome.status === "finalized" ? outcome.emailSent : undefined,
           });
@@ -6088,23 +6086,81 @@ const app = defineApp([
             status: string;
             metadata?: Record<string, string>;
           };
-          const paymentId = refund.metadata?.payment_id;
-          if (!paymentId) return new Response("OK", { status: 200 });
-          const payment = await getPaymentById(env.DB, paymentId);
-          if (!payment) return new Response("OK", { status: 200 });
-          await upsertPaymentRefund(env.DB, {
-            stripeRefundId: refund.id,
+          if (!refund.id) return new Response("OK", { status: 200 });
+
+          const paymentId = refund.metadata?.payment_id || null;
+          const bookingId = refund.metadata?.booking_id || null;
+          const status = refund.status === "succeeded" || refund.status === "pending"
+            ? "settled"
+            : refund.status === "requires_action"
+              ? "pending"
+              : "failed";
+          const amount = Math.round((Number(refund.amount) || 0)) / 100;
+          if (amount <= 0) return new Response("OK", { status: 200 });
+          const paidAt = status === "settled"
+            ? new Date().toISOString().replace("T", " ").slice(0, 19)
+            : null;
+          const existingByRef = await env.DB.prepare(
+            "SELECT id FROM payments WHERE external_ref = ?",
+          ).bind(refund.id).first<{ id: string }>();
+          if (!paymentId && !existingByRef) return new Response("OK", { status: 200 });
+
+          // La référence Stripe est la clé d'idempotence du mouvement négatif.
+          await env.DB.prepare(
+            `INSERT INTO payments
+               (id, amount, method, status, paid_at, external_ref, parent_id, reason, performed_by, created_at)
+             VALUES (?, ?, 'card', ?, ?, ?, ?, ?, 'stripe-webhook', ?)
+             ON CONFLICT(external_ref) DO UPDATE SET
+               status = CASE WHEN payments.status = 'settled' THEN payments.status ELSE excluded.status END,
+               paid_at = CASE WHEN payments.status = 'settled' THEN payments.paid_at ELSE excluded.paid_at END`,
+          ).bind(
+            generateId(),
+            -amount,
+            status,
+            paidAt,
+            refund.id,
             paymentId,
-            bookingId: payment.booking_id,
-            amountCents: refund.amount,
-            status: refund.status,
-            now: new Date().toISOString(),
-          });
-          await recomputePaymentRefundState(env.DB, paymentId);
-          await recomputeBookingPaymentStatus(env.DB, payment.booking_id);
-          await addAuditLog(env.DB, "payment", paymentId, "refund-reconciled", {
+            refund.metadata?.reason || null,
+            new Date().toISOString().replace("T", " ").slice(0, 19),
+          ).run();
+
+          const movement = await env.DB.prepare(
+            "SELECT id, amount FROM payments WHERE external_ref = ?",
+          ).bind(refund.id).first<{ id: string; amount: number }>();
+          if (!movement) return new Response("OK", { status: 200 });
+
+          // Une allocation de remboursement est attribuée au booking porté par
+          // les métadonnées Stripe. Les anciens événements mono-réservation
+          // peuvent encore être réparés depuis l'allocation du parent.
+          let resolvedBookingId = bookingId;
+          if (!resolvedBookingId && paymentId) {
+            const parentAllocation = await env.DB.prepare(
+              "SELECT booking_id FROM payment_allocations WHERE payment_id = ? LIMIT 2",
+            ).bind(paymentId).all<{ booking_id: string }>();
+            if (parentAllocation.results.length === 1) resolvedBookingId = parentAllocation.results[0].booking_id;
+          }
+          if (resolvedBookingId) {
+            await env.DB.prepare(
+              `INSERT OR IGNORE INTO payment_allocations (id, payment_id, booking_id, amount, created_at)
+               VALUES (?, ?, ?, ?, ?)`,
+            ).bind(
+              generateId(),
+              movement.id,
+              resolvedBookingId,
+              Number(movement.amount),
+              new Date().toISOString().replace("T", " ").slice(0, 19),
+            ).run();
+          }
+
+          const allocations = await env.DB.prepare(
+            "SELECT booking_id FROM payment_allocations WHERE payment_id = ?",
+          ).bind(movement.id).all<{ booking_id: string }>();
+          const bookingIds = [...new Set(allocations.results.map((row) => row.booking_id))];
+          for (const id of bookingIds) await recomputeBookingPaymentStatus(env.DB, id);
+          await addAuditLog(env.DB, "payment", movement.id, "refund-reconciled", {
             stripe_refund_id: refund.id,
             status: refund.status,
+            bookingIds,
           }, "stripe-webhook");
           return new Response("OK", { status: 200 });
         }
@@ -6149,7 +6205,30 @@ const app = defineApp([
 function buildFinalizeDeps(): FinalizePaidSessionDeps {
   return {
     getBookingsByRef: (refs) => getBookingsByRefs(env.DB, refs),
-    completePayment: (data) => addPaymentIdempotent(env.DB, data as Parameters<typeof addPaymentIdempotent>[1]),
+    completeSessionPayment: async (data) => {
+      const existing = await env.DB.prepare(
+        "SELECT id FROM payments WHERE external_ref = ?",
+      ).bind(data.sessionId).first<{ id: string }>();
+      if (existing) return { inserted: false };
+
+      try {
+        await recordMovement(env.DB, {
+          amount: data.amount,
+          method: "card",
+          external_ref: data.sessionId,
+          allocations: data.allocations,
+        });
+        return { inserted: true };
+      } catch (error) {
+        // A concurrent webhook may have inserted the same Checkout movement.
+        // The unique external_ref constraint makes the retry idempotent.
+        const concurrent = await env.DB.prepare(
+          "SELECT id FROM payments WHERE external_ref = ?",
+        ).bind(data.sessionId).first<{ id: string }>();
+        if (concurrent) return { inserted: false };
+        throw error;
+      }
+    },
     addAuditLog: (entityType, entityId, action, changes, performedBy) =>
       addAuditLog(env.DB, entityType, entityId, action, changes, performedBy ?? "stripe-webhook"),
     claimConfirmation: (sessionId, refs) => claimPaymentConfirmation(env.DB, sessionId, refs),

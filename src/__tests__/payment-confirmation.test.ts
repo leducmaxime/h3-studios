@@ -14,6 +14,7 @@ import {
 } from "@/lib/payment-confirmation";
 import type { DbBooking } from "@/lib/db-types";
 import type { BookingConfirmationData } from "@/lib/email";
+import type { BookingLedgerSummary } from "@/lib/ledger";
 
 type BookingLike = DbBooking;
 
@@ -60,9 +61,21 @@ function makeBooking(overrides: Partial<BookingLike>): BookingLike {
 
 const USER = { name: "Jean Dupont", email: "jean@example.fr", phone: "0612345678" };
 
+function ledger(balance: number, movements: Array<{ amount: number; status: "pending" | "settled" }> = []): BookingLedgerSummary {
+  return {
+    bookingId: "b1", due: balance, settled: 0, balance, refunded: 0,
+    movements: movements.map((movement, index) => ({
+      id: `m-${index}`, amount: movement.amount, allocated: movement.amount,
+      status: movement.status, method: "cash", paid_at: null, external_ref: null,
+      parent_id: null, reason: null, performed_by: null, created_at: "2026-01-01",
+      refundable: 0,
+    })),
+  };
+}
+
 interface FakeState {
   bookings: BookingLike[];
-  payments: Array<{ booking_id: string; amount: number; stripe_event_id: string | null }>;
+  payments: Array<{ sessionId: string; amount: number; allocations: Array<{ booking_id: string; amount: number }> }>;
   audits: Array<{ entityType: string; entityId: string; action: string; changes: Record<string, unknown> }>;
   claimed: boolean;
   emailClaimed: boolean;
@@ -83,13 +96,11 @@ function makeDeps(overrides: Partial<FinalizePaidSessionDeps> = {}) {
 
   const deps: FinalizePaidSessionDeps = {
     getBookingsByRef: async (refs) => state.bookings.filter((b) => refs.includes(b.booking_ref)),
-    // Idempotent par (booking_id, stripe_event_id) — émule INSERT OR IGNORE.
-    completePayment: async (data) => {
-      const already = state.payments.some(
-        (p) => p.booking_id === data.booking_id && p.stripe_event_id === data.stripe_event_id,
-      );
+    // Un seul mouvement par session, avec plusieurs allocations.
+    completeSessionPayment: async (data) => {
+      const already = state.payments.some((p) => p.sessionId === data.sessionId);
       if (already) return { inserted: false };
-      state.payments.push({ booking_id: data.booking_id, amount: data.amount, stripe_event_id: data.stripe_event_id ?? null });
+      state.payments.push({ sessionId: data.sessionId, amount: data.amount, allocations: data.allocations });
       return { inserted: true };
     },
     addAuditLog: async (entityType, entityId, action, changes) => {
@@ -297,7 +308,7 @@ describe("buildBookingConfirmationEmailPayload / canResendBookingConfirmation", 
     const unpaid = buildBookingReminderEmailPayload({
       booking,
       user: USER,
-      payments: [],
+      payments: ledger(70),
       whenPhrase: "dans 5 jours",
     });
     expect(unpaid.reminder).toEqual({ whenPhrase: "dans 5 jours", remainingDue: 70 });
@@ -305,7 +316,7 @@ describe("buildBookingConfirmationEmailPayload / canResendBookingConfirmation", 
     const partial = buildBookingReminderEmailPayload({
       booking,
       user: USER,
-      payments: [{ amount: 40, status: "paid", refunded_amount: 0 }],
+      payments: ledger(30, [{ amount: 40, status: "settled" }]),
       whenPhrase: "demain",
     });
     expect(partial.reminder).toEqual({ whenPhrase: "demain", remainingDue: 30 });
@@ -313,7 +324,7 @@ describe("buildBookingConfirmationEmailPayload / canResendBookingConfirmation", 
     const settled = buildBookingReminderEmailPayload({
       booking,
       user: USER,
-      payments: [{ amount: 70, status: "paid", refunded_amount: 0 }],
+      payments: ledger(0, [{ amount: 70, status: "settled" }]),
       whenPhrase: "aujourd'hui",
     });
     expect(settled.reminder).toEqual({ whenPhrase: "aujourd'hui", remainingDue: 0 });
@@ -340,13 +351,21 @@ describe("finalizePaidCheckoutSession", () => {
 
     const first = await finalizePaidCheckoutSession(paidSession, ["a", "b"], deps);
     expect(first.status).toBe("finalized");
-    expect(state.payments).toHaveLength(2);
+    expect(state.payments).toHaveLength(1);
+    expect(state.payments[0]).toMatchObject({
+      sessionId: paidSession.id,
+      amount: 28,
+      allocations: [
+        { booking_id: "b-a", amount: 23 },
+        { booking_id: "b-b", amount: 5 },
+      ],
+    });
     expect(state.sentPayloads).toHaveLength(1);
 
     // Duplicate (webhook replay + session lookup) → déjà traité, rien de refait.
     const second = await finalizePaidCheckoutSession(paidSession, ["a", "b"], deps);
     expect(second.status).toBe("already-finalized");
-    expect(state.payments).toHaveLength(2);
+    expect(state.payments).toHaveLength(1);
     expect(state.sentPayloads).toHaveLength(1);
   });
 
@@ -367,7 +386,7 @@ describe("finalizePaidCheckoutSession", () => {
     const retry = await finalizePaidCheckoutSession(paidSession, ["a"], deps);
     expect(retry.status).toBe("finalized");
     if (retry.status === "finalized") {
-      expect(retry.paymentsAdded).toBe(0); // pas de re-ajout de paiement
+      expect(retry.paymentInserted).toBe(false); // pas de re-ajout de mouvement
       expect(retry.emailSent).toBe(true);
     }
     expect(state.payments).toHaveLength(1);
@@ -384,7 +403,8 @@ describe("finalizePaidCheckoutSession", () => {
     const outcome = await finalizePaidCheckoutSession(paidSession, ["a", "b"], deps);
     expect(outcome.status).toBe("finalized");
     if (outcome.status === "finalized") expect(outcome.cancelledSkipped).toBe(1);
-    expect(state.payments.map((p) => p.booking_id)).toEqual(["b-b"]);
+    expect(state.payments).toHaveLength(1);
+    expect(state.payments[0].allocations).toEqual([{ booking_id: "b-b", amount: 28 }]);
     const lateAudit = state.audits.find((a) => a.action === "late-payment-cancelled");
     expect(lateAudit).toBeDefined();
     expect(lateAudit!.entityId).toBe("b-a");
@@ -479,46 +499,25 @@ describe("M1 — concurrent email delivery is claimed atomically (single send)",
   });
 });
 
-describe("M2 — partial payment failure is backfilled idempotently", () => {
-  it("first invocation fails after one payment, retry backfills without duplicate", async () => {
+describe("M2 — one movement per Checkout session", () => {
+  it("stores the session amount once and allocates it across all bookings", async () => {
     const { deps, state } = makeDeps();
     state.bookings = [
       makeBooking({ booking_ref: "a", base_price: 23, equipment_price: 0, total_price: 23, promo_discount: 0, status: "confirmed" }),
       makeBooking({ booking_ref: "b", base_price: 30, equipment_price: 0, total_price: 30, promo_discount: 0, status: "confirmed" }),
     ];
 
-    // Simule un crash après le 1er paiement : le 2e (booking b) échoue.
-    let failBookingB = true;
-    const origComplete = deps.completePayment;
-    deps.completePayment = async (data) => {
-      if (data.booking_id === "b-b" && failBookingB) {
-        failBookingB = false;
-        throw new Error("simulated crash after first payment");
-      }
-      return origComplete(data);
-    };
-
-    // Invocation 1 : paiement A enregistré, crash sur B → la promise rejette.
-    await expect(
-      finalizePaidCheckoutSession(paidSession, ["a", "b"], deps),
-    ).rejects.toThrow("simulated crash");
-    expect(state.payments.map((p) => p.booking_id)).toEqual(["b-a"]);
-    expect(state.sentPayloads).toHaveLength(0);
-
-    // Invocation 2 (retry / webhook replay) : backfill idempotent de B.
-    const retry = await finalizePaidCheckoutSession(paidSession, ["a", "b"], deps);
-    expect(retry.status).toBe("finalized");
-    if (retry.status === "finalized") expect(retry.paymentsAdded).toBe(1);
-
-    // Aucun doublon, clé d'idempotence = session.id pour les deux.
-    expect(state.payments).toHaveLength(2);
-    for (const p of state.payments) {
-      expect(p.stripe_event_id).toBe(paidSession.id);
-    }
-    expect(state.payments.filter((p) => p.booking_id === "b-a")).toHaveLength(1);
-    expect(state.payments.filter((p) => p.booking_id === "b-b")).toHaveLength(1);
-
-    // Un seul email, envoyé par l'invocation de récupération.
+    const outcome = await finalizePaidCheckoutSession(paidSession, ["a", "b"], deps);
+    expect(outcome).toMatchObject({ status: "finalized", paymentInserted: true });
+    expect(state.payments).toHaveLength(1);
+    expect(state.payments[0]).toMatchObject({
+      sessionId: paidSession.id,
+      amount: 28,
+      allocations: [
+        { booking_id: "b-a", amount: 23 },
+        { booking_id: "b-b", amount: 5 },
+      ],
+    });
     expect(state.sentPayloads).toHaveLength(1);
   });
 });

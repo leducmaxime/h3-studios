@@ -35,10 +35,10 @@ describe("libellés français partagés", () => {
     expect(STUDIO_LABELS).toEqual({ "la-scene": "La Scène", "le-podium": "Le Podium" });
     expect(STUDIO_LABELS_SHORT).toEqual({ "la-scene": "Scène", "le-podium": "Podium" });
     expect(BOOKING_STATUS_LABELS).toEqual({ confirmed: "Confirmée", cancelled: "Annulée", completed: "Terminée", "no-show": "Absent" });
-    expect(PAYMENT_METHOD_LABELS).toEqual({ card: "Carte bancaire", "card-online": "Carte bancaire en ligne", "card-onsite": "Carte bancaire sur place", cash: "Espèces", transfer: "Virement", check: "Chèque", cheque: "Chèque" });
-    expect(PAYMENT_METHOD_LABELS_SHORT).toEqual({ card: "CB", "card-online": "CB en ligne", "card-onsite": "CB sur place", cash: "Espèces", transfer: "Virement", check: "Chèque", cheque: "Chèque" });
+    expect(PAYMENT_METHOD_LABELS).toEqual({ card: "Carte bancaire", "card-online": "Carte bancaire en ligne", "card-onsite": "Carte bancaire sur place", cash: "Espèces", transfer: "Virement", check: "Chèque" });
+    expect(PAYMENT_METHOD_LABELS_SHORT).toEqual({ card: "CB", "card-online": "CB en ligne", "card-onsite": "CB sur place", cash: "Espèces", transfer: "Virement", check: "Chèque" });
     expect(STORED_PAYMENT_STATUS_LABELS).toEqual({ pending: "En attente", paid: "Payé", "pay-on-site": "Paiement sur place" });
-    expect(PAYMENT_RECORD_STATUS_LABELS).toEqual({ pending: "En attente", paid: "Payé", refunded: "Remboursé", "partial-refund": "Remboursé partiel" });
+    expect(PAYMENT_RECORD_STATUS_LABELS).toEqual({ pending: "En attente", settled: "Payé", failed: "Échec" });
     expect(DISPLAY_PAYMENT_STATUS_LABELS).toEqual({ paid: "Payé", pending: "En attente", "pay-on-site": "Reste à payer", cancelled: "Annulée", "paid-before-cancel": "Payée avant annulation", refunded: "Remboursement effectué" });
     expect(PAYMENT_TYPE_LABELS).toEqual({ "on-site": "Sur place", online: "En ligne" });
     expect(ADMIN_ROLE_LABELS).toEqual({ "super-admin": "Super administrateur", operator: "Opérateur" });
@@ -78,7 +78,7 @@ describe("libellés français partagés", () => {
   });
 
   it("gère les alias et variantes de copie attendus", () => {
-    expect(paymentMethodLabel("cheque")).toBe("Chèque");
+    expect(paymentMethodLabel("cheque")).toBe("—");
     expect(paymentMethodLabel("check")).toBe("Chèque");
     expect(groupTypeLabel("group")).toBe("Groupe");
     expect(groupTypeLabel("group", { long: true })).toBe("Groupe (3+)");

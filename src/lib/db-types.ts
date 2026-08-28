@@ -206,7 +206,7 @@ export interface UserBookingInsights {
 // --- Bookings ---
 
 export type BookingStatus = "confirmed" | "cancelled" | "completed" | "no-show";
-export type PaymentMethod = "card" | "cash" | "cheque" | "transfer";
+export type PaymentMethod = "card" | "cash" | "transfer" | "check";
 export type PaymentStatus = "pending" | "paid" | "pay-on-site";
 export type GroupType = "solo" | "duo" | "group";
 export type StudioId = "la-scene" | "le-podium";
@@ -258,43 +258,37 @@ export type CreateBooking = Omit<DbBooking, "id" | "created_at" | "updated_at" |
 
 // --- Payments ---
 
-export type DbPaymentStatus = "pending" | "paid" | "refunded" | "partial-refund";
+export type MovementStatus = "pending" | "settled" | "failed";
+export type DbPaymentStatus = MovementStatus;
 
 export interface DbPayment {
   id: string;
-  booking_id: string;
+  /** Signed movement: positive for collection, negative for refund or reversal. */
   amount: number;
-  method: string;
-  status: DbPaymentStatus;
-  refunded_amount: number;
+  method: PaymentMethod;
+  status: MovementStatus;
   paid_at: string | null;
-  created_at: string;
-  stripe_event_id: string | null;
-}
-
-export interface DbPaymentRefund {
-  stripe_refund_id: string;
-  payment_id: string;
-  booking_id: string;
-  amount_cents: number;
-  status: string;
+  external_ref: string | null;
+  parent_id: string | null;
   reason: string | null;
   performed_by: string | null;
   created_at: string;
-  updated_at: string;
 }
 
-export interface DbPaymentWithRefund extends DbPayment {
-  refund_reserved_cents: number;
-  refundable_amount: number | null;
-  refund_pending_cents: number;
+export interface DbPaymentAllocation {
+  id: string;
+  payment_id: string;
+  booking_id: string;
+  amount: number;
+  created_at: string;
 }
 
 export interface AdminPaymentRow extends DbPayment {
-  refund_reserved_cents: number;
-  refundable_amount: number | null;
-  refund_pending_cents: number;
-  booking_ref: string | null;
+  booking_refs: string;
+  allocation_count: number;
+  allocated_amount: number;
+  unallocated_amount: number;
+  refundable_amount: number;
   user_name: string | null;
   user_band_name: string | null;
   user_id: string | null;
@@ -306,8 +300,8 @@ export type AdminPaymentSortField = "created_at" | "booking_date" | "amount" | "
 export type AdminPaymentSortOrder = "asc" | "desc";
 
 export interface AdminPaymentFilters {
-  status?: "pending" | "paid" | "refunded" | "partial-refund";
-  method?: "card" | "cash" | "transfer" | "check";
+  status?: MovementStatus;
+  method?: PaymentMethod;
   paymentType?: "on-site" | "online";
   search?: string;
   userId?: string;

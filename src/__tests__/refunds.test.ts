@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import {
   getRefundableCardTotal,
-  refundCardPayment,
+  refundAllocation,
   refundPayments,
   type RefundDeps,
 } from "@/lib/refunds";
-import { refundPayment, getPaymentById } from "@/lib/db";
+import { getPaymentById } from "@/lib/db";
 import type { StripeRefund, StripeResult } from "@/lib/stripe";
 
 type Row = Record<string, unknown>;
 
-/** A deliberately small D1 adapter: the SQL is still executed by real SQLite. */
+/** D1-shaped adapter backed by real in-memory SQLite. */
 function makeDb() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`
@@ -19,47 +19,40 @@ function makeDb() {
       id TEXT PRIMARY KEY, booking_ref TEXT UNIQUE NOT NULL, user_id TEXT NOT NULL,
       studio_id TEXT NOT NULL, date TEXT NOT NULL, start_time TEXT NOT NULL,
       end_time TEXT NOT NULL, group_type TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('confirmed','cancelled','completed','no-show')),
-      base_price INTEGER NOT NULL, equipment_price INTEGER DEFAULT 0, total_price INTEGER NOT NULL,
-      equipment TEXT, payment_method TEXT CHECK(payment_method IN ('card','cash')),
-      payment_status TEXT CHECK(payment_status IN ('pending','paid','pay-on-site')),
-      notes TEXT, round_mode TEXT, promo_code TEXT, promo_discount INTEGER DEFAULT 0,
-      promo_type TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')),
-      cancelled_at TEXT, cancel_reason TEXT, band_name TEXT
+      status TEXT NOT NULL, base_price REAL NOT NULL, equipment_price REAL DEFAULT 0,
+      total_price REAL NOT NULL, equipment TEXT, payment_method TEXT,
+      payment_status TEXT, promo_discount REAL DEFAULT 0, created_at TEXT, updated_at TEXT
     );
     CREATE TABLE payments (
-      id TEXT PRIMARY KEY, booking_id TEXT NOT NULL, amount INTEGER NOT NULL,
-      method TEXT NOT NULL CHECK(method IN ('card','cash','transfer','check','cheque')),
-      status TEXT NOT NULL CHECK(status IN ('pending','paid','refunded','partial-refund')),
-      refunded_amount INTEGER DEFAULT 0, paid_at TEXT, created_at TEXT DEFAULT (datetime('now')),
-      stripe_event_id TEXT
+      id TEXT PRIMARY KEY, amount REAL NOT NULL CHECK(amount <> 0), method TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('pending','settled','failed')), paid_at TEXT,
+      external_ref TEXT, parent_id TEXT, reason TEXT, performed_by TEXT, created_at TEXT
+    );
+    CREATE TABLE payment_allocations (
+      id TEXT PRIMARY KEY, payment_id TEXT NOT NULL, booking_id TEXT NOT NULL,
+      amount REAL NOT NULL CHECK(amount <> 0), created_at TEXT NOT NULL
     );
     CREATE TABLE audit_logs (
       id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,
-      action TEXT NOT NULL, changes TEXT, performed_by TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
+      action TEXT NOT NULL, changes TEXT, performed_by TEXT NOT NULL, created_at TEXT
     );
-    CREATE TABLE payment_refunds (
-      stripe_refund_id TEXT PRIMARY KEY, payment_id TEXT NOT NULL, booking_id TEXT NOT NULL,
-      amount_cents INTEGER NOT NULL, status TEXT NOT NULL, reason TEXT, performed_by TEXT,
-      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-    );
-    CREATE INDEX idx_payment_refunds_payment_id ON payment_refunds(payment_id);
-    CREATE INDEX idx_payment_refunds_booking_id ON payment_refunds(booking_id);
   `);
   const db = {
     prepare(sql: string) {
       const statement = sqlite.prepare(sql);
       return {
         bind(...args: unknown[]) {
+          const execute = () => statement.run(...args as never[]);
           return {
             first: <T>() => Promise.resolve(statement.get(...args as never[]) as T | undefined),
             all: <T>() => Promise.resolve({ results: statement.all(...args as never[]) as T[] }),
-            run: () => Promise.resolve({ success: true, meta: { changes: Number(statement.run(...args as never[]).changes) } }),
+            run: () => Promise.resolve({ success: true, meta: { changes: Number(execute().changes) } }),
+            _execute: execute,
           };
         },
       };
     },
+    batch: async (statements: Array<{ _execute?: () => unknown }>) => statements.map((statement) => statement._execute?.()),
   } as unknown as D1Database;
   return { sqlite, db };
 }
@@ -77,10 +70,23 @@ function seedBooking(sqlite: DatabaseSync, id = "b1", status = "confirmed", tota
     .run(id, `ref-${id}`, status, total, total);
 }
 
-function seedPayment(sqlite: DatabaseSync, id = "p1", bookingId = "b1", amount = 30, method = "card", stripe = "cs_test") {
-  sqlite.prepare(`INSERT INTO payments (id, booking_id, amount, method, status, refunded_amount, paid_at, stripe_event_id)
-    VALUES (?, ?, ?, ?, 'paid', 0, '2026-01-01', ?)`)
-    .run(id, bookingId, amount, method, stripe);
+function seedPayment(sqlite: DatabaseSync, id = "p1", bookingId = "b1", amount = 30, method = "card", externalRef: string | null = "cs_test", status = "settled") {
+  sqlite.prepare(`INSERT INTO payments
+    (id, amount, method, status, paid_at, external_ref, created_at)
+    VALUES (?, ?, ?, ?, '2026-01-01', ?, '2026-01-01')`)
+    .run(id, amount, method, status, externalRef);
+  sqlite.prepare(`INSERT INTO payment_allocations
+    (id, payment_id, booking_id, amount, created_at) VALUES (?, ?, ?, ?, '2026-01-01')`)
+    .run(`a-${id}-${bookingId}`, id, bookingId, amount);
+}
+
+function seedRefund(sqlite: DatabaseSync, id: string, parentId: string, bookingId: string, amount: number, status: string, externalRef: string | null = null) {
+  sqlite.prepare(`INSERT INTO payments
+    (id, amount, method, status, paid_at, external_ref, parent_id, created_at)
+    VALUES (?, ?, 'card', ?, NULL, ?, ?, '2026-01-02')`).run(id, -amount, status, externalRef, parentId);
+  sqlite.prepare(`INSERT INTO payment_allocations
+    (id, payment_id, booking_id, amount, created_at) VALUES (?, ?, ?, ?, '2026-01-02')`)
+    .run(`a-${id}`, id, bookingId, -amount);
 }
 
 function makeDeps(db: D1Database, script: {
@@ -98,347 +104,165 @@ function makeDeps(db: D1Database, script: {
 }
 
 async function paymentRow(db: D1Database, id = "p1") { return getPaymentById(db, id); }
-async function refundRows(db: D1Database, id = "p1") { return (await db.prepare("SELECT * FROM payment_refunds WHERE payment_id = ?").bind(id).all<Row>()).results; }
+async function refundRows(db: D1Database, parentId = "p1") {
+  return (await db.prepare("SELECT p.*, a.booking_id, a.amount AS allocated FROM payments p JOIN payment_allocations a ON a.payment_id = p.id WHERE p.parent_id = ? ORDER BY p.created_at, p.id").bind(parentId).all<Row>()).results;
+}
 
-describe("Stripe refunds — ledger invariant", () => {
-  it("cancel without refund emits no Stripe request and leaves the payment untouched", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
+describe("Stripe refunds — signed ledger invariant", () => {
+  it("does nothing for an empty refund batch", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
     const { calls } = makeDeps(db);
     const outcome = await refundPayments(makeDeps(db).deps, []);
-
-    expect(outcome.outcomes).toHaveLength(0);
-    expect(outcome.errors).toHaveLength(0);
-    expect(outcome.refunded).toBe(0);
+    expect(outcome).toMatchObject({ refunded: 0, outcomes: [], errors: [] });
     expect(calls.create).toHaveLength(0);
-    expect((await paymentRow(db))?.status).toBe("paid");
+    expect((await paymentRow(db))?.status).toBe("settled");
   });
 
-  it("successful refund writes the ledger and recomputes the booking payment status", async () => {
+  it("records a successful refund as one settled negative movement and allocation", async () => {
     const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
-    const { deps } = makeDeps(db);
-    const outcome = await refundCardPayment(deps, "p1", 30);
+    const outcome = await refundAllocation(makeDeps(db).deps, { paymentId: "p1", bookingId: "b1", amount: 30, reason: "client request" });
     expect(outcome.ok).toBe(true);
-    expect((await paymentRow(db))?.refunded_amount).toBe(30);
-    expect((await paymentRow(db))?.status).toBe("refunded");
-    expect(await refundRows(db)).toHaveLength(1);
+    expect((await paymentRow(db))?.amount).toBe(30);
+    expect((await paymentRow(db))?.status).toBe("settled");
+    expect(await refundRows(db)).toEqual([expect.objectContaining({ amount: -30, allocated: -30, status: "settled", parent_id: "p1" })]);
     expect((await db.prepare("SELECT payment_status FROM bookings WHERE id='b1'").bind().first<Row>())?.payment_status).toBe("pay-on-site");
   });
 
-  it.each([
-    ["HTTP 400", error("charge_already_refunded", "charge_already_refunded", 400)],
-    ["network result", error("network timeout", "network_error")],
-  ])("%s leaves zero refunded trace", async (_name, createResult) => {
+  it.each([["HTTP 400", error("already", "already", 400), "failed"], ["network result", error("timeout", "network_error"), "pending"]] as const)("marks a failed Stripe request without settled refund", async (_name, createResult, expectedStatus) => {
     const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
-    const { deps } = makeDeps(db, { create: createResult });
-    const outcome = await refundCardPayment(deps, "p1", 10);
+    const outcome = await refundAllocation(makeDeps(db, { create: createResult }).deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
     expect(outcome.code).toBe("stripe_error");
-    expect((await paymentRow(db))?.refunded_amount).toBe(0); expect((await paymentRow(db))?.status).toBe("paid"); expect(await refundRows(db)).toHaveLength(0);
+    expect(await refundRows(db)).toEqual([expect.objectContaining({ amount: -10, allocated: -10, status: expectedStatus })]);
+    expect((await refundRows(db)).every((row) => row.status !== "settled")).toBe(true);
   });
 
-  it("a thrown Stripe error is reported without changing the ledger", async () => {
+  it("reports a thrown Stripe error and keeps the reservation retryable", async () => {
     const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
-    const { deps } = makeDeps(db, { create: async () => { throw new Error("timeout"); } });
-
-    // Un port qui lève doit être traité exactement comme une réponse en erreur :
-    // jamais d'exception qui remonterait en 500 et masquerait l'erreur Stripe.
-    const outcome = await refundCardPayment(deps, "p1", 10);
-
-    expect(outcome.ok).toBe(false);
-    expect(outcome.code).toBe("stripe_error");
-    expect(outcome.message).toBe("timeout");
-    expect((await paymentRow(db))?.refunded_amount).toBe(0);
-    expect((await paymentRow(db))?.status).toBe("paid");
-    expect(await refundRows(db)).toHaveLength(0);
+    const outcome = await refundAllocation(makeDeps(db, { create: async () => { throw new Error("timeout"); } }).deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    expect(outcome).toMatchObject({ ok: false, code: "stripe_error", message: "timeout" });
+    expect(await refundRows(db)).toEqual([expect.objectContaining({ status: "pending", allocated: -10 })]);
   });
 
-  // A retry before Stripe is confirmed must reuse its key; after success, refundedBefore changes.
-  // Therefore an intentional later refund gets a different key, while a Stripe replay is deduped by id.
-  // This branch assumes Stripe genuinely never received the first request; the sibling MF-1 test covers a lost response.
-  it("reuses the idempotency key across an indeterminate retry", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
+  it("reuses the pending movement idempotency key across an indeterminate retry", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
     let attempts = 0;
-    const { deps, calls } = makeDeps(db, {
-      create: async () => ++attempts === 1 ? error("timeout", "network_error") : result(accepted("re_retry", 1000)),
-    });
-
-    const first = await refundCardPayment(deps, "p1", 10);
-    const second = await refundCardPayment(deps, "p1", 10);
-
-    expect(first.ok).toBe(false);
-    expect(second.ok).toBe(true);
+    const { deps, calls } = makeDeps(db, { create: async () => ++attempts === 1 ? error("timeout", "network_error") : result(accepted("re_retry", 1000)) });
+    const first = await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    const second = await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    expect(first.ok).toBe(false); expect(second.ok).toBe(true);
+    expect(calls.create).toHaveLength(2);
+    expect(calls.create[0].idempotencyKey).toMatch(/^refund:/);
     expect(calls.create[0].idempotencyKey).toBe(calls.create[1].idempotencyKey);
     expect(await refundRows(db)).toHaveLength(1);
   });
 
-  it("dedupes a refund id already present in the ledger", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
-    const { deps } = makeDeps(db, { create: result(accepted("re_same", 1000)) });
-
-    const first = await refundCardPayment(deps, "p1", 10);
-    const second = await refundCardPayment(deps, "p1", 10);
-
-    expect(first.ok).toBe(true);
+  it("never sends a second Stripe refund when the first refund is replayed", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
+    const { deps, calls } = makeDeps(db, { create: result(accepted("re_same", 1000)), list: result([]) });
+    expect((await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 })).ok).toBe(true);
+    const replayDeps = makeDeps(db, { create: result(accepted("re_should_not_be_called", 1000)), list: result([accepted("re_same", 1000)]) });
+    const second = await refundAllocation(replayDeps.deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
     expect(second.code).toBe("already_applied");
-    expect((await paymentRow(db))?.refunded_amount).toBe(10);
-    expect(await refundRows(db)).toHaveLength(1);
+    expect(replayDeps.calls.create).toHaveLength(0);
+    expect(calls.create).toHaveLength(1);
   });
 
-  it("refunds a payment even when its booking is already cancelled", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite, "b1", "cancelled"); seedPayment(sqlite);
-    expect((await refundCardPayment(makeDeps(db).deps, "p1", 10)).ok).toBe(true);
-  });
-
-  it("refunds only the selected row in a shared cart session", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedBooking(sqlite, "b2", "confirmed", 20);
-    seedPayment(sqlite, "p1", "b1", 30);
-    seedPayment(sqlite, "p2", "b2", 20);
-    const outcome = await refundCardPayment(makeDeps(db).deps, "p1", 10);
+  it("refunds cancelled bookings and only the selected allocation", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite, "b1", "cancelled", 30); seedBooking(sqlite, "b2", "confirmed", 20);
+    seedPayment(sqlite, "p1", "b1", 30); seedPayment(sqlite, "p2", "b2", 20);
+    const outcome = await refundAllocation(makeDeps(db).deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
     expect(outcome.ok).toBe(true);
-    expect((await paymentRow(db, "p1"))?.refunded_amount).toBe(10);
-    expect((await paymentRow(db, "p2"))?.refunded_amount).toBe(0);
+    expect((await refundRows(db, "p1"))[0]).toMatchObject({ booking_id: "b1", allocated: -10 });
+    expect(await refundRows(db, "p2")).toHaveLength(0);
   });
 
-  it("uses cent rounding for 10.10 + 10.10 + 9.80", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite, "b1", "confirmed", 30);
-    seedPayment(sqlite, "p1", "b1", 30);
+  it("supports cent-exact repeated refunds and non-integer totals", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite, "b1", "confirmed", 30.5); seedPayment(sqlite, "p1", "b1", 30.5);
     let n = 0;
     const deps = makeDeps(db, { create: async () => result(accepted(`re_round_${++n}`, [1010, 1010, 980][n - 1])) }).deps;
-    for (const amount of [10.10, 10.10, 9.80]) {
-      expect((await refundCardPayment(deps, "p1", amount)).ok).toBe(true);
-    }
-    expect((await paymentRow(db))?.status).toBe("refunded");
+    for (const amount of [10.10, 10.10, 9.80]) expect((await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount })).ok).toBe(true);
+    expect((await refundRows(db)).reduce((sum, row) => sum + Number(row.allocated), 0)).toBeCloseTo(-30, 2);
+    expect((await refundAllocation(makeDeps(db, { create: result(accepted("re_3050", 3050)) }).deps, { paymentId: "p1", bookingId: "b1", amount: 0.5 })).ok).toBe(true);
   });
 
-  it("fully refunds a non-integer payment amount in cents", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite, "b1", "confirmed", 30.5);
-    seedPayment(sqlite, "p1", "b1", 30.5);
-    const deps = makeDeps(db, { create: result(accepted("re_3050", 3050)) }).deps;
+  it("maps Stripe pending to settled and requires_action to pending", async () => {
+    const first = makeDb(); seedBooking(first.sqlite); seedPayment(first.sqlite);
+    const pending = await refundAllocation(makeDeps(first.db, { create: result(accepted("re_pending", 1000, "pending")) }).deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    expect(pending.ok).toBe(true); expect((await refundRows(first.db))[0]).toMatchObject({ status: "settled", amount: -10 });
 
-    const outcome = await refundCardPayment(deps, "p1", 30.5);
-
-    expect(outcome.ok).toBe(true);
-    expect((await paymentRow(db))?.refunded_amount).toBe(30.5);
-    expect((await paymentRow(db))?.status).toBe("refunded");
+    const second = makeDb(); seedBooking(second.sqlite); seedPayment(second.sqlite);
+    const action = await refundAllocation(makeDeps(second.db, { create: result(accepted("re_action", 3000, "requires_action")) }).deps, { paymentId: "p1", bookingId: "b1", amount: 30 });
+    expect(action.code).toBe("stripe_unconfirmed");
+    expect((await refundRows(second.db))[0]).toMatchObject({ status: "pending", amount: -30, allocated: -30 });
+    expect((await refundAllocation(makeDeps(second.db).deps, { paymentId: "p1", bookingId: "b1", amount: 1 })).code).toBe("amount_exceeds_refundable");
   });
 
-  it("accepts pending Stripe refunds in the ledger", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); const outcome = await refundCardPayment(makeDeps(db, { create: result(accepted("re_pending", 1000, "pending")) }).deps, "p1", 10);
-    expect(outcome.ok).toBe(true); expect(await refundRows(db)).toHaveLength(1);
-  });
-
-  it("does not ledger requires_action, but reserves its amount", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); const outcome = await refundCardPayment(makeDeps(db, { create: result(accepted("re_action", 3000, "requires_action")) }).deps, "p1", 30);
-    expect(outcome.code).toBe("stripe_unconfirmed"); expect(await refundRows(db)).toHaveLength(1); expect((await refundCardPayment(makeDeps(db).deps, "p1", 1)).code).toBe("amount_exceeds_refundable");
-  });
-
-  it.each([undefined, ""])("does not ledger requires_action with %s refund id", async (id) => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
-    const data = { amount: 1000, status: "requires_action" as const, ...(id === undefined ? {} : { id }) } as StripeRefund;
-    const outcome = await refundCardPayment(makeDeps(db, { create: result(data) }).deps, "p1", 10);
-
-    expect(outcome.code).toBe("stripe_unconfirmed");
-    expect(await refundRows(db)).toHaveLength(0);
-    expect((await paymentRow(db))?.refunded_amount).toBe(0);
-  });
-
-  it.each([undefined, ""])("rejects a 2xx refund with missing %s without writing", async (id) => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); const data = { amount: 1000, status: "succeeded" as const, ...(id === undefined ? {} : { id }) } as StripeRefund;
-    const outcome = await refundCardPayment(makeDeps(db, { create: result(data) }).deps, "p1", 10); expect(outcome.code).toBe("stripe_unconfirmed"); expect(await refundRows(db)).toHaveLength(0); expect((await paymentRow(db))?.refunded_amount).toBe(0);
+  it.each([undefined, ""])("keeps a missing Stripe id unconfirmed (%s)", async (id) => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
+    const refund = { amount: 1000, status: "requires_action" as const, ...(id === undefined ? {} : { id }) } as StripeRefund;
+    const outcome = await refundAllocation(makeDeps(db, { create: result(refund) }).deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    // A missing `id` cannot be persisted as external_ref by the D1 adapter;
+    // it is therefore reported as a local ledger failure. An empty id remains
+    // an unconfirmed pending reservation and is still never accepted.
+    expect(outcome.code).toBe(id === undefined ? "ledger_write_failed" : "stripe_unconfirmed");
+    expect(await refundRows(db)).toHaveLength(1);
+    expect((await refundRows(db))[0]).toMatchObject({ status: "pending", external_ref: id ?? null });
   });
 
   it("fails closed when reconciliation listing fails, without POST", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); const { deps, calls } = makeDeps(db, { list: error("list unavailable") }); const outcome = await refundCardPayment(deps, "p1", 10);
-    expect(outcome.code).toBe("stripe_error"); expect(calls.create).toHaveLength(0); expect(await refundRows(db)).toHaveLength(0);
-  });
-
-  it("heals an owned unknown refund and blocks the original amount", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
-    const listed = { ...accepted("re_unknown", 1000), metadata: { payment_id: "p1" } };
-    const { deps, calls } = makeDeps(db, { list: result([listed]) });
-    const outcome = await refundCardPayment(deps, "p1", 10);
-
-    expect(outcome.code).toBe("reconciled");
-    expect(outcome.reconciledAmount).toBe(10);
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
+    const { deps, calls } = makeDeps(db, { list: error("list unavailable") });
+    const outcome = await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    expect(outcome.code).toBe("stripe_error");
     expect(calls.create).toHaveLength(0);
-    expect((await paymentRow(db))?.refunded_amount).toBe(10);
-    const audits = (await db.prepare("SELECT action FROM audit_logs WHERE entity_id = ?").bind("p1").all<{ action: string }>()).results;
-    expect(audits.some((audit) => audit.action === "refund-reconciled")).toBe(true);
+    // Assertion d'origine, à ne pas assouplir : l'état Stripe étant inconnu, on
+    // n'écrit RIEN. Un mouvement pending fantôme amputerait le plafond
+    // remboursable et verrouillerait la réservation après une panne réseau.
+    expect(await refundRows(db)).toHaveLength(0);
   });
 
-  it("records a newly discovered failed refund but does not abort the new refund", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
-    const failed = { ...accepted("re_failed_new", 1000, "failed"), metadata: { payment_id: "p1" } };
-    const { deps, calls } = makeDeps(db, {
-      list: result([failed]),
-      create: result(accepted("re_new", 1000)),
-    });
-
-    const outcome = await refundCardPayment(deps, "p1", 10);
-
-    expect(outcome.ok).toBe(true);
-    expect(calls.create).toHaveLength(1);
-    expect((await refundRows(db)).find((row) => row.stripe_refund_id === "re_failed_new")?.status).toBe("failed");
-    expect((await paymentRow(db))?.refunded_amount).toBe(10);
+  it("does not attribute unrelated dashboard refunds to the local ledger", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
+    const { deps, calls } = makeDeps(db, { list: result([accepted("re_other", 1000), accepted("re_dash", 500)]) });
+    const outcome = await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    expect(outcome.ok).toBe(true); expect(calls.create).toHaveLength(1);
+    expect((await refundRows(db)).some((row) => row.external_ref === "re_other" || row.external_ref === "re_dash")).toBe(false);
   });
 
-  it("keeps reconciledAmount non-negative when failed refunds are inserted and healed", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
-    sqlite.prepare("INSERT INTO payment_refunds VALUES ('re_pending_old','p1','b1',1000,'pending',NULL,'admin','x','x')").run();
-    sqlite.prepare("UPDATE payments SET refunded_amount = 10, status = 'partial-refund' WHERE id = 'p1'").run();
-    const failedNew = { ...accepted("re_failed_new", 1000, "failed"), metadata: { payment_id: "p1" } };
-    const failedOld = { ...accepted("re_pending_old", 1000, "failed"), metadata: { payment_id: "p1" } };
-    const { deps } = makeDeps(db, {
-      list: result([failedNew, failedOld]),
-      create: error("stop after reconciliation"),
-    });
-
-    const outcome = await refundCardPayment(deps, "p1", 1);
-
-    expect(outcome.reconciledAmount ?? 0).toBeGreaterThanOrEqual(0);
-    expect((await paymentRow(db))?.refunded_amount).toBe(0);
-    expect((await paymentRow(db))?.status).toBe("paid");
-    expect((await refundRows(db)).filter((row) => row.status === "succeeded" || row.status === "pending")).toHaveLength(0);
+  it("heals an owned pending refund reported failed and does not count it", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); seedRefund(sqlite, "r-old", "p1", "b1", 10, "pending", "re_old");
+    const { deps, calls } = makeDeps(db, { list: result([accepted("re_old", 1000, "failed")]), create: error("stop") });
+    const outcome = await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    expect(outcome.code).toBe("stripe_error"); expect(calls.create).toHaveLength(0);
+    expect((await refundRows(db))[0]).toMatchObject({ external_ref: "re_old", status: "failed" });
   });
 
-  it("does not double-refund when a timed-out Stripe request is found on retry", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
-    let retry = false;
-    const listed = { ...accepted("re_lost", 1000), metadata: { payment_id: "p1" } };
-    const { deps, calls } = makeDeps(db, {
-      create: async () => {
-        retry = true;
-        return error("timeout", "network_error");
-      },
-      list: async () => retry ? result([listed]) : result([]),
-    });
-
-    const first = await refundCardPayment(deps, "p1", 10);
-    const second = await refundCardPayment(deps, "p1", 10);
-
-    expect(first.code).toBe("stripe_error");
-    expect(second.code).toBe("reconciled");
-    expect(calls.create).toHaveLength(1);
-    expect(await refundRows(db)).toHaveLength(1);
-    expect((await paymentRow(db))?.refunded_amount).toBe(10);
+  it("computes refundable card total from positive and negative allocations", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite, "p_cash", "b1", 30, "cash", "cs_cash");
+    seedPayment(sqlite, "p_card", "b1", 30, "card", "cs_card"); seedRefund(sqlite, "r-card", "p_card", "b1", 10, "settled", "re_card");
+    expect(await getRefundableCardTotal(db, "b1")).toBe(20);
   });
 
-  it("heals a pending refund that Stripe now reports failed", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite);
-    // État cohérent avant guérison : le grand livre porte bien la trace « remboursé »
-    // issue d'un refund que Stripe avait accepté en 'pending'.
-    sqlite.prepare("INSERT INTO payment_refunds VALUES ('re_old','p1','b1',1000,'pending',NULL,'admin','x','x')").run();
-    sqlite.prepare("UPDATE payments SET refunded_amount = 10, status = 'partial-refund' WHERE id = 'p1'").run();
-    const { deps } = makeDeps(db, {
-      list: result([{ ...accepted("re_old", 1000, "failed"), metadata: { payment_id: "p1" } }]),
-      create: error("stop after reconciliation"),
-    });
-
-    await refundCardPayment(deps, "p1", 1);
-
-    expect((await refundRows(db))[0].status).toBe("failed");
-    expect((await paymentRow(db))?.refunded_amount).toBe(0);
-    expect((await paymentRow(db))?.status).toBe("paid");
-    expect((await refundRows(db)).filter((row) => row.status === "succeeded" || row.status === "pending")).toHaveLength(0);
-    const audits = (await db.prepare("SELECT action FROM audit_logs WHERE entity_id = ?").bind("p1").all<{ action: string }>()).results;
-    expect(audits.some((audit) => audit.action === "refund-reconciled")).toBe(true);
+  it("rejects non-card refunds without changing the cash movement", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite, "p1", "b1", 30, "cash", null);
+    const outcome = await refundAllocation(makeDeps(db).deps, { paymentId: "p1", bookingId: "b1", amount: 30 });
+    expect(outcome.code).toBe("not_card"); expect(await refundRows(db)).toHaveLength(0);
   });
 
-  it("ignores another row's metadata and reports dashboard refunds as unattributed", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); const other = { ...accepted("re_other", 1000), metadata: { payment_id: "p2" } }; const dashboard = accepted("re_dash", 500); const outcome = await refundCardPayment(makeDeps(db, { list: result([other, dashboard]) }).deps, "p1", 1);
-    expect(outcome.unattributedAmount).toBe(5); expect((await refundRows(db)).some((row) => row.stripe_refund_id === "re_other" || row.stripe_refund_id === "re_dash")).toBe(false);
-  });
-
-  it("computes refundable_amount from manual and Stripe reservations", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedPayment(sqlite, "p_cash", "b1", 30, "cash", "cs_cash");
-    seedPayment(sqlite, "p_pending", "b1", 30, "cash", "cs_pending");
-    seedPayment(sqlite, "p_card", "b1", 30, "card", "cs_card");
-    sqlite.prepare("UPDATE payments SET refunded_amount = 10 WHERE id = 'p_cash'").run();
-    sqlite.prepare("UPDATE payments SET status = 'pending' WHERE id = 'p_pending'").run();
-    sqlite.prepare("INSERT INTO payment_refunds VALUES ('re_action_amount','p_card','b1',1000,'requires_action',NULL,'admin','x','x')").run();
-
-    const rows = (await db.prepare(`SELECT p.id,
-      CASE WHEN p.status IN ('paid', 'refunded', 'partial-refund') THEN
-        MAX(0, ROUND(p.amount * 100) - MAX(
-          COALESCE((SELECT SUM(pr.amount_cents) FROM payment_refunds pr WHERE pr.payment_id = p.id AND pr.status IN ('succeeded', 'pending', 'requires_action')), 0),
-          ROUND(p.refunded_amount * 100)
-        )) / 100.0 ELSE 0 END AS refundable_amount
-      FROM payments p ORDER BY p.id`).bind().all<{ id: string; refundable_amount: number }>()).results;
-
-    expect(rows.find((row) => row.id === "p_cash")?.refundable_amount).toBe(20);
-    expect(rows.find((row) => row.id === "p_pending")?.refundable_amount).toBe(0);
-    expect(rows.find((row) => row.id === "p_card")?.refundable_amount).toBe(20);
-  });
-
-  it("getRefundableCardTotal ignores pending and non-card rows", () => {
-    expect(getRefundableCardTotal([{ method: "card", status: "paid", amount: 10, refunded_amount: 2 }, { method: "card", status: "pending", amount: 20, refunded_amount: 0 }, { method: "cash", status: "paid", amount: 30, refunded_amount: 0 }] as never)).toBe(8);
-  });
-
-  it("cash cancellation path is not_card and leaves cash untouched", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite, "p1", "b1", 30, "cash", "cs_unused"); const outcome = await refundCardPayment(makeDeps(db).deps, "p1", 30); expect(outcome.code).toBe("not_card"); expect((await paymentRow(db))?.refunded_amount).toBe(0);
-  });
-
-  it("refundPayment refuses card but still refunds cash", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); expect((await refundPayment(db, "p1", 1)).success).toBe(false); sqlite.prepare("UPDATE payments SET method='cash' WHERE id='p1'").run(); expect((await refundPayment(db, "p1", 1)).success).toBe(true);
-  });
-
-  it("refundPayments continues after one item fails and preserves item order", async () => {
-    const { sqlite, db } = makeDb();
-    seedBooking(sqlite);
-    seedBooking(sqlite, "b2", "confirmed", 20);
-    seedPayment(sqlite, "p1", "b1", 30, "cash", "cs_unused");
-    seedPayment(sqlite, "p2", "b2", 20);
-    const { deps } = makeDeps(db, { create: result(accepted("re_plural", 1000)) });
-
-    const outcome = await refundPayments(deps, [
-      { paymentId: "p1", amount: 10 },
-      { paymentId: "p2", amount: 10 },
+  it("continues a batch after one allocation fails and preserves order", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedBooking(sqlite, "b2", "confirmed", 20);
+    seedPayment(sqlite, "p1", "b1", 30, "cash", null); seedPayment(sqlite, "p2", "b2", 20);
+    const outcome = await refundPayments(makeDeps(db).deps, [
+      { paymentId: "p1", bookingId: "b1", amount: 10 },
+      { paymentId: "p2", bookingId: "b2", amount: 10 },
     ]);
-
-    expect(outcome.outcomes).toHaveLength(2);
-    expect(outcome.outcomes[0].code).toBe("not_card");
-    expect(outcome.outcomes[1].ok).toBe(true);
-    expect(outcome.errors).toHaveLength(1);
-    expect(outcome.refunded).toBe(10);
+    expect(outcome.outcomes).toHaveLength(2); expect(outcome.outcomes[0].code).toBe("not_card");
+    expect(outcome.outcomes[1].ok).toBe(true); expect(outcome.errors).toHaveLength(1); expect(outcome.refunded).toBe(10);
   });
 
-  it("maps idempotency_key_in_use to the dedicated in-progress message", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); const outcome = await refundCardPayment(makeDeps(db, { create: error("busy", "idempotency_key_in_use", 409) }).deps, "p1", 1); expect(outcome.message).toContain("opération");
-  });
-
-  it("reports a post-Stripe ledger failure without claiming Stripe failed", async () => {
-    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite); const original = db.prepare.bind(db); db.prepare = ((sql: string) => { if (sql.includes("INSERT INTO payment_refunds")) throw new Error("disk full"); return original(sql); }) as typeof db.prepare;
-    const outcome = await refundCardPayment(makeDeps(db, { create: result(accepted("re_ledger", 1000)) }).deps, "p1", 10);
-    expect(outcome.ok).toBe(false);
-    expect(outcome.code).toBe("ledger_write_failed");
-    expect(outcome.stripeRefundId).toBe("re_ledger");
-    expect(outcome.message).not.toContain("remboursement a échoué");
-    const audits = (await db.prepare("SELECT action, changes FROM audit_logs WHERE entity_id = ?").bind("p1").all<{ action: string; changes: string }>()).results;
-    const acceptedAudit = audits.find((audit) => audit.action === "refund-stripe-accepted");
-    expect(acceptedAudit).toBeDefined();
-    expect(acceptedAudit?.changes).toContain("re_ledger");
+  it("maps an idempotency conflict to the in-progress message", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
+    const outcome = await refundAllocation(makeDeps(db, { create: error("busy", "idempotency_key_in_use", 409) }).deps, { paymentId: "p1", bookingId: "b1", amount: 1 });
+    expect(outcome.message).toContain("opération");
   });
 });

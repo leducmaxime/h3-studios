@@ -110,6 +110,7 @@ interface UpcomingBooking {
   total_price: number;
   promo_discount?: number;
   payment_status: string;
+  remaining: number;
 }
 
 interface CalendarBooking {
@@ -1852,8 +1853,8 @@ export function AdminDashboard() {
                   <p className="font-medium text-sm">{b.band_name || b.user_name || "—"}</p>
                   <p className="text-xs text-zinc-400">{b.start_time} – {b.end_time} · {studioLabel(b.studio_id)}</p>
                 </div>
-                <span className={`text-xs font-medium px-2 py-1 rounded-full ${b.payment_status === "paid" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>
-                  {b.payment_status === "paid" ? "Payé" : b.remaining > 0 ? `À encaisser ${formatPrice(b.remaining)}` : "À encaisser"}
+                <span className={`text-xs font-medium px-2 py-1 rounded-full ${b.remaining < -0.005 ? "bg-red-500/15 text-red-400" : b.remaining <= 0.005 ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>
+                  {b.remaining < -0.005 ? `Avoir ${formatPrice(b.remaining)}` : b.remaining <= 0.005 ? "Payé" : `À encaisser ${formatPrice(b.remaining)}`}
                 </span>
               </a>
             ))}
@@ -1890,10 +1891,12 @@ export function AdminDashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {booking.payment_status === "paid" ? (
+                  {booking.remaining < -0.005 ? (
+                    <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px]">Avoir {formatPrice(booking.remaining)}</Badge>
+                  ) : booking.remaining <= 0.005 ? (
                     <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">{DISPLAY_PAYMENT_STATUS_LABELS.paid}</Badge>
                   ) : (
-                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px]">{(booking as any).remaining > 0 ? `Reste ${formatPrice((booking as any).remaining)}` : DISPLAY_PAYMENT_STATUS_LABELS["pay-on-site"]}</Badge>
+                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px]">Reste {formatPrice(booking.remaining)}</Badge>
                   )}
 
                 </div>

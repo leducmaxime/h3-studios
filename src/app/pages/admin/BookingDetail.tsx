@@ -49,8 +49,9 @@ import {
 } from "@/components/ui/select";
 import { STUDIOS, formatPrice, slotDurationHours, type StudioId, type GroupType, calculateEquipmentPrice, parseBookingEquipmentLines, resolveEquipmentDisplay, type EquipmentSelection } from "@/lib/booking";
 import { type DbBooking, type DbUser, type BookingStatus, type DbPayment } from "@/lib/db-types";
+import type { BookingLedgerSummary } from "@/lib/ledger";
 import { formatDbTimestamp } from "@/lib/utils";
-import { bookingAllowsCollection, getBookingAmountDue, getBookingBalance, getBookingOverpayment, getDisplayStatus, getManualDiscountEligibility, getManualDiscountBlockMessage, isBookingPast, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus, shouldShowDisplayPaymentStatus } from "@/lib/booking-totals";
+import { bookingAllowsCollection, getBookingAmountDue, getDisplayStatus, getManualDiscountEligibility, getManualDiscountBlockMessage, isBookingPast, isKeepBalanceDue, parseAmountInput, getDisplayPaymentStatus, shouldShowDisplayPaymentStatus } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabel, paymentRecordStatusLabel, studioLabel } from "@/lib/labels";
 import { formatSiret, resolveBookingClientIdentity } from "@/lib/client-identity";
@@ -70,7 +71,7 @@ interface BookingWithPromo extends DbBooking {
   promo_code_value?: number | null;
   loyalty_award_id?: string | null;
 }
-import { generateInvoicePDF } from "@/lib/export";
+import { generateInvoicePDF, type InvoiceLedgerSummary } from "@/lib/export";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + "T00:00:00");
@@ -93,33 +94,17 @@ const STATUS_CLASSES: Record<BookingStatus, string> = {
 /**
  * Libellé secondaire d'état de remboursement d'une ligne carte — trois états
  * distincts, sans formulation douteuse :
- *  - refund_pending_cents > 0  → accepté par Stripe, règlement encore en cours
- *  - aucun pending + refund    → réglé, état final
- *  - reserved > grand livre    → requires_action, à traiter dans le Dashboard
- * Les deux derniers peuvent coexister : une seule ligne, ambre, qui fusionne.
+ *  - un mouvement enfant pending → accepté par Stripe, règlement en cours
+ *  - un mouvement enfant settled → réglé, état final
+ * Les enfants portent l'état de remboursement, jamais le statut du mouvement parent.
  */
 function refundStateLine(p: PaymentRefundInfo): { text: string; tone: "amber" | "zinc" } | null {
-  if (p.method !== "card") return null;
-  const refundedCents = Math.round(p.refunded_amount * 100);
-  const awaitingActionCents = Math.max(0, (p.refund_reserved_cents ?? 0) - refundedCents);
-  const pendingCents = Math.min(Math.max(0, p.refund_pending_cents ?? 0), refundedCents);
-  if (awaitingActionCents > 0) {
-    const action = `${refundedCents > 0 ? "dont " : ""}${formatPrice(awaitingActionCents / 100)} en attente d'action dans le Dashboard Stripe`;
-    return {
-      tone: "amber",
-      text: pendingCents > 0 ? `${action} · ${formatPrice(pendingCents / 100)} en cours de règlement` : action,
-    };
-  }
-  if (refundedCents <= 0) return null;
-  if (pendingCents > 0) {
-    return {
-      tone: "zinc",
-      text: pendingCents < refundedCents
-        ? `dont ${formatPrice(pendingCents / 100)} en cours de règlement par la banque`
-        : "Remboursement accepté par Stripe — règlement en cours",
-    };
-  }
-  return { tone: "zinc", text: "Remboursement effectué" };
+  if (p.amount <= 0.005) return null;
+  const refunded = (p.allocated ?? p.amount) - (p.refundable ?? p.refundable_amount ?? 0);
+  if (refunded <= 0.005) return null;
+  return p.status === "pending"
+    ? { tone: "amber", text: "Remboursement accepté par Stripe — règlement en cours" }
+    : { tone: "zinc", text: refunded >= (p.allocated ?? p.amount) - 0.005 ? "Remboursement effectué" : `dont ${formatPrice(refunded)} remboursés` };
 }
 
 interface BookingDetailProps {
@@ -137,6 +122,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [booking, setBooking] = useState<BookingWithPromo | null>(null);
   const [user, setUser] = useState<DbUser | null>(null);
   const [payments, setPayments] = useState<PaymentRefundInfo[]>([]);
+  const [ledgerSummary, setLedgerSummary] = useState<BookingLedgerSummary | null>(null);
   const [equipment, setEquipment] = useState<EquipmentInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -147,12 +133,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const [addingPayment, setAddingPayment] = useState(false);
 
   // Edit payment dialog
-  const [editPayment, setEditPayment] = useState<DbPayment | null>(null);
-  const [editPaymentOpen, setEditPaymentOpen] = useState(false);
-  const [editPaymentAmount, setEditPaymentAmount] = useState("");
-  const [editPaymentMethod, setEditPaymentMethod] = useState<"cash" | "card" | "transfer" | "check">("cash");
-  const [editingPayment, setEditingPayment] = useState(false);
-
   // Delete payment dialog
   const [deletePaymentTarget, setDeletePaymentTarget] = useState<DbPayment | null>(null);
   const [deletePaymentOpen, setDeletePaymentOpen] = useState(false);
@@ -238,9 +218,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         // Fetch payments for this booking
         setLoadingPayments(true);
         const paymentRes = await fetch(`/api/admin/bookings/${bookingId}/payments`);
-        const paymentJson = (await paymentRes.json()) as { success: boolean; data?: DbPayment[] };
+        const paymentJson = (await paymentRes.json()) as { success: boolean; data?: BookingLedgerSummary | DbPayment[] };
         if (paymentJson.success && paymentJson.data) {
-          setPayments(paymentJson.data);
+          if (Array.isArray(paymentJson.data)) {
+            setLedgerSummary(null);
+            setPayments(paymentJson.data as PaymentRefundInfo[]);
+          } else {
+            setLedgerSummary(paymentJson.data);
+            setPayments(paymentJson.data.movements as PaymentRefundInfo[]);
+          }
         }
         setLoadingPayments(false);
 
@@ -278,9 +264,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     setLoadingPayments(true);
     try {
       const paymentRes = await fetch(`/api/admin/bookings/${bookingId}/payments`);
-      const paymentJson = (await paymentRes.json()) as { success: boolean; data?: DbPayment[] };
+      const paymentJson = (await paymentRes.json()) as { success: boolean; data?: BookingLedgerSummary | DbPayment[] };
       if (paymentJson.success && paymentJson.data) {
-        setPayments(paymentJson.data);
+        if (Array.isArray(paymentJson.data)) {
+          setLedgerSummary(null);
+          setPayments(paymentJson.data as PaymentRefundInfo[]);
+        } else {
+          setLedgerSummary(paymentJson.data);
+          setPayments(paymentJson.data.movements as PaymentRefundInfo[]);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch payments:", error);
@@ -296,9 +288,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   // Update default payment amount when payments change (show remaining balance)
   useEffect(() => {
     if (booking && payments.length >= 0) {
-      const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
-      const finalTotal = getBookingAmountDue(booking);
-      const balance = finalTotal - totalPaid;
+      const balance = ledgerSummary?.balance ?? 0;
       
       if (balance > 0) {
         setNewPayment(prev => ({
@@ -307,7 +297,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         }));
       }
     }
-  }, [payments, booking]);
+  }, [payments, booking, ledgerSummary]);
 
   const handleResendConfirmation = async () => {
     if (!booking) return;
@@ -509,7 +499,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
           body: JSON.stringify({
             amount,
             method: newPayment.method,
-            status: "paid",
           }),
         });
       const json = await res.json() as { success: boolean; error?: string };
@@ -526,38 +515,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
     }
   };
 
-  const handleEditPayment = async () => {
-    if (!editPayment) return;
-    const amount = parseAmountInput(editPaymentAmount);
-    if (isNaN(amount) || amount <= 0) return;
-    // max = reste à payer + montant actuel de ce paiement (puisqu'on le remplace)
-    const maxAmount = booking ? balance + (editPayment?.amount ?? 0) : undefined;
-    if (maxAmount !== undefined && amount > maxAmount) {
-      toast.error(`Le montant ne peut pas dépasser le reste à payer (${formatPrice(maxAmount)})`);
-      return;
-    }
-    setEditingPayment(true);
-    try {
-      const res = await fetch(`/api/admin/payments/${editPayment.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, method: editPaymentMethod }),
-      });
-      const json = await res.json() as { success: boolean; error?: string };
-      if (json.success) {
-        toast.success("Paiement modifié");
-        setEditPaymentOpen(false);
-        fetchBooking();
-      } else {
-        toast.error(json.error || "Erreur lors de la modification");
-      }
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setEditingPayment(false);
-    }
-  };
-
   const handleDeletePayment = async () => {
     if (!deletePaymentTarget) return;
     setDeletingPayment(true);
@@ -567,7 +524,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       });
       const json = await res.json() as { success: boolean; error?: string };
       if (json.success) {
-        toast.success("Paiement supprimé");
+        toast.success("Paiement contre-passé");
         setDeletePaymentOpen(false);
         setDeletePaymentTarget(null);
         fetchPayments();
@@ -592,11 +549,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
   const studio = STUDIOS[booking.studio_id as StudioId];
 
-  const totalPaid = payments.reduce((acc, p) => p.status === "paid" ? acc + p.amount : acc, 0);
+  const totalPaid = ledgerSummary?.settled ?? payments.filter((p) => p.status === "settled").reduce((sum, p) => sum + p.amount, 0);
   const totalPrice = Number(booking.total_price) || 0;
   const finalTotal = getBookingAmountDue(booking);
-  const balance = getBookingBalance(booking, payments);
-  const overpayment = getBookingOverpayment(booking, payments);
+  const balance = ledgerSummary?.balance ?? 0;
+  const overpayment = Math.max(0, -balance);
+  const invoiceLedger: InvoiceLedgerSummary = {
+    allocations: payments.map((payment) => ({ ...payment, allocated: payment.allocated ?? payment.amount })),
+    firstPayment: payments.find((payment) => payment.amount > 0) ?? null,
+  };
 
   // Présentation du paiement : le statut d'affichage tient compte du solde
   // conservé sur une réservation annulée.
@@ -605,7 +566,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   const sessionEnded = displayStatus === "completed" || displayStatus === "no-show" || isBookingPast(booking);
   const canMutateSession = booking.status === "confirmed" && displayStatus === "confirmed";
   const canMarkNoShow = booking.status === "confirmed" || booking.status === "completed";
-  const displayPaymentStatus = getDisplayPaymentStatus(booking, payments);
+  const displayPaymentStatus = getDisplayPaymentStatus(booking, ledgerSummary ?? ({ bookingId, due: finalTotal, settled: totalPaid, balance, refunded: 0, movements: payments.map((payment) => ({ ...payment, allocated: payment.allocated ?? payment.amount, refundable: payment.refundable ?? payment.refundable_amount ?? 0 })) } as BookingLedgerSummary));
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -960,14 +921,13 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                         className="flex items-center justify-between p-4 rounded-xl bg-zinc-800/20 hover:bg-zinc-800/40 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${p.status === "paid" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${p.status === "settled" && p.amount > 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
                             {p.method === "card" ? <CreditCard className="h-5 w-5" /> : p.method === "cash" ? <Banknote className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
                           </div>
                           <div>
-                            <p className="font-semibold">{formatPrice(p.amount)}</p>
+                            <p className="font-semibold">{formatPrice(p.allocated ?? p.amount)}</p>
                             <p className="text-xs text-zinc-500">
                               {paymentMethodLabel(p.method)} · {formatDbTimestamp(p.created_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                              {p.refunded_amount > 0 && ` · -${formatPrice(p.refunded_amount)} remboursés`}
                             </p>
                             {(() => {
                               const line = refundStateLine(p);
@@ -981,10 +941,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge className={p.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : p.status === "refunded" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : p.status === "partial-refund" ? "bg-blue-500/10 text-blue-300 border-blue-500/20" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
-                            {paymentRecordStatusLabel(p.status)}
+                          <Badge className={p.status === "settled" && p.amount > 0 ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : p.amount < 0 ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
+                            {paymentRecordStatusLabel(p.status, { amount: p.amount, refundableAmount: p.refundable ?? p.refundable_amount })}
                           </Badge>
-                          {(p.status === "paid" || p.status === "partial-refund") &&
+                          {p.status === "settled" && p.amount > 0 &&
                             (isStripeRefundable(p) || (p.method !== "card" && refundableCap(p) > 0.004)) && (
                             <Button
                               size="sm"
@@ -999,7 +959,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                               Rembourser
                             </Button>
                           )}
-                          {(p.status === "paid" || p.status === "partial-refund") &&
+                          {p.status === "settled" && p.amount > 0 &&
                             p.method === "card" && !hasStripeReference(p) && (
                             <Button
                               size="sm"
@@ -1015,20 +975,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 px-2 text-xs text-zinc-400"
-                            onClick={() => {
-                              setEditPayment(p);
-                              setEditPaymentAmount(p.amount.toFixed(2).replace(".", ","));
-                              setEditPaymentMethod((p.method as "cash" | "card" | "transfer" | "check") || "cash");
-                              setEditPaymentOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-3 w-3 mr-1" />
-                            Modifier le paiement
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
                             className="h-7 px-2 text-xs text-red-400"
                             onClick={() => {
                               setDeletePaymentTarget(p);
@@ -1036,7 +982,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                             }}
                           >
                             <Trash2 className="h-3 w-3 mr-1" />
-                            Supprimer
+                            Contre-passer
                           </Button>
                         </div>
                       </div>
@@ -1251,7 +1197,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
               <Button
                 variant="outline"
                 className="w-full justify-start h-11 border-zinc-700 hover:bg-zinc-800"
-                onClick={async () => { await generateInvoicePDF(booking, payments[0] || null, user || ({} as DbUser)); }}
+                onClick={async () => { await generateInvoicePDF(booking, invoiceLedger, user || ({} as DbUser)); }}
                 disabled={!user || (isCancelled && !isKeepBalanceDue(booking))}
                 title={isCancelled && !isKeepBalanceDue(booking) ? "Aucune facture pour une réservation annulée" : undefined}
               >
@@ -1366,62 +1312,9 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Payment Dialog */}
-      <Dialog open={editPaymentOpen} onOpenChange={setEditPaymentOpen}>
-        <DialogContent className="border-zinc-800 bg-zinc-900">
-          <DialogHeader>
-            <DialogTitle>Modifier le paiement</DialogTitle>
-            <DialogDescription>Modifiez le montant ou le mode de paiement.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-payment-amount">Montant (&euro; TTC)</Label>
-              <Input
-                id="edit-payment-amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                max={booking ? balance + (editPayment?.amount ?? 0) : undefined}
-                value={editPaymentAmount}
-                onChange={(e) => setEditPaymentAmount(e.target.value)}
-                className="border-zinc-700 bg-zinc-800"
-                autoFocus
-              />
-              {booking && parseAmountInput(editPaymentAmount) > balance + (editPayment?.amount ?? 0) && (
-                <p className="text-xs text-destructive">
-                  Maximum : {formatPrice(balance + (editPayment?.amount ?? 0))} (reste à payer)
-                </p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-payment-method">Mode de paiement</Label>
-              <Select value={editPaymentMethod} onValueChange={(v) => setEditPaymentMethod(v as "cash" | "card" | "transfer" | "check")}>
-                <SelectTrigger id="edit-payment-method" className="bg-zinc-800 border-zinc-700">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800">
-                  <SelectItem value="card">Carte Bancaire</SelectItem>
-                  <SelectItem value="cash">Esp&egrave;ces</SelectItem>
-                  <SelectItem value="transfer">Virement</SelectItem>
-                  <SelectItem value="check">Ch&egrave;que</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditPaymentOpen(false)} className="border-zinc-700">
-              Annuler
-            </Button>
-            <Button onClick={handleEditPayment} disabled={editingPayment || (booking !== null && parseAmountInput(editPaymentAmount) > balance + (editPayment?.amount ?? 0))}>
-              {editingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Enregistrer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <RefundPaymentDialog
         payment={refundTarget}
+        bookingId={booking.id}
         open={refundOpen}
         onOpenChange={setRefundOpen}
         onSettled={() => {
@@ -1434,7 +1327,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       <Dialog open={deletePaymentOpen} onOpenChange={setDeletePaymentOpen}>
         <DialogContent className="border-zinc-800 bg-zinc-900">
           <DialogHeader>
-            <DialogTitle>Supprimer le paiement</DialogTitle>
+            <DialogTitle>Contre-passer le paiement</DialogTitle>
             <DialogDescription>
               {deletePaymentTarget && (
                 <>Êtes-vous sûr de vouloir supprimer le paiement de <span className="font-semibold text-foreground">{formatPrice(deletePaymentTarget.amount)}</span> ({paymentMethodLabel(deletePaymentTarget.method)}) ? Cette action est irréversible.</>
@@ -1447,7 +1340,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
             </Button>
             <Button variant="destructive" onClick={handleDeletePayment} disabled={deletingPayment}>
               {deletingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Supprimer
+              Contre-passer
             </Button>
           </DialogFooter>
         </DialogContent>

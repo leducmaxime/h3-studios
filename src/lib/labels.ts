@@ -93,8 +93,7 @@ export function bookingStatusLabel(
 // ─── Méthodes de paiement ─────────────────────────────────────────────────────
 
 /**
- * `check` et `cheque` coexistent en base (alias hérité) et rendent le même
- * libellé.
+ * `check` est la valeur canonique en base.
  * `card-online` et `card-onsite` sont des clés d'agrégation statistique
  * (graphique du dashboard), pas des valeurs stockées dans `payments.method`.
  */
@@ -104,8 +103,7 @@ export type PaymentMethodKey =
   | "card-onsite"
   | "cash"
   | "transfer"
-  | "check"
-  | "cheque";
+  | "check";
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethodKey, string> = {
   card: "Carte bancaire",
@@ -114,7 +112,6 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethodKey, string> = {
   cash: "Espèces",
   transfer: "Virement",
   check: "Chèque",
-  cheque: "Chèque",
 };
 
 /** Variante compacte pour les colonnes et légendes de graphiques étroites. */
@@ -125,7 +122,6 @@ export const PAYMENT_METHOD_LABELS_SHORT: Record<PaymentMethodKey, string> = {
   cash: "Espèces",
   transfer: "Virement",
   check: "Chèque",
-  cheque: "Chèque",
 };
 
 export function paymentMethodLabel(
@@ -161,14 +157,30 @@ export function storedPaymentStatusLabel(
 
 export const PAYMENT_RECORD_STATUS_LABELS: Record<DbPaymentStatus, string> = {
   pending: "En attente",
-  paid: "Payé",
-  refunded: "Remboursé",
-  "partial-refund": "Remboursé partiel",
+  settled: "Payé",
+  failed: "Échec",
 };
 
+export interface PaymentRecordStatusContext {
+  /** Signed movement amount. Negative movements are refunds/reversals. */
+  amount?: number | null;
+  /** Remaining refundable amount on a positive parent movement. */
+  refundableAmount?: number | null;
+}
+
 export function paymentRecordStatusLabel(
-  value: DbPaymentStatus | (string & {}) | null | undefined
+  value: DbPaymentStatus | (string & {}) | null | undefined,
+  context?: PaymentRecordStatusContext,
 ): string {
+  if (value === "settled") {
+    if ((context?.amount ?? 0) < -0.005) return "Remboursé";
+    const amount = context?.amount;
+    const refundable = context?.refundableAmount;
+    if (typeof amount === "number" && amount > 0.005 && typeof refundable === "number") {
+      if (refundable <= 0.005) return "Remboursé";
+      if (refundable < amount - 0.005) return "Remboursé partiel";
+    }
+  }
   return PAYMENT_RECORD_STATUS_LABELS[value as DbPaymentStatus] ?? UNKNOWN_LABEL;
 }
 
