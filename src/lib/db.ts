@@ -35,6 +35,7 @@ import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon, isPromoCodeExpire
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type StudioId } from "./booking";
 import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
 import { computeClientBookingInsights, type BookingStatSource } from "./user-booking-stats";
+import { addDaysToDateISO, generateLoyaltyCode } from "./loyalty";
 
 export { isPromoCodeExpired } from "./utils";
 
@@ -45,153 +46,123 @@ export interface PromoCartLine {
   subtotal: number;
 }
 
-export function buildLoyaltyCountsQuery(userId: string, nowValue: { dateISO: string; hours: number; minutes: number }): { sql: string; params: unknown[] } {
-  const direction = dateDirectionCondition("past", nowValue);
-  const lastAwardEnd = `(SELECT MAX(${sqlBookingEndInstant("a")}) FROM bookings a WHERE a.user_id = b.user_id AND a.status != 'cancelled' AND a.loyalty_award_id IS NOT NULL)`;
-  return {
-    sql: `SELECT COUNT(CASE WHEN ${direction.sql} AND b.status IN ('confirmed','completed') THEN 1 END) as past_eligible, COUNT(DISTINCT CASE WHEN b.status != 'cancelled' THEN b.loyalty_award_id END) as awards_granted, COUNT(CASE WHEN ${direction.sql} AND b.status IN ('confirmed','completed') AND (${lastAwardEnd} IS NULL OR ${sqlBookingEndInstant("b")} > ${lastAwardEnd}) THEN 1 END) as past_since_award FROM bookings b WHERE b.user_id = ?`,
-    params: [...direction.params, ...direction.params, userId],
-  };
-}
-export async function getUserLoyaltyCounts(db: D1Database, userId: string): Promise<{ pastEligibleBookings: number; awardsGranted: number; pastSinceLastAward: number }> {
-  const q = buildLoyaltyCountsQuery(userId, getParisNow());
-  const row = await db.prepare(q.sql).bind(...q.params).first<{ past_eligible: number; awards_granted: number; past_since_award: number }>();
-  return { pastEligibleBookings: Number(row?.past_eligible) || 0, awardsGranted: Number(row?.awards_granted) || 0, pastSinceLastAward: Number(row?.past_since_award) || 0 };
-}
-
 /**
  * Candidates are deduplicated after their progress is computed. When several
  * user rows share an inbox, the due row with the smallest id is the stable
  * winner, so one inbox receives at most one notification per award.
  */
-export function buildDueLoyaltyRewardCandidatesQuery(
+export function buildDueLoyaltyCodeCandidatesQuery(
   nowValue: { dateISO: string; hours: number; minutes: number },
   limit: number,
 ): { sql: string; params: unknown[] } {
   const direction = dateDirectionCondition("past", nowValue);
-  const bookingEnd = sqlBookingEndInstant("b");
-  const pastEligible = `${direction.sql} AND b.status IN ('confirmed','completed')`;
-  const pastSinceAward = `${pastEligible} AND (lae.last_award_end IS NULL OR ${bookingEnd} > lae.last_award_end)`;
-
   return {
     sql: `WITH loyalty_users AS (
         SELECT u.id, TRIM(u.email) AS email, u.name, u.first_name,
-               u.loyalty_enabled, u.loyalty_discount_type,
-               u.loyalty_discount_value, u.loyalty_threshold,
-               COALESCE(u.loyalty_notified_award_index, 0) AS loyalty_notified_award_index
+               u.loyalty_discount_type, u.loyalty_discount_value, u.loyalty_threshold,
+               COALESCE(u.loyalty_code_validity_days, 60) AS loyalty_code_validity_days,
+               u.loyalty_cycle_start
         FROM users u
         WHERE COALESCE(u.is_blocked, 0) = 0
-          AND u.email IS NOT NULL
-          AND TRIM(u.email) <> ''
+          AND u.email IS NOT NULL AND TRIM(u.email) <> ''
           AND COALESCE(u.loyalty_emails_opt_out, 0) = 0
           AND u.loyalty_enabled = 1
       ),
-      last_award_end AS (
-        SELECT b.user_id, MAX(${sqlBookingEndInstant("b")}) AS last_award_end
+      eligible_bookings AS (
+        SELECT b.user_id, ${sqlBookingEndInstant("b")} AS booking_end
         FROM bookings b
-        INNER JOIN loyalty_users u ON u.id = b.user_id
-        WHERE b.status != 'cancelled' AND b.loyalty_award_id IS NOT NULL
-        GROUP BY b.user_id
+        WHERE ${direction.sql} AND b.status IN ('confirmed','completed')
       ),
       booking_counts AS (
         SELECT u.id,
-               COUNT(CASE WHEN ${pastEligible} THEN 1 END) AS past_eligible,
-               COUNT(DISTINCT CASE WHEN b.status != 'cancelled' THEN b.loyalty_award_id END) AS awards_granted,
-               COUNT(CASE WHEN ${pastSinceAward} THEN 1 END) AS past_since_award,
-               MAX(CASE WHEN ${pastEligible} THEN ${bookingEnd} END) AS last_qualifying_end
+               COUNT(CASE WHEN u.loyalty_cycle_start IS NULL OR eb.booking_end > u.loyalty_cycle_start THEN 1 END) AS cycle_bookings,
+               MAX(CASE WHEN u.loyalty_cycle_start IS NULL OR eb.booking_end > u.loyalty_cycle_start THEN eb.booking_end END) AS cycle_end
         FROM loyalty_users u
-        LEFT JOIN bookings b ON b.user_id = u.id
-        LEFT JOIN last_award_end lae ON lae.user_id = u.id
+        LEFT JOIN eligible_bookings eb ON eb.user_id = u.id
         GROUP BY u.id
       ),
       due_candidates AS (
-        SELECT u.id, u.email, u.name, u.first_name,
-               u.loyalty_enabled, u.loyalty_discount_type,
-               u.loyalty_discount_value, u.loyalty_threshold,
-               u.loyalty_notified_award_index,
-               c.past_eligible, c.awards_granted, c.past_since_award,
-               c.last_qualifying_end,
+        SELECT u.id, u.email, u.name, u.first_name, u.loyalty_discount_type,
+               u.loyalty_discount_value, u.loyalty_threshold, u.loyalty_code_validity_days,
+               u.loyalty_cycle_start, c.cycle_bookings, c.cycle_end,
                ROW_NUMBER() OVER (PARTITION BY lower(trim(u.email)) ORDER BY u.id ASC) AS email_rank
         FROM loyalty_users u
         INNER JOIN booking_counts c ON c.id = u.id
-        WHERE c.past_since_award >= u.loyalty_threshold
+        WHERE c.cycle_bookings >= u.loyalty_threshold AND c.cycle_end IS NOT NULL
       )
-      SELECT id, email, name, first_name, loyalty_enabled,
-             loyalty_discount_type, loyalty_discount_value, loyalty_threshold,
-             loyalty_notified_award_index, past_eligible, awards_granted,
-             past_since_award
+      SELECT id, email, name, first_name, loyalty_discount_type, loyalty_discount_value,
+             loyalty_threshold, loyalty_code_validity_days, loyalty_cycle_start,
+             cycle_bookings, cycle_end
       FROM due_candidates
-      -- Le rang par inbox est calculé AVANT ce filtre : le gagnant d'une inbox
-      -- reste le même une fois notifié, sinon le perdant serait promu et
-      -- enverrait un second mail à la même adresse. Filtrer les déjà-notifiés
-      -- ici (et pas seulement en JS) évite qu'ils saturent le LIMIT à vie :
-      -- un client reste « dû » jusqu'à sa prochaine réservation.
       WHERE email_rank = 1
-        AND loyalty_notified_award_index < awards_granted + 1
-      ORDER BY last_qualifying_end ASC, id ASC
+      ORDER BY cycle_end ASC, id ASC
       LIMIT ?`,
-    // dateDirectionCondition appears three times above, so its three
-    // parameters must be bound three times.
-    params: [...direction.params, ...direction.params, ...direction.params, limit],
+    params: [...direction.params, limit],
   };
 }
 
-export async function getDueLoyaltyRewardCandidates(
+export async function getDueLoyaltyCodeCandidates(
   db: D1Database,
   limit: number,
 ): Promise<Array<{
-  id: string;
-  email: string;
-  name: string;
-  first_name: string | null;
-  loyalty_enabled: number;
-  loyalty_discount_type: string | null;
-  loyalty_discount_value: number;
-  loyalty_threshold: number;
-  loyalty_notified_award_index: number;
-  pastEligibleBookings: number;
-  awardsGranted: number;
-  pastSinceLastAward: number;
+  id: string; email: string; name: string; first_name: string | null;
+  loyalty_discount_type: string | null; loyalty_discount_value: number; loyalty_threshold: number;
+  loyalty_code_validity_days: number; loyalty_cycle_start: string | null;
+  cycleBookings: number; cycleEnd: string;
 }>> {
-  const q = buildDueLoyaltyRewardCandidatesQuery(getParisNow(), limit);
+  const q = buildDueLoyaltyCodeCandidatesQuery(getParisNow(), limit);
   const result = await db.prepare(q.sql).bind(...q.params).all<{
-    id: string;
-    email: string;
-    name: string;
-    first_name: string | null;
-    loyalty_enabled: number;
-    loyalty_discount_type: string | null;
-    loyalty_discount_value: number;
-    loyalty_threshold: number;
-    loyalty_notified_award_index: number;
-    past_eligible: number;
-    awards_granted: number;
-    past_since_award: number;
+    id: string; email: string; name: string; first_name: string | null;
+    loyalty_discount_type: string | null; loyalty_discount_value: number; loyalty_threshold: number;
+    loyalty_code_validity_days: number; loyalty_cycle_start: string | null;
+    cycle_bookings: number; cycle_end: string;
   }>();
   return result.results.map((row) => ({
-    id: row.id,
-    email: row.email,
-    name: row.name,
-    first_name: row.first_name,
-    loyalty_enabled: Number(row.loyalty_enabled) || 0,
+    id: row.id, email: row.email, name: row.name, first_name: row.first_name,
     loyalty_discount_type: row.loyalty_discount_type,
     loyalty_discount_value: Number(row.loyalty_discount_value) || 0,
     loyalty_threshold: Number(row.loyalty_threshold) || 0,
-    loyalty_notified_award_index: Number(row.loyalty_notified_award_index) || 0,
-    pastEligibleBookings: Number(row.past_eligible) || 0,
-    awardsGranted: Number(row.awards_granted) || 0,
-    pastSinceLastAward: Number(row.past_since_award) || 0,
+    loyalty_code_validity_days: Number(row.loyalty_code_validity_days) || 60,
+    loyalty_cycle_start: row.loyalty_cycle_start,
+    cycleBookings: Number(row.cycle_bookings) || 0,
+    cycleEnd: row.cycle_end,
   }));
 }
 
-/** Atomically reserves one notification; there is intentionally no release. */
-export async function claimLoyaltyRewardEmail(
-  db: D1Database,
-  args: { userId: string; awardIndex: number },
-): Promise<boolean> {
+export async function claimLoyaltyCycleStart(db: D1Database, userId: string, newCycleEnd: string): Promise<boolean> {
   const result = await db.prepare(
-    "UPDATE users SET loyalty_notified_award_index = ?, updated_at = ? WHERE id = ? AND COALESCE(loyalty_notified_award_index, 0) < ?",
-  ).bind(args.awardIndex, now(), args.userId, args.awardIndex).run();
+    "UPDATE users SET loyalty_cycle_start = ?, updated_at = ? WHERE id = ? AND (loyalty_cycle_start IS NULL OR loyalty_cycle_start < ?)",
+  ).bind(newCycleEnd, now(), userId, newCycleEnd).run();
+  return result.meta.changes === 1;
+}
+
+export async function createLoyaltyPromoCode(
+  db: D1Database,
+  args: { userId: string; type: "percentage" | "fixed"; value: number; threshold: number; cycleEnd: string; validityDays: number },
+): Promise<DbPromoCode> {
+  const expiresAt = addDaysToDateISO(args.cycleEnd, args.validityDays);
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const id = generateId();
+    const code = generateLoyaltyCode();
+    try {
+      await db.prepare(`
+        INSERT INTO promo_codes (id, code, type, value, min_total, is_active, expires_at, usage_count, max_usage, round_mode, created_at, user_id, source, scope, notified_at, cycle_end)
+        VALUES (?, ?, ?, ?, 0, 1, ?, 0, 1, 'none', ?, ?, 'loyalty', 'cart', NULL, ?)
+      `).bind(id, code, args.type, args.value, expiresAt, now(), args.userId, args.cycleEnd).run();
+      const promo = await db.prepare("SELECT * FROM promo_codes WHERE id = ?").bind(id).first<DbPromoCode>();
+      if (!promo) throw new Error("Code fidélité introuvable après création");
+      return promo;
+    } catch (error) {
+      if (attempt === 7 || !/unique|constraint/i.test(error instanceof Error ? error.message : String(error))) throw error;
+    }
+  }
+  throw new Error("Impossible de générer un code fidélité unique");
+}
+
+export async function markLoyaltyPromoCodeNotified(db: D1Database, promoId: string): Promise<boolean> {
+  const result = await db.prepare(
+    "UPDATE promo_codes SET notified_at = ? WHERE id = ? AND source = 'loyalty' AND notified_at IS NULL",
+  ).bind(now(), promoId).run();
   return result.meta.changes === 1;
 }
 
@@ -204,11 +175,6 @@ export async function getUserLoyaltyDiscountTotal(db: D1Database, userId: string
   ).bind(userId).first<{ total: number }>();
   return Number(row?.total) || 0;
 }
-export async function claimLoyaltyAward(db: D1Database, args: { bookingId: string; userId: string; awardId: string; discount: number; expectedAwardsGranted: number }): Promise<boolean> {
-  const result = await db.prepare(`UPDATE bookings SET promo_discount = ?, loyalty_award_id = ?, updated_at = ? WHERE id = ? AND user_id = ? AND (SELECT COUNT(DISTINCT loyalty_award_id) FROM bookings WHERE user_id = ? AND status != 'cancelled') = ?`).bind(args.discount, args.awardId, now(), args.bookingId, args.userId, args.userId, args.expectedAwardsGranted).run();
-  return result.meta.changes === 1;
-}
-
 /** Normalise "00:00" en "24:00" pour les comparaisons de strings SQL.
  *  "00:00" est plus petit que toutes les heures en string compare,
  *  ce qui casse les gardes start_time < ? AND end_time > ?. */
@@ -694,6 +660,8 @@ export async function getUsers(
         u.loyalty_discount_type,
         u.loyalty_discount_value,
         u.loyalty_threshold,
+        u.loyalty_code_validity_days,
+        u.loyalty_cycle_start,
         COALESCE(s.total_bookings, 0) as total_bookings,
         COALESCE(s.total_spent, 0) as total_spent,
         COALESCE(s.total_cancellations, 0) as total_cancellations,
@@ -746,6 +714,8 @@ export async function getUserById(
         u.loyalty_discount_type,
         u.loyalty_discount_value,
         u.loyalty_threshold,
+        u.loyalty_code_validity_days,
+        u.loyalty_cycle_start,
         COALESCE(s.total_bookings, 0) as total_bookings,
         COALESCE(s.total_spent, 0) as total_spent,
         COALESCE(s.total_cancellations, 0) as total_cancellations,
@@ -997,7 +967,7 @@ export async function createUser(
 export async function updateUser(
   db: D1Database,
   id: string,
-  data: Partial<Pick<DbUser, "email" | "name" | "first_name" | "last_name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country" | "password_hash" | "client_type" | "legal_name" | "siret" | "rna" | "instagram_accounts" | "loyalty_enabled" | "loyalty_discount_type" | "loyalty_discount_value" | "loyalty_threshold">>,
+  data: Partial<Pick<DbUser, "email" | "name" | "first_name" | "last_name" | "phone" | "band_name" | "notes" | "is_blocked" | "total_bookings" | "total_spent" | "address_line1" | "address_line2" | "postal_code" | "city" | "country" | "password_hash" | "client_type" | "legal_name" | "siret" | "rna" | "instagram_accounts" | "loyalty_enabled" | "loyalty_discount_type" | "loyalty_discount_value" | "loyalty_threshold" | "loyalty_code_validity_days">>,
 ): Promise<{ success: boolean; error?: string }> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -1053,6 +1023,9 @@ export async function mergeUsers(
   statements.push(
     db.prepare(`UPDATE bookings SET user_id = ?, updated_at = ? WHERE user_id IN (${placeholders})`).bind(primaryId, now(), ...uniqueDuplicateIds),
   );
+  statements.push(
+    db.prepare(`UPDATE promo_codes SET user_id = ? WHERE user_id IN (${placeholders})`).bind(primaryId, ...uniqueDuplicateIds),
+  );
   const loyaltySource = primary.loyalty_enabled === 0 ? duplicates.results.find((d) => d.loyalty_enabled === 1) : undefined;
   if (loyaltySource) statements.push(db.prepare("UPDATE users SET loyalty_enabled = ?, loyalty_discount_type = ?, loyalty_discount_value = ?, loyalty_threshold = ?, updated_at = ? WHERE id = ?").bind(loyaltySource.loyalty_enabled, loyaltySource.loyalty_discount_type, loyaltySource.loyalty_discount_value, loyaltySource.loyalty_threshold, now(), primaryId));
 
@@ -1064,9 +1037,13 @@ export async function mergeUsers(
     Number(primary.loyalty_emails_opt_out) || 0,
     ...duplicates.results.map((d) => Number(d.loyalty_emails_opt_out) || 0),
   );
+  const loyaltyCycleStart = [primary.loyalty_cycle_start, ...duplicates.results.map((d) => d.loyalty_cycle_start)]
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? null;
   statements.push(db.prepare(
-    "UPDATE users SET loyalty_notified_award_index = ?, loyalty_emails_opt_out = ?, updated_at = ? WHERE id = ?",
-  ).bind(notifiedAwardIndex, emailsOptOut, now(), primaryId));
+    "UPDATE users SET loyalty_notified_award_index = ?, loyalty_emails_opt_out = ?, loyalty_cycle_start = ?, updated_at = ? WHERE id = ?",
+  ).bind(notifiedAwardIndex, emailsOptOut, loyaltyCycleStart, now(), primaryId));
 
   const mergedEmails = duplicates.results.map((d) => d.email).filter(Boolean).join(", ") || "(sans email)";
   const newNotes = primary.notes
@@ -1735,8 +1712,17 @@ export async function updateEquipment(
 
 // ─── Promo Codes ─────────────────────────────────────────────────────────────
 
-export async function getPromoCodes(db: D1Database): Promise<DbPromoCode[]> {
-  const result = await db.prepare("SELECT * FROM promo_codes ORDER BY created_at DESC").all<DbPromoCode>();
+export async function getPromoCodes(db: D1Database, source?: "manual" | "loyalty"): Promise<DbPromoCode[]> {
+  const result = source
+    ? await db.prepare("SELECT * FROM promo_codes WHERE source = ? ORDER BY created_at DESC").bind(source).all<DbPromoCode>()
+    : await db.prepare("SELECT * FROM promo_codes ORDER BY created_at DESC").all<DbPromoCode>();
+  return result.results;
+}
+
+export async function getLoyaltyPromoCodes(db: D1Database, userId: string): Promise<DbPromoCode[]> {
+  const result = await db.prepare(
+    "SELECT * FROM promo_codes WHERE user_id = ? AND source = 'loyalty' ORDER BY created_at DESC",
+  ).bind(userId).all<DbPromoCode>();
   return result.results;
 }
 

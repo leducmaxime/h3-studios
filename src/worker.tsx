@@ -52,7 +52,7 @@ import { ForgotPassword } from "@/app/pages/ForgotPassword";
 import { ResetPassword } from "@/app/pages/ResetPassword";
 import { createCheckoutSession, retrieveCheckoutSession, constructWebhookEvent, type StripeCheckoutSession } from "@/lib/stripe";
 import { DEFAULT_MATERIEL, parseMaterielSetting } from "@/lib/materiel";
-import { sendBookingCancellationEmail, sendBookingConfirmationEmail, sendBookingReminderEmail, sendLoyaltyRewardEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
+import { sendBookingCancellationEmail, sendBookingConfirmationEmail, sendBookingReminderEmail, sendLoyaltyCodeEmail, sendPasswordResetEmail, type BookingConfirmationData, type BookingSlot } from "@/lib/email";
 import { COMPANY } from "@/lib/company";
 import {
   type AdminRole,
@@ -118,6 +118,7 @@ import {
   getEquipment,
   updateEquipment,
   getPromoCodes,
+  getLoyaltyPromoCodes,
   createPromoCode,
   updatePromoCode,
   validatePromoCode,
@@ -143,16 +144,16 @@ import {
   findOrCreateUserByEmail,
   getBookingsByRefs,
   resolveStatsRange,
-  getUserLoyaltyCounts,
   getUserLoyaltyDiscountTotal,
-  claimLoyaltyAward,
-  getDueLoyaltyRewardCandidates,
-  claimLoyaltyRewardEmail,
+  getDueLoyaltyCodeCandidates,
+  claimLoyaltyCycleStart,
+  createLoyaltyPromoCode,
+  markLoyaltyPromoCodeNotified,
   claimPromoCodeUsage,
   releasePromoCodeUsage,
   claimPromoValidationAttempt,
 } from "@/lib/db";
-import { getLoyaltyProgress, readLoyaltyConfig, isLoyaltyConfigured, validateLoyaltySettings, computeLoyaltyDiscount } from "@/lib/loyalty";
+import { validateLoyaltySettings } from "@/lib/loyalty";
 import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
 import { refundCardPayment, refundPayments } from "@/lib/refunds";
 import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
@@ -1082,19 +1083,11 @@ const app = defineApp([
       const allowCash = body.paymentMethod === "cash"
         ? parseAllowCash(await getSetting(env.DB, "booking.allow_cash"))
         : true;
-      // Sans code promo ni remise de fidélité possible, le net ne peut pas
+      // Sans code promo, le net ne peut pas
       // tomber à 0 : on refuse avant toute écriture. Dès qu'une remise peut
       // s'appliquer, seul le net calculé côté serveur tranche (plus bas).
       if (body.paymentMethod === "cash" && !allowCash && !body.promoCode) {
-        // Lecture seule : ce pré-contrôle ne doit jamais créer de client.
-        const earlyToken = getClientSessionToken(request);
-        const earlySessionUser = earlyToken ? await validateClientSession(env.DB, earlyToken) : null;
-        const earlyUser = earlySessionUser
-          ? await getUserById(env.DB, earlySessionUser.id)
-          : (body.user?.email ? await getUserByEmail(env.DB, body.user.email) : null);
-        if (!earlyUser || !isLoyaltyConfigured(readLoyaltyConfig(earlyUser))) {
-          return jsonResponse({ success: false, error: "Le paiement sur place n'est plus disponible, réglez en ligne par carte.", code: "cash-not-allowed" }, 400);
-        }
+        return jsonResponse({ success: false, error: "Le paiement sur place n'est plus disponible, réglez en ligne par carte.", code: "cash-not-allowed" }, 400);
       }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) return jsonError("Format de date invalide", 400);
       if (!/^\d{2}:\d{2}$/.test(body.startTime) || !/^\d{2}:\d{2}$/.test(body.endTime)) return jsonError("Format d'heure invalide", 400);
@@ -1386,10 +1379,6 @@ const app = defineApp([
       // Cart-level promo total (server-authoritative) — also used by the
       // consolidated confirmation email so it matches the charged amount.
       let cartPromoDiscountTotal = 0;
-      let cartLoyaltyDiscountTotal = 0;
-      let loyaltyAllocations: Array<{ ref: string; id: string | null; discount: number }> = [];
-      let loyaltyAwardId: string | null = null;
-      let loyaltyExpectedAwardsGranted = 0;
       let promoType: string | null = null;
       let promoValue: number | undefined = undefined;
       let promoUsageClaimed = false;
@@ -1488,34 +1477,6 @@ const app = defineApp([
               serverPromoDiscount = alloc.discount;
             }
           }
-        } else {
-          // Remise de fidélité : réservée aux clients configurés ayant
-          // franchi un nouveau palier. L'allocation reste PROVISOIRE — rien
-          // n'est écrit tant que l'award n'a pas été réclamé atomiquement.
-          const loyaltyUser = await getUserById(env.DB, userId);
-          const loyaltyConfig = loyaltyUser ? readLoyaltyConfig(loyaltyUser) : null;
-          if (loyaltyConfig && isLoyaltyConfigured(loyaltyConfig)) {
-            const counts = await getUserLoyaltyCounts(env.DB, userId);
-            const progress = getLoyaltyProgress(loyaltyConfig, counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
-            if (progress.isDue) {
-              const discountTotal = computeLoyaltyDiscount(loyaltyConfig, cartSubtotal);
-              let remaining = discountTotal;
-              for (const ref of prevRefs) {
-                const b = previousBookings.find((pb) => pb.booking_ref === ref);
-                if (!b) continue;
-                const subtotal = (b.base_price || 0) + (b.equipment_price || 0);
-                const alloc = Math.min(remaining, subtotal);
-                loyaltyAllocations.push({ ref, id: b.id, discount: alloc });
-                remaining -= alloc;
-              }
-              const currentAlloc = Math.min(remaining, serverTotalPrice);
-              loyaltyAllocations.push({ ref: body.bookingRef, id: null, discount: currentAlloc });
-              cartLoyaltyDiscountTotal = discountTotal;
-              loyaltyExpectedAwardsGranted = counts.awardsGranted;
-              loyaltyAwardId = crypto.randomUUID();
-              serverPromoDiscount = currentAlloc;
-            }
-          }
         }
       } else if (body.promoCode) {
         // Non-last cart request: store promo_code/type for later cart recompute,
@@ -1569,7 +1530,7 @@ const app = defineApp([
         round_mode: body.round_mode || "none",
         round_value: null,
         promo_code: body.promoCode || null,
-        promo_discount: loyaltyAwardId ? 0 : serverPromoDiscount,
+        promo_discount: serverPromoDiscount,
         promo_type: promoType,
         cancelled_at: null,
         cancel_reason: null,
@@ -1587,38 +1548,6 @@ const app = defineApp([
           }
         }
         throw error;
-      }
-
-      // La réclamation est la seule garde de concurrence ; aucune écriture de
-      // remise fidélité ne doit précéder cette instruction atomique.
-      if (loyaltyAwardId) {
-        const claimed = await claimLoyaltyAward(env.DB, {
-          bookingId: booking.id,
-          userId,
-          awardId: loyaltyAwardId,
-          discount: serverPromoDiscount,
-          expectedAwardsGranted: loyaltyExpectedAwardsGranted,
-        });
-        if (claimed) {
-          for (const alloc of loyaltyAllocations) {
-            if (!alloc.id) continue;
-            await updateBooking(env.DB, alloc.id, { promo_discount: alloc.discount, loyalty_award_id: loyaltyAwardId });
-            const prev = (await getBookingById(env.DB, alloc.id));
-            const gross = prev ? (prev.base_price || 0) + (prev.equipment_price || 0) : 0;
-            if (prev && alloc.discount >= gross && gross > 0 && prev.payment_status !== "paid") {
-              await addPayment(env.DB, { booking_id: alloc.id, amount: 0, method: body.paymentMethod, status: "paid", paid_at: new Date().toISOString() });
-            }
-            await recomputeBookingPaymentStatus(env.DB, alloc.id);
-          }
-        } else {
-          loyaltyAwardId = null;
-          cartLoyaltyDiscountTotal = 0;
-          serverPromoDiscount = 0;
-          serverNetTotal = serverTotalPrice;
-          bookingPaymentStatus = body.paymentStatus;
-          await updateBooking(env.DB, booking.id, { payment_status: bookingPaymentStatus });
-          await recomputeBookingPaymentStatus(env.DB, booking.id);
-        }
       }
 
       // Auto-create a 0€ payment record for fully discounted bookings.
@@ -1673,7 +1602,7 @@ const app = defineApp([
             equipmentPrice: serverEquipmentPrice,
             // Server-authoritative totals: multi-slot emails show the cart net
             // total, single-slot the booking net — never client-supplied amounts.
-            totalPrice: Math.max(0, allSlots.length > 1 ? cartGrossTotal - cartPromoDiscountTotal - cartLoyaltyDiscountTotal : serverNetTotal),
+            totalPrice: Math.max(0, allSlots.length > 1 ? cartGrossTotal - cartPromoDiscountTotal : serverNetTotal),
             paymentMethod: body.paymentMethod,
             paymentStatus: bookingPaymentStatus,
             userName: name,
@@ -1685,7 +1614,7 @@ const app = defineApp([
             legalName: resolved.legalName,
             promoCode: body.promoCode,
             promoDiscount: cartPromoDiscountTotal,
-            loyaltyDiscount: cartLoyaltyDiscountTotal,
+            loyaltyDiscount: 0,
             promoType: promoType,
             promoValue,
             allSlots: allSlots.length > 1 ? allSlots : undefined,
@@ -1711,8 +1640,8 @@ const app = defineApp([
         const cartGrossTotal = cartRows.reduce((sum, b) => sum + (b.base_price || 0) + (b.equipment_price || 0), 0);
         responseData.promoCode = body.promoCode || null;
         responseData.promoDiscount = cartPromoDiscountTotal;
-        responseData.loyaltyDiscount = cartLoyaltyDiscountTotal;
-        responseData.netTotal = Math.max(0, cartGrossTotal - cartPromoDiscountTotal - cartLoyaltyDiscountTotal);
+        responseData.loyaltyDiscount = 0;
+        responseData.netTotal = Math.max(0, cartGrossTotal - cartPromoDiscountTotal);
       }
 
       if (newSessionToken) {
@@ -3334,22 +3263,21 @@ const app = defineApp([
       try {
         const user = await getUserById(env.DB, id);
         if (!user) return jsonError("Utilisateur introuvable", 404);
-        const [counts, totalDiscountGranted, ops, insights] = await Promise.all([
-          getUserLoyaltyCounts(env.DB, id),
+        const [loyaltyCodes, totalDiscountGranted, ops, insights] = await Promise.all([
+          getLoyaltyPromoCodes(env.DB, id),
           getUserLoyaltyDiscountTotal(env.DB, id),
           getUserOpsSnapshot(env.DB, id),
           getUserBookingInsights(env.DB, id),
         ]);
-        const progress = getLoyaltyProgress(readLoyaltyConfig(user), counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
         return jsonSuccess({
           ...user,
           loyalty: {
-            pastEligibleBookings: progress.pastEligibleBookings,
-            awardsGranted: progress.awardsGranted,
-            counter: progress.counter,
-            remainingToNextAward: progress.remainingToNextAward,
-            isDue: progress.isDue,
-            threshold: progress.threshold,
+            enabled: user.loyalty_enabled === 1,
+            discountType: user.loyalty_discount_type,
+            discountValue: user.loyalty_discount_value,
+            threshold: user.loyalty_threshold,
+            validityDays: user.loyalty_code_validity_days ?? 60,
+            codes: loyaltyCodes,
             totalDiscountGranted,
           },
           ops,
@@ -3367,7 +3295,7 @@ const app = defineApp([
 
         // Whitelist runtime — empêche la modification de password_hash, total_bookings, total_spent, etc.
         const ALLOWED_USER_FIELDS = ["name", "first_name", "last_name", "email", "phone", "band_name",
-          "notes", "address_line1", "address_line2", "postal_code", "city", "country", "is_blocked", "client_type", "legal_name", "siret", "rna", "instagram_accounts", "loyalty_enabled", "loyalty_discount_type", "loyalty_discount_value", "loyalty_threshold"] as const;
+          "notes", "address_line1", "address_line2", "postal_code", "city", "country", "is_blocked", "client_type", "legal_name", "siret", "rna", "instagram_accounts", "loyalty_enabled", "loyalty_discount_type", "loyalty_discount_value", "loyalty_threshold", "loyalty_code_validity_days"] as const;
         const body = Object.fromEntries(
           Object.entries(rawBody).filter(([k]) => (ALLOWED_USER_FIELDS as readonly string[]).includes(k))
         ) as {
@@ -3393,11 +3321,12 @@ const app = defineApp([
           loyalty_discount_type?: string | null;
           loyalty_discount_value?: number;
           loyalty_threshold?: number;
+          loyalty_code_validity_days?: number;
         };
 
         // La remise est un levier tarifaire récurrent : comme la grille de
         // tarifs, les codes promo et les réglages, elle reste au super-admin.
-        if (["loyalty_enabled", "loyalty_discount_type", "loyalty_discount_value", "loyalty_threshold"].some((key) => Object.prototype.hasOwnProperty.call(rawBody, key))) {
+        if (["loyalty_enabled", "loyalty_discount_type", "loyalty_discount_value", "loyalty_threshold", "loyalty_code_validity_days"].some((key) => Object.prototype.hasOwnProperty.call(rawBody, key))) {
           if (request.headers.get("X-Admin-User-Role") !== "super-admin") {
             return jsonError("Réglage réservé aux super-administrateurs", 403);
           }
@@ -4409,7 +4338,9 @@ const app = defineApp([
   route("/api/admin/promo-codes", async ({ request }) => {
     if (request.method === "GET") {
       try {
-        const codes = await getPromoCodes(env.DB);
+        const sourceParam = new URL(request.url).searchParams.get("source");
+        const source = sourceParam === "loyalty" || sourceParam === "manual" ? sourceParam : undefined;
+        const codes = await getPromoCodes(env.DB, source);
         return jsonSuccess(codes);
       } catch (error) {
         console.error("GET /api/admin/promo-codes error:", error);
@@ -5673,13 +5604,16 @@ const app = defineApp([
     if (request.method !== "GET") return jsonError("Method not allowed", 405);
     const token = getClientSessionToken(request);
     const user = token ? await validateClientSession(env.DB, token) : null;
-    if (!user) return jsonSuccess({ configured: false, type: null, value: 0, threshold: 0, counter: 0, remainingToNextAward: 0, isDue: false });
+    if (!user) return jsonError("Authentification requise", 401);
     const loyaltyUser = await getUserById(env.DB, user.id);
-    const config = readLoyaltyConfig(loyaltyUser ?? {});
-    if (!isLoyaltyConfigured(config)) return jsonSuccess({ configured: false, type: null, value: 0, threshold: 0, counter: 0, remainingToNextAward: 0, isDue: false });
-    const counts = await getUserLoyaltyCounts(env.DB, user.id);
-    const progress = getLoyaltyProgress(config, counts.pastEligibleBookings, counts.awardsGranted, counts.pastSinceLastAward);
-    return jsonSuccess({ configured: true, type: config.type, value: config.value, threshold: config.threshold, counter: progress.counter, remainingToNextAward: progress.remainingToNextAward, isDue: progress.isDue });
+    const codes = await getLoyaltyPromoCodes(env.DB, user.id);
+    return jsonSuccess({
+      configured: loyaltyUser?.loyalty_enabled === 1,
+      type: loyaltyUser?.loyalty_discount_type ?? null,
+      value: loyaltyUser?.loyalty_discount_value ?? 0,
+      threshold: loyaltyUser?.loyalty_threshold ?? 0,
+      codes,
+    });
   }),
 
   route("/api/client/check-email", async ({ request }) => {
@@ -6138,37 +6072,27 @@ function buildFinalizeDeps(): FinalizePaidSessionDeps {
   };
 }
 
-async function sendDueLoyaltyRewardEmails(db: D1Database, apiKey: string): Promise<void> {
-  const candidates = await getDueLoyaltyRewardCandidates(db, 25);
+async function sendDueLoyaltyCodeEmails(db: D1Database, apiKey: string): Promise<void> {
+  const candidates = await getDueLoyaltyCodeCandidates(db, 200);
   let sent = 0;
   let failed = 0;
   let skipped = 0;
 
   for (const candidate of candidates) {
-    const config = readLoyaltyConfig(candidate);
-    const progress = getLoyaltyProgress(
-      config,
-      candidate.pastEligibleBookings,
-      candidate.awardsGranted,
-      candidate.pastSinceLastAward,
-    );
-    if (!isLoyaltyConfigured(config) || !progress.isDue || (config.type !== "percentage" && config.type !== "fixed")) {
-      skipped++;
-      continue;
-    }
-
-    const awardIndex = progress.awardsGranted + 1;
-    if (candidate.loyalty_notified_award_index >= awardIndex) {
+    if ((candidate.loyalty_discount_type !== "percentage" && candidate.loyalty_discount_type !== "fixed")
+      || candidate.loyalty_discount_value <= 0
+      || candidate.loyalty_threshold < 1
+      || candidate.loyalty_code_validity_days <= 0) {
       skipped++;
       continue;
     }
 
     let claimed: boolean;
     try {
-      claimed = await claimLoyaltyRewardEmail(db, { userId: candidate.id, awardIndex });
+      claimed = await claimLoyaltyCycleStart(db, candidate.id, candidate.cycleEnd);
     } catch (error) {
       skipped++;
-      console.error(`[Cron] Loyalty reward claim failed for ${candidate.id}:`, error);
+      console.error(`[Cron] Loyalty cycle claim failed for ${candidate.id}:`, error);
       continue;
     }
     if (!claimed) {
@@ -6176,35 +6100,46 @@ async function sendDueLoyaltyRewardEmails(db: D1Database, apiKey: string): Promi
       continue;
     }
 
+    let promo: Awaited<ReturnType<typeof createLoyaltyPromoCode>> | null = null;
     let result: { success: boolean; error?: string };
     try {
-      result = await sendLoyaltyRewardEmail(apiKey, {
+      promo = await createLoyaltyPromoCode(db, {
+        userId: candidate.id,
+        type: candidate.loyalty_discount_type,
+        value: candidate.loyalty_discount_value,
+        threshold: candidate.loyalty_threshold,
+        cycleEnd: candidate.cycleEnd,
+        validityDays: candidate.loyalty_code_validity_days,
+      });
+      result = await sendLoyaltyCodeEmail(apiKey, {
         clientName: candidate.first_name || candidate.name.split(" ")[0] || candidate.name,
         clientEmail: candidate.email,
-        discountType: config.type,
-        discountValue: config.value,
-        threshold: config.threshold,
+        code: promo.code,
+        discountType: candidate.loyalty_discount_type,
+        discountValue: candidate.loyalty_discount_value,
+        scope: "cart",
+        threshold: candidate.loyalty_threshold,
+        expiresAt: promo.expires_at || "",
         bookingUrl: `${COMPANY.siteUrl}/reservation`,
       });
+      if (result.success) await markLoyaltyPromoCodeNotified(db, promo.id);
     } catch (error) {
-      // The email helper normally collapses errors into { success: false }, but
-      // keep the claim consumed even if that implementation ever changes.
       result = { success: false, error: error instanceof Error ? error.message : "Unknown error" };
     }
 
     const auditSnapshot = {
-      threshold: config.threshold,
-      discountType: config.type,
-      discountValue: config.value,
-      awardIndex,
-      pastEligibleBookings: progress.pastEligibleBookings,
-      awardsGranted: progress.awardsGranted,
-      pastSinceLastAward: candidate.pastSinceLastAward,
+      threshold: candidate.loyalty_threshold,
+      discountType: candidate.loyalty_discount_type,
+      discountValue: candidate.loyalty_discount_value,
+      cycleBookings: candidate.cycleBookings,
+      cycleEnd: candidate.cycleEnd,
+      promoCodeId: promo?.id ?? null,
+      promoCode: promo?.code ?? null,
       success: result.success,
       error: result.error ?? null,
     };
     try {
-      await addAuditLog(db, "user", candidate.id, "send-loyalty-reward", auditSnapshot, "cron");
+      await addAuditLog(db, "user", candidate.id, "generate-loyalty-code", auditSnapshot, "cron");
     } catch (error) {
       console.error(`[Cron] Loyalty reward audit failed for ${candidate.id}:`, error);
     }
@@ -6216,7 +6151,7 @@ async function sendDueLoyaltyRewardEmails(db: D1Database, apiKey: string): Promi
     }
   }
 
-  console.log(`[Cron] Loyalty reward emails: ${sent} sent, ${failed} failed, ${skipped} skipped`);
+  console.log(`[Cron] Loyalty code emails: ${sent} sent, ${failed} failed, ${skipped} skipped`);
 }
 
 async function handleScheduled(controller: ScheduledController) {
@@ -6224,12 +6159,12 @@ async function handleScheduled(controller: ScheduledController) {
 
   if (env.RESEND_API_KEY) {
     try {
-      await sendDueLoyaltyRewardEmails(env.DB as D1Database, env.RESEND_API_KEY);
+      await sendDueLoyaltyCodeEmails(env.DB as D1Database, env.RESEND_API_KEY);
     } catch (error) {
-      console.error("[Cron] Loyalty reward email step failed:", error);
+      console.error("[Cron] Loyalty code email step failed:", error);
     }
   } else {
-    console.log("[Cron] Loyalty reward emails skipped (RESEND_API_KEY missing)");
+    console.log("[Cron] Loyalty code emails skipped (RESEND_API_KEY missing)");
   }
 
   try {
