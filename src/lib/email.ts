@@ -883,7 +883,8 @@ export function buildLoyaltyCodeEmailHtml(data: LoyaltyCodeEmailData): string {
               <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;text-align:center;">Une récompense vous attend</h2>
               <p style="margin:0 0 30px 0;color:#aaaaaa;font-size:15px;line-height:1.6;text-align:center;">
                 Bonjour ${data.clientName},<br>
-                Vous avez bouclé un nouveau cycle de <strong style="color:#ffffff;">${pluralizeRepetitions(threshold)}</strong> chez nous. Merci pour votre fidélité &mdash; voici ce qu'elle vous rapporte.
+                Vous avez bouclé un nouveau cycle de <strong style="color:#ffffff;">${pluralizeRepetitions(threshold)}</strong> chez nous.<br>
+                Merci pour votre fidélité.
               </p>
 
               <!-- Hero: discount value -->
