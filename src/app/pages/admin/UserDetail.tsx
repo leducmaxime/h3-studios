@@ -49,6 +49,7 @@ import {
   isLoyaltyCodeResendable,
 } from "@/lib/loyalty-code-display";
 import { LoyaltyCodeResendButton } from "@/components/admin/LoyaltyCodeResendButton";
+import { LoyaltyCodeExpiryEditor } from "@/components/admin/LoyaltyCodeExpiryEditor";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -443,6 +444,23 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           ...prev.loyalty,
           codes: (prev.loyalty.codes ?? []).map((c) =>
             c.id === codeId ? { ...c, notified_at: notifiedAt } : c,
+          ),
+        },
+      };
+    });
+  };
+
+  // Mise à jour en place après un changement de date d'expiration : la
+  // ligne et le badge d'état se recalculent immédiatement, sans refetch.
+  const handleLoyaltyCodeExpiryUpdated = (codeId: string, expiresAt: string) => {
+    setUser((prev) => {
+      if (!prev || !prev.loyalty) return prev;
+      return {
+        ...prev,
+        loyalty: {
+          ...prev.loyalty,
+          codes: (prev.loyalty.codes ?? []).map((c) =>
+            c.id === codeId ? { ...c, expires_at: expiresAt } : c,
           ),
         },
       };
@@ -1137,8 +1155,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
 
                 {/* Codes fidélité générés pour ce client — toujours visible, y
                     compris si la remise a depuis été désactivée : les codes
-                    déjà émis restent une trace utile. Lecture seule, même
-                    vocabulaire d'états que l'onglet Codes Promo. */}
+                    déjà émis restent une trace utile. Même vocabulaire
+                    d'états que l'onglet Codes Promo. Seule la date
+                    d'expiration est modifiable, et seulement par un
+                    super-admin (isSuperAdmin) : un opérateur voit la
+                    même table sans affordance d'édition. */}
                 <div className="mt-6 border-t border-zinc-800 pt-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-zinc-500" />
@@ -1190,9 +1211,23 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                                   {formatDate(code.created_at)}
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className={`text-sm ${status === "expired" ? "text-red-400" : "text-zinc-400"}`}>
-                                    {code.expires_at ? formatDate(code.expires_at) : "—"}
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className={`text-sm tabular-nums ${
+                                        status === "expired" ? "text-red-400" : "text-zinc-400"
+                                      }`}
+                                    >
+                                      {code.expires_at ? formatDate(code.expires_at) : "—"}
+                                    </span>
+                                    {isSuperAdmin && (
+                                      <LoyaltyCodeExpiryEditor
+                                        promo={code}
+                                        onUpdated={(updated) =>
+                                          handleLoyaltyCodeExpiryUpdated(code.id, updated.expires_at)
+                                        }
+                                      />
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="px-4 py-3">
                                   <div className="flex flex-wrap items-center gap-1.5">

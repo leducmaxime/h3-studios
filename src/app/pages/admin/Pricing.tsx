@@ -57,6 +57,7 @@ import {
   isLoyaltyCodeResendable,
 } from "@/lib/loyalty-code-display";
 import { LoyaltyCodeResendButton } from "@/components/admin/LoyaltyCodeResendButton";
+import { LoyaltyCodeExpiryEditor } from "@/components/admin/LoyaltyCodeExpiryEditor";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1537,6 +1538,12 @@ function PromoCodesTab() {
     setPromoCodes((prev) => prev.map((p) => (p.id === id ? { ...p, notified_at: notifiedAt } : p)));
   };
 
+  // Mise à jour en place après un changement de date d'expiration : la
+  // ligne et le badge d'état se recalculent immédiatement, sans refetch.
+  const handleLoyaltyCodeExpiryUpdated = (id: string, expiresAt: string) => {
+    setPromoCodes((prev) => prev.map((p) => (p.id === id ? { ...p, expires_at: expiresAt } : p)));
+  };
+
   const handleToggleActive = async (promo: DbPromoCode) => {
     try {
       const res = await fetch(`/api/admin/promo-codes/${promo.id}`, {
@@ -1785,14 +1792,15 @@ function PromoCodesTab() {
           </div>
         </TabsContent>
 
-        {/* ─── Codes fidélité (lecture seule) ────────────────────────────── */}
+        {/* ─── Codes fidélité (édition limitée à l'expiration) ───────────── */}
         <TabsContent value="loyalty" className="space-y-4">
           <div className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
             <p className="text-sm text-zinc-400">
               Ces codes sont émis automatiquement par le programme de fidélité quand un client
-              atteint son palier de réservations, puis envoyés par email. Ils sont liés au
-              compteur du client : lecture seule, rien à créer ni modifier ici.
+              atteint son palier de réservations, puis envoyés par email. Leur montant et leur
+              bénéficiaire ne se modifient pas ici : seule la date d&apos;expiration peut être
+              ajustée.
             </p>
           </div>
 
@@ -1873,13 +1881,21 @@ function PromoCodesTab() {
 
                           {/* Expiration */}
                           <td className="px-6 py-4">
-                            <span
-                              className={`text-sm tabular-nums ${
-                                status === "expired" ? "text-red-400" : "text-zinc-400"
-                              }`}
-                            >
-                              {formatDate(promo.expires_at)}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`text-sm tabular-nums ${
+                                  status === "expired" ? "text-red-400" : "text-zinc-400"
+                                }`}
+                              >
+                                {formatDate(promo.expires_at)}
+                              </span>
+                              <LoyaltyCodeExpiryEditor
+                                promo={promo}
+                                onUpdated={(updated) =>
+                                  handleLoyaltyCodeExpiryUpdated(promo.id, updated.expires_at)
+                                }
+                              />
+                            </div>
                           </td>
 
                           {/* État */}
