@@ -22,6 +22,17 @@ export function getParisDateISO(date = new Date()): string {
 }
 
 /**
+ * Valide une date calendaire au format AAAA-MM-JJ. Le contrôle de format seul
+ * ne suffit pas : "2026-02-30" le respecte mais n'existe pas, et serait stocké
+ * tel quel dans une colonne TEXT puis comparé en string.
+ */
+export function isValidDateISO(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+/**
  * Promo-code expiration is date-only and is always read in Paris time.
  * Both legacy date-only values and full ISO timestamps begin with YYYY-MM-DD.
  */

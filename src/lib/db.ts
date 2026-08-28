@@ -1864,6 +1864,14 @@ export async function createPromoCode(
   return { success: true, id };
 }
 
+/** Colonnes réellement modifiables : les clés alimentent le SET de la requête,
+ *  donc tout ce qui n'est pas dans cette liste est ignoré. Sans ce garde-fou, un
+ *  corps de requête inattendu écrirait des colonnes sensibles (user_id, source,
+ *  usage_count) ou injecterait du SQL par son nom de clé. */
+export const UPDATABLE_PROMO_CODE_FIELDS = [
+  "code", "type", "value", "min_total", "is_active", "expires_at", "max_usage", "round_mode",
+] as const;
+
 export async function updatePromoCode(
   db: D1Database,
   id: string,
@@ -1873,6 +1881,7 @@ export async function updatePromoCode(
   const params: unknown[] = [];
 
   for (const [key, value] of Object.entries(data)) {
+    if (!(UPDATABLE_PROMO_CODE_FIELDS as readonly string[]).includes(key)) continue;
     sets.push(`${key} = ?`);
     params.push(value);
   }

@@ -125,6 +125,7 @@ import {
   getLoyaltyPromoResendClientError,
   createPromoCode,
   updatePromoCode,
+  UPDATABLE_PROMO_CODE_FIELDS,
   validatePromoCode,
   getOpeningHours,
   updateOpeningHours,
@@ -174,6 +175,7 @@ import {
   getParisNow,
   getISOWeekStartUTCNoon,
   parseDbTimestamp,
+  isValidDateISO,
 } from "@/lib/utils";
 import {
   getStoredReviews,
@@ -4476,7 +4478,14 @@ const app = defineApp([
 
     if (request.method === "PUT") {
       try {
-        const body = await request.json() as {
+        const rawBody = await request.json() as Record<string, unknown>;
+
+        // Whitelist runtime : les clés du corps deviennent des noms de colonnes
+        // dans le SET de updatePromoCode. Tout ce qui n'est pas listé ici est
+        // écarté avant d'atteindre la couche SQL.
+        const body = Object.fromEntries(
+          Object.entries(rawBody).filter(([k]) => (UPDATABLE_PROMO_CODE_FIELDS as readonly string[]).includes(k)),
+        ) as {
           code?: string;
           type?: "percentage" | "fixed";
           value?: number;
@@ -4486,6 +4495,13 @@ const app = defineApp([
           max_usage?: number;
           round_mode?: "down" | "up" | "none";
         };
+
+        // expires_at est une colonne TEXT comparée en string à la date de Paris
+        // (isPromoCodeExpired, getLoyaltyCodeStatus) : un format libre passerait
+        // en base et fausserait silencieusement le calcul d'expiration.
+        if (body.expires_at !== undefined && !isValidDateISO(body.expires_at)) {
+          return jsonError("Date d'expiration invalide : format attendu AAAA-MM-JJ", 400);
+        }
 
         const result = await updatePromoCode(env.DB, id, body);
         if (!result.success) {
