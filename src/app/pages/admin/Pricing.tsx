@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Euro,
   Pencil,
@@ -20,6 +20,9 @@ import {
   CalendarClock,
   CalendarPlus,
   RefreshCw,
+  Sparkles,
+  AlertTriangle,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,9 +47,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { STUDIOS, type StudioId } from "@/lib/booking";
-import { type DbPricing, type DbPromoCode } from "@/lib/db-types";
+import { type DbPricing, type DbPromoCode, type DbUser } from "@/lib/db-types";
 import { groupTypeLabel } from "@/lib/labels";
 import { getParisDateISO, isPromoCodeExpired } from "@/lib/utils";
+import {
+  getLoyaltyCodeStatus,
+  loyaltyStatusBadgeProps,
+  formatLoyaltyDiscount,
+  isLoyaltyCodeResendable,
+} from "@/lib/loyalty-code-display";
+import { LoyaltyCodeResendButton } from "@/components/admin/LoyaltyCodeResendButton";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -165,6 +175,9 @@ function formatDate(dateStr: string | null): string {
   const d = new Date(dateStr);
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
+
+// Vocabulaire des codes fidélité (statut, portée, éligibilité au renvoi) :
+// voir src/lib/loyalty-code-display.ts, partagé avec UserDetail.tsx.
 
 // ─── Public Holidays helpers ────────────────────────────────────────────────
 
@@ -1458,6 +1471,45 @@ function PromoCodesTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<DbPromoCode | null>(null);
 
+  // Un code sans `source` renseignée est un code créé avant la migration
+  // fidélité : il est manuel par défaut (comportement historique préservé).
+  const manualCodes = useMemo(
+    () => promoCodes.filter((p) => p.source !== "loyalty"),
+    [promoCodes],
+  );
+  const loyaltyCodes = useMemo(
+    () => promoCodes.filter((p) => p.source === "loyalty"),
+    [promoCodes],
+  );
+
+  // Annuaire client pour la colonne "Client" de la liste fidélité — l'API
+  // codes promo ne renvoie que `user_id`, on résout les noms via l'API
+  // utilisateurs déjà existante, une seule fois, dès qu'il y a des codes
+  // fidélité à afficher.
+  const [userDirectory, setUserDirectory] = useState<Map<string, DbUser>>(new Map());
+  const [usersLoading, setUsersLoading] = useState(false);
+  const hasLoyaltyCodes = loyaltyCodes.length > 0;
+
+  useEffect(() => {
+    if (!hasLoyaltyCodes) return;
+    let active = true;
+    setUsersLoading(true);
+    fetch("/api/admin/users?all=true")
+      .then((res) => res.json() as Promise<{ success: boolean; data?: { data: DbUser[] } }>)
+      .then((json) => {
+        if (active && json.success && json.data) {
+          setUserDirectory(new Map(json.data.data.map((u) => [u.id, u])));
+        }
+      })
+      .catch((error) => console.error("Failed to fetch users directory:", error))
+      .finally(() => {
+        if (active) setUsersLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [hasLoyaltyCodes]);
+
   const fetchPromoCodes = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/promo-codes");
@@ -1478,6 +1530,12 @@ function PromoCodesTab() {
   useEffect(() => {
     fetchPromoCodes();
   }, [fetchPromoCodes]);
+
+  // Mise à jour en place après un renvoi réussi : pas de refetch, le badge
+  // ambre et le niveau d'insistance du bouton retombent immédiatement.
+  const handleLoyaltyCodeResent = (id: string, notifiedAt: string) => {
+    setPromoCodes((prev) => prev.map((p) => (p.id === id ? { ...p, notified_at: notifiedAt } : p)));
+  };
 
   const handleToggleActive = async (promo: DbPromoCode) => {
     try {
@@ -1541,168 +1599,324 @@ function PromoCodesTab() {
     );
   }
 
+  const today = getParisDateISO();
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className="text-zinc-400">Gérez les codes promotionnels de vos studios</p>
-        <Button onClick={handleNewPromo}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nouveau code promo
-        </Button>
-      </div>
+      {/*
+        Deux familles de codes bien distinctes : les manuels (une poignée,
+        créés/modifiés à la main) et les codes fidélité (potentiellement
+        plusieurs dizaines, générés par le système et strictement en lecture
+        seule). Un sous-onglet par famille garde chaque liste lisible même
+        quand celle de la fidélité grandit, sans jamais mélanger une action
+        de création avec une liste où il n'y en a pas.
+      */}
+      <Tabs defaultValue="manual" className="w-full">
+        <TabsList>
+          <TabsTrigger value="manual" className="gap-1.5">
+            <Tag className="h-4 w-4" />
+            Codes manuels
+            <span className="ml-0.5 text-xs text-muted-foreground">({manualCodes.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="loyalty" className="gap-1.5">
+            <Sparkles className="h-4 w-4" />
+            Codes fidélité
+            <span className="ml-0.5 text-xs text-muted-foreground">({loyaltyCodes.length})</span>
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Promo codes table */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-        {promoCodes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-800">
-              <Tag className="h-7 w-7 text-zinc-500" />
-            </div>
-            <h3 className="text-lg font-medium text-zinc-300">Aucun code promo</h3>
-            <p className="mt-1 text-sm text-zinc-500">
-              Créez votre premier code promotionnel pour attirer de nouveaux clients.
-            </p>
-            <Button onClick={handleNewPromo} className="mt-4">
+        {/* ─── Codes manuels ─────────────────────────────────────────────── */}
+        <TabsContent value="manual" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <p className="text-zinc-400">Gérez les codes promotionnels de vos studios</p>
+            <Button onClick={handleNewPromo}>
               <Plus className="mr-2 h-4 w-4" />
-              Créer un code promo
+              Nouveau code promo
             </Button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
-                  <th className="px-6 py-3 font-medium">Code</th>
-                  <th className="px-6 py-3 font-medium">Réduction</th>
-                  <th className="px-6 py-3 font-medium">Min. achat</th>
-                  <th className="px-6 py-3 font-medium">Expiration</th>
-                  <th className="px-6 py-3 font-medium">Utilisations</th>
-                  <th className="px-6 py-3 font-medium">Statut</th>
-                  <th className="px-6 py-3 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {promoCodes.map((promo) => {
-                  const isExpired = isPromoCodeExpired(promo.expires_at, getParisDateISO());
-                  const isMaxUsed = promo.max_usage !== null
-                    ? promo.usage_count >= promo.max_usage
-                    : false;
 
-                  return (
-                    <tr
-                      key={promo.id}
-                      className="border-b border-zinc-800/50 transition-colors hover:bg-zinc-800/30"
-                    >
-                      {/* Code */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-                            {promo.type === "percentage" ? (
-                              <Percent className="h-4 w-4" />
-                            ) : (
-                              <Euro className="h-4 w-4" />
-                            )}
-                          </div>
-                          <span className="font-mono text-sm font-semibold tracking-wider">
-                            {promo.code}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Réduction */}
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-medium tabular-nums text-primary">
-                          -{formatPromoValue(promo)}
-                        </span>
-                      </td>
-
-                      {/* Min achat */}
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-zinc-400 tabular-nums">
-                          {promo.min_total > 0 ? `${promo.min_total}€ TTC` : "—"}
-                        </span>
-                      </td>
-
-                      {/* Expiration */}
-                      <td className="px-6 py-4">
-                        <span
-                          className={`text-sm tabular-nums ${isExpired ? "text-red-400" : "text-zinc-400"}`}
-                        >
-                          {formatDate(promo.expires_at)}
-                        </span>
-                        {isExpired && (
-                          <Badge variant="destructive" className="ml-2 text-[10px]">
-                            Expiré
-                          </Badge>
-                        )}
-                      </td>
-
-                      {/* Utilisations */}
-                      <td className="px-6 py-4">
-                        <span className="text-sm tabular-nums text-zinc-400">
-                          {promo.usage_count}
-                          {promo.max_usage !== null ? ` / ${promo.max_usage}` : ""}
-                        </span>
-                        {isMaxUsed && (
-                          <Badge variant="secondary" className="ml-2 text-[10px]">
-                            Épuisé
-                          </Badge>
-                        )}
-                      </td>
-
-                      {/* Statut */}
-                      <td className="px-6 py-4">
-                        {promo.is_active === 1 ? (
-                          <Badge variant="default">Actif</Badge>
-                        ) : (
-                          <Badge variant="outline">Inactif</Badge>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleToggleActive(promo)}
-                            title={promo.is_active === 1 ? "Désactiver" : "Activer"}
-                          >
-                            {promo.is_active === 1 ? (
-                              <ToggleRight className="h-4 w-4 text-green-400" />
-                            ) : (
-                              <ToggleLeft className="h-4 w-4 text-zinc-500" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(promo)}
-                            title="Modifier"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(promo)}
-                            title="Supprimer"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-400" />
-                          </Button>
-                        </div>
-                      </td>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+            {manualCodes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-800">
+                  <Tag className="h-7 w-7 text-zinc-500" />
+                </div>
+                <h3 className="text-lg font-medium text-zinc-300">Aucun code promo</h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Créez votre premier code promotionnel pour attirer de nouveaux clients.
+                </p>
+                <Button onClick={handleNewPromo} className="mt-4">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Créer un code promo
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
+                      <th className="px-6 py-3 font-medium">Code</th>
+                      <th className="px-6 py-3 font-medium">Réduction</th>
+                      <th className="px-6 py-3 font-medium">Min. achat</th>
+                      <th className="px-6 py-3 font-medium">Expiration</th>
+                      <th className="px-6 py-3 font-medium">Utilisations</th>
+                      <th className="px-6 py-3 font-medium">Statut</th>
+                      <th className="px-6 py-3 font-medium text-right">Actions</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                  </thead>
+                  <tbody>
+                    {manualCodes.map((promo) => {
+                      const isExpired = isPromoCodeExpired(promo.expires_at, today);
+                      const isMaxUsed = promo.max_usage !== null
+                        ? promo.usage_count >= promo.max_usage
+                        : false;
 
-      {/* Dialog */}
+                      return (
+                        <tr
+                          key={promo.id}
+                          className="border-b border-zinc-800/50 transition-colors hover:bg-zinc-800/30"
+                        >
+                          {/* Code */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                {promo.type === "percentage" ? (
+                                  <Percent className="h-4 w-4" />
+                                ) : (
+                                  <Euro className="h-4 w-4" />
+                                )}
+                              </div>
+                              <span className="font-mono text-sm font-semibold tracking-wider">
+                                {promo.code}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Réduction */}
+                          <td className="px-6 py-4">
+                            <span className="text-sm font-medium tabular-nums text-primary">
+                              -{formatPromoValue(promo)}
+                            </span>
+                          </td>
+
+                          {/* Min achat */}
+                          <td className="px-6 py-4">
+                            <span className="text-sm text-zinc-400 tabular-nums">
+                              {promo.min_total > 0 ? `${promo.min_total}€ TTC` : "—"}
+                            </span>
+                          </td>
+
+                          {/* Expiration */}
+                          <td className="px-6 py-4">
+                            <span
+                              className={`text-sm tabular-nums ${isExpired ? "text-red-400" : "text-zinc-400"}`}
+                            >
+                              {formatDate(promo.expires_at)}
+                            </span>
+                            {isExpired && (
+                              <Badge variant="destructive" className="ml-2 text-[10px]">
+                                Expiré
+                              </Badge>
+                            )}
+                          </td>
+
+                          {/* Utilisations */}
+                          <td className="px-6 py-4">
+                            <span className="text-sm tabular-nums text-zinc-400">
+                              {promo.usage_count}
+                              {promo.max_usage !== null ? ` / ${promo.max_usage}` : ""}
+                            </span>
+                            {isMaxUsed && (
+                              <Badge variant="secondary" className="ml-2 text-[10px]">
+                                Épuisé
+                              </Badge>
+                            )}
+                          </td>
+
+                          {/* Statut */}
+                          <td className="px-6 py-4">
+                            {promo.is_active === 1 ? (
+                              <Badge variant="default">Actif</Badge>
+                            ) : (
+                              <Badge variant="outline">Inactif</Badge>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleActive(promo)}
+                                title={promo.is_active === 1 ? "Désactiver" : "Activer"}
+                              >
+                                {promo.is_active === 1 ? (
+                                  <ToggleRight className="h-4 w-4 text-green-400" />
+                                ) : (
+                                  <ToggleLeft className="h-4 w-4 text-zinc-500" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(promo)}
+                                title="Modifier"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(promo)}
+                                title="Supprimer"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-400" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ─── Codes fidélité (lecture seule) ────────────────────────────── */}
+        <TabsContent value="loyalty" className="space-y-4">
+          <div className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
+            <p className="text-sm text-zinc-400">
+              Ces codes sont émis automatiquement par le programme de fidélité quand un client
+              atteint son palier de réservations, puis envoyés par email. Ils sont liés au
+              compteur du client : lecture seule, rien à créer ni modifier ici.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+            {loyaltyCodes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-800">
+                  <Sparkles className="h-7 w-7 text-zinc-500" />
+                </div>
+                <h3 className="text-lg font-medium text-zinc-300">Aucun code fidélité émis</h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Les codes apparaîtront ici dès qu'un client atteindra son palier de fidélité.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
+                      <th className="px-6 py-3 font-medium">Code</th>
+                      <th className="px-6 py-3 font-medium">Client</th>
+                      <th className="px-6 py-3 font-medium">Remise</th>
+                      <th className="px-6 py-3 font-medium">Expiration</th>
+                      <th className="px-6 py-3 font-medium">État</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loyaltyCodes.map((promo) => {
+                      const status = getLoyaltyCodeStatus(promo, today);
+                      const statusBadge = loyaltyStatusBadgeProps(status);
+                      const notNotified = !promo.notified_at;
+                      const resendable = isLoyaltyCodeResendable(promo, today);
+                      const client = promo.user_id ? userDirectory.get(promo.user_id) : undefined;
+
+                      return (
+                        <tr
+                          key={promo.id}
+                          className={`border-b border-zinc-800/50 transition-colors hover:bg-zinc-800/30 ${
+                            notNotified ? "bg-amber-500/[0.04]" : ""
+                          }`}
+                        >
+                          {/* Code */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                <Sparkles className="h-4 w-4" />
+                              </div>
+                              <span className="font-mono text-sm font-semibold tracking-wider">
+                                {promo.code}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Client */}
+                          <td className="px-6 py-4">
+                            {!promo.user_id ? (
+                              <span className="text-sm text-zinc-500">—</span>
+                            ) : client ? (
+                              <a
+                                href={`/admin/users/${promo.user_id}`}
+                                className="text-sm font-medium hover:underline"
+                              >
+                                {client.name}
+                              </a>
+                            ) : usersLoading ? (
+                              <span className="text-sm text-zinc-600">…</span>
+                            ) : (
+                              <span className="text-sm text-zinc-500">Compte supprimé</span>
+                            )}
+                          </td>
+
+                          {/* Remise (avec portée) */}
+                          <td className="px-6 py-4">
+                            <span className="text-sm font-medium tabular-nums text-primary">
+                              {formatLoyaltyDiscount(promo)}
+                            </span>
+                          </td>
+
+                          {/* Expiration */}
+                          <td className="px-6 py-4">
+                            <span
+                              className={`text-sm tabular-nums ${
+                                status === "expired" ? "text-red-400" : "text-zinc-400"
+                              }`}
+                            >
+                              {formatDate(promo.expires_at)}
+                            </span>
+                          </td>
+
+                          {/* État */}
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {notNotified && (
+                                <Badge
+                                  className="gap-1 bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px]"
+                                  title="Le code a été généré mais l'email n'a pas encore été envoyé au client."
+                                >
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Email non envoyé
+                                </Badge>
+                              )}
+                              <Badge className={`${statusBadge.className} text-[10px]`}>
+                                {statusBadge.label}
+                              </Badge>
+                              {resendable && (
+                                <LoyaltyCodeResendButton
+                                  promo={promo}
+                                  onResent={(updated) => handleLoyaltyCodeResent(promo.id, updated.notified_at)}
+                                />
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Dialog (codes manuels uniquement) */}
       <PromoCodeDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}

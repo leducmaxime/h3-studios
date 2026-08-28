@@ -1,12 +1,16 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  buildLoyaltyCodeEmailData,
   buildDueLoyaltyCodeCandidatesQuery,
   claimLoyaltyCycleStart,
   claimPromoCodeUsage,
   claimPromoValidationAttempt,
   createLoyaltyPromoCode,
   getUserLoyaltyDiscountTotal,
+  getLoyaltyPromoResendError,
+  getLoyaltyPromoResendClientError,
+  markLoyaltyPromoCodeResent,
   releasePromoCodeUsage,
   validatePromoCode,
 } from "@/lib/db";
@@ -104,6 +108,34 @@ describe("fidélité — codes nominatif", () => {
     });
     expect(promo).toMatchObject({ user_id: "u", source: "loyalty", max_usage: 1, cycle_end: "2026-08-20 12:00:00" });
     expect(promo.code).toMatch(/^FID-[0-9A-HJKMNP-TV-Z]{8}$/);
+  });
+
+  it("met à jour notified_at lors d'un renvoi, même si le code était déjà notifié", async () => {
+    sqlite.prepare("INSERT INTO promo_codes (id,code,type,value,user_id,source,notified_at) VALUES ('resend','RESEND','fixed',10,'u','loyalty','2000-01-01 00:00:00')").run();
+    expect(await markLoyaltyPromoCodeResent(db as unknown as D1Database, "resend")).toMatch(/^\d{4}-\d{2}-\d{2} /);
+    expect((sqlite.prepare("SELECT notified_at FROM promo_codes WHERE id='resend'").get() as { notified_at: string }).notified_at).not.toBe("2000-01-01 00:00:00");
+  });
+
+  it("refuse les codes manuels, utilisés, expirés et inactifs", () => {
+    const base = { source: "loyalty" as const, used_at: null, expires_at: "2099-01-01", is_active: 1 };
+    expect(getLoyaltyPromoResendError({ ...base, source: "manual" }, "2026-08-28")).toBe("Seuls les codes fidélité peuvent être renvoyés.");
+    expect(getLoyaltyPromoResendError({ ...base, used_at: "2026-08-27 10:00:00" }, "2026-08-28")).toBe("Ce code a déjà été utilisé.");
+    expect(getLoyaltyPromoResendError({ ...base, expires_at: "2026-08-27" }, "2026-08-28")).toBe("Ce code a expiré le 2026-08-27.");
+    expect(getLoyaltyPromoResendError({ ...base, is_active: 0 }, "2026-08-28")).toBe("Ce code promo est inactif.");
+  });
+
+  it("refuse un client absent ou sans email", () => {
+    expect(getLoyaltyPromoResendClientError(null)).toBe("Le client associé à ce code est introuvable.");
+    expect(getLoyaltyPromoResendClientError({ email: "  " })).toBe("Le client associé à ce code n'a pas d'adresse email.");
+  });
+
+  it("transmet la portée réellement stockée du code, indépendamment de son type", () => {
+    const data = buildLoyaltyCodeEmailData(
+      { first_name: "Ada", name: "Ada Lovelace", email: "ada@example.com", loyalty_threshold: 3 },
+      { code: "FID-TEST123", type: "percentage", value: 15, scope: "cart", expires_at: "2026-10-01" },
+      "https://example.com/reservation",
+    );
+    expect(data.scope).toBe("cart");
   });
 
   it("applique un pourcentage à la première séance et un montant fixe au panier", async () => {

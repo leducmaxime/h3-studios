@@ -119,6 +119,10 @@ import {
   updateEquipment,
   getPromoCodes,
   getLoyaltyPromoCodes,
+  getPromoCodeById,
+  buildLoyaltyCodeEmailData,
+  getLoyaltyPromoResendError,
+  getLoyaltyPromoResendClientError,
   createPromoCode,
   updatePromoCode,
   validatePromoCode,
@@ -149,6 +153,7 @@ import {
   claimLoyaltyCycleStart,
   createLoyaltyPromoCode,
   markLoyaltyPromoCodeNotified,
+  markLoyaltyPromoCodeResent,
   claimPromoCodeUsage,
   releasePromoCodeUsage,
   claimPromoValidationAttempt,
@@ -4398,6 +4403,65 @@ const app = defineApp([
     }
 
     return jsonError("Method not allowed", 405);
+  }),
+
+  route("/api/admin/promo-codes/:id/resend", async ({ request, params }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    const promo = await getPromoCodeById(env.DB, params.id);
+    if (!promo) return jsonError("Code promo introuvable", 404);
+
+    const adminId = request.headers.get("X-Admin-User-Id") || "admin";
+    const audit = async (success: boolean, error: string | null, userEmail: string | null = null) => {
+      try {
+        await addAuditLog(env.DB, "promo", promo.id, "resend-loyalty-code", {
+          code: promo.code,
+          clientId: promo.user_id ?? null,
+          clientEmail: userEmail,
+          success,
+          error,
+        }, adminId);
+      } catch (auditError) {
+        console.error("POST /api/admin/promo-codes/:id/resend audit error:", auditError);
+      }
+    };
+    const reject = async (message: string, status: number, userEmail: string | null = null) => {
+      await audit(false, message, userEmail);
+      return jsonError(message, status);
+    };
+
+    const resendError = getLoyaltyPromoResendError(promo, getParisDateISO());
+    if (resendError) return reject(resendError, 400);
+
+    const user = promo.user_id ? await getUserById(env.DB, promo.user_id) : null;
+    const userEmail = user?.email ?? null;
+    const clientError = getLoyaltyPromoResendClientError(user);
+    if (!user) return reject(clientError || "Le client associé à ce code est introuvable.", 400, userEmail);
+    if (clientError) return reject(clientError, 400, userEmail);
+    if (!env.RESEND_API_KEY) return reject("Le service d'envoi d'email est indisponible.", 503, user.email);
+
+    let result: { success: boolean; error?: string };
+    try {
+      result = await sendLoyaltyCodeEmail(env.RESEND_API_KEY, buildLoyaltyCodeEmailData(user, promo, `${COMPANY.siteUrl}/reservation`));
+    } catch (error) {
+      result = { success: false, error: error instanceof Error ? error.message : "Erreur inconnue" };
+    }
+
+    if (!result.success) {
+      const message = result.error || "L'email n'a pas pu être envoyé.";
+      await audit(false, message, user.email);
+      return jsonError(message, 502);
+    }
+
+    const notifiedAt = await markLoyaltyPromoCodeResent(env.DB, promo.id);
+    if (!notifiedAt) {
+      const message = "L'email a été envoyé, mais son statut n'a pas pu être enregistré.";
+      await audit(false, message, user.email);
+      return jsonError(message, 500);
+    }
+
+    await audit(true, null, user.email);
+    return jsonSuccess({ id: promo.id, code: promo.code, notified_at: notifiedAt });
   }),
 
   route("/api/admin/promo-codes/:id", async ({ request, params }) => {

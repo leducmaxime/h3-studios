@@ -36,6 +36,7 @@ import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type Stu
 import { applyDiscountRounding, getBookingAmountDue } from "./booking-totals";
 import { computeClientBookingInsights, type BookingStatSource } from "./user-booking-stats";
 import { addDaysToDateISO, generateLoyaltyCode } from "./loyalty";
+import type { LoyaltyCodeEmailData } from "./email";
 
 export { isPromoCodeExpired } from "./utils";
 
@@ -175,6 +176,15 @@ export async function markLoyaltyPromoCodeNotified(db: D1Database, promoId: stri
     "UPDATE promo_codes SET notified_at = ? WHERE id = ? AND source = 'loyalty' AND notified_at IS NULL",
   ).bind(now(), promoId).run();
   return result.meta.changes === 1;
+}
+
+/** Updates the notification timestamp for both first sends and resends. */
+export async function markLoyaltyPromoCodeResent(db: D1Database, promoId: string): Promise<string | null> {
+  const notifiedAt = now();
+  const result = await db.prepare(
+    "UPDATE promo_codes SET notified_at = ? WHERE id = ? AND source = 'loyalty'",
+  ).bind(notifiedAt, promoId).run();
+  return result.meta.changes === 1 ? notifiedAt : null;
 }
 
 /** Somme des remises fidélité réellement utilisées (hors annulations). */
@@ -1735,6 +1745,42 @@ export async function getLoyaltyPromoCodes(db: D1Database, userId: string): Prom
     "SELECT * FROM promo_codes WHERE user_id = ? AND source = 'loyalty' ORDER BY created_at DESC",
   ).bind(userId).all<DbPromoCode>();
   return result.results;
+}
+
+export async function getPromoCodeById(db: D1Database, id: string): Promise<DbPromoCode | null> {
+  return db.prepare("SELECT * FROM promo_codes WHERE id = ?").bind(id).first<DbPromoCode>();
+}
+
+export function buildLoyaltyCodeEmailData(
+  user: Pick<DbUser, "first_name" | "name" | "email" | "loyalty_threshold">,
+  promo: Pick<DbPromoCode, "code" | "type" | "value" | "scope" | "expires_at">,
+  bookingUrl: string,
+): LoyaltyCodeEmailData {
+  return {
+    clientName: user.first_name || user.name.split(" ")[0] || user.name,
+    clientEmail: user.email || "",
+    code: promo.code,
+    discountType: promo.type,
+    discountValue: promo.value,
+    scope: promo.scope === "first_booking" ? "first_booking" : "cart",
+    threshold: user.loyalty_threshold,
+    expiresAt: promo.expires_at || "",
+    bookingUrl,
+  };
+}
+
+export function getLoyaltyPromoResendError(promo: Pick<DbPromoCode, "source" | "used_at" | "expires_at" | "is_active">, parisDateISO: string): string | null {
+  if (promo.source !== "loyalty") return "Seuls les codes fidélité peuvent être renvoyés.";
+  if (promo.used_at) return "Ce code a déjà été utilisé.";
+  if (isPromoCodeExpired(promo.expires_at, parisDateISO)) return `Ce code a expiré le ${promo.expires_at?.slice(0, 10)}.`;
+  if (!promo.is_active) return "Ce code promo est inactif.";
+  return null;
+}
+
+export function getLoyaltyPromoResendClientError(user: Pick<DbUser, "email"> | null): string | null {
+  if (!user) return "Le client associé à ce code est introuvable.";
+  if (!user.email || user.email.trim() === "") return "Le client associé à ce code n'a pas d'adresse email.";
+  return null;
 }
 
 export async function createPromoCode(

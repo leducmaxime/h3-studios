@@ -22,6 +22,7 @@ import {
   Clock,
   AlertTriangle,
   StickyNote,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,21 +32,31 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatDateISO } from "@/lib/utils";
+import { formatDateISO, getParisDateISO } from "@/lib/utils";
 import { formatSiret, resolveUserClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
 import { formatPrice, type StudioId } from "@/lib/booking";
 import { getBookingAmountDue, getDisplayPaymentStatusFromSummary, isKeepBalanceDue } from "@/lib/booking-totals";
 import { bookingStatusLabel, displayPaymentStatusLabel, groupTypeLabel, paymentMethodLabelShort, paymentRecordStatusLabel, paymentTypeLabel, studioLabel } from "@/lib/labels";
-import { type DbUser, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot, type UserBookingInsights } from "@/lib/db-types";
+import { type DbUser, type DbPromoCode, type BookingWithUser, type BookingStatus, type BookingSortField, type BookingSortOrder, type UserOpsSnapshot, type UserBookingInsights } from "@/lib/db-types";
 import { exportBookingsCSV } from "@/lib/export";
 import { formatDurationHours } from "@/lib/user-booking-stats";
 import { formatCountRate, formatNextBookingWhen } from "@/lib/user-ops-snapshot";
+import {
+  getLoyaltyCodeStatus,
+  loyaltyStatusBadgeProps,
+  formatLoyaltyDiscount,
+  isLoyaltyCodeResendable,
+} from "@/lib/loyalty-code-display";
+import { LoyaltyCodeResendButton } from "@/components/admin/LoyaltyCodeResendButton";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
+
+// Vocabulaire des codes fidélité (statut, portée, éligibilité au renvoi) :
+// voir src/lib/loyalty-code-display.ts, partagé avec Pricing.tsx.
 
 interface ClientPaymentRow {
   id: string;
@@ -73,6 +84,8 @@ interface LoyaltyProgress {
   isDue: boolean;
   threshold: number;
   totalDiscountGranted?: number;
+  validityDays?: number;
+  codes?: DbPromoCode[];
 }
 
 type UserWithLoyalty = DbUser & {
@@ -86,7 +99,10 @@ interface LoyaltyFormState {
   discountType: LoyaltyDiscountType;
   value: string;
   threshold: string;
+  validityDays: string;
 }
+
+const DEFAULT_LOYALTY_CODE_VALIDITY_DAYS = 60;
 
 function loyaltyFormFromUser(u: UserWithLoyalty): LoyaltyFormState {
   return {
@@ -94,6 +110,7 @@ function loyaltyFormFromUser(u: UserWithLoyalty): LoyaltyFormState {
     discountType: u.loyalty_discount_type === "fixed" ? "fixed" : "percentage",
     value: u.loyalty_discount_value ? String(u.loyalty_discount_value) : "",
     threshold: u.loyalty_threshold ? String(u.loyalty_threshold) : "",
+    validityDays: String(u.loyalty_code_validity_days ?? DEFAULT_LOYALTY_CODE_VALIDITY_DAYS),
   };
 }
 
@@ -138,6 +155,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     discountType: "percentage",
     value: "",
     threshold: "",
+    validityDays: String(DEFAULT_LOYALTY_CODE_VALIDITY_DAYS),
   });
 
   const [notesEditing, setNotesEditing] = useState(false);
@@ -317,6 +335,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     if (!loyaltyForm.enabled) return null;
     const value = parseLoyaltyNumber(loyaltyForm.value);
     const threshold = parseLoyaltyNumber(loyaltyForm.threshold);
+    const validityDays = parseLoyaltyNumber(loyaltyForm.validityDays);
     if (!loyaltyForm.value.trim() || !Number.isFinite(value) || value <= 0) {
       return "La valeur de la remise doit être un nombre strictement positif.";
     }
@@ -325,6 +344,9 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     }
     if (!Number.isInteger(threshold) || threshold < 1) {
       return "Le seuil doit être un nombre entier d'au moins 1.";
+    }
+    if (!Number.isInteger(validityDays) || validityDays < 1) {
+      return "La durée de validité du code doit être un nombre entier d'au moins 1 jour.";
     }
     return null;
   };
@@ -348,6 +370,9 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           loyalty_discount_type: loyaltyForm.enabled ? loyaltyForm.discountType : (user.loyalty_discount_type ?? null),
           loyalty_discount_value: loyaltyForm.enabled ? parseLoyaltyNumber(loyaltyForm.value) : (user.loyalty_discount_value ?? 0),
           loyalty_threshold: loyaltyForm.enabled ? parseLoyaltyNumber(loyaltyForm.threshold) : (user.loyalty_threshold ?? 0),
+          loyalty_code_validity_days: loyaltyForm.enabled
+            ? parseLoyaltyNumber(loyaltyForm.validityDays)
+            : (user.loyalty_code_validity_days ?? DEFAULT_LOYALTY_CODE_VALIDITY_DAYS),
         }),
       });
       const json = (await res.json()) as { success: boolean; data?: UserWithLoyalty; error?: string };
@@ -405,6 +430,23 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
     if (user) setLoyaltyForm(loyaltyFormFromUser(user));
     setLoyaltyError(null);
     setLoyaltyEditing(false);
+  };
+
+  // Mise à jour en place après un renvoi réussi : pas de refetch, le badge
+  // ambre et le niveau d'insistance du bouton retombent immédiatement.
+  const handleLoyaltyCodeResent = (codeId: string, notifiedAt: string) => {
+    setUser((prev) => {
+      if (!prev || !prev.loyalty) return prev;
+      return {
+        ...prev,
+        loyalty: {
+          ...prev.loyalty,
+          codes: (prev.loyalty.codes ?? []).map((c) =>
+            c.id === codeId ? { ...c, notified_at: notifiedAt } : c,
+          ),
+        },
+      };
+    });
   };
 
   if (loading || !user) {
@@ -513,6 +555,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
       ? 100
       : Math.min(100, Math.round((loyaltyProgress.counter / loyaltyProgress.threshold) * 100))
     : 0;
+  const loyaltyCodeValidityDays = user.loyalty_code_validity_days
+    ?? loyaltyProgress?.validityDays
+    ?? DEFAULT_LOYALTY_CODE_VALIDITY_DAYS;
+  const loyaltyCodes = loyaltyProgress?.codes ?? [];
+  const todayISO = getParisDateISO();
 
   return (
     <div className="space-y-6">
@@ -962,7 +1009,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                             placeholder={loyaltyForm.discountType === "percentage" ? "Ex. 10" : "Ex. 15"}
                           />
                         </div>
-                        <div className="grid gap-2 lg:col-span-2">
+                        <div className="grid gap-2">
                           <Label htmlFor="loyalty-threshold">Seuil (nombre de réservations)</Label>
                           <Input
                             id="loyalty-threshold"
@@ -976,6 +1023,22 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                           />
                           <p className="text-xs text-zinc-500">
                             Une remise est accordée chaque fois que ce nombre de réservations comptabilisées est atteint, puis le compteur repart à zéro.
+                          </p>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="loyalty-validity-days">Durée de validité du code (jours)</Label>
+                          <Input
+                            id="loyalty-validity-days"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            step={1}
+                            value={loyaltyForm.validityDays}
+                            onChange={(e) => setLoyaltyForm({ ...loyaltyForm, validityDays: e.target.value })}
+                            placeholder="Ex. 60"
+                          />
+                          <p className="text-xs text-zinc-500">
+                            Délai avant expiration du code envoyé au client à chaque palier atteint.
                           </p>
                         </div>
                       </div>
@@ -997,6 +1060,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         <span className="font-semibold">
                           {loyaltyThreshold > 1 ? `Toutes les ${loyaltyThreshold} réservations` : "À chaque réservation"}
                         </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400 text-sm">Durée de validité du code</span>
+                        <span className="font-semibold">{loyaltyCodeValidityDays} jours</span>
                       </div>
                     </div>
 
@@ -1064,6 +1131,96 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     </p>
                   </div>
                 )}
+
+                {/* Codes fidélité générés pour ce client — toujours visible, y
+                    compris si la remise a depuis été désactivée : les codes
+                    déjà émis restent une trace utile. Lecture seule, même
+                    vocabulaire d'états que l'onglet Codes Promo. */}
+                <div className="mt-6 border-t border-zinc-800 pt-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-zinc-500" />
+                    <h3 className="text-sm font-medium text-zinc-300">
+                      Codes générés pour ce client {loyaltyCodes.length > 0 ? `(${loyaltyCodes.length})` : ""}
+                    </h3>
+                  </div>
+                  {loyaltyCodes.length === 0 ? (
+                    <p className="text-sm text-zinc-500">
+                      Aucun code fidélité n'a encore été généré pour ce client.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border border-zinc-800">
+                      <table className="w-full">
+                        <thead className="border-b border-zinc-800 bg-zinc-900/50">
+                          <tr>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-zinc-400">Code</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-zinc-400">Remise</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-zinc-400">Émis le</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-zinc-400">Expiration</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-zinc-400">État</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800">
+                          {loyaltyCodes.map((code) => {
+                            const status = getLoyaltyCodeStatus(code, todayISO);
+                            const statusBadge = loyaltyStatusBadgeProps(status);
+                            const notNotified = !code.notified_at;
+                            const resendable = isLoyaltyCodeResendable(code, todayISO);
+
+                            return (
+                              <tr
+                                key={code.id}
+                                className={`bg-zinc-900/30 transition-colors hover:bg-zinc-800/50 ${
+                                  notNotified ? "bg-amber-500/[0.04]" : ""
+                                }`}
+                              >
+                                <td className="px-4 py-3">
+                                  <span className="font-mono text-sm font-semibold tracking-wider">
+                                    {code.code}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-sm font-medium text-primary">
+                                    {formatLoyaltyDiscount(code)}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-zinc-400">
+                                  {formatDate(code.created_at)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`text-sm ${status === "expired" ? "text-red-400" : "text-zinc-400"}`}>
+                                    {code.expires_at ? formatDate(code.expires_at) : "—"}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {notNotified && (
+                                      <Badge
+                                        className="gap-1 bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px]"
+                                        title="Le code a été généré mais l'email n'a pas encore été envoyé au client."
+                                      >
+                                        <AlertTriangle className="h-3 w-3" />
+                                        Email non envoyé
+                                      </Badge>
+                                    )}
+                                    <Badge className={`${statusBadge.className} text-[10px]`}>
+                                      {statusBadge.label}
+                                    </Badge>
+                                    {resendable && (
+                                      <LoyaltyCodeResendButton
+                                        promo={code}
+                                        onResent={(updated) => handleLoyaltyCodeResent(code.id, updated.notified_at)}
+                                      />
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </div>
               )}
             </div>
