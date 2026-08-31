@@ -138,7 +138,8 @@ export function PaymentChoice({
               <span className={`inline-flex w-full items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-black transition-all lg:px-4 lg:py-3 lg:text-base ${
                 isSubmitting ? "" : actionsDisabled ? "" : "group-hover:bg-primary/90"
               }`}>
-                {isSubmitting ? submittingLabel : <>Payer <Price amount={total} /> →</>}
+                {/* Un seul item flex : sinon le conteneur inline-flex rogne les espaces autour des nœuds texte (« Payer27€ TTC→ »). */}
+                {isSubmitting ? submittingLabel : <span>Payer <Price amount={total} /> →</span>}
               </span>
             </div>
           </button>
