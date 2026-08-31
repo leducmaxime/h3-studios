@@ -95,10 +95,10 @@ export function PaymentChoice({
           disabled={actionsDisabled}
           className={`w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-black transition-all lg:py-4 lg:text-lg ${
             isSubmitting
-              ? "cursor-wait opacity-100 shadow-lg shadow-primary/25"
+              ? "cursor-wait opacity-100"
               : actionsDisabled
               ? "cursor-not-allowed opacity-40"
-              : "opacity-100 shadow-lg shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99]"
+              : "opacity-100 hover:bg-primary/90 active:scale-[0.99]"
           }`}
         >
           {isSubmitting ? submittingLabel : "Confirmer la réservation"}
@@ -115,7 +115,7 @@ export function PaymentChoice({
                 ? "cursor-wait border-primary/50 bg-primary/10 opacity-100"
                 : actionsDisabled
                 ? "cursor-not-allowed border-primary/30 bg-primary/5 opacity-40"
-                : "border-primary bg-primary/15 opacity-100 shadow-[0_12px_40px_-18px_rgba(255,222,89,0.55)] hover:-translate-y-0.5 hover:bg-primary/25 hover:shadow-[0_16px_44px_-18px_rgba(255,222,89,0.7)]"
+                : "border-primary bg-primary/15 opacity-100 hover:-translate-y-0.5 hover:bg-primary/25"
             }`}
           >
             {allowOnSitePayment && (
@@ -136,7 +136,7 @@ export function PaymentChoice({
 
             <div className="mt-auto pt-3 lg:pt-4">
               <span className={`inline-flex w-full items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-black transition-all lg:px-4 lg:py-3 lg:text-base ${
-                isSubmitting ? "shadow-lg shadow-primary/30" : actionsDisabled ? "" : "shadow-lg shadow-primary/35 group-hover:bg-primary/90 group-hover:shadow-primary/50"
+                isSubmitting ? "" : actionsDisabled ? "" : "group-hover:bg-primary/90"
               }`}>
                 {isSubmitting ? submittingLabel : <>Payer <Price amount={total} /> →</>}
               </span>
@@ -151,29 +151,29 @@ export function PaymentChoice({
               aria-busy={isSubmitting}
               className={`group flex flex-col gap-3 rounded-xl border-2 p-4 text-left transition-all lg:gap-4 lg:p-6 ${
                 isSubmitting
-                  ? "cursor-wait border-white/35 bg-white/10 opacity-100"
+                  ? "cursor-wait border-white/25 bg-white/[0.07] opacity-100"
                   : actionsDisabled
-                  ? "cursor-not-allowed border-white/15 bg-white/5 opacity-40"
-                  : "border-white/60 bg-white/10 opacity-100 shadow-lg shadow-black/20 hover:-translate-y-0.5 hover:border-white hover:bg-white/15"
+                  ? "cursor-not-allowed border-white/10 bg-white/[0.03] opacity-40"
+                  : "border-white/20 bg-white/5 opacity-100 hover:border-white/30 hover:bg-white/[0.08]"
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 lg:h-12 lg:w-12">
-                  <Banknote className="h-5 w-5 text-white lg:h-6 lg:w-6" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 lg:h-12 lg:w-12">
+                  <Banknote className="h-5 w-5 text-white/70 lg:h-6 lg:w-6" />
                 </div>
                 <div>
-                  <h4 className="text-base font-semibold text-white lg:text-lg">Payer sur place</h4>
-                  <p className="text-xs text-white/70 lg:text-sm">Espèces ou CB</p>
+                  <h4 className="text-base font-semibold text-white/80 lg:text-lg">Payer sur place</h4>
+                  <p className="text-xs text-white/50 lg:text-sm">Espèces ou CB</p>
                 </div>
               </div>
 
               <div className="mt-auto pt-3 lg:pt-4">
-                <span className={`inline-flex w-full items-center justify-center rounded-xl px-3 py-2.5 text-sm font-semibold transition-all lg:px-4 lg:py-3 lg:text-base ${
+                <span className={`inline-flex w-full items-center justify-center rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all lg:px-4 lg:py-3 lg:text-base ${
                   isSubmitting
-                    ? "border border-white/50 bg-white/15 text-white"
+                    ? "border-white/40 bg-white/10 text-white"
                     : actionsDisabled
-                      ? "border border-white/50 bg-white/10 text-white"
-                      : "bg-white text-black shadow-lg shadow-black/25 group-hover:bg-white/90"
+                      ? "border-white/20 bg-white/5 text-white/50"
+                      : "border-white/30 bg-white/5 text-white/80 group-hover:border-white/50 group-hover:bg-white/10 group-hover:text-white"
                 }`}>
                   {isSubmitting ? submittingLabel : "Réserver sans payer"}
                 </span>
