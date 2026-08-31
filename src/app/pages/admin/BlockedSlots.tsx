@@ -485,7 +485,7 @@ export function AdminBlockedSlots() {
                 onChange={(e) => {
                   const nextDate = e.target.value;
                   setFormData((prev) => {
-                    const nextDateTo = prev.dateTo && prev.dateTo >= nextDate ? prev.dateTo : nextDate;
+                    const nextDateTo = prev.dateTo && prev.dateTo < nextDate ? "" : prev.dateTo;
                     return { ...prev, date: nextDate, dateTo: nextDateTo };
                   });
                 }}
