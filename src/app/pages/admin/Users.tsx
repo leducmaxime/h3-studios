@@ -322,7 +322,7 @@ export function AdminUsers() {
                 Nouveau client
               </Button>
             </DialogTrigger>
-          <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden border-zinc-800 bg-zinc-900 lg:max-w-2xl">
+          <DialogContent className="flex max-h-[90vh] flex-col border-zinc-800 bg-zinc-900 lg:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Nouveau client</DialogTitle>
               <DialogDescription>
