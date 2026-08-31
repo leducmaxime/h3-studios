@@ -2289,15 +2289,15 @@ export function AdminDashboard() {
                         <div className="w-full lg:w-1/2">
                           <div className="space-y-2">
                             {labels.map((l, i) => (
-                              <div key={l.method} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                                <div className="flex items-center gap-2">
+                              <div key={l.method} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-2.5 py-2">
+                                <div className="flex min-w-0 items-center gap-1.5">
                                   <span
-                                    className="h-2.5 w-2.5 rounded-full"
+                                    className="h-2.5 w-2.5 shrink-0 rounded-full"
                                     style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                                   />
-                                  <span className="text-sm text-zinc-300">{l.method}</span>
+                                  <span className="truncate text-xs text-zinc-300">{l.method}</span>
                                 </div>
-                                <span className="text-sm text-zinc-200">
+                                <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-zinc-200">
                                   {formatPrice(l.revenue)} <span className="text-zinc-500">· {l.count} · {l.pct}%</span>
                                 </span>
                               </div>
