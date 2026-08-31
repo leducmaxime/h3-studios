@@ -148,6 +148,9 @@ import {
   createLoyaltyPromoCode,
   markLoyaltyPromoCodeNotified,
   markLoyaltyPromoCodeResent,
+  buildDueRemindersQuery,
+  claimBookingReminder,
+  purgeOldReminderClaims,
   claimPromoCodeUsage,
   releasePromoCodeUsage,
   claimPromoValidationAttempt,
@@ -180,6 +183,7 @@ import {
   getParisDateISO,
   getParisNow,
   getISOWeekStartUTCNoon,
+  formatParisReminderKey,
   parseDbTimestamp,
   isValidDateISO,
 } from "@/lib/utils";
@@ -201,6 +205,9 @@ import {
   syncInstagram,
 } from "@/lib/instagram";
 import { isAllowedInstagramMediaUrl } from "@/lib/instagram-media";
+import { dispatchDueReminderRows, resolveCronJob, resolveReminderLeadHours } from "@/lib/cron";
+export { resolveCronJob, resolveReminderLeadHours } from "@/lib/cron";
+export type { CronJob } from "@/lib/cron";
 import {
   RESERVATION_BANNER_DESCRIPTION_MAX_LENGTH,
   RESERVATION_BANNER_SETTING_KEYS,
@@ -450,6 +457,8 @@ function validateAdminSettingValue(key: string, rawValue: string): { ok: true; v
       return parseIntSetting({ label: "Délai minimum de réservation", min: 0, max: 72 });
     case "booking.max_advance_days":
       return parseIntSetting({ label: "Délai maximum de réservation", min: 1, max: 365 });
+    case "push.reminder_lead_hours":
+      return parseIntSetting({ label: "Délai de rappel avant séance", min: 1, max: 24 });
     case "booking.allow_cash":
       return parseBooleanSetting({ label: "Paiement sur place" });
     case "booking.require_phone":
@@ -6698,14 +6707,49 @@ async function sendDueLoyaltyCodeEmails(db: D1Database, apiKey: string): Promise
   console.log(`[Cron] Loyalty code emails: ${sent} sent, ${failed} failed, ${skipped} skipped`);
 }
 
-async function handleScheduled(controller: ScheduledController) {
-  console.log(`[Cron] Triggered: ${controller.cron} at ${new Date().toISOString()}`);
+async function runReminderJobs(): Promise<void> {
+  const leadHours = resolveReminderLeadHours(await getSetting(env.DB as D1Database, "push.reminder_lead_hours"));
+  const now = new Date();
+  const nowKey = formatParisReminderKey(now);
+  const targetKey = formatParisReminderKey(new Date(now.getTime() + leadHours * 60 * 60 * 1000));
+  const query = buildDueRemindersQuery(nowKey, targetKey, 100);
+  const result = await (env.DB as D1Database).prepare(query.sql).bind(...query.params).all<{
+    booking_id: string;
+    booking_ref: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    studio_id: string;
+    user_name: string | null;
+  }>();
+  const summary = await dispatchDueReminderRows(
+    result.results,
+    (bookingId, targetKeyOfBooking) => claimBookingReminder(env.DB as D1Database, bookingId, targetKeyOfBooking),
+    async (row) => {
+      await notifyAdminsNow("booking_reminder", {
+        bookingId: row.booking_id,
+        clientName: row.user_name || "Client",
+        studioId: row.studio_id,
+        date: row.date,
+        startTime: row.start_time,
+      });
+    },
+  );
+
+  console.log(`[Cron] Rappels: ${summary.sent} envoyés, ${summary.ignored} ignorés`);
+}
+
+async function runDailyJobs(): Promise<void> {
 
   if (env.RESEND_API_KEY) {
     try {
       await sendDueLoyaltyCodeEmails(env.DB as D1Database, env.RESEND_API_KEY);
     } catch (error) {
       console.error("[Cron] Loyalty code email step failed:", error);
+      await notifyAdminsNow("cron_failure", {
+        service: "loyalty",
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   } else {
     console.log("[Cron] Loyalty code emails skipped (RESEND_API_KEY missing)");
@@ -6719,10 +6763,18 @@ async function handleScheduled(controller: ScheduledController) {
         console.log(`[Cron] Reviews synced: ${result.reviewsCount} reviews, ${result.averageRating}/5`);
       } else {
         console.error(`[Cron] Reviews sync failed: ${result.error}`);
+        await notifyAdminsNow("cron_failure", {
+          service: "google_reviews",
+          message: result.error || "Unknown error",
+        });
       }
     }
   } catch (error) {
     console.error("[Cron] Reviews step failed:", error);
+    await notifyAdminsNow("cron_failure", {
+      service: "google_reviews",
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 
   try {
@@ -6736,6 +6788,10 @@ async function handleScheduled(controller: ScheduledController) {
       console.log("[Cron] Instagram token refresh skipped (too recent)");
     } else if (igRefresh.error) {
       console.error(`[Cron] Instagram token refresh failed: ${igRefresh.error}`);
+      await notifyAdminsNow("cron_failure", {
+        service: "instagram_token",
+        message: igRefresh.error,
+      });
     }
     const igToken = igRefresh.token;
     const igResult = await syncInstagram(env.DB as D1Database, igToken);
@@ -6743,6 +6799,10 @@ async function handleScheduled(controller: ScheduledController) {
       console.log(`[Cron] Instagram synced: ${igResult.count} posts`);
     } else {
       console.error(`[Cron] Instagram sync failed: ${igResult.error}`);
+      await notifyAdminsNow("cron_failure", {
+        service: "instagram",
+        message: igResult.error || "Unknown error",
+      });
       try {
         const errorBody = igResult.error?.match(/\{[\s\S]*\}$/)?.[0];
         const parsed = errorBody ? JSON.parse(errorBody) as {
@@ -6762,6 +6822,32 @@ async function handleScheduled(controller: ScheduledController) {
     }
   } catch (error) {
     console.error("[Cron] Instagram step failed:", error);
+    await notifyAdminsNow("cron_failure", {
+      service: "instagram",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  await purgeOldReminderClaims(
+    env.DB as D1Database,
+    formatParisReminderKey(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+  );
+}
+
+async function handleScheduled(controller: ScheduledController) {
+  const job = resolveCronJob(controller.cron);
+  console.log(`[Cron] Triggered: ${controller.cron} → job=${job ?? "INCONNU"}`);
+  if (job === null) {
+    console.error(`[Cron] Expression inconnue, aucune tâche exécutée: ${controller.cron}`);
+    return;
+  }
+  if (job === "daily") {
+    console.log("[Cron] daily: début");
+    await runDailyJobs();
+    console.log("[Cron] daily: fin");
+  }
+  if (job === "reminders") {
+    await runReminderJobs();
   }
 }
 

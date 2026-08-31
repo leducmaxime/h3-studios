@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildDueRemindersQuery } from "@/lib/db";
+import { dispatchDueReminderRows } from "@/lib/cron";
 import { bookingReminderKey, formatParisReminderKey, getParisNow } from "@/lib/utils";
 
 describe("notifications push — requêtes et horaires", () => {
@@ -68,5 +69,54 @@ describe("notifications push — requêtes et horaires", () => {
       hours: expect.any(Number),
       minutes: expect.any(Number),
     });
+  });
+
+  it("ne distribue qu'une fois lorsque le claim est déjà pris", async () => {
+    const rows = [
+      { booking_id: "booking-1", date: "2026-08-20", start_time: "20:00" },
+      { booking_id: "booking-1", date: "2026-08-20", start_time: "20:00" },
+    ];
+    const claims = [true, false];
+    const dispatched: string[] = [];
+
+    const summary = await dispatchDueReminderRows(
+      rows,
+      async (bookingId, targetKey) => {
+        expect(targetKey).toBe(bookingReminderKey("2026-08-20", "20:00"));
+        expect(bookingId).toBe("booking-1");
+        return claims.shift()!;
+      },
+      async (row) => {
+        dispatched.push(row.booking_id);
+      },
+    );
+
+    expect(dispatched).toEqual(["booking-1"]);
+    expect(summary).toEqual({ sent: 1, ignored: 1 });
+  });
+
+  it("réarme le rappel quand la réservation est déplacée", async () => {
+    const rows = [
+      { booking_id: "booking-1", date: "2026-08-20", start_time: "20:00" },
+      { booking_id: "booking-1", date: "2026-08-20", start_time: "21:00" },
+    ];
+    const claimedKeys = new Set<string>();
+    const dispatched: string[] = [];
+
+    const summary = await dispatchDueReminderRows(
+      rows,
+      async (bookingId, targetKey) => {
+        const claimKey = `${bookingId}:${targetKey}`;
+        if (claimedKeys.has(claimKey)) return false;
+        claimedKeys.add(claimKey);
+        return true;
+      },
+      async (row) => {
+        dispatched.push(row.start_time);
+      },
+    );
+
+    expect(dispatched).toEqual(["20:00", "21:00"]);
+    expect(summary).toEqual({ sent: 2, ignored: 0 });
   });
 });

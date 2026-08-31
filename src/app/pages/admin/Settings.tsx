@@ -116,12 +116,14 @@ function BookingRulesTab({ settings, onUpdate }: {
 }) {
   const [minAdvanceHours, setMinAdvanceHours] = useState(settings["booking.min_advance_hours"] || "2");
   const [maxAdvanceDays, setMaxAdvanceDays] = useState(settings["booking.max_advance_days"] || "30");
+  const [reminderLeadHours, setReminderLeadHours] = useState(settings["push.reminder_lead_hours"] || "2");
   const [allowCash, setAllowCash] = useState(settings["booking.allow_cash"] !== "false");
   const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     setMinAdvanceHours(settings["booking.min_advance_hours"] || "2");
     setMaxAdvanceDays(settings["booking.max_advance_days"] || "30");
+    setReminderLeadHours(settings["push.reminder_lead_hours"] || "2");
     setAllowCash(settings["booking.allow_cash"] !== "false");
   }, [settings]);
 
@@ -200,6 +202,41 @@ function BookingRulesTab({ settings, onUpdate }: {
               className="ml-auto"
             >
               {saving === "booking.max_advance_days" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Clock className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Délai de rappel avant séance (heures)</h3>
+              <p className="text-xs text-zinc-500">Un rappel est envoyé ce nombre d'heures avant le début de la séance</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={1}
+              max={24}
+              value={reminderLeadHours}
+              onChange={(e) => setReminderLeadHours(e.target.value)}
+              className="w-24 bg-zinc-800 border-zinc-700"
+            />
+            <span className="text-sm text-zinc-400">heures</span>
+            <Button
+              size="sm"
+              onClick={() => persistSetting("push.reminder_lead_hours", reminderLeadHours)}
+              disabled={saving === "push.reminder_lead_hours"}
+              className="ml-auto"
+            >
+              {saving === "push.reminder_lead_hours" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Save className="h-4 w-4" />

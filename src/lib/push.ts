@@ -59,7 +59,7 @@ export type PushNotificationInputByEvent = {
   payment_received: { bookingId: string; clientName: string; amount: number | string; studioId?: string; date?: string | Date; startTime?: string };
   refund_issued: { bookingId: string; clientName: string; amount: number | string };
   contact_message: { name: string; subject: string; message?: string };
-  booking_reminder: { bookingId: string; clientName: string; studioId: string; startTime: string; date?: string | Date; startAt: string | Date };
+  booking_reminder: { bookingId: string; clientName: string; studioId: string; startTime: string; date?: string | Date; startAt?: string | Date };
   cron_failure: { service: string; message: string };
 };
 
