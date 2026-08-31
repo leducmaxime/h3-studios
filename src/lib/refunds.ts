@@ -1,4 +1,4 @@
-import type { DbPayment, MovementStatus } from "./db-types";
+import type { DbPayment, MovementStatus, PaymentMethod } from "./db-types";
 import {
   addAuditLog,
   getPaymentById,
@@ -15,8 +15,11 @@ import {
   getBookingLedger,
   recordMovement,
   refundableForAllocation,
+  tryInsertManualRefundMovement,
 } from "./ledger";
 import { round2 } from "./booking-totals";
+
+export type RefundChannel = "stripe" | "cash" | "transfer" | "check" | "card";
 
 export type RefundFailureCode =
   | "payment_not_found"
@@ -29,7 +32,8 @@ export type RefundFailureCode =
   | "stripe_error"
   | "stripe_unconfirmed"
   | "ledger_write_failed"
-  | "already_applied";
+  | "already_applied"
+  | "idempotency_conflict";
 
 export interface RefundOutcome {
   ok: boolean;
@@ -475,14 +479,153 @@ export async function refundAllocation(
   };
 }
 
+/**
+ * Enregistre un remboursement manuel (cash, transfer, check, card, etc.) sans passer par Stripe.
+ * Utilise requestId comme id du mouvement enfant pour idempotence (rejeu = no-op détecté).
+ * Le cap est vérifié atomiquement avec l'INSERT conditionnel (dans un batch D1 = tx).
+ * Le `method` du mouvement enfant est `channel`, pas le method du parent.
+ */
+export async function recordManualRefund(
+  deps: RefundDeps,
+  input: { paymentId: string; bookingId: string; amount: number; channel: Exclude<RefundChannel, "stripe">; requestId: string; reason?: string },
+): Promise<RefundOutcome> {
+  const { paymentId, bookingId, channel, requestId } = input;
+  const amount = round2(Number(input.amount));
+  const now = deps.now ?? (() => new Date().toISOString());
+  const payment = await getPaymentById(deps.db, paymentId);
+
+  const auditFailure = async (code: RefundFailureCode, message: string) => {
+    await addAuditLog(deps.db, "payment", paymentId, "refund-failed", { code, message, channel }, deps.performedBy);
+  };
+
+  const baseOutcome = (
+    code: RefundFailureCode,
+    message: string,
+    refundableAfter = 0,
+    extra: Partial<RefundOutcome> = {},
+  ): RefundOutcome => ({
+    ok: false,
+    paymentId,
+    requestedAmount: amount,
+    refundedAmount: 0,
+    refundableAfter,
+    code,
+    message,
+    ...extra,
+  });
+
+  if (!payment) return baseOutcome("payment_not_found", "Paiement introuvable");
+  if (payment.status !== "settled" || payment.amount <= 0) {
+    const message = "Ce paiement n'est pas encaissé";
+    await auditFailure("not_collected", message);
+    return baseOutcome("not_collected", message);
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    const message = "Le montant doit être supérieur à zéro";
+    await auditFailure("amount_invalid", message);
+    return baseOutcome("amount_invalid", message);
+  }
+
+  // Idempotency via requestId-as-id is handled inside the conditional insert.
+  // We still perform other validations first.
+  const write = await tryInsertManualRefundMovement(deps.db, {
+    id: requestId,
+    amount,
+    method: channel as PaymentMethod,
+    parent_id: paymentId,
+    booking_id: bookingId,
+    reason: input.reason ?? null,
+    performed_by: deps.performedBy,
+  });
+
+  if (write.capExceeded) {
+    const available = await getRefundableAfter(deps.db, paymentId, bookingId);
+    const message = "Montant supérieur au montant remboursable";
+    await auditFailure("amount_exceeds_refundable", message);
+    return baseOutcome("amount_exceeds_refundable", message, available);
+  }
+
+  if (write.conflict) {
+    const available = await getRefundableAfter(deps.db, paymentId, bookingId);
+    const message = "Cet identifiant de requête a déjà été utilisé pour un remboursement différent";
+    await auditFailure("idempotency_conflict", message);
+    return baseOutcome("idempotency_conflict", message, available);
+  }
+
+  // Genuine success (fresh insert) or genuine replay (identical params).
+  // Only audit on the actual insert; replays are silent successes.
+  if (write.inserted) {
+    await addAuditLog(deps.db, "payment", paymentId, "refund-manual", {
+      channel,
+      amount,
+      booking_id: bookingId,
+      movement_id: requestId,
+    }, deps.performedBy);
+  }
+
+  const refundableAfter = await getRefundableAfter(deps.db, paymentId, bookingId);
+
+  // On genuine replay, return the amount that was actually stored (read from row),
+  // not the amount from the current request (even though they match within tolerance).
+  let refundedAmount = amount;
+  if (!write.inserted) {
+    const stored = await deps.db
+      .prepare("SELECT amount FROM payments WHERE id = ?")
+      .bind(requestId)
+      .first<{ amount: number }>();
+    if (stored) {
+      refundedAmount = Math.abs(round2(Number(stored.amount)));
+    }
+  }
+
+  return {
+    ok: true,
+    paymentId,
+    requestedAmount: amount,
+    refundedAmount,
+    refundableAfter,
+  };
+}
+
 /** Rembourse en lot les allocations explicitement sélectionnées. */
 export async function refundPayments(
   deps: RefundDeps,
-  items: { paymentId: string; bookingId: string; amount: number; reason?: string }[],
+  items: { paymentId: string; bookingId: string; amount: number; channel?: RefundChannel; requestId?: string; reason?: string }[],
 ): Promise<RefundBatchOutcome> {
   const outcomes: RefundOutcome[] = [];
   for (const item of items) {
-    outcomes.push(await refundAllocation(deps, item));
+    const channel = item.channel ?? "stripe";
+    if (channel === "stripe") {
+      outcomes.push(await refundAllocation(deps, {
+        paymentId: item.paymentId,
+        bookingId: item.bookingId,
+        amount: item.amount,
+        reason: item.reason,
+      }));
+    } else {
+      if (!item.requestId) {
+        // Non-stripe in batch without requestId: treat as invalid (callers for manual use the single route)
+        const base: RefundOutcome = {
+          ok: false,
+          paymentId: item.paymentId,
+          requestedAmount: item.amount,
+          refundedAmount: 0,
+          refundableAfter: 0,
+          code: "amount_invalid",
+          message: "requestId obligatoire pour les remboursements manuels",
+        };
+        outcomes.push(base);
+        continue;
+      }
+      outcomes.push(await recordManualRefund(deps, {
+        paymentId: item.paymentId,
+        bookingId: item.bookingId,
+        amount: item.amount,
+        channel: channel as Exclude<RefundChannel, "stripe">,
+        requestId: item.requestId,
+        reason: item.reason,
+      }));
+    }
   }
   return {
     refunded: round2(outcomes.reduce((sum, outcome) => sum + (outcome.ok ? outcome.refundedAmount : 0), 0)),

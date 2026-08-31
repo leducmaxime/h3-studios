@@ -124,12 +124,113 @@ export async function recordMovement(db: D1Database, input: {
   return { id, inserted: true };
 }
 
+/**
+ * Conditional insert for a manual (non-Stripe) refund child movement.
+ * Uses the provided `id` (client requestId) for idempotency: replay collides
+ * via OR IGNORE and is detected as already.
+ * The cap check (mirroring refundableForAllocation) is inside the WHERE so
+ * the write is atomic inside the implicit tx of batch().
+ * Uses MONEY_TOLERANCE (0.005) on the cap: accept if computed raw cap >= refundAmount - 0.005
+ * to tolerate REAL floating-point rounding errors in sums (e.g. 16.66 + 16.67 + 16.67
+ * may compute as 49.999999996 inside SQLite).
+ * Returns:
+ * - inserted=true only for fresh success (recompute run)
+ * - inserted=false, capExceeded=false : genuine replay of *identical* operation (parent/amount/booking match, no recompute)
+ * - inserted=false, capExceeded=false, conflict=true : requestId exists but for *different* parent/amount/booking
+ * - inserted=false, capExceeded=true : cap check rejected and no row for this id
+ */
+export async function tryInsertManualRefundMovement(
+  db: D1Database,
+  input: {
+    id: string;
+    amount: number;
+    method: PaymentMethod;
+    parent_id: string;
+    booking_id: string;
+    reason?: string | null;
+    performed_by?: string | null;
+  },
+): Promise<{ id: string; inserted: boolean; capExceeded: boolean; conflict?: boolean }> {
+  const refundAmount = round2(input.amount);
+  const negAmount = round2(-refundAmount);
+  const id = input.id;
+  const createdAt = new Date().toISOString().replace("T", " ").slice(0, 19);
+  const parentId = input.parent_id;
+  const bookingId = input.booking_id;
+
+  const refundableExpr = `COALESCE((SELECT SUM(a.amount) FROM payment_allocations a
+                          JOIN payments parent ON parent.id = a.payment_id
+                         WHERE a.payment_id = ? AND a.booking_id = ?
+                           AND parent.status = 'settled'), 0)
+             + COALESCE((SELECT SUM(c.amount) FROM payment_allocations c
+                          JOIN payments child ON child.id = c.payment_id
+                         WHERE child.parent_id = ? AND c.booking_id = ?
+                           AND child.status IN ('settled','pending')), 0)`;
+
+  const paymentStmt = db.prepare(
+    `INSERT OR IGNORE INTO payments (id, amount, method, status, paid_at, external_ref, parent_id, reason, performed_by, created_at)
+     SELECT ?, ?, ?, 'settled', ?, NULL, ?, ?, ?, ?
+     WHERE (${refundableExpr}) >= ?`,
+  ).bind(
+    id,
+    negAmount,
+    input.method,
+    createdAt,
+    parentId,
+    input.reason ?? null,
+    input.performed_by ?? null,
+    createdAt,
+    parentId,
+    bookingId,
+    parentId,
+    bookingId,
+    refundAmount - MONEY_TOLERANCE,
+  );
+
+  const allocStmt = db.prepare(
+    `INSERT OR IGNORE INTO payment_allocations (id, payment_id, booking_id, amount, created_at)
+     SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM payments WHERE id = ?)`,
+  ).bind(generateId(), id, bookingId, negAmount, createdAt, id);
+
+  const results = await db.batch([paymentStmt, allocStmt]);
+  const r0 = (results[0] ?? {}) as { meta?: { changes?: number }; changes?: number };
+  const paymentChanges = r0.meta?.changes ?? r0.changes ?? 0;
+  const inserted = paymentChanges > 0;
+
+  if (inserted) {
+    await recomputeAllocatedBookings(db, [{ booking_id: bookingId, amount: negAmount }]);
+    return { id, inserted: true, capExceeded: false };
+  }
+
+  const existing = await db.prepare(
+    "SELECT id, amount, parent_id, status FROM payments WHERE id = ?",
+  ).bind(id).first<{ id: string; amount: number; parent_id: string | null; status: string }>();
+  if (existing) {
+    const matchesParent = existing.parent_id === parentId;
+    const matchesAmount = Math.abs(Number(existing.amount) - negAmount) <= MONEY_TOLERANCE;
+    const hasAllocForBooking = !!(await db.prepare(
+      "SELECT 1 FROM payment_allocations WHERE payment_id = ? AND booking_id = ? LIMIT 1",
+    ).bind(id, bookingId).first());
+    if (matchesParent && matchesAmount && hasAllocForBooking && existing.status === "settled") {
+      // Deliberate choice: do NOT call recomputeAllocatedBookings on the genuine replay branch.
+      // It was already executed on the first (inserting) call for this requestId; recompute is
+      // idempotent but the replay path is deliberately a no-op for derived side-effects.
+      return { id, inserted: false, capExceeded: false };
+    }
+    // Idempotency key replayed with different parent/amount/booking/status: distinct failure signal.
+    return { id, inserted: false, capExceeded: false, conflict: true };
+  }
+
+  return { id, inserted: false, capExceeded: true };
+}
+
 /** Contre-passation : mouvement inverse + allocations miroir. */
 export async function reverseMovement(
   db: D1Database, movementId: string, reason: string, performedBy: string,
 ): Promise<{ id: string }> {
   const movement = await db.prepare("SELECT * FROM payments WHERE id = ?").bind(movementId).first<DbPayment>();
   if (!movement) throw new Error("Mouvement introuvable");
+  if (movement.status !== "settled") throw new Error("Seul un mouvement encaissé peut être contre-passé");
 
   const allocationRows = await db.prepare(
     "SELECT booking_id, amount FROM payment_allocations WHERE payment_id = ? ORDER BY created_at ASC, id ASC",

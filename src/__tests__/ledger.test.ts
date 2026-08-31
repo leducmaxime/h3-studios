@@ -10,8 +10,11 @@ import {
   recordMovement,
   refundableForAllocation,
   reverseMovement,
+  tryInsertManualRefundMovement,
   upsertCheckoutPayment,
 } from "@/lib/ledger";
+import { recordManualRefund, type RefundDeps } from "@/lib/refunds";
+import { recomputeBookingPaymentStatus } from "@/lib/db";
 
 const migrationsDirectory = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -430,5 +433,276 @@ describe("getBookingLedger", () => {
     expect(ledger.due).toBe(50);
     expect(ledger.settled).toBe(60);
     expect(ledger.balance).toBe(-10);
+  });
+});
+
+describe("recordManualRefund (via helper and high-level)", () => {
+  function makeRefundDeps(): RefundDeps {
+    return {
+      db: database.db,
+      secretKey: undefined,
+      performedBy: "admin-test",
+      now: () => "2026-08-31T12:00:00.000Z",
+    };
+  }
+
+  it("manual refund reduces refundableForAllocation and flips booking payment status correctly", async () => {
+    seedBooking(database.sqlite, "b1", 100);
+    const { id: parentId } = await recordMovement(database.db, {
+      id: "p-card-parent",
+      amount: 100,
+      method: "card",
+      allocations: [{ booking_id: "b1", amount: 100 }],
+    });
+    // initially paid
+    expect((await database.db.prepare("SELECT payment_status FROM bookings WHERE id = ?").bind("b1").first<{ payment_status: string }>())?.payment_status).toBe("paid");
+
+    const reqId = "req-manual-1";
+    const outcome = await recordManualRefund(makeRefundDeps(), {
+      paymentId: parentId,
+      bookingId: "b1",
+      amount: 40,
+      channel: "cash",
+      requestId: reqId,
+      reason: "test manual",
+    });
+    expect(outcome.ok).toBe(true);
+    expect(outcome.refundedAmount).toBe(40);
+    expect(await refundableForAllocation(database.db, parentId, "b1")).toBe(60);
+
+    const child = await database.db.prepare("SELECT * FROM payments WHERE id = ?").bind(reqId).first<any>();
+    expect(child).toMatchObject({ amount: -40, method: "cash", status: "settled", parent_id: parentId });
+
+    const statusAfter = (await database.db.prepare("SELECT payment_status FROM bookings WHERE id = ?").bind("b1").first<{ payment_status: string }>())?.payment_status;
+    expect(statusAfter).toBe("pay-on-site"); // net 60 >0 → pay-on-site (current recompute semantics)
+  });
+
+  it("manual refund on a CARD parent stores method = channel (not 'card' when channel='cash')", async () => {
+    seedBooking(database.sqlite, "b2");
+    const { id: parentId } = await recordMovement(database.db, {
+      id: "p-card2",
+      amount: 50,
+      method: "card",
+      allocations: [{ booking_id: "b2", amount: 50 }],
+    });
+    const reqId = "req-cash-chan";
+    await recordManualRefund(makeRefundDeps(), {
+      paymentId: parentId,
+      bookingId: "b2",
+      amount: 25,
+      channel: "cash",
+      requestId: reqId,
+    });
+    const child = await database.db.prepare("SELECT method FROM payments WHERE id = ?").bind(reqId).first<{ method: string }>();
+    expect(child?.method).toBe("cash");
+    expect(child?.method).not.toBe("card");
+  });
+
+  it("over-cap manual refund is rejected", async () => {
+    seedBooking(database.sqlite, "b3");
+    const { id: parentId } = await recordMovement(database.db, {
+      id: "p-cap",
+      amount: 30,
+      method: "card",
+      allocations: [{ booking_id: "b3", amount: 30 }],
+    });
+    const outcome = await recordManualRefund(makeRefundDeps(), {
+      paymentId: parentId,
+      bookingId: "b3",
+      amount: 35,
+      channel: "transfer",
+      requestId: "req-over",
+    });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.code).toBe("amount_exceeds_refundable");
+    expect(await refundableForAllocation(database.db, parentId, "b3")).toBe(30);
+    const overCount = await database.db.prepare("SELECT COUNT(*) as c FROM payments WHERE parent_id = ?").bind(parentId).first<{c:number}>();
+    expect(overCount?.c ?? 0).toBe(0);
+  });
+
+  it("replaying the same requestId does not double-insert", async () => {
+    seedBooking(database.sqlite, "b4");
+    const { id: parentId } = await recordMovement(database.db, {
+      id: "p-replay",
+      amount: 80,
+      method: "cash",
+      allocations: [{ booking_id: "b4", amount: 80 }],
+    });
+    const reqId = "req-idemp";
+    const first = await recordManualRefund(makeRefundDeps(), {
+      paymentId: parentId, bookingId: "b4", amount: 30, channel: "check", requestId: reqId,
+    });
+    expect(first.ok).toBe(true);
+    const second = await recordManualRefund(makeRefundDeps(), {
+      paymentId: parentId, bookingId: "b4", amount: 30, channel: "check", requestId: reqId,
+    });
+    expect(second.ok).toBe(true);
+    const countRow = await database.db.prepare("SELECT COUNT(*) as c FROM payments WHERE parent_id=?").bind(parentId).first<{c:number}>();
+    const count = countRow?.c ?? 0;
+    expect(count).toBe(1);
+    expect(await refundableForAllocation(database.db, parentId, "b4")).toBe(50);
+  });
+
+  it("the conditional INSERT rejects when the cap is consumed concurrently (simulate by inserting competing child first)", async () => {
+    seedBooking(database.sqlite, "b5");
+    const { id: parentId } = await recordMovement(database.db, {
+      id: "p-concur",
+      amount: 100,
+      method: "card",
+      allocations: [{ booking_id: "b5", amount: 100 }],
+    });
+
+    // simulate concurrent: insert a child that consumes 60
+    const competingId = "competing-child";
+    await recordMovement(database.db, {
+      id: competingId,
+      amount: -60,
+      method: "cash",
+      status: "settled",
+      parent_id: parentId,
+      allocations: [{ booking_id: "b5", amount: -60 }],
+    });
+    expect(await refundableForAllocation(database.db, parentId, "b5")).toBe(40);
+
+    // now attempt 50 which >40
+    const writeRes = await tryInsertManualRefundMovement(database.db, {
+      id: "req-concur",
+      amount: 50,
+      method: "cash",
+      parent_id: parentId,
+      booking_id: "b5",
+      reason: null,
+      performed_by: "admin",
+    });
+    expect(writeRes.capExceeded).toBe(true);
+    expect(writeRes.inserted).toBe(false);
+    // no new child
+    const countAfterRow = await database.db.prepare("SELECT COUNT(*) as c FROM payments WHERE parent_id=?").bind(parentId).first<{c:number}>();
+    const countAfter = countAfterRow?.c ?? 0;
+    expect(countAfter).toBe(1); // only the competing
+  });
+
+  it("accepts full refund at 50.00 when raw cap sum is slightly under due to FP (16.66+16.67+16.67)", async () => {
+    seedBooking(database.sqlite, "b-fp", 50);
+    const parentId = "p-fp";
+    const imprecise = 16.666666666666 * 3; // ~49.999999999997996
+    const createdAt = "2026-08-31 12:00:00";
+    // Insert parent with exact +50 but alloc using imprecise value so SUM in cap expr is imprecise
+    await database.db
+      .prepare(
+        `INSERT INTO payments (id, amount, method, status, paid_at, external_ref, parent_id, reason, performed_by, created_at)
+         VALUES (?, ?, 'cash', 'settled', ?, NULL, NULL, NULL, 'admin', ?)`,
+      )
+      .bind(parentId, 50, createdAt, createdAt)
+      .run();
+    await database.db
+      .prepare(
+        `INSERT INTO payment_allocations (id, payment_id, booking_id, amount, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind("a-fp", parentId, "b-fp", imprecise, createdAt)
+      .run();
+
+    // refundableForAllocation applies round2 so reports 50, but raw SUM in WHERE is <50
+    expect(await refundableForAllocation(database.db, parentId, "b-fp")).toBe(50);
+
+    const reqId = "req-fp-full";
+    const outcome = await recordManualRefund(makeRefundDeps(), {
+      paymentId: parentId,
+      bookingId: "b-fp",
+      amount: 50,
+      channel: "cash",
+      requestId: reqId,
+    });
+    expect(outcome.ok).toBe(true);
+    expect(outcome.refundedAmount).toBe(50);
+    expect(await refundableForAllocation(database.db, parentId, "b-fp")).toBe(0);
+
+    const child = await database.db.prepare("SELECT amount FROM payments WHERE id = ?").bind(reqId).first<{ amount: number }>();
+    expect(child?.amount).toBe(-50);
+  });
+
+  it("replaying same requestId with different amount is idempotency_conflict failure (not treated as success)", async () => {
+    seedBooking(database.sqlite, "b-conflict", 100);
+    const { id: parentId } = await recordMovement(database.db, {
+      id: "p-conflict",
+      amount: 100,
+      method: "card",
+      allocations: [{ booking_id: "b-conflict", amount: 100 }],
+    });
+    const reqId = "req-conflict";
+    const first = await recordManualRefund(makeRefundDeps(), {
+      paymentId: parentId,
+      bookingId: "b-conflict",
+      amount: 30,
+      channel: "transfer",
+      requestId: reqId,
+    });
+    expect(first.ok).toBe(true);
+    expect(first.refundedAmount).toBe(30);
+
+    const second = await recordManualRefund(makeRefundDeps(), {
+      paymentId: parentId,
+      bookingId: "b-conflict",
+      amount: 40, // different amount, same requestId
+      channel: "transfer",
+      requestId: reqId,
+    });
+    expect(second.ok).toBe(false);
+    expect(second.code).toBe("idempotency_conflict");
+    expect(second.refundedAmount).toBe(0);
+
+    // only the first succeeded; no second child
+    const countRow = await database.db.prepare("SELECT COUNT(*) as c FROM payments WHERE parent_id=?").bind(parentId).first<{c:number}>();
+    expect(countRow?.c ?? 0).toBe(1);
+    expect(await refundableForAllocation(database.db, parentId, "b-conflict")).toBe(70);
+  });
+});
+
+describe("void and reverseMovement guards", () => {
+  it("voiding a pending movement sets failed and leaves the booking balance untouched", async () => {
+    seedBooking(database.sqlite, "b-void", 120);
+    const { id: pendId } = await recordMovement(database.db, {
+      id: "p-pending-void",
+      amount: 120,
+      method: "cash",
+      status: "pending",
+      allocations: [{ booking_id: "b-void", amount: 120 }],
+    });
+    // before void, status pending so settled=0
+    let ledger = await getBookingLedger(database.db, "b-void");
+    expect(ledger.settled).toBe(0);
+    expect(ledger.balance).toBe(120);
+
+    // simulate the void logic (the UPDATE + recompute)
+    const upd = await database.db.prepare(
+      "UPDATE payments SET status = 'failed' WHERE id = ? AND status = 'pending'",
+    ).bind(pendId).run();
+    expect((upd as any).meta?.changes ?? (upd as any).changes).toBe(1);
+
+    const allocs = await database.db.prepare("SELECT booking_id FROM payment_allocations WHERE payment_id=?").bind(pendId).all<{booking_id:string}>();
+    for (const a of allocs.results) await recomputeBookingPaymentStatus(database.db, a.booking_id);
+
+    const after = await database.db.prepare("SELECT status FROM payments WHERE id=?").bind(pendId).first<{status:string}>();
+    expect(after?.status).toBe("failed");
+
+    ledger = await getBookingLedger(database.db, "b-void");
+    expect(ledger.settled).toBe(0);
+    expect(ledger.balance).toBe(120); // untouched
+    expect(ledger.movements.find(m => m.id === pendId)?.status).toBe("failed");
+  });
+
+  it("reverseMovement now throws on a pending movement", async () => {
+    seedBooking(database.sqlite, "b-rev");
+    const { id: pendId } = await recordMovement(database.db, {
+      id: "p-pending-rev",
+      amount: 50,
+      method: "cash",
+      status: "pending",
+      allocations: [{ booking_id: "b-rev", amount: 50 }],
+    });
+    await expect(
+      reverseMovement(database.db, pendId, "test", "admin"),
+    ).rejects.toThrow("Seul un mouvement encaissé peut être contre-passé");
   });
 });

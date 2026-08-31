@@ -20,7 +20,7 @@ import {
   Banknote,
   Wallet,
   Pencil,
-  Trash2,
+  Ban,
   Undo2,
   Mail,
   Bell,
@@ -59,9 +59,8 @@ import { bookingFieldLabel, getVisibleBookingFields } from "@/lib/booking-fields
 import {
   CancelBookingDialog,
   RefundPaymentDialog,
-  isStripeRefundable,
+  VoidPaymentDialog,
   refundableCap,
-  hasStripeReference,
   type PaymentRefundInfo,
 } from "@/components/admin/refund";
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
@@ -81,19 +80,20 @@ const STATUS_CLASSES: Record<BookingStatus, string> = {
 };
 
 /**
- * Libellé secondaire d'état de remboursement d'une ligne carte — trois états
- * distincts, sans formulation douteuse :
- *  - un mouvement enfant pending → accepté par Stripe, règlement en cours
- *  - un mouvement enfant settled → réglé, état final
- * Les enfants portent l'état de remboursement, jamais le statut du mouvement parent.
+ * Libellé secondaire d'état de remboursement d'une ligne — l'état de
+ * remboursement est porté par les mouvements enfants (refundable/allocated),
+ * jamais par le statut du mouvement parent. Un mouvement qui n'est pas encore
+ * réglé (encaissement sur place en attente, par exemple) n'a par définition
+ * rien de remboursé : on ne calcule ce libellé que pour les lignes réglées.
  */
-function refundStateLine(p: PaymentRefundInfo): { text: string; tone: "amber" | "zinc" } | null {
+function refundStateLine(p: PaymentRefundInfo): { text: string } | null {
+  if (p.status !== "settled") return null;
   if (p.amount <= 0.005) return null;
   const refunded = (p.allocated ?? p.amount) - (p.refundable ?? p.refundable_amount ?? 0);
   if (refunded <= 0.005) return null;
-  return p.status === "pending"
-    ? { tone: "amber", text: "Remboursement accepté par Stripe — règlement en cours" }
-    : { tone: "zinc", text: refunded >= (p.allocated ?? p.amount) - 0.005 ? "Remboursement effectué" : `dont ${formatPrice(refunded)} remboursés` };
+  return {
+    text: refunded >= (p.allocated ?? p.amount) - 0.005 ? "Remboursement effectué" : `dont ${formatPrice(refunded)} remboursés`,
+  };
 }
 
 interface BookingDetailProps {
@@ -121,12 +121,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   }>({ amount: "", method: "cash" });
   const [addingPayment, setAddingPayment] = useState(false);
 
-  // Edit payment dialog
-  // Delete payment dialog
-  const [deletePaymentTarget, setDeletePaymentTarget] = useState<DbPayment | null>(null);
-  const [deletePaymentOpen, setDeletePaymentOpen] = useState(false);
-  const [deletingPayment, setDeletingPayment] = useState(false);
-
   // Reschedule dialog
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
@@ -142,6 +136,10 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
   // Post-hoc refund dialog
   const [refundTarget, setRefundTarget] = useState<PaymentRefundInfo | null>(null);
   const [refundOpen, setRefundOpen] = useState(false);
+
+  // Void (annuler cette ligne) dialog — encaissement en attente jamais reçu
+  const [voidTarget, setVoidTarget] = useState<PaymentRefundInfo | null>(null);
+  const [voidOpen, setVoidOpen] = useState(false);
 
   // No-show dialog
   const [noShowOpen, setNoShowOpen] = useState(false);
@@ -501,30 +499,6 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
       toast.error("Erreur réseau");
     } finally {
       setAddingPayment(false);
-    }
-  };
-
-  const handleDeletePayment = async () => {
-    if (!deletePaymentTarget) return;
-    setDeletingPayment(true);
-    try {
-      const res = await fetch(`/api/admin/payments/${deletePaymentTarget.id}`, {
-        method: "DELETE",
-      });
-      const json = await res.json() as { success: boolean; error?: string };
-      if (json.success) {
-        toast.success("Paiement contre-passé");
-        setDeletePaymentOpen(false);
-        setDeletePaymentTarget(null);
-        fetchPayments();
-        fetchBooking();
-      } else {
-        toast.error(json.error || "Erreur lors de la suppression");
-      }
-    } catch {
-      toast.error("Erreur réseau");
-    } finally {
-      setDeletingPayment(false);
     }
   };
 
@@ -922,7 +896,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                               const line = refundStateLine(p);
                               if (!line) return null;
                               return (
-                                <p className={`mt-0.5 text-[11px] ${line.tone === "amber" ? "text-amber-400/90" : "text-zinc-600"}`}>
+                                <p className="mt-0.5 text-[11px] text-zinc-600">
                                   {line.text}
                                 </p>
                               );
@@ -933,8 +907,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                           <Badge className={p.status === "settled" && p.amount > 0 ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : p.amount < 0 ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"}>
                             {paymentRecordStatusLabel(p.status, { amount: p.amount, refundableAmount: p.refundable ?? p.refundable_amount })}
                           </Badge>
-                          {p.status === "settled" && p.amount > 0 &&
-                            (isStripeRefundable(p) || (p.method !== "card" && refundableCap(p) > 0.004)) && (
+                          {p.status === "settled" && p.amount > 0.005 && refundableCap(p) > 0.004 && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -948,31 +921,20 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                               Rembourser
                             </Button>
                           )}
-                          {p.status === "settled" && p.amount > 0 &&
-                            p.method === "card" && !hasStripeReference(p) && (
+                          {p.status === "pending" && p.amount > 0.005 && (
                             <Button
                               size="sm"
                               variant="ghost"
-                              disabled
-                              className="h-7 px-2 text-xs text-zinc-600"
-                              title="Remboursement impossible depuis l'application : aucune référence Stripe exploitable"
+                              className="h-7 px-2 text-xs text-zinc-400"
+                              onClick={() => {
+                                setVoidTarget(p);
+                                setVoidOpen(true);
+                              }}
                             >
-                              <Undo2 className="h-3 w-3 mr-1" />
-                              Rembourser
+                              <Ban className="h-3 w-3 mr-1" />
+                              Annuler cette ligne
                             </Button>
                           )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs text-red-400"
-                            onClick={() => {
-                              setDeletePaymentTarget(p);
-                              setDeletePaymentOpen(true);
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3 mr-1" />
-                            Contre-passer
-                          </Button>
                         </div>
                       </div>
                     ))}
@@ -1312,28 +1274,15 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
         }}
       />
 
-      {/* Delete Payment Dialog */}
-      <Dialog open={deletePaymentOpen} onOpenChange={setDeletePaymentOpen}>
-        <DialogContent className="border-zinc-800 bg-zinc-900">
-          <DialogHeader>
-            <DialogTitle>Contre-passer le paiement</DialogTitle>
-            <DialogDescription>
-              {deletePaymentTarget && (
-                <>Êtes-vous sûr de vouloir supprimer le paiement de <span className="font-semibold text-foreground">{formatPrice(deletePaymentTarget.amount)}</span> ({paymentMethodLabel(deletePaymentTarget.method)}) ? Cette action est irréversible.</>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletePaymentOpen(false)} className="border-zinc-700">
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={handleDeletePayment} disabled={deletingPayment}>
-              {deletingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Contre-passer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <VoidPaymentDialog
+        payment={voidTarget}
+        open={voidOpen}
+        onOpenChange={setVoidOpen}
+        onSettled={() => {
+          fetchPayments();
+          fetchBooking();
+        }}
+      />
     </div>
   );
 }

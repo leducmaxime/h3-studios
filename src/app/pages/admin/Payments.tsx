@@ -15,7 +15,7 @@ import {
   MoreHorizontal,
   Loader2,
   Search,
-  Trash2,
+  Ban,
   Download,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -50,7 +50,7 @@ import { formatBookingSlot, formatPrice } from "@/lib/booking";
 import { isBookingPast, parseAmountInput, round2 } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { exportAllocationsCSV, exportCollectionsCSV, type AllocationExportRow } from "@/lib/export";
-import { RefundPaymentDialog } from "@/components/admin/refund";
+import { RefundPaymentDialog, VoidPaymentDialog } from "@/components/admin/refund";
 import { paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
 import { allocateCollectPayments } from "@/lib/recouvrement-collect";
 import type { DbPayment, OverdueBooking } from "@/lib/db-types";
@@ -281,85 +281,28 @@ async function buildAllocationExportRows(payments: ApiPayment[]): Promise<{
   return { rows, missing: [...new Set(missing)] };
 }
 
-// ─── Delete Payment Dialog ──────────────────────────────────────────────────────
-
-function DeletePaymentDialog({
-  payment,
-  open,
-  onOpenChange,
-  onConfirm,
-}: {
-  payment: ApiPayment | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (paymentId: string) => void;
-}) {
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (open) setSubmitting(false);
-  }, [open]);
-
-  function handleConfirm() {
-    if (!payment) return;
-    setSubmitting(true);
-    onConfirm(payment.id);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-zinc-800 bg-zinc-900">
-        <DialogHeader>
-          <DialogTitle>Contre-passer le paiement</DialogTitle>
-          <DialogDescription>
-            {payment && (
-              <>
-                Êtes-vous sûr de vouloir contre-passer le paiement de{" "}
-                <span className="font-semibold text-foreground">{formatPrice(payment.amount)}</span>{" "}
-                ({payment.method}) pour la réservation{" "}
-                <span className="font-semibold text-foreground">{payment.booking_refs || "—"}</span> ?{" "}
-                Cette action est irréversible.
-              </>
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-zinc-700">
-            Annuler
-          </Button>
-          <Button variant="destructive" onClick={handleConfirm} disabled={submitting}>
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Contre-passer
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ─── Payment Row Actions ────────────────────────────────────────────────────────
 
 function PaymentActions({
   payment,
   onMarkPaid,
   onRefund,
-  onDelete,
+  onVoid,
   onCollect,
 }: {
   payment: ApiPayment;
   onMarkPaid: (id: string) => void;
   onRefund: (payment: ApiPayment) => void;
-  onDelete: (payment: ApiPayment) => void;
+  onVoid: (payment: ApiPayment) => void;
   onCollect: (payment: ApiPayment) => void;
 }) {
   const canPay = payment.status === "pending";
+  const canVoid = payment.status === "pending";
   const canRefund =
     payment.status === "settled" && payment.amount > 0.005 &&
-    payment.refundable_amount > 0.004 &&
-    (payment.method !== "card" || !!payment.external_ref?.startsWith("cs_"));
-  const canDelete = payment.payment_type === "on-site";
+    payment.refundable_amount > 0.004;
   const canCollect = Boolean(payment.user_id);
-  if (!canPay && !canRefund && !canDelete && !canCollect) return null;
+  if (!canPay && !canRefund && !canVoid && !canCollect) return null;
 
   return (
     <DropdownMenu>
@@ -376,21 +319,20 @@ function PaymentActions({
             <span>Encaisser ce client</span>
           </DropdownMenuItem>
         )}
-        {canCollect && (canDelete || canPay || canRefund) && <DropdownMenuSeparator />}
-        {canDelete && (
-          <DropdownMenuItem variant="destructive" onClick={() => onDelete(payment)}>
-            <Trash2 className="h-4 w-4" />
-            <span>Contre-passer</span>
-          </DropdownMenuItem>
-        )}
-        {canDelete && (canPay || canRefund) && <DropdownMenuSeparator />}
+        {canCollect && (canPay || canVoid || canRefund) && <DropdownMenuSeparator />}
         {canPay && (
           <DropdownMenuItem onClick={() => onMarkPaid(payment.id)}>
             <Check className="h-4 w-4 text-green-400" />
             <span>Marquer payé</span>
           </DropdownMenuItem>
         )}
-        {canPay && canRefund && <DropdownMenuSeparator />}
+        {canVoid && (
+          <DropdownMenuItem onClick={() => onVoid(payment)}>
+            <Ban className="h-4 w-4 text-zinc-400" />
+            <span>Annuler cette ligne</span>
+          </DropdownMenuItem>
+        )}
+        {(canPay || canVoid) && canRefund && <DropdownMenuSeparator />}
         {canRefund && (
           <DropdownMenuItem
             variant="destructive"
@@ -843,9 +785,6 @@ export function AdminPayments() {
   const [page, setPage] = useState(1);
   const perPage = 20;
 
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingPayment, setDeletingPayment] = useState<ApiPayment | null>(null);
-
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
 
@@ -853,6 +792,10 @@ export function AdminPayments() {
   const [refundTarget, setRefundTarget] = useState<ApiPayment | null>(null);
   const [refundOpen, setRefundOpen] = useState(false);
   const [refundBookingOptions, setRefundBookingOptions] = useState<Array<{ id: string; ref: string }>>([]);
+
+  // Void dialog state — encaissement en attente jamais reçu
+  const [voidTarget, setVoidTarget] = useState<ApiPayment | null>(null);
+  const [voidOpen, setVoidOpen] = useState(false);
 
   const [groupCollectOpen, setGroupCollectOpen] = useState(false);
   const [groupCollectUserId, setGroupCollectUserId] = useState<string | null>(null);
@@ -955,27 +898,9 @@ export function AdminPayments() {
     setRefundOpen(true);
   }
 
-  const openDeleteDialog = (payment: ApiPayment) => {
-    setDeletingPayment(payment);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeletePayment = async (paymentId: string) => {
-    try {
-      const res = await fetch(`/api/admin/payments/${paymentId}`, {
-        method: "DELETE",
-      });
-      const json = await res.json() as { success: boolean; error?: string };
-      if (json.success) {
-        toast.success("Paiement contre-passé");
-        setDeleteDialogOpen(false);
-        fetchPayments();
-      } else {
-        toast.error(json.error || "Erreur lors de la suppression");
-      }
-    } catch {
-      toast.error("Erreur réseau");
-    }
+  const openVoidDialog = (payment: ApiPayment) => {
+    setVoidTarget(payment);
+    setVoidOpen(true);
   };
 
   async function handleExportCollections() {
@@ -1346,7 +1271,7 @@ export function AdminPayments() {
                         payment={payment}
                         onMarkPaid={handleMarkPaid}
                         onRefund={openRefundDialog}
-                        onDelete={openDeleteDialog}
+                        onVoid={openVoidDialog}
                         onCollect={openGroupCollect}
                       />
                     </td>
@@ -1405,11 +1330,11 @@ export function AdminPayments() {
         onSettled={fetchPayments}
       />
 
-      <DeletePaymentDialog
-        payment={deletingPayment}
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        onConfirm={handleDeletePayment}
+      <VoidPaymentDialog
+        payment={voidTarget}
+        open={voidOpen}
+        onOpenChange={setVoidOpen}
+        onSettled={fetchPayments}
       />
 
       <GroupCollectDialog

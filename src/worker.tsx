@@ -152,7 +152,7 @@ import {
 } from "@/lib/db";
 import { validateLoyaltySettings } from "@/lib/loyalty";
 import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
-import { refundAllocation, refundPayments } from "@/lib/refunds";
+import { recordManualRefund, refundAllocation, refundPayments, type RefundChannel } from "@/lib/refunds";
 import {
   allocateWaterfall,
   getBookingLedger,
@@ -3584,11 +3584,45 @@ const app = defineApp([
     }
   }),
 
+  route("/api/admin/payments/:id/void", async ({ request, params }) => {
+    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
+
+    try {
+      const movement = await env.DB.prepare(
+        "SELECT id, status FROM payments WHERE id = ?",
+      ).bind(params.id).first<{ id: string; status: string }>();
+      if (!movement) return jsonError("Mouvement introuvable", 404);
+      if (movement.status !== "pending") return jsonError("Le mouvement n'est pas en attente", 400);
+
+      const updated = await env.DB.prepare(
+        "UPDATE payments SET status = 'failed' WHERE id = ? AND status = 'pending'",
+      ).bind(params.id).run();
+      if ((updated.meta?.changes ?? 0) !== 1) return jsonError("Le mouvement n'est plus en attente", 409);
+
+      const allocations = await env.DB.prepare(
+        "SELECT booking_id FROM payment_allocations WHERE payment_id = ?",
+      ).bind(params.id).all<{ booking_id: string }>();
+      const bookingIds = [...new Set(allocations.results.map((row) => row.booking_id))];
+      for (const bookingId of bookingIds) await recomputeBookingPaymentStatus(env.DB, bookingId);
+      await addAuditLog(env.DB, "payment", params.id, "void", { bookingIds }, request.headers.get("X-Admin-User-Id") || "admin");
+      return jsonSuccess({ id: params.id, status: "failed" });
+    } catch (error) {
+      console.error("PUT /api/admin/payments/:id/void error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to void payment", 500);
+    }
+  }),
+
   route("/api/admin/payments/:id/refund", async ({ request, params }) => {
     if (request.method !== "PUT") return jsonError("Method not allowed", 405);
 
     try {
-      const body = await request.json() as { bookingId?: string; amount?: number; reason?: string };
+      const body = await request.json() as {
+        bookingId?: string;
+        amount?: number;
+        channel?: string;
+        requestId?: string;
+        reason?: string;
+      };
       if (!body.bookingId?.trim()) {
         return jsonError("Champ obligatoire manquant: bookingId", 400);
       }
@@ -3596,16 +3630,42 @@ const app = defineApp([
         return jsonError("Champ obligatoire manquant: amount (> 0)", 400);
       }
 
-      const outcome = await refundAllocation({
+      const allowedChannels: RefundChannel[] = ["stripe", "cash", "transfer", "check", "card"];
+      if (!body.channel || !allowedChannels.includes(body.channel as RefundChannel)) {
+        return jsonError("Champ obligatoire manquant: channel", 400);
+      }
+      const channel = body.channel as RefundChannel;
+
+      if (channel !== "stripe" && !body.requestId?.trim()) {
+        return jsonError("Champ obligatoire manquant: requestId", 400);
+      }
+
+      const performedBy = request.headers.get("X-Admin-User-Id") || "admin";
+      const deps = {
         db: env.DB,
         secretKey: env.STRIPE_SECRET_KEY,
-        performedBy: request.headers.get("X-Admin-User-Id") || "admin",
-      }, {
-        paymentId: params.id,
-        bookingId: body.bookingId,
-        amount: body.amount,
-        reason: body.reason,
-      });
+        performedBy,
+      };
+
+      let outcome;
+      if (channel === "stripe") {
+        outcome = await refundAllocation(deps, {
+          paymentId: params.id,
+          bookingId: body.bookingId,
+          amount: body.amount,
+          reason: body.reason,
+        });
+      } else {
+        outcome = await recordManualRefund(deps, {
+          paymentId: params.id,
+          bookingId: body.bookingId,
+          amount: body.amount,
+          channel: channel as Exclude<RefundChannel, "stripe">,
+          requestId: body.requestId!,
+          reason: body.reason,
+        });
+      }
+
       if (!outcome.ok) {
         return jsonResponse({ success: false, error: outcome.message || "Refund failed", code: outcome.code, outcome }, 400);
       }
@@ -6125,9 +6185,9 @@ const app = defineApp([
             `INSERT INTO payments
                (id, amount, method, status, paid_at, external_ref, parent_id, reason, performed_by, created_at)
              VALUES (?, ?, 'card', ?, ?, ?, ?, ?, 'stripe-webhook', ?)
-             ON CONFLICT(external_ref) DO UPDATE SET
-               status = CASE WHEN payments.status = 'settled' THEN payments.status ELSE excluded.status END,
-               paid_at = CASE WHEN payments.status = 'settled' THEN payments.paid_at ELSE excluded.paid_at END`,
+              ON CONFLICT(external_ref) WHERE external_ref IS NOT NULL DO UPDATE SET
+                status = CASE WHEN payments.status = 'settled' THEN payments.status ELSE excluded.status END,
+                paid_at = CASE WHEN payments.status = 'settled' THEN payments.paid_at ELSE excluded.paid_at END`,
           ).bind(
             generateId(),
             -amount,
