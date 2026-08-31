@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyProfilePrefill, type ClientProfile } from "@/components/booking/useBookingWithRouter";
+import { applyProfilePrefill, prefillClientType, type ClientProfile } from "@/components/booking/useBookingWithRouter";
 import { accountFieldsDrifted, computeAccountFieldStatus, deriveDisplayName, getBookingFieldIssues, type BookingUserFields } from "@/lib/booking-fields";
 
 const baseUser: ClientProfile = {
@@ -289,6 +289,28 @@ describe("accountFieldsDrifted", () => {
 
     const invalid = { ...completeAccount, phone: "+33612345678" };
     expect(accountFieldsDrifted({ ...completeFields, userPhone: "0600000000" }, invalid)).toBe(false);
+  });
+});
+
+describe("prefillClientType", () => {
+  it("uses the account type on first arrival even if leftover state is association", () => {
+    expect(prefillClientType({ ...baseUser, client_type: "particulier" }, { initial: true })).toEqual({
+      clientType: "particulier",
+    });
+  });
+
+  it("defaults an unset account to particulier on first arrival", () => {
+    expect(prefillClientType(baseUser, { initial: true })).toEqual({ clientType: "particulier" });
+  });
+
+  it("keeps an association account on first arrival", () => {
+    expect(prefillClientType({ ...baseUser, client_type: "association" }, { initial: true })).toEqual({
+      clientType: "association",
+    });
+  });
+
+  it("does not revert an in-session choice on later arrivals", () => {
+    expect(prefillClientType({ ...baseUser, client_type: "particulier" }, { initial: false })).toEqual({});
   });
 });
 

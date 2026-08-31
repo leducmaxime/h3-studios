@@ -9,12 +9,12 @@ import { usePricing } from "./usePricing";
 import { useEquipment } from "./useEquipment";
 import { getClientAuthState, login as authLogin, logout as authLogout, refresh as refreshClientAuth, useClientAuth } from "@/lib/client-auth-store";
 import {
+  accountClientType,
   accountFieldsDrifted,
   accountFieldValues,
   BOOKING_FIELD_KEYS,
   computeAccountFieldStatus,
   getBookingFieldIssues,
-  DEFAULT_CLIENT_TYPE,
   isClientType,
   splitDisplayName,
   type ClientType,
@@ -148,6 +148,22 @@ export function applyProfilePrefill(fields: PrefillFields, user: ClientProfile, 
     next.userEmail = "";
   }
   return next;
+}
+
+/**
+ * First profile arrival: the account type always wins.
+ *
+ * Guest prefs and a restored cart can already hold `association` before
+ * `/api/client/me` returns. Leaving that leftover in place is what opened a
+ * logged-in particulier on Association. Later arrivals (focus refetch, drift
+ * correction) must not undo an in-session toggle.
+ */
+export function prefillClientType(
+  user: ClientProfile,
+  { initial }: { initial: boolean },
+): { clientType: ClientType } | Record<string, never> {
+  if (!initial) return {};
+  return { clientType: accountClientType(user) };
 }
 
 /**
@@ -598,7 +614,7 @@ export function useBookingWithRouter(urlStep?: string) {
     return refreshClientAuth().then((user) => {
         if (user) {
           const initial = !hasAppliedInitialPrefillRef.current;
-          setState((s) => ({ ...s, ...(initial && s.clientType === null ? { clientType: isClientType(user.client_type) ? user.client_type : DEFAULT_CLIENT_TYPE } : {}), ...applyProfilePrefill(s, user, { initial }) }));
+          setState((s) => ({ ...s, ...prefillClientType(user, { initial }), ...applyProfilePrefill(s, user, { initial }) }));
           hasAppliedInitialPrefillRef.current = true;
           return user;
         }
@@ -1207,7 +1223,7 @@ export function useBookingWithRouter(urlStep?: string) {
     const user = getClientAuthState().user;
     setState(
       user
-        ? { ...initialState, clientType: isClientType(user.client_type) ? user.client_type : DEFAULT_CLIENT_TYPE, ...applyProfilePrefill(initialState, user, { initial: true }) }
+        ? { ...initialState, ...prefillClientType(user, { initial: true }), ...applyProfilePrefill(initialState, user, { initial: true }) }
         : initialState,
     );
   }, []);
@@ -1219,7 +1235,7 @@ export function useBookingWithRouter(urlStep?: string) {
       if (!result.ok) return result;
       const user = await refreshClientAuth();
       if (!user) return { ok: false, error: "Connexion établie mais profil indisponible, réessayez" };
-      setState((s) => ({ ...s, ...(s.clientType === null ? { clientType: isClientType(user.client_type) ? user.client_type : DEFAULT_CLIENT_TYPE } : {}), ...applyProfilePrefill(s, user, { initial: false }) }));
+      setState((s) => ({ ...s, clientType: accountClientType(user), ...applyProfilePrefill(s, user, { initial: false }) }));
       return { ok: true };
     } catch (err) {
       return { ok: false, error: "Erreur réseau" };
