@@ -1,0 +1,31 @@
+{
+  "id": "/admin?h3admin",
+  "name": "H3 Studios Admin",
+  "short_name": "H3 Admin",
+  "description": "Panneau d'administration H3 Studios",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#ffde59",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

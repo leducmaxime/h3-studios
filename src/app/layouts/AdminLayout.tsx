@@ -18,6 +18,7 @@ import {
   LogOut,
   ArrowLeft,
   Ban,
+  Bell,
 } from "lucide-react";
 
 import { navigate } from "rwsdk/client";
@@ -57,6 +58,7 @@ const ALL_NAV_ITEMS = [
   { href: "/admin/payments", label: "Paiements", icon: CreditCard, superAdminOnly: false },
   { href: "/admin/recouvrement", label: "Recouvrement", icon: AlertCircle, superAdminOnly: false },
   { href: "/admin/blocked-slots", label: "Blocages d'agenda", icon: Ban, superAdminOnly: false },
+  { href: "/admin/notifications", label: "Notifications", icon: Bell, superAdminOnly: false },
   { href: "/admin/equipements", label: "Équipements", icon: Package, superAdminOnly: true },
   { href: "/admin/pricing", label: "Tarification", icon: Euro, superAdminOnly: true },
   { href: "/admin/settings", label: "Paramètres", icon: Settings, superAdminOnly: true },
