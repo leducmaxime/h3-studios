@@ -6837,6 +6837,24 @@ async function runDailyJobs(): Promise<void> {
 async function handleScheduled(controller: ScheduledController) {
   const job = resolveCronJob(controller.cron);
   console.log(`[Cron] Triggered: ${controller.cron} → job=${job ?? "INCONNU"}`);
+
+  // Trace persistante de la dernière invocation planifiée. Les logs de cron ne
+  // sont pas consultables après coup ; sans cette trace, il est impossible de
+  // distinguer « le cron ne se déclenche pas » de « le cron se déclenche mais
+  // l'expression n'est pas reconnue », deux pannes silencieuses au symptôme
+  // identique. On enregistre l'expression BRUTE reçue de Cloudflare, avant tout
+  // aiguillage. Jamais bloquant : un échec d'écriture ne doit pas empêcher la
+  // tâche de s'exécuter.
+  try {
+    await setSetting(
+      env.DB as D1Database,
+      "cron.last_invocation",
+      JSON.stringify({ cron: controller.cron, job: job ?? "INCONNU", at: new Date().toISOString() }),
+    );
+  } catch (error) {
+    console.error("[Cron] Impossible d'enregistrer la trace d'invocation:", error);
+  }
+
   if (job === null) {
     console.error(`[Cron] Expression inconnue, aucune tâche exécutée: ${controller.cron}`);
     return;
