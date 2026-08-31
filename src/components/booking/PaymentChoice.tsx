@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, Banknote } from "lucide-react";
+import { CreditCard, Banknote, Loader2 } from "lucide-react";
 import { type CompletedBooking, type PaymentMethod } from "@/lib/booking";
 import { Price } from "@/components/common/Price";
 import { PaymentSummary } from "@/components/booking/PaymentSummary";
@@ -41,6 +41,12 @@ export function PaymentChoice({
   displayPrices = {},
 }: PaymentChoiceProps) {
   const actionsDisabled = !acceptedCgv || isSubmitting;
+  const submittingLabel = (
+    <span className="inline-flex items-center gap-2">
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      Réservation en cours…
+    </span>
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -84,25 +90,32 @@ export function PaymentChoice({
 
       {isFree ? (
         <button
+          type="button"
           onClick={onConfirmFree}
           disabled={actionsDisabled}
           className={`w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-black transition-all lg:py-4 lg:text-lg ${
-            actionsDisabled
+            isSubmitting
+              ? "cursor-wait opacity-100 shadow-lg shadow-primary/25"
+              : actionsDisabled
               ? "cursor-not-allowed opacity-40"
-              : "shadow-lg shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99]"
+              : "opacity-100 shadow-lg shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 active:scale-[0.99]"
           }`}
         >
-          Confirmer la réservation
+          {isSubmitting ? submittingLabel : "Confirmer la réservation"}
         </button>
       ) : (
         <div className={`grid gap-3 lg:gap-4${allowOnSitePayment ? " lg:grid-cols-2" : ""}`}>
           <button
+            type="button"
             onClick={() => onSelectMethod("card")}
             disabled={actionsDisabled}
-            className={`group relative flex flex-col gap-3 rounded-xl border-2 border-primary/50 bg-primary/10 p-4 text-left transition-all lg:gap-4 lg:p-6 ${
-              actionsDisabled
-                ? "cursor-not-allowed opacity-40"
-                : "hover:border-primary hover:bg-primary/20"
+            aria-busy={isSubmitting}
+            className={`group relative flex flex-col gap-3 rounded-xl border-2 p-4 text-left transition-all lg:gap-4 lg:p-6 ${
+              isSubmitting
+                ? "cursor-wait border-primary/50 bg-primary/10 opacity-100"
+                : actionsDisabled
+                ? "cursor-not-allowed border-primary/30 bg-primary/5 opacity-40"
+                : "border-primary bg-primary/15 opacity-100 shadow-[0_12px_40px_-18px_rgba(255,222,89,0.55)] hover:-translate-y-0.5 hover:bg-primary/25 hover:shadow-[0_16px_44px_-18px_rgba(255,222,89,0.7)]"
             }`}
           >
             {allowOnSitePayment && (
@@ -117,44 +130,52 @@ export function PaymentChoice({
               </div>
               <div>
                 <h4 className="text-base font-semibold lg:text-lg">Payez en ligne</h4>
-                <p className="text-xs text-white/50 lg:text-sm">Paiement sécurisé</p>
+                <p className="text-xs text-white/70 lg:text-sm">Paiement sécurisé</p>
               </div>
             </div>
 
             <div className="mt-auto pt-3 lg:pt-4">
-              <span className={`inline-block rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-black transition-all lg:px-4 lg:py-2 lg:text-base ${
-                actionsDisabled ? "" : "group-hover:bg-primary/90"
+              <span className={`inline-flex w-full items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-black transition-all lg:px-4 lg:py-3 lg:text-base ${
+                isSubmitting ? "shadow-lg shadow-primary/30" : actionsDisabled ? "" : "shadow-lg shadow-primary/35 group-hover:bg-primary/90 group-hover:shadow-primary/50"
               }`}>
-                Payer <Price amount={total} /> →
+                {isSubmitting ? submittingLabel : <>Payer <Price amount={total} /> →</>}
               </span>
             </div>
           </button>
 
           {allowOnSitePayment && (
             <button
+              type="button"
               onClick={() => onSelectMethod("cash")}
               disabled={actionsDisabled}
-              className={`group flex flex-col gap-3 rounded-xl border-2 border-white/20 bg-white/15 p-4 text-left transition-all lg:gap-4 lg:p-6 ${
-                actionsDisabled
-                  ? "cursor-not-allowed opacity-40"
-                  : "hover:border-white/40 hover:bg-white/15"
+              aria-busy={isSubmitting}
+              className={`group flex flex-col gap-3 rounded-xl border-2 p-4 text-left transition-all lg:gap-4 lg:p-6 ${
+                isSubmitting
+                  ? "cursor-wait border-white/35 bg-white/10 opacity-100"
+                  : actionsDisabled
+                  ? "cursor-not-allowed border-white/15 bg-white/5 opacity-40"
+                  : "border-white/60 bg-white/10 opacity-100 shadow-lg shadow-black/20 hover:-translate-y-0.5 hover:border-white hover:bg-white/15"
               }`}
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 lg:h-12 lg:w-12">
-                  <Banknote className="h-5 w-5 text-white/70 lg:h-6 lg:w-6" />
+                  <Banknote className="h-5 w-5 text-white lg:h-6 lg:w-6" />
                 </div>
                 <div>
-                  <h4 className="text-base font-semibold lg:text-lg">Payer sur place</h4>
-                  <p className="text-xs text-white/50 lg:text-sm">Espèces ou CB</p>
+                  <h4 className="text-base font-semibold text-white lg:text-lg">Payer sur place</h4>
+                  <p className="text-xs text-white/70 lg:text-sm">Espèces ou CB</p>
                 </div>
               </div>
 
               <div className="mt-auto pt-3 lg:pt-4">
-                <span className={`inline-block rounded-lg border border-white/30 px-3 py-1.5 text-sm font-medium text-white/70 transition-all lg:px-4 lg:py-2 lg:text-base ${
-                  actionsDisabled ? "" : "group-hover:border-white/50 group-hover:text-white"
+                <span className={`inline-flex w-full items-center justify-center rounded-xl px-3 py-2.5 text-sm font-semibold transition-all lg:px-4 lg:py-3 lg:text-base ${
+                  isSubmitting
+                    ? "border border-white/50 bg-white/15 text-white"
+                    : actionsDisabled
+                      ? "border border-white/50 bg-white/10 text-white"
+                      : "bg-white text-black shadow-lg shadow-black/25 group-hover:bg-white/90"
                 }`}>
-                  Réserver sans payer
+                  {isSubmitting ? submittingLabel : "Réserver sans payer"}
                 </span>
               </div>
             </button>
