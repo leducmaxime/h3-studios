@@ -100,7 +100,7 @@ function makeDeps(db: D1Database, script: {
     listRefundsForPaymentIntent: async (_key: string, pi: string) => { calls.list.push(pi); return typeof script.list === "function" ? script.list() : script.list ?? result([]); },
     createRefund: async (_key: string, params: { paymentIntentId: string; amountCents: number; idempotencyKey: string }) => { calls.create.push(params); return typeof script.create === "function" ? script.create() : script.create ?? result(accepted("re_test", params.amountCents)); },
   };
-  return { deps: { db, secretKey: "sk_test", performedBy: "admin-1", now: () => "2026-08-13T12:00:00.000Z", stripe: fake } as RefundDeps, calls };
+  return { deps: { db, secretKey: "sk_test", performedBy: "admin-1", sendPush: async () => {}, now: () => "2026-08-13T12:00:00.000Z", stripe: fake } as RefundDeps, calls };
 }
 
 async function paymentRow(db: D1Database, id = "p1") { return getPaymentById(db, id); }

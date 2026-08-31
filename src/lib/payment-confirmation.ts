@@ -3,6 +3,7 @@ import { allocateWaterfall, type BookingLedgerSummary } from "./ledger";
 import type { DbBooking, DbUser } from "./db-types";
 import { daysUntilDate, reminderWhenPhrase, type BookingConfirmationData, type BookingSlot } from "./email";
 import { parseBookingEquipmentLines } from "./booking";
+import { buildPushNotification, type PushNotification } from "./push";
 
 /**
  * Finalisation idempotente d'un paiement en ligne (Stripe Checkout).
@@ -253,6 +254,7 @@ export interface FinalizePaidSessionDeps {
   releaseEmailClaim: (sessionId: string, claimedAt: string) => Promise<void>;
   getUserById: (userId: string) => Promise<Pick<DbUser, "name" | "email" | "phone"> | null>;
   sendEmail: (data: BookingConfirmationData) => Promise<{ success: boolean }>;
+  sendPush: (notification: PushNotification) => Promise<void>;
   equipmentNames?: Record<string, string>;
   nowISO: () => string;
 }
@@ -334,6 +336,18 @@ export async function finalizePaidCheckoutSession(
       allocations,
     });
     paymentInserted = result.inserted;
+  }
+
+  if (paymentInserted && finalizable.length > 0) {
+    const booking = finalizable[0];
+    void Promise.resolve().then(() => deps.sendPush(buildPushNotification("payment_received", {
+      bookingId: booking.id,
+      clientName: booking.band_name ?? undefined,
+      studioId: booking.studio_id,
+      date: booking.date,
+      startTime: booking.start_time,
+      amount: sessionAmount,
+    }))).catch(() => {});
   }
 
   // M1 : claim atomique de la livraison email AVANT l'envoi. Seul l'appelant

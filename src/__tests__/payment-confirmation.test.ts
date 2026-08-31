@@ -130,6 +130,7 @@ function makeDeps(overrides: Partial<FinalizePaidSessionDeps> = {}) {
       state.sentPayloads.push(data);
       return { success: true };
     },
+    sendPush: async () => {},
     nowISO: () => "2026-01-05 12:00:00",
     ...overrides,
   };

@@ -169,7 +169,7 @@ import {
 } from "@/lib/ledger";
 import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 import type { PushEventType } from "@/lib/db-types";
-import { resolvePreferences, sendPushToAdmin, type PushDeps, type PushNotification } from "@/lib/push";
+import { buildPushNotification, resolvePreferences, sendPushToAdmin, sendPushToAdmins, type PushDeps, type PushNotification, type PushNotificationInput } from "@/lib/push";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, STUDIOS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
@@ -335,6 +335,25 @@ function jsonSuccess(data: unknown): Response {
 
 function jsonError(error: string, status = 400): Response {
   return jsonResponse({ success: false, error }, status);
+}
+
+function notifyAdmins(typeOrNotification: PushEventType | PushNotification, input?: PushNotificationInput): Promise<void> {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return Promise.resolve();
+  const dispatch = Promise.resolve().then(() => {
+    const notification = typeof typeOrNotification === "string"
+      ? buildPushNotification(typeOrNotification, input ?? {})
+      : typeOrNotification;
+    return sendPushToAdmins({
+      db: env.DB as D1Database,
+      vapid: {
+        publicKey: env.VAPID_PUBLIC_KEY,
+        privateKey: env.VAPID_PRIVATE_KEY,
+        subject: env.VAPID_SUBJECT,
+      },
+    }, notification);
+  }).then(() => undefined).catch(() => {});
+  waitUntil(dispatch);
+  return Promise.resolve();
 }
 
 const PUSH_EVENT_TYPES: readonly PushEventType[] = [
@@ -941,6 +960,11 @@ const app = defineApp([
         return jsonError(`Échec de l'envoi de l'email: ${errorData}`, 500);
       }
 
+      notifyAdmins("contact_message", {
+        name: body.name,
+        subject: body.subject,
+        message: body.message,
+      });
       return jsonSuccess({ sent: true });
     } catch (error) {
       console.error("POST /api/contact error:", error);
@@ -1567,6 +1591,14 @@ const app = defineApp([
         }
         throw error;
       }
+
+      notifyAdmins("booking_created", {
+        bookingId: booking.id,
+        clientName: name,
+        studioId: booking.studio_id,
+        date: booking.date,
+        startTime: booking.start_time,
+      });
 
       // ── Email (consolidated on last cart request) ─────────────────────────
       const isLastInCart = body.isLastInCart === true;
@@ -2312,6 +2344,14 @@ const app = defineApp([
           end_time: booking.end_time,
         }, request.headers.get("X-Admin-User-Id") || "admin");
 
+        notifyAdmins("booking_created", {
+          bookingId: booking.id,
+          clientName: booking.user_name ?? booking.band_name ?? undefined,
+          studioId: booking.studio_id,
+          date: booking.date,
+          startTime: booking.start_time,
+        });
+
         // Send booking confirmation email to client
         if (env.RESEND_API_KEY) {
           const userRow = await env.DB.prepare(
@@ -2641,6 +2681,16 @@ const app = defineApp([
         } : body;
         await addAuditLog(env.DB, "booking", id, "update", auditChanges, request.headers.get("X-Admin-User-Id") || "admin");
 
+        if (isReschedule && updated) {
+          notifyAdmins("booking_rescheduled", {
+            bookingId: updated.id,
+            clientName: updated.user_name ?? updated.band_name ?? undefined,
+            studioId: updated.studio_id,
+            date: updated.date,
+            startTime: updated.start_time,
+          });
+        }
+
         // Refund policy for a lower online-paid reschedule: operator-proposed.
         // PUT never calls Stripe; it exposes the credit, which the operator can
         // settle through the existing partial-refund endpoint after review.
@@ -2735,6 +2785,13 @@ const app = defineApp([
             }),
           );
         }
+        notifyAdmins("booking_cancelled", {
+          bookingId: booking.id,
+          clientName: client?.name ?? booking.user_name ?? booking.band_name ?? undefined,
+          studioId: booking.studio_id,
+          date: booking.date,
+          startTime: booking.start_time,
+        });
       }
 
       const updated = await getBookingById(env.DB, params.id);
@@ -2767,6 +2824,7 @@ const app = defineApp([
             db: env.DB,
             secretKey: env.STRIPE_SECRET_KEY,
             performedBy: request.headers.get("X-Admin-User-Id") || "admin",
+            sendPush: (notification) => notifyAdmins(notification),
           }, body.refunds!.map((item) => ({
             ...item,
             reason: item.reason ?? body.reason,
@@ -2798,6 +2856,14 @@ const app = defineApp([
       if (!result.success) return jsonError(result.error || "No-show update failed", 400);
 
       await addAuditLog(env.DB, "booking", params.id, "no-show", {}, request.headers.get("X-Admin-User-Id") || "admin");
+
+      notifyAdmins("booking_no_show", {
+        bookingId: booking.id,
+        clientName: booking.user_name ?? booking.band_name ?? undefined,
+        studioId: booking.studio_id,
+        date: booking.date,
+        startTime: booking.start_time,
+      });
 
       const updated = await getBookingById(env.DB, params.id);
       return jsonSuccess(updated);
@@ -2944,6 +3010,11 @@ const app = defineApp([
       });
 
       await addAuditLog(env.DB, "booking", params.id, "mark-paid", { amount: remaining, method }, request.headers.get("X-Admin-User-Id") || "admin");
+      notifyAdmins("payment_received", {
+        bookingId: booking.id,
+        clientName: booking.user_name ?? booking.band_name ?? undefined,
+        amount: remaining,
+      });
       return jsonSuccess({ id: params.id, paymentId: paymentResult.id, amount: remaining });
     } catch (error) {
       console.error("PUT /api/admin/bookings/:id/mark-paid error:", error);
@@ -3675,6 +3746,7 @@ const app = defineApp([
         db: env.DB,
         secretKey: env.STRIPE_SECRET_KEY,
         performedBy,
+        sendPush: (notification: PushNotification) => notifyAdmins(notification),
       };
 
       let outcome;
@@ -6506,6 +6578,7 @@ function buildFinalizeDeps(): FinalizePaidSessionDeps {
       if (!env.RESEND_API_KEY) return { success: false };
       return sendBookingConfirmationEmail(env.RESEND_API_KEY, data);
     },
+    sendPush: (notification) => notifyAdmins(notification),
     nowISO: () => new Date().toISOString().replace("T", " ").slice(0, 19),
   };
 }

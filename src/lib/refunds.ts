@@ -18,6 +18,7 @@ import {
   tryInsertManualRefundMovement,
 } from "./ledger";
 import { round2 } from "./booking-totals";
+import { buildPushNotification, type PushNotification } from "./push";
 
 export type RefundChannel = "stripe" | "cash" | "transfer" | "check" | "card";
 
@@ -65,6 +66,7 @@ export interface RefundDeps {
   db: D1Database;
   secretKey: string | undefined;
   performedBy: string;
+  sendPush: (notification: PushNotification) => Promise<void>;
   stripe?: StripeRefundPort;
   now?: () => string;
 }
@@ -467,6 +469,11 @@ export async function refundAllocation(
     );
   }
 
+  void Promise.resolve().then(() => deps.sendPush(buildPushNotification("refund_issued", {
+    bookingId,
+    amount,
+  }))).catch(() => {});
+
   return {
     ok: true,
     paymentId,
@@ -561,6 +568,10 @@ export async function recordManualRefund(
       booking_id: bookingId,
       movement_id: requestId,
     }, deps.performedBy);
+    void Promise.resolve().then(() => deps.sendPush(buildPushNotification("refund_issued", {
+      bookingId,
+      amount,
+    }))).catch(() => {});
   }
 
   const refundableAfter = await getRefundableAfter(deps.db, paymentId, bookingId);
