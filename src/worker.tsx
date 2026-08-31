@@ -30,6 +30,7 @@ import { AdminCalendar } from "@/app/pages/admin/Calendar";
 import { AdminBookings } from "@/app/pages/admin/Bookings";
 import { AdminBookingDetail } from "@/app/pages/admin/BookingDetail";
 import { AdminBlockedSlots } from "@/app/pages/admin/BlockedSlots";
+import { AdminNotifications } from "@/app/pages/admin/Notifications";
 import { AdminUsers } from "@/app/pages/admin/Users";
 import { AdminUserDetail } from "@/app/pages/admin/UserDetail";
 import { AdminPayments } from "@/app/pages/admin/Payments";
@@ -150,6 +151,11 @@ import {
   claimPromoCodeUsage,
   releasePromoCodeUsage,
   claimPromoValidationAttempt,
+  deletePushSubscriptionForAdmin,
+  getPushPreferences,
+  getPushSubscriptionsForAdmin,
+  setPushPreference,
+  upsertPushSubscription,
 } from "@/lib/db";
 import { validateLoyaltySettings } from "@/lib/loyalty";
 import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
@@ -162,6 +168,8 @@ import {
   reverseMovement,
 } from "@/lib/ledger";
 import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
+import type { PushEventType } from "@/lib/db-types";
+import { resolvePreferences, sendPushToAdmin, type PushDeps, type PushNotification } from "@/lib/push";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, STUDIOS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
@@ -327,6 +335,22 @@ function jsonSuccess(data: unknown): Response {
 
 function jsonError(error: string, status = 400): Response {
   return jsonResponse({ success: false, error }, status);
+}
+
+const PUSH_EVENT_TYPES: readonly PushEventType[] = [
+  "booking_created",
+  "booking_cancelled",
+  "booking_rescheduled",
+  "booking_no_show",
+  "payment_received",
+  "refund_issued",
+  "contact_message",
+  "booking_reminder",
+  "cron_failure",
+];
+
+function isPushEventType(value: unknown): value is PushEventType {
+  return typeof value === "string" && PUSH_EVENT_TYPES.includes(value as PushEventType);
 }
 
 function validateAdminSettingValue(key: string, rawValue: string): { ok: true; value: string } | { ok: false; error: string } {
@@ -692,6 +716,7 @@ const app = defineApp([
       route("/admin/bookings/new", AdminBookingNew),
       route("/admin/bookings/:id", ({ params }) => <AdminBookingDetail bookingId={params.id} />),
       route("/admin/blocked-slots", AdminBlockedSlots),
+      route("/admin/notifications", AdminNotifications),
       route("/admin/users", AdminUsers),
       route("/admin/users/:id", ({ params }) => <AdminUserDetail userId={params.id} />),
       route("/admin/payments", AdminPayments),
@@ -3805,6 +3830,167 @@ const app = defineApp([
     } catch (error) {
       console.error("DELETE /api/admin/blocked-slots/:id error:", error);
       return jsonError(error instanceof Error ? error.message : "Failed to remove blocked slot", 500);
+    }
+  }),
+
+  // ─── Admin Push Notifications API ──────────────────────────────────────────
+
+  route("/api/admin/push/config", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    const adminId = request.headers.get("X-Admin-User-Id");
+    if (!adminId) return jsonError("Non authentifié", 401);
+
+    try {
+      return jsonSuccess({
+        vapidPublicKey: env.VAPID_PUBLIC_KEY ?? "",
+        supported: Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
+      });
+    } catch (error) {
+      console.error("GET /api/admin/push/config error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch push config", 500);
+    }
+  }),
+
+  route("/api/admin/push/state", async ({ request }) => {
+    if (request.method !== "GET") return jsonError("Method not allowed", 405);
+
+    const adminId = request.headers.get("X-Admin-User-Id");
+    if (!adminId) return jsonError("Non authentifié", 401);
+
+    try {
+      const [subscriptions, storedPreferences] = await Promise.all([
+        getPushSubscriptionsForAdmin(env.DB, adminId),
+        getPushPreferences(env.DB, adminId),
+      ]);
+
+      return jsonSuccess({
+        subscriptions: subscriptions.map((subscription) => ({
+          id: subscription.id,
+          endpoint: subscription.endpoint,
+          userAgent: subscription.user_agent ?? "",
+          createdAt: subscription.created_at,
+        })),
+        preferences: resolvePreferences(storedPreferences),
+      });
+    } catch (error) {
+      console.error("GET /api/admin/push/state error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to fetch push state", 500);
+    }
+  }),
+
+  route("/api/admin/push/subscribe", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    const adminId = request.headers.get("X-Admin-User-Id");
+    if (!adminId) return jsonError("Non authentifié", 401);
+
+    try {
+      const body = await request.json() as {
+        endpoint?: unknown;
+        keys?: { p256dh?: unknown; auth?: unknown };
+        userAgent?: unknown;
+      } | null;
+      const endpoint = typeof body?.endpoint === "string" ? body.endpoint.trim() : "";
+      const p256dh = typeof body?.keys?.p256dh === "string" ? body.keys.p256dh.trim() : "";
+      const auth = typeof body?.keys?.auth === "string" ? body.keys.auth.trim() : "";
+
+      if (!endpoint || !p256dh || !auth) {
+        return jsonError("Abonnement invalide", 400);
+      }
+
+      const subscription = await upsertPushSubscription(env.DB, {
+        adminId,
+        endpoint,
+        p256dh,
+        auth,
+        userAgent: typeof body?.userAgent === "string" ? body.userAgent : null,
+      });
+      return jsonSuccess({ id: subscription.id });
+    } catch (error) {
+      console.error("POST /api/admin/push/subscribe error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to subscribe device", 500);
+    }
+  }),
+
+  route("/api/admin/push/unsubscribe", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    const adminId = request.headers.get("X-Admin-User-Id");
+    if (!adminId) return jsonError("Non authentifié", 401);
+
+    try {
+      const body = await request.json() as { endpoint?: unknown } | null;
+      const endpoint = typeof body?.endpoint === "string" ? body.endpoint.trim() : "";
+      if (!endpoint) return jsonError("Abonnement invalide", 400);
+
+      const subscriptions = await getPushSubscriptionsForAdmin(env.DB, adminId);
+      const subscription = subscriptions.find((candidate) => candidate.endpoint === endpoint);
+      if (subscription) {
+        await deletePushSubscriptionForAdmin(env.DB, adminId, subscription.id);
+      }
+
+      return jsonSuccess({});
+    } catch (error) {
+      console.error("POST /api/admin/push/unsubscribe error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to unsubscribe device", 500);
+    }
+  }),
+
+  route("/api/admin/push/preferences", async ({ request }) => {
+    if (request.method !== "PUT") return jsonError("Method not allowed", 405);
+
+    const adminId = request.headers.get("X-Admin-User-Id");
+    if (!adminId) return jsonError("Non authentifié", 401);
+
+    try {
+      const body = await request.json() as { eventType?: unknown; enabled?: unknown } | null;
+      if (!isPushEventType(body?.eventType)) {
+        return jsonError("Type d'événement invalide", 400);
+      }
+      if (typeof body?.enabled !== "boolean") {
+        return jsonError("Préférence invalide", 400);
+      }
+
+      await setPushPreference(env.DB, adminId, body.eventType, body.enabled ? 1 : 0);
+      return jsonSuccess({});
+    } catch (error) {
+      console.error("PUT /api/admin/push/preferences error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to update push preference", 500);
+    }
+  }),
+
+  route("/api/admin/push/test", async ({ request }) => {
+    if (request.method !== "POST") return jsonError("Method not allowed", 405);
+
+    const adminId = request.headers.get("X-Admin-User-Id");
+    if (!adminId) return jsonError("Non authentifié", 401);
+
+    try {
+      if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
+        return jsonError("Clés VAPID non configurées", 500);
+      }
+
+      const deps: PushDeps = {
+        db: env.DB as D1Database,
+        vapid: {
+          publicKey: env.VAPID_PUBLIC_KEY,
+          privateKey: env.VAPID_PRIVATE_KEY,
+          subject: env.VAPID_SUBJECT,
+        },
+      };
+      const notification: PushNotification = {
+        title: "Notification de test",
+        body: "Les notifications sont bien actives.",
+        url: "/admin/notifications",
+        tag: "test",
+        type: "contact_message",
+      };
+      const result = await sendPushToAdmin(deps, adminId, notification);
+      return jsonSuccess({ sent: result.sent, results: result.results });
+    } catch (error) {
+      console.error("POST /api/admin/push/test error:", error);
+      return jsonError(error instanceof Error ? error.message : "Failed to send push test", 500);
     }
   }),
 
