@@ -169,7 +169,7 @@ import {
 } from "@/lib/ledger";
 import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbBooking, type DbOpeningHours } from "@/lib/db-types";
 import type { PushEventType } from "@/lib/db-types";
-import { buildPushNotification, resolvePreferences, sendPushToAdmin, sendPushToAdmins, type PushDeps, type PushNotification, type PushNotificationInput } from "@/lib/push";
+import { buildPushNotification, resolvePreferences, sendPushToAdmin, sendPushToAdmins, type PushDeps, type PushNotification, type PushNotificationInput, type PushNotificationInputByEvent, type PushDispatchResult } from "@/lib/push";
 
 import { ALL_TIME_SLOTS, STUDIO_HOURS, STUDIOS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
@@ -337,11 +337,13 @@ function jsonError(error: string, status = 400): Response {
   return jsonResponse({ success: false, error }, status);
 }
 
+function notifyAdmins<T extends PushEventType>(typeOrNotification: T, input: PushNotificationInputByEvent[T]): Promise<void>;
+function notifyAdmins(typeOrNotification: PushNotification): Promise<void>;
 function notifyAdmins(typeOrNotification: PushEventType | PushNotification, input?: PushNotificationInput): Promise<void> {
-  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return Promise.resolve();
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return Promise.resolve();
   const dispatch = Promise.resolve().then(() => {
     const notification = typeof typeOrNotification === "string"
-      ? buildPushNotification(typeOrNotification, input ?? {})
+      ? buildPushNotification(typeOrNotification, input as never)
       : typeOrNotification;
     return sendPushToAdmins({
       db: env.DB as D1Database,
@@ -352,8 +354,33 @@ function notifyAdmins(typeOrNotification: PushEventType | PushNotification, inpu
       },
     }, notification);
   }).then(() => undefined).catch(() => {});
-  waitUntil(dispatch);
+  try {
+    waitUntil(dispatch);
+  } catch {
+    // Les invocations planifiées n'ont pas toujours de contexte IO actif.
+  }
   return Promise.resolve();
+}
+
+async function notifyAdminsNow<T extends PushEventType>(typeOrNotification: T, input: PushNotificationInputByEvent[T]): Promise<PushDispatchResult | null>;
+async function notifyAdminsNow(typeOrNotification: PushNotification): Promise<PushDispatchResult | null>;
+async function notifyAdminsNow(typeOrNotification: PushEventType | PushNotification, input?: PushNotificationInput): Promise<PushDispatchResult | null> {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return null;
+  const notification = typeof typeOrNotification === "string"
+    ? buildPushNotification(typeOrNotification, input as never)
+    : typeOrNotification;
+  try {
+    return await sendPushToAdmins({
+      db: env.DB as D1Database,
+      vapid: {
+        publicKey: env.VAPID_PUBLIC_KEY,
+        privateKey: env.VAPID_PRIVATE_KEY,
+        subject: env.VAPID_SUBJECT,
+      },
+    }, notification);
+  } catch {
+    return null;
+  }
 }
 
 const PUSH_EVENT_TYPES: readonly PushEventType[] = [
@@ -2227,7 +2254,7 @@ const app = defineApp([
         // Admin may force overlapping / blocked / off-hours / sub-1h slots.
         // Public POST /api/bookings still rejects those.
 
-        const user = await env.DB.prepare("SELECT band_name, client_type, legal_name, siret, rna, instagram_accounts FROM users WHERE id = ?").bind(body.user_id).first<{ band_name: string | null; client_type: string | null; legal_name: string | null; siret: string | null; rna: string | null; instagram_accounts: string | null }>();
+        const user = await env.DB.prepare("SELECT name, band_name, client_type, legal_name, siret, rna, instagram_accounts FROM users WHERE id = ?").bind(body.user_id).first<{ name: string | null; band_name: string | null; client_type: string | null; legal_name: string | null; siret: string | null; rna: string | null; instagram_accounts: string | null }>();
         const bookingBandName = user?.band_name ?? null;
         const adminClientType = isClientType(user?.client_type) ? user.client_type : DEFAULT_CLIENT_TYPE;
         const adminIdentity = pruneToClientType({
@@ -2346,7 +2373,7 @@ const app = defineApp([
 
         notifyAdmins("booking_created", {
           bookingId: booking.id,
-          clientName: booking.user_name ?? booking.band_name ?? undefined,
+          clientName: user?.name ?? booking.user_name ?? booking.band_name ?? "Client inconnu",
           studioId: booking.studio_id,
           date: booking.date,
           startTime: booking.start_time,
@@ -2682,9 +2709,10 @@ const app = defineApp([
         await addAuditLog(env.DB, "booking", id, "update", auditChanges, request.headers.get("X-Admin-User-Id") || "admin");
 
         if (isReschedule && updated) {
+          const client = await getUserById(env.DB, updated.user_id);
           notifyAdmins("booking_rescheduled", {
             bookingId: updated.id,
-            clientName: updated.user_name ?? updated.band_name ?? undefined,
+            clientName: client?.name ?? updated.user_name ?? updated.band_name ?? "Client inconnu",
             studioId: updated.studio_id,
             date: updated.date,
             startTime: updated.start_time,
@@ -2787,7 +2815,7 @@ const app = defineApp([
         }
         notifyAdmins("booking_cancelled", {
           bookingId: booking.id,
-          clientName: client?.name ?? booking.user_name ?? booking.band_name ?? undefined,
+          clientName: client?.name ?? booking.user_name ?? booking.band_name ?? "Client inconnu",
           studioId: booking.studio_id,
           date: booking.date,
           startTime: booking.start_time,
@@ -2849,21 +2877,24 @@ const app = defineApp([
       const booking = await getBookingById(env.DB, params.id);
       if (!booking) return jsonError("Réservation introuvable", 404);
 
-      const result = await updateBooking(env.DB, params.id, {
-        status: "no-show",
-      });
+      if (booking.status !== "no-show") {
+        const result = await updateBooking(env.DB, params.id, {
+          status: "no-show",
+        });
 
-      if (!result.success) return jsonError(result.error || "No-show update failed", 400);
+        if (!result.success) return jsonError(result.error || "No-show update failed", 400);
 
-      await addAuditLog(env.DB, "booking", params.id, "no-show", {}, request.headers.get("X-Admin-User-Id") || "admin");
+        await addAuditLog(env.DB, "booking", params.id, "no-show", {}, request.headers.get("X-Admin-User-Id") || "admin");
 
-      notifyAdmins("booking_no_show", {
-        bookingId: booking.id,
-        clientName: booking.user_name ?? booking.band_name ?? undefined,
-        studioId: booking.studio_id,
-        date: booking.date,
-        startTime: booking.start_time,
-      });
+        const client = await getUserById(env.DB, booking.user_id);
+        notifyAdmins("booking_no_show", {
+          bookingId: booking.id,
+          clientName: client?.name ?? booking.user_name ?? booking.band_name ?? "Client inconnu",
+          studioId: booking.studio_id,
+          date: booking.date,
+          startTime: booking.start_time,
+        });
+      }
 
       const updated = await getBookingById(env.DB, params.id);
       return jsonSuccess(updated);
@@ -3012,7 +3043,7 @@ const app = defineApp([
       await addAuditLog(env.DB, "booking", params.id, "mark-paid", { amount: remaining, method }, request.headers.get("X-Admin-User-Id") || "admin");
       notifyAdmins("payment_received", {
         bookingId: booking.id,
-        clientName: booking.user_name ?? booking.band_name ?? undefined,
+        clientName: booking.user_name ?? booking.band_name ?? "Client inconnu",
         amount: remaining,
       });
       return jsonSuccess({ id: params.id, paymentId: paymentResult.id, amount: remaining });
@@ -4039,7 +4070,7 @@ const app = defineApp([
     if (!adminId) return jsonError("Non authentifié", 401);
 
     try {
-      if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
+      if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) {
         return jsonError("Clés VAPID non configurées", 500);
       }
 
@@ -4058,7 +4089,7 @@ const app = defineApp([
         tag: "test",
         type: "contact_message",
       };
-      const result = await sendPushToAdmin(deps, adminId, notification);
+      const result = await sendPushToAdmin(deps, adminId, notification, { skipPreferenceCheck: true });
       return jsonSuccess({ sent: result.sent, results: result.results });
     } catch (error) {
       console.error("POST /api/admin/push/test error:", error);

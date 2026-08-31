@@ -1,6 +1,7 @@
 import type { DbPayment, MovementStatus, PaymentMethod } from "./db-types";
 import {
   addAuditLog,
+  getBookingById,
   getPaymentById,
   recomputeBookingPaymentStatus,
 } from "./db";
@@ -69,6 +70,42 @@ export interface RefundDeps {
   sendPush: (notification: PushNotification) => Promise<void>;
   stripe?: StripeRefundPort;
   now?: () => string;
+}
+
+interface RefundOperationOptions {
+  suppressPush?: boolean;
+  onApplied?: (amount: number) => void;
+}
+
+async function getRefundClientName(db: D1Database, bookingId: string): Promise<string> {
+  try {
+    const booking = await getBookingById(db, bookingId);
+    if (!booking) return "Client inconnu";
+    let user: { name: string | null; band_name: string | null } | null = null;
+    try {
+      user = await db.prepare("SELECT name, band_name FROM users WHERE id = ?")
+        .bind(booking.user_id)
+        .first<{ name: string | null; band_name: string | null }>();
+    } catch {
+      // The booking snapshot remains a useful fallback if the client lookup fails.
+    }
+    return user?.name?.trim() || booking.user_name?.trim() || booking.band_name?.trim() || user?.band_name?.trim() || "Client inconnu";
+  } catch {
+    return "Client inconnu";
+  }
+}
+
+async function sendRefundPush(
+  deps: RefundDeps,
+  bookingId: string,
+  amount: number,
+  clientName?: string,
+): Promise<void> {
+  await deps.sendPush(buildPushNotification("refund_issued", {
+    bookingId,
+    amount,
+    clientName: clientName ?? await getRefundClientName(deps.db, bookingId),
+  }));
 }
 
 /**
@@ -184,6 +221,7 @@ export async function getRefundableCardTotal(
 export async function refundAllocation(
   deps: RefundDeps,
   input: { paymentId: string; bookingId: string; amount: number; reason?: string },
+  options: RefundOperationOptions = {},
 ): Promise<RefundOutcome> {
   const { paymentId, bookingId } = input;
   const amount = round2(Number(input.amount));
@@ -469,10 +507,11 @@ export async function refundAllocation(
     );
   }
 
-  void Promise.resolve().then(() => deps.sendPush(buildPushNotification("refund_issued", {
-    bookingId,
-    amount,
-  }))).catch(() => {});
+  if (options.onApplied) {
+    options.onApplied(amount);
+  } else if (!options.suppressPush) {
+    void Promise.resolve().then(() => sendRefundPush(deps, bookingId, amount)).catch(() => {});
+  }
 
   return {
     ok: true,
@@ -495,6 +534,7 @@ export async function refundAllocation(
 export async function recordManualRefund(
   deps: RefundDeps,
   input: { paymentId: string; bookingId: string; amount: number; channel: Exclude<RefundChannel, "stripe">; requestId: string; reason?: string },
+  options: RefundOperationOptions = {},
 ): Promise<RefundOutcome> {
   const { paymentId, bookingId, channel, requestId } = input;
   const amount = round2(Number(input.amount));
@@ -568,10 +608,11 @@ export async function recordManualRefund(
       booking_id: bookingId,
       movement_id: requestId,
     }, deps.performedBy);
-    void Promise.resolve().then(() => deps.sendPush(buildPushNotification("refund_issued", {
-      bookingId,
-      amount,
-    }))).catch(() => {});
+    if (options.onApplied) {
+      options.onApplied(amount);
+    } else if (!options.suppressPush) {
+      void Promise.resolve().then(() => sendRefundPush(deps, bookingId, amount)).catch(() => {});
+    }
   }
 
   const refundableAfter = await getRefundableAfter(deps.db, paymentId, bookingId);
@@ -604,7 +645,12 @@ export async function refundPayments(
   items: { paymentId: string; bookingId: string; amount: number; channel?: RefundChannel; requestId?: string; reason?: string }[],
 ): Promise<RefundBatchOutcome> {
   const outcomes: RefundOutcome[] = [];
+  const applied: Array<{ item: (typeof items)[number]; amount: number }> = [];
   for (const item of items) {
+    const operationOptions: RefundOperationOptions = {
+      suppressPush: true,
+      onApplied: (amount) => applied.push({ item, amount }),
+    };
     const channel = item.channel ?? "stripe";
     if (channel === "stripe") {
       outcomes.push(await refundAllocation(deps, {
@@ -612,7 +658,7 @@ export async function refundPayments(
         bookingId: item.bookingId,
         amount: item.amount,
         reason: item.reason,
-      }));
+      }, operationOptions));
     } else {
       if (!item.requestId) {
         // Non-stripe in batch without requestId: treat as invalid (callers for manual use the single route)
@@ -635,8 +681,18 @@ export async function refundPayments(
         channel: channel as Exclude<RefundChannel, "stripe">,
         requestId: item.requestId,
         reason: item.reason,
-      }));
+      }, operationOptions));
     }
+  }
+  if (applied.length > 0) {
+    const bookingIds = new Set(applied.map(({ item }) => item.bookingId));
+    const clientName = bookingIds.size > 1 ? `${applied.length} remboursements` : undefined;
+    void Promise.resolve().then(() => sendRefundPush(
+      deps,
+      applied[0].item.bookingId,
+      round2(applied.reduce((sum, { amount }) => sum + amount, 0)),
+      clientName,
+    )).catch(() => {});
   }
   return {
     refunded: round2(outcomes.reduce((sum, outcome) => sum + (outcome.ok ? outcome.refundedAmount : 0), 0)),

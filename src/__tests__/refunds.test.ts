@@ -23,6 +23,7 @@ function makeDb() {
       total_price REAL NOT NULL, equipment TEXT, payment_method TEXT,
       payment_status TEXT, promo_discount REAL DEFAULT 0, created_at TEXT, updated_at TEXT
     );
+    CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT, band_name TEXT);
     CREATE TABLE payments (
       id TEXT PRIMARY KEY, amount REAL NOT NULL CHECK(amount <> 0), method TEXT NOT NULL,
       status TEXT NOT NULL CHECK(status IN ('pending','settled','failed')), paid_at TEXT,
@@ -37,6 +38,7 @@ function makeDb() {
       action TEXT NOT NULL, changes TEXT, performed_by TEXT NOT NULL, created_at TEXT
     );
   `);
+  sqlite.prepare("INSERT INTO users (id, name, band_name) VALUES ('u1', 'Ada', NULL)").run();
   const db = {
     prepare(sql: string) {
       const statement = sqlite.prepare(sql);
@@ -126,6 +128,18 @@ describe("Stripe refunds — signed ledger invariant", () => {
     expect((await paymentRow(db))?.status).toBe("settled");
     expect(await refundRows(db)).toEqual([expect.objectContaining({ amount: -30, allocated: -30, status: "settled", parent_id: "p1" })]);
     expect((await db.prepare("SELECT payment_status FROM bookings WHERE id='b1'").bind().first<Row>())?.payment_status).toBe("pay-on-site");
+  });
+
+  it("resolves the client name for a refund push", async () => {
+    const { sqlite, db } = makeDb(); seedBooking(sqlite); seedPayment(sqlite);
+    const pushes: Array<{ body: string }> = [];
+    const { deps } = makeDeps(db);
+    deps.sendPush = async (notification) => { pushes.push(notification); };
+    await refundAllocation(deps, { paymentId: "p1", bookingId: "b1", amount: 10 });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0].body).toContain("Ada");
+    expect(pushes[0].body).not.toContain("— —");
   });
 
   it.each([["HTTP 400", error("already", "already", 400), "failed"], ["network result", error("timeout", "network_error"), "pending"]] as const)("marks a failed Stripe request without settled refund", async (_name, createResult, expectedStatus) => {
@@ -278,6 +292,31 @@ describe("Stripe refunds — signed ledger invariant", () => {
     ]);
     expect(outcome.outcomes).toHaveLength(2); expect(outcome.outcomes[0].code).toBe("not_card");
     expect(outcome.outcomes[1].ok).toBe(true); expect(outcome.errors).toHaveLength(1); expect(outcome.refunded).toBe(10);
+  });
+
+  it("sends one push for a batch, with the aggregate amount", async () => {
+    const { sqlite, db } = makeDb();
+    seedBooking(sqlite, "b1", "confirmed", 30);
+    seedBooking(sqlite, "b2", "confirmed", 20);
+    seedBooking(sqlite, "b3", "confirmed", 60);
+    seedPayment(sqlite, "p1", "b1", 30, "cash", null);
+    seedPayment(sqlite, "p2", "b2", 20, "cash", null);
+    seedPayment(sqlite, "p3", "b3", 60, "cash", null);
+    const pushes: Array<{ body: string }> = [];
+    const { deps } = makeDeps(db);
+    deps.sendPush = async (notification) => { pushes.push(notification); };
+
+    const outcome = await refundPayments(deps, [
+      { paymentId: "p1", bookingId: "b1", amount: 10, channel: "cash", requestId: "refund-1" },
+      { paymentId: "p2", bookingId: "b2", amount: 20, channel: "cash", requestId: "refund-2" },
+      { paymentId: "p3", bookingId: "b3", amount: 30, channel: "cash", requestId: "refund-3" },
+    ]);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(outcome.refunded).toBe(60);
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0].body).toContain("60,00");
+    expect(pushes[0].body).toContain("3 remboursements");
   });
 
   it("maps an idempotency conflict to the in-progress message", async () => {

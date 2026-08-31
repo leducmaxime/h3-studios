@@ -51,39 +51,30 @@ export interface PushNotification {
   startAt?: string | Date;
 }
 
-export interface PushNotificationInput {
-  bookingId?: string;
-  id?: string;
-  client?: string;
-  clientName?: string;
-  name?: string;
-  studio?: string;
-  studioId?: string;
-  date?: string | Date;
-  time?: string;
-  startTime?: string;
-  amount?: number | string;
-  montant?: number | string;
-  subject?: string;
-  service?: string;
-  message?: string;
-  startAt?: string | Date;
-}
+export type PushNotificationInputByEvent = {
+  booking_created: { bookingId: string; clientName: string; studioId: string; date: string | Date; startTime: string };
+  booking_cancelled: { bookingId: string; clientName: string; studioId: string; date: string | Date; startTime: string };
+  booking_rescheduled: { bookingId: string; clientName: string; studioId: string; date: string | Date; startTime: string };
+  booking_no_show: { bookingId: string; clientName: string; studioId: string; date: string | Date; startTime: string };
+  payment_received: { bookingId: string; clientName: string; amount: number | string; studioId?: string; date?: string | Date; startTime?: string };
+  refund_issued: { bookingId: string; clientName: string; amount: number | string };
+  contact_message: { name: string; subject: string; message?: string };
+  booking_reminder: { bookingId: string; clientName: string; studioId: string; startTime: string; date?: string | Date; startAt: string | Date };
+  cron_failure: { service: string; message: string };
+};
+
+export type PushNotificationInput = PushNotificationInputByEvent[PushEventType];
 
 function truncate(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 }
 
-function bookingId(input: PushNotificationInput): string {
-  return input.bookingId ?? input.id ?? "";
+function clientName(input: { clientName: string }): string {
+  return input.clientName;
 }
 
-function clientName(input: PushNotificationInput): string {
-  return input.client ?? input.clientName ?? input.name ?? "—";
-}
-
-function studioName(input: PushNotificationInput): string {
-  const value = input.studioId ?? input.studio ?? "";
+function studioName(input: { studioId: string }): string {
+  const value = input.studioId;
   return (STUDIO_LABELS[value as keyof typeof STUDIO_LABELS] ?? value) || "—";
 }
 
@@ -157,71 +148,71 @@ function finish(notification: PushNotification): PushNotification {
   };
 }
 
-export function buildBookingCreatedNotification(input: PushNotificationInput): PushNotification {
+export function buildBookingCreatedNotification(input: PushNotificationInputByEvent["booking_created"]): PushNotification {
   return finish({
     title: "Nouvelle réservation",
-    body: `${clientName(input)} — ${studioName(input)}, le ${displayDate(input.date)} à ${displayTime(input.time ?? input.startTime)}`,
+    body: `${clientName(input)} — ${studioName(input)}, le ${displayDate(input.date)} à ${displayTime(input.startTime)}`,
     url: "/admin/bookings",
     tag: "booking_created",
     type: "booking_created",
   });
 }
 
-export function buildBookingCancelledNotification(input: PushNotificationInput): PushNotification {
+export function buildBookingCancelledNotification(input: PushNotificationInputByEvent["booking_cancelled"]): PushNotification {
   return finish({
     title: "Réservation annulée",
-    body: `${clientName(input)} — ${studioName(input)}, le ${displayDate(input.date)} à ${displayTime(input.time ?? input.startTime)}`,
-    url: `/admin/bookings/${bookingId(input)}`,
+    body: `${clientName(input)} — ${studioName(input)}, le ${displayDate(input.date)} à ${displayTime(input.startTime)}`,
+    url: `/admin/bookings/${input.bookingId}`,
     tag: "booking_cancelled",
     type: "booking_cancelled",
   });
 }
 
-export function buildBookingRescheduledNotification(input: PushNotificationInput): PushNotification {
+export function buildBookingRescheduledNotification(input: PushNotificationInputByEvent["booking_rescheduled"]): PushNotification {
   return finish({
     title: "Réservation déplacée",
-    body: `${clientName(input)} — désormais le ${displayDate(input.date)} à ${displayTime(input.time ?? input.startTime)}`,
-    url: `/admin/bookings/${bookingId(input)}`,
+    body: `${clientName(input)} — désormais le ${displayDate(input.date)} à ${displayTime(input.startTime)}`,
+    url: `/admin/bookings/${input.bookingId}`,
     tag: "booking_rescheduled",
     type: "booking_rescheduled",
   });
 }
 
-export function buildBookingNoShowNotification(input: PushNotificationInput): PushNotification {
+export function buildBookingNoShowNotification(input: PushNotificationInputByEvent["booking_no_show"]): PushNotification {
   return finish({
     title: "Client absent",
-    body: `${clientName(input)} — ${studioName(input)}, le ${displayDate(input.date)} à ${displayTime(input.time ?? input.startTime)}`,
-    url: `/admin/bookings/${bookingId(input)}`,
+    body: `${clientName(input)} — ${studioName(input)}, le ${displayDate(input.date)} à ${displayTime(input.startTime)}`,
+    url: `/admin/bookings/${input.bookingId}`,
     tag: "booking_no_show",
     type: "booking_no_show",
   });
 }
 
 function paymentNotification(
-  input: PushNotificationInput,
+  input: PushNotificationInputByEvent["payment_received"] | PushNotificationInputByEvent["refund_issued"],
   type: "payment_received" | "refund_issued",
 ): PushNotification {
   return finish({
     title: type === "payment_received" ? "Paiement reçu" : "Remboursement effectué",
-    body: `${formatEuroAmount(input.amount ?? input.montant)} — ${clientName(input)}`,
+    body: `${formatEuroAmount(input.amount)} — ${clientName(input)}`,
     url: "/admin/payments",
     tag: type,
     type,
   });
 }
 
-export function buildPaymentReceivedNotification(input: PushNotificationInput): PushNotification {
+export function buildPaymentReceivedNotification(input: PushNotificationInputByEvent["payment_received"]): PushNotification {
   return paymentNotification(input, "payment_received");
 }
 
-export function buildRefundIssuedNotification(input: PushNotificationInput): PushNotification {
+export function buildRefundIssuedNotification(input: PushNotificationInputByEvent["refund_issued"]): PushNotification {
   return paymentNotification(input, "refund_issued");
 }
 
-export function buildContactMessageNotification(input: PushNotificationInput): PushNotification {
+export function buildContactMessageNotification(input: PushNotificationInputByEvent["contact_message"]): PushNotification {
   return finish({
     title: "Nouveau message",
-    body: `${input.name ?? "—"} — ${input.subject ?? "—"}`,
+    body: `${input.name} — ${input.subject}`,
     url: "/admin",
     tag: "contact_message",
     type: "contact_message",
@@ -229,43 +220,43 @@ export function buildContactMessageNotification(input: PushNotificationInput): P
 }
 
 export function buildBookingReminderNotification(
-  input: PushNotificationInput,
+  input: PushNotificationInputByEvent["booking_reminder"],
   now: Date = new Date(),
 ): PushNotification {
-  const start = toStartDate(input.startAt, input.date, input.time ?? input.startTime);
+  const start = toStartDate(input.startAt, input.date, input.startTime);
   const remaining = start ? (start.getTime() - now.getTime()) / 60_000 : 0;
   return finish({
     title: `Séance ${formatReminderDelay(remaining)}`,
-    body: `${clientName(input)} — ${studioName(input)} à ${displayTime(input.time ?? input.startTime)}`,
-    url: `/admin/bookings/${bookingId(input)}`,
-    tag: `reminder_${bookingId(input)}`,
+    body: `${clientName(input)} — ${studioName(input)} à ${displayTime(input.startTime)}`,
+    url: `/admin/bookings/${input.bookingId}`,
+    tag: `reminder_${input.bookingId}`,
     type: "booking_reminder",
     reminderStartAt: start?.toISOString(),
     startAt: start?.toISOString(),
   });
 }
 
-export function buildCronFailureNotification(input: PushNotificationInput): PushNotification {
+export function buildCronFailureNotification(input: PushNotificationInputByEvent["cron_failure"]): PushNotification {
   return finish({
     title: "Échec de synchronisation",
-    body: `${input.service ?? "—"} : ${input.message ?? "—"}`,
+    body: `${input.service} : ${input.message}`,
     url: "/admin",
     tag: "cron_failure",
     type: "cron_failure",
   });
 }
 
-export function buildPushNotification(type: PushEventType, input: PushNotificationInput, now?: Date): PushNotification {
+export function buildPushNotification<T extends PushEventType>(type: T, input: PushNotificationInputByEvent[T], now?: Date): PushNotification {
   switch (type) {
-    case "booking_created": return buildBookingCreatedNotification(input);
-    case "booking_cancelled": return buildBookingCancelledNotification(input);
-    case "booking_rescheduled": return buildBookingRescheduledNotification(input);
-    case "booking_no_show": return buildBookingNoShowNotification(input);
-    case "payment_received": return buildPaymentReceivedNotification(input);
-    case "refund_issued": return buildRefundIssuedNotification(input);
-    case "contact_message": return buildContactMessageNotification(input);
-    case "booking_reminder": return buildBookingReminderNotification(input, now);
-    case "cron_failure": return buildCronFailureNotification(input);
+    case "booking_created": return buildBookingCreatedNotification(input as PushNotificationInputByEvent["booking_created"]);
+    case "booking_cancelled": return buildBookingCancelledNotification(input as PushNotificationInputByEvent["booking_cancelled"]);
+    case "booking_rescheduled": return buildBookingRescheduledNotification(input as PushNotificationInputByEvent["booking_rescheduled"]);
+    case "booking_no_show": return buildBookingNoShowNotification(input as PushNotificationInputByEvent["booking_no_show"]);
+    case "payment_received": return buildPaymentReceivedNotification(input as PushNotificationInputByEvent["payment_received"]);
+    case "refund_issued": return buildRefundIssuedNotification(input as PushNotificationInputByEvent["refund_issued"]);
+    case "contact_message": return buildContactMessageNotification(input as PushNotificationInputByEvent["contact_message"]);
+    case "booking_reminder": return buildBookingReminderNotification(input as PushNotificationInputByEvent["booking_reminder"], now);
+    case "cron_failure": return buildCronFailureNotification(input as PushNotificationInputByEvent["cron_failure"]);
   }
 }
 
@@ -364,6 +355,7 @@ async function dispatchSubscriptions(
   deps: PushDeps,
   subscriptions: DbPushSubscription[],
   notification: PushNotification,
+  options: { skipPreferenceCheck?: boolean } = {},
 ): Promise<PushDispatchResult> {
   const result = emptyResult();
   const byAdmin = new Map<string, DbPushSubscription[]>();
@@ -374,14 +366,16 @@ async function dispatchSubscriptions(
   }
 
   for (const [adminId, adminSubscriptions] of byAdmin) {
-    let preferences: Record<PushEventType, boolean>;
-    try {
-      preferences = resolvePreferences(await getPushPreferences(deps.db, adminId));
-    } catch (error) {
-      console.error("[Push] preference lookup failed", error);
-      continue;
+    if (!options.skipPreferenceCheck) {
+      let preferences: Record<PushEventType, boolean>;
+      try {
+        preferences = resolvePreferences(await getPushPreferences(deps.db, adminId));
+      } catch (error) {
+        console.error("[Push] preference lookup failed", error);
+        continue;
+      }
+      if (!preferences[notification.type]) continue;
     }
-    if (!preferences[notification.type]) continue;
 
     await Promise.all(adminSubscriptions.map(async (subscription) => {
       try {
@@ -407,6 +401,7 @@ export async function sendPushToAdmins(
   deps: PushDeps,
   notification: PushNotification,
 ): Promise<PushDispatchResult> {
+  if (typeof deps.vapid.subject !== "string" || !deps.vapid.subject.trim()) return emptyResult();
   try {
     const subscriptions = await getAllPushSubscriptions(deps.db);
     return await dispatchSubscriptions(deps, subscriptions, notification);
@@ -420,10 +415,12 @@ export async function sendPushToAdmin(
   deps: PushDeps,
   adminId: string,
   notification: PushNotification,
+  options: { skipPreferenceCheck?: boolean } = {},
 ): Promise<PushDispatchResult> {
+  if (typeof deps.vapid.subject !== "string" || !deps.vapid.subject.trim()) return emptyResult();
   try {
     const subscriptions = await getPushSubscriptionsForAdmin(deps.db, adminId);
-    return await dispatchSubscriptions(deps, subscriptions, notification);
+    return await dispatchSubscriptions(deps, subscriptions, notification, options);
   } catch (error) {
     console.error("[Push] admin dispatch failed", error);
     return emptyResult();

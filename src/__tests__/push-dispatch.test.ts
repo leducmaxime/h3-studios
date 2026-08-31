@@ -48,7 +48,9 @@ vi.mock("../lib/push-crypto", () => ({
 import {
   buildBookingCreatedNotification,
   buildBookingReminderNotification,
+  buildRefundIssuedNotification,
   formatReminderDelay,
+  sendPushToAdmin,
   sendPushToAdmins,
 } from "../lib/push";
 
@@ -67,10 +69,10 @@ const subscription = (endpoint: string, adminId = "admin-1") => ({
 });
 const notification = buildBookingCreatedNotification({
   bookingId: "booking-1",
-  client: "Ada",
+  clientName: "Ada",
   studioId: "la-scene",
   date: "2026-08-31",
-  time: "20:00",
+  startTime: "20:00",
 });
 
 function response(status: number, retryAfter?: string): Response {
@@ -158,16 +160,16 @@ describe("push dispatch", () => {
     const now = new Date("2026-08-31T10:00:00.000Z");
     const fortyMinutes = buildBookingReminderNotification({
       bookingId: "booking-40",
-      client: "Ada",
+      clientName: "Ada",
       studioId: "la-scene",
-      time: "12:40",
+      startTime: "12:40",
       startAt: new Date(now.getTime() + 40 * 60_000),
     }, now);
     const twoHours = buildBookingReminderNotification({
       bookingId: "booking-120",
-      client: "Ada",
+      clientName: "Ada",
       studioId: "la-scene",
-      time: "14:00",
+      startTime: "14:00",
       startAt: new Date(now.getTime() + 120 * 60_000),
     }, now);
     expect(fortyMinutes.title).toBe("Séance dans 40 min");
@@ -175,6 +177,35 @@ describe("push dispatch", () => {
     expect(twoHours.title).toBe("Séance dans 2 h");
     expect(formatReminderDelay(40)).toBe("dans 40 min");
     expect(formatReminderDelay(120)).toBe("dans 2 h");
+  });
+
+  it("renders a real refund client name", () => {
+    const refund = buildRefundIssuedNotification({ bookingId: "booking-1", clientName: "Ada", amount: 45 });
+    expect(refund.body).toBe("45,00 € — Ada");
+    expect(refund.body).not.toContain("— —");
+  });
+
+  it("delivers the test push regardless of the contact preference", async () => {
+    getPreferences.mockResolvedValue([{ admin_id: "admin-1", event_type: "contact_message", enabled: 0 }]);
+    const fetchImpl = vi.fn(async () => response(201));
+    const result = await sendPushToAdmin({ db, vapid: vapidConfig, fetchImpl }, "admin-1", {
+      title: "Notification de test",
+      body: "Les notifications sont bien actives.",
+      url: "/admin/notifications",
+      tag: "test",
+      type: "contact_message",
+    }, { skipPreferenceCheck: true });
+    expect(result.sent).toBe(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(getPreferences).not.toHaveBeenCalled();
+  });
+
+  it("skips dispatch cleanly when VAPID subject is empty", async () => {
+    const fetchImpl = vi.fn(async () => response(201));
+    const result = await sendPushToAdmins({ db, vapid: { ...vapidConfig, subject: "" }, fetchImpl }, notification);
+    expect(result).toEqual({ sent: 0, failed: 0, removed: 0, results: [] });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(getAll).not.toHaveBeenCalled();
   });
 
   it("sends the required payload JSON shape", async () => {

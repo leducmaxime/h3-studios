@@ -342,7 +342,7 @@ export async function finalizePaidCheckoutSession(
     const booking = finalizable[0];
     void Promise.resolve().then(() => deps.sendPush(buildPushNotification("payment_received", {
       bookingId: booking.id,
-      clientName: booking.band_name ?? undefined,
+      clientName: booking.user_name ?? booking.band_name ?? "Client inconnu",
       studioId: booking.studio_id,
       date: booking.date,
       startTime: booking.start_time,
