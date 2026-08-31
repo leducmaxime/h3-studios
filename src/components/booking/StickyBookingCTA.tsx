@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Price } from "@/components/common/Price";
 
 interface StickyBookingCTAProps {
@@ -24,8 +26,49 @@ export function StickyBookingCTA({
 }: StickyBookingCTAProps) {
   const total = studioPrice + equipmentPrice;
 
-  return (
+  // This app server-renders "use client" components, so `document` is
+  // undefined during SSR. Only portal into document.body once mounted on
+  // the client — the server pass (and the very first client render, before
+  // hydration effects fire) returns null instead.
+  const [mounted, setMounted] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Reserve real scroll room for the bar at the true end of the document
+  // (after the site footer, which lives outside this component's tree in
+  // MainLayout) so nothing ends up permanently hidden behind it. Measuring
+  // the bar's own rendered height (rather than a hardcoded constant) keeps
+  // this correct if the content wraps to two lines, and naturally collapses
+  // to 0 on desktop where `lg:hidden` makes the bar's offsetHeight 0.
+  useEffect(() => {
+    if (!mounted) return;
+    const el = barRef.current;
+    if (!el) return;
+
+    const updateClearance = () => {
+      document.body.style.paddingBottom = `${el.offsetHeight}px`;
+    };
+    updateClearance();
+
+    const resizeObserver = new ResizeObserver(updateClearance);
+    resizeObserver.observe(el);
+    window.addEventListener("resize", updateClearance);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateClearance);
+      document.body.style.paddingBottom = "";
+    };
+  }, [mounted]);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div
+      ref={barRef}
       className="fixed inset-x-0 bottom-0 z-50 lg:hidden"
       style={{
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -73,6 +116,7 @@ export function StickyBookingCTA({
           )}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
