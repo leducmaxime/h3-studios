@@ -716,8 +716,8 @@ export function AdminCalendar() {
     return (
       <div className="overflow-x-auto">
         <div className="min-w-[900px] lg:min-w-[1100px]">
-          <div className="grid grid-cols-[80px_repeat(7,_minmax(0,1fr))] lg:grid-cols-[100px_repeat(7,_minmax(0,1fr))] border-b border-zinc-800">
-            <div className="p-3 text-sm font-medium text-zinc-400">Studio</div>
+          <div className="grid grid-cols-[52px_repeat(7,_minmax(0,1fr))] border-b border-zinc-800">
+            <div className="px-2 py-3 text-xs font-medium text-zinc-400">Studio</div>
             {weekDates.map((date) => {
               const isToday = isSameDay(date, today);
               return (
@@ -733,7 +733,7 @@ export function AdminCalendar() {
             })}
           </div>
 
-          <div className="grid grid-cols-[80px_repeat(7,_minmax(0,1fr))] lg:grid-cols-[100px_repeat(7,_minmax(0,1fr))]">
+          <div className="grid grid-cols-[52px_repeat(7,_minmax(0,1fr))]">
             <div className="border-r border-zinc-800 bg-zinc-950/30">
               <div className="border-b border-zinc-800" style={{ height: '23px' }} />
               {bands.map((band) => (
