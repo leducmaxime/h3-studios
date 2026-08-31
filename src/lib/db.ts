@@ -318,7 +318,7 @@ export function dateDirectionCondition(
   };
 }
 
-const PAID_BY_BOOKING_CTE = `paid_by_booking AS (
+export const PAID_BY_BOOKING_CTE = `paid_by_booking AS (
   SELECT a.booking_id, COALESCE(SUM(a.amount), 0) as paid_amount
   FROM payment_allocations a
   JOIN payments p ON p.id = a.payment_id
@@ -524,14 +524,18 @@ export async function updateBooking(
 export async function getBookingsByDate(
   db: D1Database,
   date: string,
-): Promise<(DbBooking & { user_name?: string; user_band_name?: string })[]> {
+): Promise<(DbBooking & { user_name?: string; user_band_name?: string; remaining?: number })[]> {
+  const remainingExpr = `(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) - COALESCE(paid.paid_amount, 0))`;
   const result = await db.prepare(
-    `SELECT b.*, u.name as user_name, u.band_name as user_band_name 
+    `WITH ${PAID_BY_BOOKING_CTE}
+     SELECT b.*, u.name as user_name, u.band_name as user_band_name,
+       ${remainingExpr} as remaining
      FROM bookings b
+     LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
      LEFT JOIN users u ON b.user_id = u.id
      WHERE b.date = ? AND b.status != 'cancelled' 
      ORDER BY b.start_time ASC`,
-  ).bind(date).all<DbBooking & { user_name?: string; user_band_name?: string }>();
+  ).bind(date).all<DbBooking & { user_name?: string; user_band_name?: string; remaining?: number }>();
   return result.results;
 }
 
@@ -539,14 +543,18 @@ export async function getBookingsByDateRange(
   db: D1Database,
   startDate: string,
   endDate: string,
-): Promise<(DbBooking & { user_name?: string; user_band_name?: string })[]> {
+): Promise<(DbBooking & { user_name?: string; user_band_name?: string; remaining?: number })[]> {
+  const remainingExpr = `(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) - COALESCE(paid.paid_amount, 0))`;
   const result = await db.prepare(
-    `SELECT b.*, u.name as user_name, u.band_name as user_band_name 
+    `WITH ${PAID_BY_BOOKING_CTE}
+     SELECT b.*, u.name as user_name, u.band_name as user_band_name,
+       ${remainingExpr} as remaining
      FROM bookings b
+     LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
      LEFT JOIN users u ON b.user_id = u.id
      WHERE b.date >= ? AND b.date <= ? AND b.status != 'cancelled' 
      ORDER BY b.date ASC, b.start_time ASC`,
-  ).bind(startDate, endDate).all<DbBooking & { user_name?: string; user_band_name?: string }>();
+  ).bind(startDate, endDate).all<DbBooking & { user_name?: string; user_band_name?: string; remaining?: number }>();
   return result.results;
 }
 

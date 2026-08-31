@@ -128,6 +128,7 @@ import {
   getAuditLogs,
   getDashboardStats,
   getOverdueBookings,
+  PAID_BY_BOOKING_CTE,
   getTopClients,
   getMonthlyReportData,
   getSetting,
@@ -3038,21 +3039,25 @@ const app = defineApp([
       const summary = url.searchParams.get("summary") === "1";
 
       if (summary) {
-        const select = `SELECT
-          b.id,
-          b.booking_ref,
-          b.user_id,
-          b.band_name,
-          u.name as user_name,
-          u.band_name as user_band_name,
-          b.studio_id,
-          b.date,
-          b.start_time,
-          b.end_time,
-          b.status,
-          b.total_price
-        FROM bookings b
-        LEFT JOIN users u ON u.id = b.user_id`;
+        const remainingExpr = `(MAX(b.total_price - COALESCE(b.promo_discount, 0), 0) - COALESCE(paid.paid_amount, 0))`;
+        const select = `WITH ${PAID_BY_BOOKING_CTE}
+          SELECT
+            b.id,
+            b.booking_ref,
+            b.user_id,
+            b.band_name,
+            u.name as user_name,
+            u.band_name as user_band_name,
+            b.studio_id,
+            b.date,
+            b.start_time,
+            b.end_time,
+            b.status,
+            b.total_price,
+            ${remainingExpr} as remaining
+          FROM bookings b
+          LEFT JOIN paid_by_booking paid ON paid.booking_id = b.id
+          LEFT JOIN users u ON u.id = b.user_id`;
 
         if (date) {
           const bookings = await env.DB.prepare(
