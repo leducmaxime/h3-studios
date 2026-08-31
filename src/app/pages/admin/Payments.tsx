@@ -51,6 +51,7 @@ import { isBookingPast, parseAmountInput, round2 } from "@/lib/booking-totals";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { exportAllocationsCSV, exportCollectionsCSV, type AllocationExportRow } from "@/lib/export";
 import { RefundPaymentDialog, VoidPaymentDialog } from "@/components/admin/refund";
+import { BookingPaymentState } from "@/components/admin/BookingPaymentState";
 import { paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
 import { allocateCollectPayments } from "@/lib/recouvrement-collect";
 import type { DbPayment, OverdueBooking } from "@/lib/db-types";
@@ -400,7 +401,7 @@ function BookingCheckRow({
           {booking.band_name ? ` · ${booking.band_name}` : ""}
         </p>
       </div>
-      <p className="shrink-0 text-sm font-medium text-red-400">{formatPrice(booking.remaining)}</p>
+      <BookingPaymentState remaining={booking.remaining} variant="text" urgent className="shrink-0 text-sm" />
     </label>
   );
 }
@@ -707,8 +708,6 @@ export function GroupCollectDialog({
                   {preview.rows.map((row) => {
                     const booking = bookingsById.get(row.id);
                     if (!booking) return null;
-                    const isFull = row.allocated >= row.due - 0.005;
-                    const isPartial = !isFull && row.allocated > 0.005;
                     return (
                       <div key={row.id} className="flex items-center justify-between gap-3 px-3 py-2">
                         <div className="min-w-0">
@@ -719,18 +718,7 @@ export function GroupCollectDialog({
                           <p className="text-sm font-medium">
                             {formatPrice(row.allocated)} <span className="text-zinc-500">/ {formatPrice(row.due)}</span>
                           </p>
-                          <Badge
-                            variant="outline"
-                            className={
-                              isFull
-                                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
-                                : isPartial
-                                  ? "border-amber-500/30 bg-amber-500/15 text-amber-400"
-                                  : "border-zinc-700 text-zinc-400"
-                            }
-                          >
-                            {isFull ? "Soldée" : isPartial ? `Partielle · reste ${formatPrice(row.due - row.allocated)}` : "Non réglée"}
-                          </Badge>
+                          <BookingPaymentState remaining={row.due - row.allocated} size="sm" />
                         </div>
                       </div>
                     );

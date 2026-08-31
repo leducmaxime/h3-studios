@@ -15,7 +15,6 @@ import {
   FileText,
   Plus,
   Minus,
-  CheckCircle2,
   Loader2,
   Banknote,
   Wallet,
@@ -64,6 +63,7 @@ import {
   type PaymentRefundInfo,
 } from "@/components/admin/refund";
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
+import { BookingPaymentState, getPaymentSettlementTone } from "@/components/admin/BookingPaymentState";
 
 interface BookingWithPromo extends DbBooking {
   promo_code_type?: string | null;
@@ -736,15 +736,8 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                 <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">
                   {displayPaymentStatusLabel(displayPaymentStatus)}
                 </Badge>
-              ) : balance <= 0 ? (
-                <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                  Soldé
-                </Badge>
               ) : (
-                <Badge variant="outline" className="border-amber-500/50 text-amber-400">
-                  Reste: {formatPrice(balance)}
-                </Badge>
+                <BookingPaymentState remaining={balance} />
               )}
             </div>
             <div className="p-6">
@@ -858,6 +851,14 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
                     <span className="font-semibold">Total TTC</span>
                     <span className="text-xl font-bold text-primary">{isCancelled && !isKeepBalanceDue(booking) ? "—" : formatPrice(finalTotal)}</span>
                   </div>
+                  {(!isCancelled || isKeepBalanceDue(booking)) && balance > 0.005 && (
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold">Reste à payer</span>
+                      <span className={`text-xl font-bold tabular-nums ${getPaymentSettlementTone(balance).text}`}>
+                        {formatPrice(balance)}
+                      </span>
+                    </div>
+                  )}
                   {totalPaid > 0 && (
                     <div className="flex justify-between items-center text-emerald-400 text-sm">
                       <span>Déjà payé</span>

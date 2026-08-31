@@ -44,6 +44,7 @@ import {
 import { toast } from "sonner";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { AdminSlotPicker } from "@/components/admin/AdminSlotPicker";
+import { BookingPaymentState, paymentSettlementLabel, getPaymentSettlementTone } from "@/components/admin/BookingPaymentState";
 import { STUDIOS, formatBookingSlot, formatDate, formatDuration, formatPrice, ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, parseBookingEquipmentLines, setOpeningHours, type StudioId, type GroupType } from "@/lib/booking";
 import { formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue } from "@/lib/booking-totals";
@@ -262,14 +263,34 @@ function getEquipmentLines(equipment: string | null, getEquipmentName: (id: stri
   return parsed.map(eq => `${eq.quantity}× ${eq.name || getEquipmentName(eq.id)}`);
 }
 
-function getBookingTooltipLines(booking: CalendarBooking, getEquipmentName: (id: string) => string): string[] {
+/** Solde restant d'une réservation calendrier : la colonne `remaining` déjà
+ *  calculée côté serveur si présente, sinon un repli dérivé du montant dû. */
+function resolveBookingRemaining(booking: CalendarBooking): number {
+  if (booking.remaining != null) return booking.remaining;
+  if (booking.payment_status === "paid") return 0;
+  return getBookingAmountDue({ ...booking, promo_discount: booking.promo_discount ?? 0 });
+}
+
+interface TooltipLine {
+  text: string;
+  /** Classe de couleur optionnelle (statut de paiement) — sinon gris neutre. */
+  className?: string;
+}
+
+function getBookingTooltipLines(booking: CalendarBooking, getEquipmentName: (id: string) => string): TooltipLine[] {
   const clientName = booking.band_name || booking.user_band_name || booking.user_name || "Client";
-  const lines = [clientName, formatBookingSlot(booking)];
-  return lines.concat(getEquipmentLines(booking.equipment, getEquipmentName));
+  const lines: TooltipLine[] = [{ text: clientName }, { text: formatBookingSlot(booking) }];
+  for (const eq of getEquipmentLines(booking.equipment, getEquipmentName)) lines.push({ text: eq });
+  if (booking.status !== "cancelled") {
+    const remaining = resolveBookingRemaining(booking);
+    const tone = getPaymentSettlementTone(remaining);
+    lines.push({ text: paymentSettlementLabel(remaining), className: `${tone.text} font-medium` });
+  }
+  return lines;
 }
 
 interface TooltipInfo {
-  lines: string[];
+  lines: TooltipLine[];
   x: number;
   y: number;
 }
@@ -684,12 +705,8 @@ export function AdminCalendar() {
 
   function getPaymentStatusColor(booking: CalendarBooking): { bg: string; text: string; border: string } {
     const isNoShow = booking.status === "no-show";
-    const isPaid = booking.remaining != null ? booking.remaining <= 0.005 : booking.payment_status === "paid";
-    const border = isNoShow ? "border-red-500/70" : isPaid ? "border-emerald-500/30" : "border-orange-500/30";
-    if (isPaid) {
-      return { bg: "bg-emerald-500/15", text: "text-emerald-400", border };
-    }
-    return { bg: "bg-orange-500/15", text: "text-orange-400", border };
+    const tone = getPaymentSettlementTone(resolveBookingRemaining(booking));
+    return { bg: tone.bg, text: tone.text, border: isNoShow ? "border-red-500/70" : tone.border };
   }
 
   const renderWeekView = () => {
@@ -948,14 +965,14 @@ export function AdminCalendar() {
           <span className="text-xs text-zinc-500">Légende :</span>
           <div className="flex items-center gap-1.5">
             <div className="h-3 w-5 rounded-sm bg-emerald-500/15 border border-emerald-500/30" />
-            <span className="text-xs text-zinc-400">Payé</span>
+            <span className="text-xs text-zinc-400">Soldé</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-orange-500/30" />
+            <div className="h-3 w-5 rounded-sm bg-amber-500/15 border border-amber-500/30" />
             <span className="text-xs text-zinc-400">Reste à payer</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-red-500/70" />
+            <div className="h-3 w-5 rounded-sm bg-amber-500/15 border border-red-500/70" />
             <span className="text-xs text-zinc-400">Absent</span>
 
           </div>
@@ -1169,14 +1186,14 @@ export function AdminCalendar() {
           <span className="text-xs text-zinc-500">Légende :</span>
           <div className="flex items-center gap-1.5">
             <div className="h-3 w-5 rounded-sm bg-emerald-500/15 border border-emerald-500/30" />
-            <span className="text-xs text-zinc-400">Payé</span>
+            <span className="text-xs text-zinc-400">Soldé</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-orange-500/30" />
+            <div className="h-3 w-5 rounded-sm bg-amber-500/15 border border-amber-500/30" />
             <span className="text-xs text-zinc-400">Reste à payer</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-5 rounded-sm bg-orange-500/15 border border-red-500/70" />
+            <div className="h-3 w-5 rounded-sm bg-amber-500/15 border border-red-500/70" />
             <span className="text-xs text-zinc-400">Absent</span>
           </div>
         </div>
@@ -1451,11 +1468,7 @@ export function AdminCalendar() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Paiements</h4>
-                {balance <= 0 ? (
-                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50">Soldé</Badge>
-                ) : (
-                  <Badge variant="outline" className="border-amber-500/50 text-amber-500">Reste: {formatPrice(balance)}</Badge>
-                )}
+                <BookingPaymentState remaining={balance} />
               </div>
 
               <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
@@ -1590,7 +1603,9 @@ export function AdminCalendar() {
           style={{ left: tooltip.x + 12, top: tooltip.y - 8, transform: "translateY(-100%)" }}
         >
           {tooltip.lines.map((line, i) => (
-            <p key={i} className={i === 0 ? "font-semibold" : "text-zinc-300 text-xs mt-0.5"}>{line}</p>
+            <p key={i} className={line.className ?? (i === 0 ? "font-semibold" : "text-zinc-300 text-xs mt-0.5")}>
+              {line.text}
+            </p>
           ))}
         </div>
       )}

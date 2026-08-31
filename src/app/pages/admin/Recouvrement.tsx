@@ -13,6 +13,7 @@ import { buildClientGroupIdentity } from "@/lib/recouvrement-display";
 import type { BookingStatus, OverdueBooking } from "@/lib/db-types";
 import { subscribe } from "@/lib/navigation-events";
 import { GroupCollectDialog } from "@/app/pages/admin/Payments";
+import { BookingPaymentState } from "@/components/admin/BookingPaymentState";
 
 const VIEW_STORAGE_KEY = "h3-admin-recouvrement-view";
 
@@ -367,7 +368,7 @@ export function AdminRecouvrement() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold text-red-400">{formatPrice(group.remaining)}</p>
+                      <BookingPaymentState remaining={group.remaining} variant="text" urgent className="text-sm" />
                       <p className="text-xs text-zinc-500">
                         {group.bookings.length} réservation{group.bookings.length === 1 ? "" : "s"}
                       </p>
@@ -490,8 +491,8 @@ function BookingsTable({
                       {BOOKING_STATUS_LABELS[displayStatus] ?? displayStatus}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-400">
-                    {formatPrice(booking.remaining)}
+                  <td className="px-4 py-3 text-right">
+                    <BookingPaymentState remaining={booking.remaining} variant="text" urgent />
                   </td>
                 </tr>
               );

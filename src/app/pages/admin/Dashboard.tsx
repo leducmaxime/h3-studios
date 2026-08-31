@@ -46,7 +46,8 @@ import {
 } from "@/components/ui/select";
 import { SLOT_DURATION_MINUTES, formatPrice } from "@/lib/booking";
 import { getBookingAmountDue } from "@/lib/booking-totals";
-import { DISPLAY_PAYMENT_STATUS_LABELS, studioLabel, studioLabelShort } from "@/lib/labels";
+import { studioLabel, studioLabelShort } from "@/lib/labels";
+import { BookingPaymentState } from "@/components/admin/BookingPaymentState";
 import { generateDashboardReportPDF } from "@/lib/export";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -1898,9 +1899,7 @@ export function AdminDashboard() {
                   <p className="font-medium text-sm">{b.band_name || b.user_name || "—"}</p>
                   <p className="text-xs text-zinc-400">{b.start_time} – {b.end_time} · {studioLabel(b.studio_id)}</p>
                 </div>
-                <span className={`text-xs font-medium px-2 py-1 rounded-full ${b.remaining < -0.005 ? "bg-red-500/15 text-red-400" : b.remaining <= 0.005 ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>
-                  {b.remaining < -0.005 ? `Avoir ${formatPrice(b.remaining)}` : b.remaining <= 0.005 ? "Payé" : `À encaisser ${formatPrice(b.remaining)}`}
-                </span>
+                <BookingPaymentState remaining={b.remaining} size="sm" />
               </a>
             ))}
           </div>
@@ -1936,14 +1935,7 @@ export function AdminDashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {booking.remaining < -0.005 ? (
-                    <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px]">Avoir {formatPrice(booking.remaining)}</Badge>
-                  ) : booking.remaining <= 0.005 ? (
-                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">{DISPLAY_PAYMENT_STATUS_LABELS.paid}</Badge>
-                  ) : (
-                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px]">Reste {formatPrice(booking.remaining)}</Badge>
-                  )}
-
+                  <BookingPaymentState remaining={booking.remaining} size="sm" />
                 </div>
               </a>
             ))}

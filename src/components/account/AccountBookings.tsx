@@ -640,7 +640,7 @@ function BookingDetails({ booking, className }: { booking: BookingRow; className
             {hasPartialPayment && (
               <>
                 <RecapLine label="Déjà payé" amount={paid} tone="discount" />
-                <div className="flex items-center justify-between gap-4 pt-1 text-sm font-semibold text-orange-300">
+                <div className="flex items-center justify-between gap-4 pt-1 text-sm font-semibold text-amber-400">
                   <span>Reste à payer</span>
                   <span className="tabular-nums"><Price amount={remaining} bare /></span>
                 </div>

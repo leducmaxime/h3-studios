@@ -50,6 +50,7 @@ import {
 } from "@/lib/loyalty-code-display";
 import { LoyaltyCodeResendButton } from "@/components/admin/LoyaltyCodeResendButton";
 import { LoyaltyCodeExpiryEditor } from "@/components/admin/LoyaltyCodeExpiryEditor";
+import { BookingPaymentState } from "@/components/admin/BookingPaymentState";
 
 // Vocabulaire des codes fidélité (statut, portée, éligibilité au renvoi) :
 // voir src/lib/loyalty-code-display.ts, partagé avec Pricing.tsx.
@@ -1509,18 +1510,10 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                               if (payDisplay === "cancelled") {
                                 return <span className="text-zinc-600">—</span>;
                               }
-                              if (payDisplay === "paid") {
-                                return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">{displayPaymentStatusLabel(payDisplay)}</Badge>;
-                              }
                               if (payDisplay === "paid-before-cancel" || payDisplay === "refunded") {
                                 return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">{displayPaymentStatusLabel(payDisplay)}</Badge>;
                               }
-                              const remaining = b.remaining;
-                              return (
-                                <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">
-                                  {remaining != null && Math.abs(remaining) > 0.005 ? `Reste ${formatPrice(remaining)}` : displayPaymentStatusLabel(payDisplay)}
-                                </Badge>
-                              );
+                              return <BookingPaymentState remaining={b.remaining ?? 0} size="sm" />;
                             })()}
                           </td>
                           <td className="px-4 py-3 text-right">

@@ -36,6 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CancelBookingDialog } from "@/components/admin/refund";
+import { BookingPaymentState } from "@/components/admin/BookingPaymentState";
 import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary, isBookingPast, isKeepBalanceDue } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, displayPaymentStatusLabel, studioLabel } from "@/lib/labels";
@@ -469,17 +470,10 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                   );
                   let paymentBadge: React.ReactNode = <span className="text-zinc-500">—</span>;
 
-                  if (displayPaymentStatus === "paid") {
-                    paymentBadge = <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">{displayPaymentStatusLabel(displayPaymentStatus)}</Badge>;
-                  } else if (displayPaymentStatus === "paid-before-cancel" || displayPaymentStatus === "refunded") {
+                  if (displayPaymentStatus === "paid-before-cancel" || displayPaymentStatus === "refunded") {
                     paymentBadge = <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">{displayPaymentStatusLabel(displayPaymentStatus)}</Badge>;
-                  } else if (displayPaymentStatus === "pay-on-site" || displayPaymentStatus === "pending") {
-                    const remaining = booking.remaining;
-                    paymentBadge = (
-                      <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
-                        {remaining != null && Math.abs(remaining) > 0.005 ? `Reste ${formatPrice(remaining)}` : displayPaymentStatusLabel(displayPaymentStatus)}
-                      </Badge>
-                    );
+                  } else if (displayPaymentStatus === "paid" || displayPaymentStatus === "pay-on-site" || displayPaymentStatus === "pending") {
+                    paymentBadge = <BookingPaymentState remaining={booking.remaining ?? 0} size="sm" />;
                   }
 
                   const displayName = booking.band_name || booking.user_name || "—";
