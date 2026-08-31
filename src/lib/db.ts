@@ -30,6 +30,9 @@ import {
   type UserOpsNextBooking,
   type UserOpsSnapshot,
   type UserBookingInsights,
+  type DbPushSubscription,
+  type DbPushPreference,
+  type PushEventType,
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon, isPromoCodeExpired } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type StudioId } from "./booking";
@@ -2034,6 +2037,153 @@ export async function releasePaymentConfirmationEmail(
 export async function getAllSettings(db: D1Database): Promise<DbSetting[]> {
   const result = await db.prepare("SELECT * FROM settings ORDER BY key").all<DbSetting>();
   return result.results;
+}
+
+// ─── Notifications push ------------------------------------------------------
+
+export function buildDueRemindersQuery(
+  nowKey: string,
+  targetKey: string,
+  limit = 100,
+): { sql: string; params: unknown[] } {
+  const bookingTargetKey = "(b.date || ' ' || b.start_time)";
+  return {
+    sql: `SELECT b.id AS booking_id, b.booking_ref, b.date, b.start_time,
+                 b.end_time, b.studio_id, u.name AS user_name
+          FROM bookings b
+          LEFT JOIN users u ON u.id = b.user_id
+          LEFT JOIN push_reminders_sent prs
+            ON prs.booking_id = b.id AND prs.target_key = ${bookingTargetKey}
+          WHERE b.status = 'confirmed'
+            AND ${bookingTargetKey} > ?
+            AND ${bookingTargetKey} <= ?
+            AND prs.booking_id IS NULL
+          ORDER BY b.date ASC, b.start_time ASC, b.id ASC
+          LIMIT ?`,
+    params: [nowKey, targetKey, limit],
+  };
+}
+
+export async function upsertPushSubscription(
+  db: D1Database,
+  args: {
+    adminId: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    userAgent?: string | null;
+  },
+): Promise<DbPushSubscription> {
+  const id = generateId();
+  await db.prepare(`
+    INSERT INTO push_subscriptions (id, admin_id, endpoint, p256dh, auth, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+      admin_id = excluded.admin_id,
+      p256dh = excluded.p256dh,
+      auth = excluded.auth,
+      user_agent = excluded.user_agent
+  `).bind(id, args.adminId, args.endpoint, args.p256dh, args.auth, args.userAgent ?? null).run();
+
+  return (await db.prepare(
+    "SELECT * FROM push_subscriptions WHERE endpoint = ?",
+  ).bind(args.endpoint).first<DbPushSubscription>())!;
+}
+
+export async function deletePushSubscriptionByEndpoint(
+  db: D1Database,
+  endpoint: string,
+): Promise<{ success: boolean }> {
+  const result = await db.prepare(
+    "DELETE FROM push_subscriptions WHERE endpoint = ?",
+  ).bind(endpoint).run();
+  return { success: result.meta.changes > 0 };
+}
+
+export async function deletePushSubscriptionForAdmin(
+  db: D1Database,
+  adminId: string,
+  id: string,
+): Promise<{ success: boolean }> {
+  const result = await db.prepare(
+    "DELETE FROM push_subscriptions WHERE id = ? AND admin_id = ?",
+  ).bind(id, adminId).run();
+  return { success: result.meta.changes > 0 };
+}
+
+export async function getPushSubscriptionsForAdmin(
+  db: D1Database,
+  adminId: string,
+): Promise<DbPushSubscription[]> {
+  const result = await db.prepare(
+    "SELECT * FROM push_subscriptions WHERE admin_id = ? ORDER BY created_at DESC",
+  ).bind(adminId).all<DbPushSubscription>();
+  return result.results;
+}
+
+export async function getAllPushSubscriptions(db: D1Database): Promise<DbPushSubscription[]> {
+  const result = await db.prepare(
+    "SELECT * FROM push_subscriptions ORDER BY created_at DESC",
+  ).all<DbPushSubscription>();
+  return result.results;
+}
+
+export async function markPushSubscriptionSuccess(db: D1Database, endpoint: string): Promise<{ success: boolean }> {
+  const result = await db.prepare(
+    "UPDATE push_subscriptions SET last_success_at = ?, last_error = NULL WHERE endpoint = ?",
+  ).bind(now(), endpoint).run();
+  return { success: result.meta.changes > 0 };
+}
+
+export async function markPushSubscriptionError(
+  db: D1Database,
+  endpoint: string,
+  error: string,
+): Promise<{ success: boolean }> {
+  const result = await db.prepare(
+    "UPDATE push_subscriptions SET last_error = ? WHERE endpoint = ?",
+  ).bind(error, endpoint).run();
+  return { success: result.meta.changes > 0 };
+}
+
+export async function getPushPreferences(db: D1Database, adminId: string): Promise<DbPushPreference[]> {
+  const result = await db.prepare(
+    "SELECT * FROM push_preferences WHERE admin_id = ? ORDER BY event_type",
+  ).bind(adminId).all<DbPushPreference>();
+  return result.results;
+}
+
+export async function setPushPreference(
+  db: D1Database,
+  adminId: string,
+  eventType: PushEventType,
+  enabled: number,
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO push_preferences (admin_id, event_type, enabled, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(admin_id, event_type) DO UPDATE SET
+      enabled = excluded.enabled,
+      updated_at = excluded.updated_at
+  `).bind(adminId, eventType, enabled, now()).run();
+}
+
+export async function claimBookingReminder(
+  db: D1Database,
+  bookingId: string,
+  targetKey: string,
+): Promise<boolean> {
+  const result = await db.prepare(
+    `INSERT OR IGNORE INTO push_reminders_sent (booking_id, target_key, sent_at)
+     VALUES (?, ?, ?)`,
+  ).bind(bookingId, targetKey, now()).run();
+  return result.meta.changes === 1;
+}
+
+export async function purgeOldReminderClaims(db: D1Database, beforeDateKey: string): Promise<void> {
+  await db.prepare(
+    "DELETE FROM push_reminders_sent WHERE target_key < ?",
+  ).bind(beforeDateKey).run();
 }
 
 // ─── Audit Log ───────────────────────────────────────────────────────────────

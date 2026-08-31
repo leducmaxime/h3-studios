@@ -392,6 +392,38 @@ export interface DbSetting {
   updated_at: string;
 }
 
+// --- Notifications push ------------------------------------------------------
+
+export interface DbPushSubscription {
+  id: string;
+  admin_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+  last_success_at: string | null;
+  last_error: string | null;
+}
+
+export interface DbPushPreference {
+  admin_id: string;
+  event_type: string;
+  enabled: number; // 0 | 1
+  updated_at: string;
+}
+
+export interface DbPushReminderSent {
+  booking_id: string;
+  target_key: string;
+  sent_at: string;
+}
+
+export type PushEventType =
+  | "booking_created" | "booking_cancelled" | "booking_rescheduled"
+  | "booking_no_show" | "payment_received" | "refund_issued"
+  | "contact_message" | "booking_reminder" | "cron_failure";
+
 // --- Payment confirmations (session-level email/finalization dedup) ---
 
 export interface DbPaymentConfirmation {

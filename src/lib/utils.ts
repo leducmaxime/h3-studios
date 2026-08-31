@@ -77,8 +77,7 @@ export function getISOWeekStartUTCNoon(year: number, week: number): Date {
 }
 
 /** Get current hours and minutes in Paris timezone */
-export function getParisNow(): { hours: number; minutes: number; dateISO: string } {
-  const now = new Date();
+export function getParisNow(now: Date = new Date()): { hours: number; minutes: number; dateISO: string } {
   const parisTime = new Intl.DateTimeFormat("en-US", {
     timeZone: "Europe/Paris",
     hour: "2-digit",
@@ -89,4 +88,30 @@ export function getParisNow(): { hours: number; minutes: number; dateISO: string
   const [rawHours, minutes] = parisTime.split(":").map(Number);
   const hours = rawHours % 24;
   return { hours, minutes, dateISO: getParisDateISO(now) };
+}
+
+/**
+ * Clé de comparaison des rappels : `YYYY-MM-DD HH:MM`, heure murale de Paris.
+ *
+ * Les colonnes `bookings.date` et `bookings.start_time` stockent une heure
+ * murale parisienne, pas un instant absolu. Plutôt que de convertir cette heure
+ * murale en instant (direction ambiguë : 02h00-02h59 n'existe pas au passage à
+ * l'heure d'été et existe deux fois au retour), on convertit `maintenant + N h`
+ * DANS l'autre sens — vers l'heure murale de Paris — puis on compare des
+ * chaînes. L'ordre lexicographique est exact car `start_time` est toujours
+ * zéro-paddé sur 2 chiffres (cf. ALL_TIME_SLOTS dans booking.ts).
+ *
+ * FORMAT CRITIQUE : jamais de secondes. `date || ' ' || start_time` produit
+ * "2026-08-20 10:00" ; comparer avec "2026-08-20 10:00:00" casserait l'ordre
+ * lexicographique. Toujours passer par ces deux helpers, jamais concaténer à la
+ * main.
+ */
+export function formatParisReminderKey(instant: Date = new Date()): string {
+  const { hours, minutes, dateISO } = getParisNow(instant);
+  return `${dateISO} ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+/** Clé d'une réservation, à partir de ses colonnes `date` et `start_time`. */
+export function bookingReminderKey(date: string, startTime: string): string {
+  return `${date} ${startTime}`;
 }
