@@ -30,8 +30,13 @@
           "database_id": "f621ac89-d8ec-42ce-ad5e-1467e629d799"
         }
       ],
+      // "0 6 * * *"     : tâches quotidiennes (fidélité, Google, Instagram)
+      // "*/5 * * * *"   : rappels de séance, volontairement absent du bloc
+      //                   production tant qu'il n'a pas été validé ici.
+      // Toute expression ajoutée ici doit être reconnue par resolveCronJob
+      // (src/lib/cron.ts) : un test lit ce fichier et échoue sinon.
       "triggers": {
-        "crons": ["0 6 * * *"]
+        "crons": ["0 6 * * *", "*/5 * * * *"]
       }
     },
     "production": {
