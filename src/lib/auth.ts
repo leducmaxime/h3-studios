@@ -230,11 +230,22 @@ export function requireRole(user: AuthUser, role: AdminRole): void {
   }
 }
 
+// SameSite=Lax, et non Strict : l'application installée sur l'écran d'accueil
+// (WebAPK Android) est lancée par un intent, et Chrome n'a alors pas joint le
+// cookie Strict à la première navigation vers /admin. L'administrateur était
+// donc redirigé vers la page de connexion à chaque réouverture de
+// l'application, alors que la session restait valide dans un onglet Chrome
+// normal sur le même téléphone — c'est ce qui a permis d'isoler la cause.
+//
+// Lax continue de bloquer l'envoi du cookie sur les requêtes POST/PUT/DELETE
+// intersites et sur les sous-ressources : la protection CSRF sur les mutations
+// est conservée. Vérifié au préalable : aucune route GET de l'administration
+// ne modifie de données.
 export function buildSessionCookie(token: string, maxAgeDays: number = SESSION_DURATION_DAYS): string {
   const maxAge = maxAgeDays * 24 * 60 * 60;
-  return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
+  return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
 }
 
 export function clearSessionCookie(): string {
-  return `${SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
+  return `${SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 }
