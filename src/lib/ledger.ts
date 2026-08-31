@@ -395,28 +395,46 @@ export async function getBookingLedger(db: D1Database, bookingId: string): Promi
   return result.get(bookingId) ?? emptySummary(bookingId);
 }
 
+// D1 limite le nombre de paramètres liés par requête (100). Au-delà, la requête
+// est rejetée : on découpe donc les identifiants en lots avant de les agréger.
+const LEDGER_BATCH_SIZE = 90;
+
 export async function getBookingLedgerBatch(
   db: D1Database, bookingIds: string[],
 ): Promise<Map<string, BookingLedgerSummary>> {
   const ids = [...new Set(bookingIds)];
   if (ids.length === 0) return new Map();
-  const placeholders = ids.map(() => "?").join(", ");
-  const result = await db.prepare(
-    `SELECT b.id AS booking_id, b.total_price AS due_total, b.promo_discount AS due_discount,
-            p.id, p.amount, p.method, p.status, p.paid_at, p.external_ref, p.parent_id,
-            p.reason, p.performed_by, p.created_at,
-            SUM(a.amount) AS allocated,
-            (SELECT COALESCE(SUM(child_a.amount), 0)
-             FROM payment_allocations child_a
-             JOIN payments child_p ON child_p.id = child_a.payment_id
-             WHERE child_p.parent_id = p.id AND child_a.booking_id = b.id
-               AND child_p.status IN ('settled', 'pending')) AS child_allocated
-     FROM bookings b
-     LEFT JOIN payment_allocations a ON a.booking_id = b.id
-     LEFT JOIN payments p ON p.id = a.payment_id
-     WHERE b.id IN (${placeholders})
-     GROUP BY b.id, p.id
-     ORDER BY b.id ASC, p.created_at ASC, p.id ASC`,
-  ).bind(...ids).all<LedgerRow>();
-  return summariesFromRows(result.results, ids);
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += LEDGER_BATCH_SIZE) {
+    chunks.push(ids.slice(i, i + LEDGER_BATCH_SIZE));
+  }
+
+  const results = await Promise.all(
+    chunks.map(async (chunkIds) => {
+      const placeholders = chunkIds.map(() => "?").join(", ");
+      const result = await db.prepare(
+        `SELECT b.id AS booking_id, b.total_price AS due_total, b.promo_discount AS due_discount,
+                p.id, p.amount, p.method, p.status, p.paid_at, p.external_ref, p.parent_id,
+                p.reason, p.performed_by, p.created_at,
+                SUM(a.amount) AS allocated,
+                (SELECT COALESCE(SUM(child_a.amount), 0)
+                 FROM payment_allocations child_a
+                 JOIN payments child_p ON child_p.id = child_a.payment_id
+                 WHERE child_p.parent_id = p.id AND child_a.booking_id = b.id
+                   AND child_p.status IN ('settled', 'pending')) AS child_allocated
+         FROM bookings b
+         LEFT JOIN payment_allocations a ON a.booking_id = b.id
+         LEFT JOIN payments p ON p.id = a.payment_id
+         WHERE b.id IN (${placeholders})
+         GROUP BY b.id, p.id
+         ORDER BY b.id ASC, p.created_at ASC, p.id ASC`,
+      ).bind(...chunkIds).all<LedgerRow>();
+      return result.results;
+    }),
+  );
+
+  // Les lignes d'une même réservation restent dans un seul lot : concaténer
+  // préserve l'ordre par réservation attendu par summariesFromRows.
+  return summariesFromRows(results.flat(), ids);
 }
