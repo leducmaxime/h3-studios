@@ -279,3 +279,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* iOS Safari zoome automatiquement le viewport quand un champ prend le focus
+   avec une `font-size` calculée < 16px, et ne dézoome jamais au blur. On force
+   donc 16px sur les champs de saisie des appareils tactiles (code promo,
+   formulaires de réservation, admin…).
+
+   Règle volontairement HORS `@layer` : les utilitaires Tailwind (`text-sm`,
+   `text-xs`) vivent dans `@layer utilities` et écraseraient une règle placée
+   dans `@layer base`. En CSS, les styles non calqués l'emportent sur tous les
+   calques, quelle que soit la spécificité.
+
+   Les `input` de type bouton/case/radio sont exclus : ils ne déclenchent pas le
+   zoom et leur typographie fait partie du design. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
