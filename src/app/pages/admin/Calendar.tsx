@@ -388,8 +388,12 @@ export function AdminCalendar() {
         .catch(console.error)
         .finally(() => setLoadingPayments(false));
       
+      // Pré-remplir avec le solde restant, pas le prix total : un encaissement
+      // porte presque toujours sur ce qui reste dû. Réservation soldée → champ
+      // vide plutôt qu'un « 0 » que la validation refuserait de toute façon.
+      const remainingDue = resolveBookingRemaining(selectedBooking);
       setNewPayment({
-        amount: String(getBookingAmountDue({ ...selectedBooking, promo_discount: selectedBooking.promo_discount ?? 0 })),
+        amount: remainingDue > 0.005 ? String(Math.round(remainingDue * 100) / 100) : "",
         method: "cash",
       });
     } else {
