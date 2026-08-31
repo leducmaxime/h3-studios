@@ -4948,7 +4948,11 @@ const app = defineApp([
         ).bind(fromStr, toStr),
          env.DB.prepare(
            `SELECT
-             CASE WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
+             -- Un remboursement porte l'external_ref du refund Stripe (re_...) : son canal se lit sur le paiement parent, sinon il serait compté « sur place ».
+             CASE WHEN p.method = 'card' AND (
+                          p.external_ref LIKE 'cs_%'
+                          OR (SELECT par.external_ref FROM payments par WHERE par.id = p.parent_id) LIKE 'cs_%'
+                        ) THEN 'card-online'
                   WHEN p.method = 'card' THEN 'card-onsite'
                   ELSE p.method END AS method,
              COUNT(*) as count,

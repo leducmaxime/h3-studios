@@ -1214,7 +1214,10 @@ function buildPaymentsCTE(): string {
         (SELECT b.date
          FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
          WHERE a.payment_id = p.id ORDER BY b.date ASC, b.id ASC LIMIT 1) as booking_date,
-        CASE WHEN p.external_ref LIKE 'cs_%' THEN 'online' ELSE 'on-site' END as payment_type
+        -- Un remboursement porte l'external_ref du refund Stripe (re_...) : son canal se lit sur le paiement parent, sinon il serait compté « sur place ».
+        CASE WHEN p.external_ref LIKE 'cs_%'
+                  OR (SELECT par.external_ref FROM payments par WHERE par.id = p.parent_id) LIKE 'cs_%'
+             THEN 'online' ELSE 'on-site' END as payment_type
       FROM payments p
     )
   `;
@@ -2720,7 +2723,11 @@ export async function getMonthlyReportData(
     // Payment methods
     db.prepare(
       `SELECT
-         CASE WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
+         -- Un remboursement porte l'external_ref du refund Stripe (re_...) : son canal se lit sur le paiement parent, sinon il serait compté « sur place ».
+         CASE WHEN p.method = 'card' AND (
+                     p.external_ref LIKE 'cs_%'
+                     OR (SELECT par.external_ref FROM payments par WHERE par.id = p.parent_id) LIKE 'cs_%'
+                   ) THEN 'card-online'
               WHEN p.method = 'card' THEN 'card-onsite'
               ELSE p.method END AS method,
          COUNT(*) as count,

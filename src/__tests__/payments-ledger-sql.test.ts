@@ -67,7 +67,10 @@ const PAYMENTS_ENRICHED_SQL = `
        WHERE a.payment_id = p.id ORDER BY b.date ASC, b.id ASC LIMIT 1) as user_id,
       (SELECT b.date FROM payment_allocations a JOIN bookings b ON b.id = a.booking_id
        WHERE a.payment_id = p.id ORDER BY b.date ASC, b.id ASC LIMIT 1) as booking_date,
-      CASE WHEN p.external_ref LIKE 'cs_%' THEN 'online' ELSE 'on-site' END as payment_type
+      -- Un remboursement porte l'external_ref du refund Stripe (re_...) : son canal se lit sur le paiement parent, sinon il serait compté « sur place ».
+      CASE WHEN p.external_ref LIKE 'cs_%'
+                OR (SELECT par.external_ref FROM payments par WHERE par.id = p.parent_id) LIKE 'cs_%'
+           THEN 'online' ELSE 'on-site' END as payment_type
     FROM payments p
   )
   SELECT * FROM payments_enriched
@@ -83,10 +86,10 @@ function insertBooking(id: string, date = "2026-01-05") {
      base_price, equipment_price, total_price, payment_method, payment_status, created_at, updated_at)
     VALUES (?, ?, 'u1', 'la-scene', ?, '10:00', '11:00', 'group', 'confirmed', 10, 0, 10, 'cash', 'pay-on-site', '2026-01-01', '2026-01-01')`).run(id, id, date);
 }
-function insertPayment(id: string, amount: number, bookingIds: string[], externalRef: string | null = null) {
+function insertPayment(id: string, amount: number, bookingIds: string[], externalRef: string | null = null, parentId: string | null = null) {
   const method = externalRef ? "card" : "cash";
-  db.prepare(`INSERT INTO payments (id, amount, method, status, paid_at, external_ref, created_at)
-    VALUES (?, ?, ?, 'settled', '2026-01-02', ?, '2026-01-02')`).run(id, amount, method, externalRef);
+  db.prepare(`INSERT INTO payments (id, amount, method, status, paid_at, external_ref, parent_id, created_at)
+    VALUES (?, ?, ?, 'settled', '2026-01-02', ?, ?, '2026-01-02')`).run(id, amount, method, externalRef, parentId);
   for (const bookingId of bookingIds) {
     db.prepare(`INSERT INTO payment_allocations (id, payment_id, booking_id, amount, created_at)
       VALUES (?, ?, ?, ?, '2026-01-02')`).run(`${id}-${bookingId}`, id, bookingId, amount / bookingIds.length);
@@ -120,5 +123,14 @@ describe("payments ledger SQL", () => {
     reset(); insertBooking("b1"); insertPayment("p1", 10, ["b1"]);
     expect(rows()).toHaveLength(1);
     expect(rows()[0].id).toBe("p1");
+  });
+
+  it("classe un remboursement Stripe rattaché à un paiement en ligne comme online", () => {
+    reset(); insertBooking("b1");
+    insertPayment("stripe-parent", 215, ["b1"], "cs_test_x");
+    insertPayment("stripe-refund", -143, ["b1"], "re_test_x", "stripe-parent");
+
+    const refund = rows().find((row) => row.id === "stripe-refund");
+    expect(refund).toMatchObject({ amount: -143, payment_type: "online" });
   });
 });

@@ -37,7 +37,8 @@ beforeAll(() => {
       method TEXT,
       status TEXT,
       external_ref TEXT,
-      paid_at TEXT
+      paid_at TEXT,
+      parent_id TEXT
     );
     CREATE TABLE payment_allocations (
       id TEXT PRIMARY KEY,
@@ -54,10 +55,11 @@ function insertBooking(id: string, total: number, discount: number, opts: { stat
   ).run(id, opts.date ?? "2026-01-05", total, discount, opts.payment_status ?? "pay-on-site", opts.payment_method ?? "cash", opts.status ?? "confirmed");
 }
 
-function insertPayment(id: string, bookingId: string, amount: number, status = "paid", opts: { paidAt?: string; externalRef?: string } = {}) {
+function insertPayment(id: string, bookingId: string, amount: number, status = "paid", opts: { paidAt?: string; externalRef?: string; method?: "cash" | "card"; parentId?: string | null } = {}) {
   const movementStatus = status === "paid" ? "settled" : status;
-  db.prepare("INSERT INTO payments (id, amount, method, status, external_ref, paid_at) VALUES (?, ?, 'cash', ?, ?, ?)").run(
-    id, amount, movementStatus, opts.externalRef ?? null, opts.paidAt ?? "2026-01-05 12:00:00",
+  const method = opts.method ?? (opts.externalRef ? "card" : "cash");
+  db.prepare("INSERT INTO payments (id, amount, method, status, external_ref, paid_at, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+    id, amount, method, movementStatus, opts.externalRef ?? null, opts.paidAt ?? "2026-01-05 12:00:00", opts.parentId ?? null,
   );
   db.prepare("INSERT INTO payment_allocations (id, payment_id, booking_id, amount) VALUES (?, ?, ?, ?)").run(`${id}-${bookingId}`, id, bookingId, amount);
 }
@@ -269,7 +271,11 @@ describe("reporting SQL — ledger revenue does not multiply shared movements", 
 describe("reporting SQL — treasury uses collection date", () => {
   const TREASURY_SQL = `
     SELECT
-      CASE WHEN p.method = 'card' AND p.external_ref LIKE 'cs_%' THEN 'card-online'
+      -- Un remboursement porte l'external_ref du refund Stripe (re_...) : son canal se lit sur le paiement parent, sinon il serait compté « sur place ».
+      CASE WHEN p.method = 'card' AND (
+                   p.external_ref LIKE 'cs_%'
+                   OR (SELECT par.external_ref FROM payments par WHERE par.id = p.parent_id) LIKE 'cs_%'
+                 ) THEN 'card-online'
            WHEN p.method = 'card' THEN 'card-onsite'
            ELSE p.method END AS method,
       COUNT(*) AS count,
@@ -297,5 +303,27 @@ describe("reporting SQL — treasury uses collection date", () => {
     const marchRevenue = db.prepare(BOOKING_REVENUE_SQL).get("2026-03-01", "2026-03-31") as { revenue: number };
     expect(januaryRevenue.revenue).toBe(0); // Le CA reste rattaché à la date de séance.
     expect(marchRevenue.revenue).toBe(100); // Le règlement anticipé ne déplace pas le CA produit.
+  });
+
+  it("rattache un remboursement Stripe au canal en ligne, pas au sur-place", () => {
+    db.exec("DELETE FROM payment_allocations; DELETE FROM payments; DELETE FROM bookings;");
+    insertBooking("refund-booking", 215, 0);
+    insertPayment("stripe-parent", "refund-booking", 215, "paid", {
+      method: "card", externalRef: "cs_test_x", paidAt: "2026-01-15 12:00:00",
+    });
+    insertPayment("stripe-refund", "refund-booking", -143, "paid", {
+      method: "card", externalRef: "re_test_x", parentId: "stripe-parent", paidAt: "2026-01-16 12:00:00",
+    });
+    insertPayment("onsite-card", "refund-booking", 5, "paid", {
+      method: "card", paidAt: "2026-01-17 12:00:00",
+    });
+
+    const treasury = db.prepare(TREASURY_SQL).all("2026-01-01", "2026-01-31") as Array<{ method: string; count: number; revenue: number }>;
+    treasury.sort((a, b) => a.method.localeCompare(b.method));
+
+    expect(treasury).toEqual([
+      { method: "card-online", count: 2, revenue: 72 },
+      { method: "card-onsite", count: 1, revenue: 5 },
+    ]);
   });
 });
