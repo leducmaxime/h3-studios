@@ -74,7 +74,7 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
         </p>
       </div>
 
-      <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-4 text-center">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400/15">
           <AlarmClock className="h-4 w-4 text-amber-400" />
         </div>
