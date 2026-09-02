@@ -217,7 +217,10 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
         <div className="text-sm text-white/85">
           <p className="mb-1 font-medium text-amber-400/90">Merci de respecter les horaires réservés !</p>
           <p>
-            Chaque créneau est prévu pour vous permettre de profiter pleinement de votre session… et pour que les suivants puissent en faire autant. 😉 À l’heure pour commencer, à l’heure pour terminer ! 🎶
+            Chaque créneau est prévu pour vous permettre de profiter pleinement de votre session… et pour que les suivants puissent en faire autant. 😉
+          </p>
+          <p className="mt-1">
+            À l’heure pour commencer, à l’heure pour terminer ! 🎶
           </p>
         </div>
       </div>
