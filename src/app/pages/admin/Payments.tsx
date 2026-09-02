@@ -761,6 +761,7 @@ export function AdminPayments() {
   const [statusFilter, setStatusFilter] = useState<
     "all" | "pending" | "settled" | "failed"
   >("all");
+  const [refundsOnly, setRefundsOnly] = useState(false);
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<"all" | "on-site" | "online">("all");
   const [methodFilter, setMethodFilter] = useState<"all" | "card" | "cash" | "transfer" | "check">(
     "all",
@@ -798,6 +799,7 @@ export function AdminPayments() {
       params.set("page", String(page));
       params.set("limit", String(perPage));
       if (statusFilter !== "all") params.set("status", statusFilter);
+      if (refundsOnly) params.set("refundsOnly", "true");
       if (paymentTypeFilter !== "all") params.set("paymentType", paymentTypeFilter);
       if (methodFilter !== "all") params.set("method", methodFilter);
       if (search) params.set("search", search);
@@ -823,7 +825,7 @@ export function AdminPayments() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, paymentTypeFilter, methodFilter, dateFilter, customDateFrom, customDateTo, search, sortBy, sortOrder]);
+  }, [page, statusFilter, refundsOnly, paymentTypeFilter, methodFilter, dateFilter, customDateFrom, customDateTo, search, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchPayments();
@@ -895,6 +897,7 @@ export function AdminPayments() {
     const params = new URLSearchParams();
     params.set("all", "true");
     if (statusFilter !== "all") params.set("status", statusFilter);
+    if (refundsOnly) params.set("refundsOnly", "true");
     if (paymentTypeFilter !== "all") params.set("paymentType", paymentTypeFilter);
     if (methodFilter !== "all") params.set("method", methodFilter);
     if (search) params.set("search", search);
@@ -925,6 +928,7 @@ export function AdminPayments() {
     const params = new URLSearchParams();
     params.set("all", "true");
     if (statusFilter !== "all") params.set("status", statusFilter);
+    if (refundsOnly) params.set("refundsOnly", "true");
     if (paymentTypeFilter !== "all") params.set("paymentType", paymentTypeFilter);
     if (methodFilter !== "all") params.set("method", methodFilter);
     if (search) params.set("search", search);
@@ -1000,6 +1004,7 @@ export function AdminPayments() {
           aria-pressed={statusFilter === "settled"}
           onClick={() => {
             setStatusFilter((current) => (current === "settled" ? "all" : "settled"));
+            setRefundsOnly(false);
             setPage(1);
           }}
           className={`rounded-xl border bg-zinc-900 p-4 text-left transition-colors hover:border-zinc-600 ${
@@ -1014,7 +1019,18 @@ export function AdminPayments() {
             {formatPrice(stats.paidAmount)}
           </p>
         </button>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left">
+        <button
+          type="button"
+          aria-pressed={refundsOnly}
+          onClick={() => {
+            setRefundsOnly((current) => !current);
+            setStatusFilter("all");
+            setPage(1);
+          }}
+          className={`rounded-xl border bg-zinc-900 p-4 text-left transition-colors hover:border-zinc-600 ${
+            refundsOnly ? "border-red-400/50" : "border-zinc-800"
+          }`}
+        >
           <p className="text-sm text-zinc-400">Remboursés</p>
           <p className="mt-1 text-2xl font-bold text-red-400">
             {stats.refundedCount}
@@ -1022,7 +1038,7 @@ export function AdminPayments() {
           <p className="text-sm text-zinc-500">
             {formatPrice(Math.abs(stats.refundedAmount))}
           </p>
-        </div>
+        </button>
       </div>
 
       {/* Filters */}
@@ -1068,7 +1084,7 @@ export function AdminPayments() {
           )}
           <select
             value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
+            onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setRefundsOnly(false); setPage(1); }}
             className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
           >
             <option value="all">Statut</option>

@@ -1250,6 +1250,13 @@ export async function getPayments(
     statusParams.push(filters.status);
   }
 
+  // Remboursements = mouvement encaissé négatif. Placé dans `statusConditions`
+  // (bucket liste-seule) pour que les cartouches statistiques restent stables
+  // quand l'opérateur filtre, comme pour le filtre de statut.
+  if (filters.refundsOnly) {
+    statusConditions.push("pe.status = 'settled' AND pe.amount < 0");
+  }
+
   if (filters.method) {
     conditions.push("pe.method = ?");
     params.push(filters.method);

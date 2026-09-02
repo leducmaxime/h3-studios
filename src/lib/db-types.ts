@@ -301,6 +301,7 @@ export type AdminPaymentSortOrder = "asc" | "desc";
 
 export interface AdminPaymentFilters {
   status?: MovementStatus;
+  refundsOnly?: boolean;
   method?: PaymentMethod;
   paymentType?: "on-site" | "online";
   search?: string;

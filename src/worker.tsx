@@ -3635,6 +3635,7 @@ const app = defineApp([
       const url = new URL(request.url);
       const filters = {} as {
         status?: "pending" | "settled" | "failed";
+        refundsOnly?: boolean;
         method?: "card" | "cash" | "transfer" | "check";
         paymentType?: "on-site" | "online";
         search?: string;
@@ -3651,6 +3652,7 @@ const app = defineApp([
 
       const status = url.searchParams.get("status");
       if (status) filters.status = status as typeof filters.status;
+      if (url.searchParams.get("refundsOnly") === "true") filters.refundsOnly = true;
       const method = url.searchParams.get("method");
       if (method) filters.method = method as typeof filters.method;
       const paymentType = url.searchParams.get("paymentType");
