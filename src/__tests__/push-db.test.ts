@@ -18,6 +18,7 @@ describe("notifications push — requêtes et horaires", () => {
     expect(query.sql).toContain("b.booking_ref");
     expect(query.sql).toContain("b.studio_id");
     expect(query.sql).toContain("u.name AS user_name");
+    expect(query.sql).toContain("COALESCE(b.band_name, u.band_name) AS band_name");
   });
 
   it("rend correctement les instants autour des changements d'heure", () => {

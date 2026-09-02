@@ -2049,7 +2049,8 @@ export function buildDueRemindersQuery(
   const bookingTargetKey = "(b.date || ' ' || b.start_time)";
   return {
     sql: `SELECT b.id AS booking_id, b.booking_ref, b.date, b.start_time,
-                 b.end_time, b.studio_id, u.name AS user_name
+                 b.end_time, b.studio_id, u.name AS user_name,
+                 COALESCE(b.band_name, u.band_name) AS band_name
           FROM bookings b
           LEFT JOIN users u ON u.id = b.user_id
           LEFT JOIN push_reminders_sent prs

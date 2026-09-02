@@ -1631,6 +1631,7 @@ const app = defineApp([
       notifyAdmins("booking_created", {
         bookingId: booking.id,
         clientName: name,
+        bandName: bookingBandName,
         studioId: booking.studio_id,
         date: booking.date,
         startTime: booking.start_time,
@@ -2383,6 +2384,7 @@ const app = defineApp([
         notifyAdmins("booking_created", {
           bookingId: booking.id,
           clientName: user?.name ?? booking.user_name ?? booking.band_name ?? "Client inconnu",
+          bandName: booking.band_name ?? user?.band_name ?? null,
           studioId: booking.studio_id,
           date: booking.date,
           startTime: booking.start_time,
@@ -2722,6 +2724,7 @@ const app = defineApp([
           notifyAdmins("booking_rescheduled", {
             bookingId: updated.id,
             clientName: client?.name ?? updated.user_name ?? updated.band_name ?? "Client inconnu",
+            bandName: updated.band_name ?? updated.user_band_name ?? client?.band_name ?? null,
             studioId: updated.studio_id,
             date: updated.date,
             startTime: updated.start_time,
@@ -2825,6 +2828,7 @@ const app = defineApp([
         notifyAdmins("booking_cancelled", {
           bookingId: booking.id,
           clientName: client?.name ?? booking.user_name ?? booking.band_name ?? "Client inconnu",
+          bandName: booking.band_name ?? booking.user_band_name ?? client?.band_name ?? null,
           studioId: booking.studio_id,
           date: booking.date,
           startTime: booking.start_time,
@@ -2899,6 +2903,7 @@ const app = defineApp([
         notifyAdmins("booking_no_show", {
           bookingId: booking.id,
           clientName: client?.name ?? booking.user_name ?? booking.band_name ?? "Client inconnu",
+          bandName: booking.band_name ?? booking.user_band_name ?? client?.band_name ?? null,
           studioId: booking.studio_id,
           date: booking.date,
           startTime: booking.start_time,
@@ -3053,6 +3058,7 @@ const app = defineApp([
       notifyAdmins("payment_received", {
         bookingId: booking.id,
         clientName: booking.user_name ?? booking.band_name ?? "Client inconnu",
+        bandName: booking.band_name ?? booking.user_band_name ?? null,
         amount: remaining,
       });
       return jsonSuccess({ id: params.id, paymentId: paymentResult.id, amount: remaining });
@@ -6721,6 +6727,7 @@ async function runReminderJobs(): Promise<void> {
     end_time: string;
     studio_id: string;
     user_name: string | null;
+    band_name: string | null;
   }>();
   const summary = await dispatchDueReminderRows(
     result.results,
@@ -6729,6 +6736,7 @@ async function runReminderJobs(): Promise<void> {
       await notifyAdminsNow("booking_reminder", {
         bookingId: row.booking_id,
         clientName: row.user_name || "Client",
+        bandName: row.band_name,
         studioId: row.studio_id,
         date: row.date,
         startTime: row.start_time,

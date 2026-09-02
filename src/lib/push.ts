@@ -52,14 +52,14 @@ export interface PushNotification {
 }
 
 export type PushNotificationInputByEvent = {
-  booking_created: { bookingId: string; clientName: string; studioId: string; date: string | Date; startTime: string };
-  booking_cancelled: { bookingId: string; clientName: string; studioId: string; date: string | Date; startTime: string };
-  booking_rescheduled: { bookingId: string; clientName: string; studioId: string; date: string | Date; startTime: string };
-  booking_no_show: { bookingId: string; clientName: string; studioId: string; date: string | Date; startTime: string };
-  payment_received: { bookingId: string; clientName: string; amount: number | string; studioId?: string; date?: string | Date; startTime?: string };
-  refund_issued: { bookingId: string; clientName: string; amount: number | string };
+  booking_created: { bookingId: string; clientName: string; bandName?: string | null; studioId: string; date: string | Date; startTime: string };
+  booking_cancelled: { bookingId: string; clientName: string; bandName?: string | null; studioId: string; date: string | Date; startTime: string };
+  booking_rescheduled: { bookingId: string; clientName: string; bandName?: string | null; studioId: string; date: string | Date; startTime: string };
+  booking_no_show: { bookingId: string; clientName: string; bandName?: string | null; studioId: string; date: string | Date; startTime: string };
+  payment_received: { bookingId: string; clientName: string; bandName?: string | null; amount: number | string; studioId?: string; date?: string | Date; startTime?: string };
+  refund_issued: { bookingId: string; clientName: string; bandName?: string | null; amount: number | string };
   contact_message: { name: string; subject: string; message?: string };
-  booking_reminder: { bookingId: string; clientName: string; studioId: string; startTime: string; date?: string | Date; startAt?: string | Date };
+  booking_reminder: { bookingId: string; clientName: string; bandName?: string | null; studioId: string; startTime: string; date?: string | Date; startAt?: string | Date };
   cron_failure: { service: string; message: string };
 };
 
@@ -69,8 +69,10 @@ function truncate(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 }
 
-function clientName(input: { clientName: string }): string {
-  return input.clientName;
+function clientName(input: { clientName: string; bandName?: string | null }): string {
+  const group = input.bandName?.trim();
+  if (!group || input.clientName.trim().toLowerCase() === group.toLowerCase()) return input.clientName;
+  return `${input.clientName} (${group})`;
 }
 
 function studioName(input: { studioId: string }): string {

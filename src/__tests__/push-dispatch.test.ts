@@ -179,6 +179,32 @@ describe("push dispatch", () => {
     expect(formatReminderDelay(120)).toBe("dans 2 h");
   });
 
+  it.each([
+    ["Les Dragons", "Ada (Les Dragons)"],
+    [null, "Ada"],
+    ["   ", "Ada"],
+    [" ada ", "Ada"],
+  ])("formats the client and group name without duplication (%s)", (bandName, expectedName) => {
+    const created = buildBookingCreatedNotification({
+      bookingId: "booking-group",
+      clientName: "Ada",
+      bandName,
+      studioId: "la-scene",
+      date: "2026-08-31",
+      startTime: "20:00",
+    });
+    const reminder = buildBookingReminderNotification({
+      bookingId: "booking-group",
+      clientName: "Ada",
+      bandName,
+      studioId: "la-scene",
+      startTime: "20:00",
+    });
+
+    expect(created.body).toContain(`${expectedName} —`);
+    expect(reminder.body).toContain(`${expectedName} —`);
+  });
+
   it("renders a real refund client name", () => {
     const refund = buildRefundIssuedNotification({ bookingId: "booking-1", clientName: "Ada", amount: 45 });
     expect(refund.body).toBe("45,00 € — Ada");

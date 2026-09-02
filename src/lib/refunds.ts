@@ -77,10 +77,10 @@ interface RefundOperationOptions {
   onApplied?: (amount: number) => void;
 }
 
-async function getRefundClientName(db: D1Database, bookingId: string): Promise<string> {
+async function getRefundClientName(db: D1Database, bookingId: string): Promise<{ clientName: string; bandName: string | null }> {
   try {
     const booking = await getBookingById(db, bookingId);
-    if (!booking) return "Client inconnu";
+    if (!booking) return { clientName: "Client inconnu", bandName: null };
     let user: { name: string | null; band_name: string | null } | null = null;
     try {
       user = await db.prepare("SELECT name, band_name FROM users WHERE id = ?")
@@ -89,9 +89,12 @@ async function getRefundClientName(db: D1Database, bookingId: string): Promise<s
     } catch {
       // The booking snapshot remains a useful fallback if the client lookup fails.
     }
-    return user?.name?.trim() || booking.user_name?.trim() || booking.band_name?.trim() || user?.band_name?.trim() || "Client inconnu";
+    return {
+      clientName: user?.name?.trim() || booking.user_name?.trim() || "Client inconnu",
+      bandName: booking.band_name?.trim() || user?.band_name?.trim() || null,
+    };
   } catch {
-    return "Client inconnu";
+    return { clientName: "Client inconnu", bandName: null };
   }
 }
 
@@ -101,10 +104,14 @@ async function sendRefundPush(
   amount: number,
   clientName?: string,
 ): Promise<void> {
+  const resolved = clientName == null
+    ? await getRefundClientName(deps.db, bookingId)
+    : { clientName, bandName: null };
   await deps.sendPush(buildPushNotification("refund_issued", {
     bookingId,
     amount,
-    clientName: clientName ?? await getRefundClientName(deps.db, bookingId),
+    clientName: resolved.clientName,
+    bandName: resolved.bandName,
   }));
 }
 
