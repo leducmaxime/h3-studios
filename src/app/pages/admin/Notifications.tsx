@@ -751,7 +751,7 @@ export function AdminNotifications() {
                       label={event.label}
                       description={
                         event.key === "booking_reminder"
-                          ? `Envoyé automatiquement ${pushState?.reminderLeadHours ?? 2} h avant le début de la séance. Délai modifiable dans Réglages.`
+                          ? `Envoyé automatiquement ${pushState?.reminderLeadHours ?? 2} h avant le début de la séance. Délai modifiable sur la page Paramètres.`
                           : event.description
                       }
                       checked={pushState?.preferences?.[event.key] ?? true}
