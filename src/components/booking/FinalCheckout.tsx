@@ -74,6 +74,21 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
         </p>
       </div>
 
+      <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400/15">
+          <AlarmClock className="h-4 w-4 text-amber-400" />
+        </div>
+        <div className="text-sm text-white/85">
+          <p className="mb-1 font-medium text-amber-400/90">Merci de respecter les horaires réservés !</p>
+          <p>
+            Chaque créneau est prévu pour vous permettre de profiter pleinement de votre session… et pour que les suivants puissent en faire autant. 😉
+          </p>
+          <p className="mt-1">
+            À l’heure pour commencer, à l’heure pour terminer ! 🎶
+          </p>
+        </div>
+      </div>
+
       {accountStatus === "created" && (
         <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20">
@@ -209,21 +224,6 @@ export function FinalCheckout({ cart, total, onNewBooking, accountStatus, displa
       >
         Nouvelle réservation
       </button>
-
-      <div className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400/15">
-          <AlarmClock className="h-4 w-4 text-amber-400" />
-        </div>
-        <div className="text-sm text-white/85">
-          <p className="mb-1 font-medium text-amber-400/90">Merci de respecter les horaires réservés !</p>
-          <p>
-            Chaque créneau est prévu pour vous permettre de profiter pleinement de votre session… et pour que les suivants puissent en faire autant. 😉
-          </p>
-          <p className="mt-1">
-            À l’heure pour commencer, à l’heure pour terminer ! 🎶
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
