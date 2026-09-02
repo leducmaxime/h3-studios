@@ -205,7 +205,7 @@ export function buildEmailHtml(data: BookingConfirmationData): string {
   const equipmentBreakdown = buildEquipmentBreakdown(data.equipment, data.equipmentPrice, data.equipmentNames);
   const clientTypeLabel = isClientType(data.clientType) ? CLIENT_TYPE_RULES[data.clientType].label : data.clientType;
   const clientIdentitySection = data.clientType
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;background-color:#111111;"><tr><td style="padding:4px 0;"><span style="color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type de client</span><br><span style="color:#ffffff;font-size:13px;">${clientTypeLabel}</span>${data.clientType !== "particulier" && data.legalName ? `<br><span style="color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Raison sociale</span><br><span style="color:#ffffff;font-size:13px;">${data.legalName}</span>` : ""}</td></tr></table>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;background-color:#111111;"><tr><td style="padding:4px 0;text-align:center;"><span style="color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type de client</span><br><span style="color:#ffffff;font-size:13px;">${clientTypeLabel}</span>${data.clientType !== "particulier" && data.legalName ? `<br><span style="color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Raison sociale</span><br><span style="color:#ffffff;font-size:13px;">${data.legalName}</span>` : ""}</td></tr></table>`
     : "";
 
   const isMultiSlot = data.allSlots && data.allSlots.length > 1;
@@ -229,7 +229,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
     return `
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:16px;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;">
   <tr>
-    <td style="background-color:#1a1a1a;padding:12px 16px;border-bottom:1px solid #2a2a2a;">
+    <td style="background-color:#1a1a1a;padding:12px 16px;border-bottom:1px solid #2a2a2a;text-align:center;">
       <p style="margin:0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Créneau ${idx + 1} · <span style="color:#facc15;font-family:'Courier New',monospace;">${slot.bookingRef}</span></p>
     </td>
   </tr>
@@ -237,21 +237,21 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
     <td style="padding:14px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
         <tr>
-          <td width="50%" style="padding-bottom:8px;">
+          <td width="50%" style="padding-bottom:8px;text-align:center;">
             <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Studio</p>
             <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">${slotStudio}</p>
           </td>
-          <td width="50%" style="padding-bottom:8px;">
+          <td width="50%" style="padding-bottom:8px;text-align:center;">
             <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
             <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">${getGroupTypeLabel(slot.groupType)}</p>
           </td>
         </tr>
         <tr>
-          <td width="50%">
+          <td width="50%" style="text-align:center;">
             <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Date</p>
             <p style="margin:0;color:#ffffff;font-size:13px;">${formatDateFrench(slot.date)}</p>
           </td>
-          <td width="50%">
+          <td width="50%" style="text-align:center;">
             <p style="margin:0 0 2px 0;color:#666666;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Horaire</p>
             <p style="margin:0;color:#ffffff;font-size:13px;">${formatTimeRange(slot.startTime, slot.endTime)}</p>
           </td>
@@ -286,7 +286,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
   <td width="50%" valign="top" style="padding-right:8px;padding-bottom:16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
       <tr>
-        <td>
+        <td style="text-align:center;">
           <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Studio</p>
           <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${studioName}</p>
         </td>
@@ -296,7 +296,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
   <td width="50%" valign="top" style="padding-left:8px;padding-bottom:16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
       <tr>
-        <td>
+        <td style="text-align:center;">
           <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Type</p>
           <p style="margin:0;color:#ffffff;font-size:16px;font-weight:600;">${groupLabel}</p>
         </td>
@@ -308,7 +308,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
   <td width="50%" valign="top" style="padding-right:8px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
       <tr>
-        <td>
+        <td style="text-align:center;">
           <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Date</p>
           <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${dateLabel}</p>
         </td>
@@ -318,7 +318,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
   <td width="50%" valign="top" style="padding-left:8px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
       <tr>
-        <td>
+        <td style="text-align:center;">
           <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Horaire</p>
           <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${timeLabel}</p>
         </td>
@@ -332,7 +332,7 @@ ${data.allSlots!.map((s, i) => `<p style="margin:${i === 0 ? "0" : "4px 0 0 0"};
     ? ""
     : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
   <tr>
-    <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;">
+    <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;text-align:center;">
       <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Matériel supplémentaire</p>
       <p style="margin:0;color:#ffffff;font-size:14px;line-height:1.5;">${equipmentLabel}</p>
     </td>
@@ -406,7 +406,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
   const reminderMoneySection = showReminderMoney
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
   <tr>
-    <td style="background-color:#1a1500;border-radius:10px;padding:16px;border-left:3px solid #facc15;">
+    <td style="background-color:#1a1500;border-radius:10px;padding:16px;border-top:2px solid #facc15;text-align:center;">
       <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Reste à payer</p>
       <p style="margin:0 0 6px 0;color:#facc15;font-size:22px;font-weight:700;">${formatPrice(remainingDue)}</p>
       <p style="margin:0;color:#aaaaaa;font-size:13px;line-height:1.5;">Merci de prévoir ce montant le jour de votre session (espèces ou CB).</p>
@@ -440,8 +440,8 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
           <!-- Main Content -->
           <tr>
             <td style="padding:40px 30px 30px 30px;">
-              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;${isReminder ? "text-align:center;" : ""}">${heading}</h2>
-              <p style="margin:0 0 30px 0;color:#aaaaaa;font-size:15px;line-height:1.6;">
+              <h2 style="margin:0 0 8px 0;color:#ffffff;font-size:22px;font-weight:600;text-align:center;">${heading}</h2>
+              <p style="margin:0 0 30px 0;color:#aaaaaa;font-size:15px;line-height:1.6;text-align:center;">
                 ${greetingLine}
               </p>
 
@@ -471,7 +471,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
               <!-- Payment Method -->
               ${isReminder ? "" : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
                 <tr>
-                  <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;border-left:3px solid #facc15;">
+                  <td style="background-color:#1a1a1a;border-radius:10px;padding:16px;border-top:2px solid #facc15;text-align:center;">
                     <p style="margin:0 0 4px 0;color:#888888;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Mode de paiement</p>
                     <p style="margin:0;color:#ffffff;font-size:15px;font-weight:500;">${paymentLabel}</p>
                   </td>
@@ -481,7 +481,7 @@ Nous avons bien enregistré votre réservation. Voici les détails :`;
               <!-- Important Info -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="background-color:#1a1500;border-radius:10px;padding:16px;border:1px solid #332200;">
+                  <td style="background-color:#1a1500;border-radius:10px;padding:16px;border:1px solid #332200;text-align:center;">
                     <p style="margin:0 0 8px 0;color:#facc15;font-size:13px;font-weight:600;">📍 Informations importantes</p>
                     <p style="margin:0;color:#aaaaaa;font-size:13px;line-height:1.6;">
                       <strong style="color:#ffffff;">Adresse :</strong> <a href="https://maps.google.com/?q=3+Rue+de+la+Grande+Ceinture+94370+Sucy-en-Brie" style="color:#facc15;text-decoration:none;">3 Rue de la Grande Ceinture, 94370 Sucy-en-Brie</a><br>
