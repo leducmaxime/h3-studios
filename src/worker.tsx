@@ -3979,9 +3979,10 @@ const app = defineApp([
     if (!adminId) return jsonError("Non authentifié", 401);
 
     try {
-      const [subscriptions, storedPreferences] = await Promise.all([
+      const [subscriptions, storedPreferences, reminderLeadHoursSetting] = await Promise.all([
         getPushSubscriptionsForAdmin(env.DB, adminId),
         getPushPreferences(env.DB, adminId),
+        getSetting(env.DB as D1Database, "push.reminder_lead_hours"),
       ]);
 
       return jsonSuccess({
@@ -3992,6 +3993,7 @@ const app = defineApp([
           createdAt: subscription.created_at,
         })),
         preferences: resolvePreferences(storedPreferences),
+        reminderLeadHours: resolveReminderLeadHours(reminderLeadHoursSetting),
       });
     } catch (error) {
       console.error("GET /api/admin/push/state error:", error);

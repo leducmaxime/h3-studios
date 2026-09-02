@@ -42,20 +42,58 @@ interface PushSubscriptionRow {
 interface PushState {
   subscriptions: PushSubscriptionRow[];
   preferences: Record<string, boolean>;
+  reminderLeadHours?: number;
 }
 
 type Phase = "loading" | "ios-install" | "unsupported" | "ready";
 
-const EVENT_TYPES: { key: string; label: string }[] = [
-  { key: "booking_created", label: "Nouvelle réservation" },
-  { key: "booking_cancelled", label: "Annulation" },
-  { key: "booking_rescheduled", label: "Déplacement" },
-  { key: "no_show", label: "Client absent" },
-  { key: "payment_received", label: "Paiement reçu" },
-  { key: "refund", label: "Remboursement" },
-  { key: "contact_message", label: "Message de contact" },
-  { key: "session_reminder", label: "Rappel de séance" },
-  { key: "sync_failure", label: "Échec de synchronisation" },
+const EVENT_TYPES: { key: string; label: string; description: string }[] = [
+  {
+    key: "booking_created",
+    label: "Nouvelle réservation",
+    description: "Réservation créée en ligne par un client ou ajoutée depuis l'admin.",
+  },
+  {
+    key: "booking_cancelled",
+    label: "Annulation",
+    description: "Réservation annulée, côté client ou côté studio.",
+  },
+  {
+    key: "booking_rescheduled",
+    label: "Déplacement",
+    description: "Séance déplacée : nouvelle date, nouvel horaire ou nouveau studio.",
+  },
+  {
+    key: "booking_no_show",
+    label: "Client absent",
+    description: "Réservation marquée « client absent » depuis l'admin.",
+  },
+  {
+    key: "payment_received",
+    label: "Paiement reçu",
+    description: "Chaque encaissement : paiement en ligne, sur place ou solde marqué payé.",
+  },
+  {
+    key: "refund_issued",
+    label: "Remboursement",
+    description: "Remboursement effectué sur une réservation.",
+  },
+  {
+    key: "contact_message",
+    label: "Message de contact",
+    description: "Message envoyé depuis le formulaire de contact du site.",
+  },
+  {
+    key: "booking_reminder",
+    label: "Rappel de séance",
+    description: "", // dynamique, voir renderReminderDescription
+  },
+  {
+    key: "cron_failure",
+    label: "Échec de synchronisation",
+    description:
+      "Échec de la synchronisation des avis Google ou du flux Instagram. Désactivé par défaut.",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -153,25 +191,39 @@ function StatusHeader({
 }
 
 function ToggleRow({
+  eventKey,
   label,
+  description,
   checked,
   saving,
   onToggle,
 }: {
+  eventKey: string;
   label: string;
+  description: string;
   checked: boolean;
   saving: boolean;
   onToggle: () => void;
 }) {
+  const descriptionId = `push-pref-desc-${eventKey}`;
+
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-zinc-800 py-3 last:border-b-0">
-      <span className="text-sm text-zinc-200">{label}</span>
+    <div className="flex items-start justify-between gap-4 border-b border-zinc-800 py-4 last:border-b-0">
+      <div className="min-w-0 pt-0.5">
+        <span className="text-sm text-zinc-200">{label}</span>
+        {description && (
+          <p id={descriptionId} className="mt-1 text-xs leading-relaxed text-zinc-500">
+            {description}
+          </p>
+        )}
+      </div>
       <button
         type="button"
         onClick={onToggle}
         disabled={saving}
         aria-pressed={checked}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+        aria-describedby={description ? descriptionId : undefined}
+        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
           checked ? "bg-primary" : "bg-zinc-700"
         } ${saving ? "opacity-60" : ""}`}
       >
@@ -695,7 +747,13 @@ export function AdminNotifications() {
                   {EVENT_TYPES.map((event) => (
                     <ToggleRow
                       key={event.key}
+                      eventKey={event.key}
                       label={event.label}
+                      description={
+                        event.key === "booking_reminder"
+                          ? `Envoyé automatiquement ${pushState?.reminderLeadHours ?? 2} h avant le début de la séance. Délai modifiable dans Réglages.`
+                          : event.description
+                      }
                       checked={pushState?.preferences?.[event.key] ?? true}
                       saving={savingPref === event.key}
                       onToggle={() => handleTogglePreference(event.key)}
