@@ -98,12 +98,17 @@ interface ExtendedBookingState {
 
 - `TimeSlotPicker` and `WeekCalendar` accept `allowOverride?: boolean` (default `false`). When `false`, behavior is unchanged — the public tunnel never passes it.
 - When `true` (admin only, via `src/components/admin/AdminSlotPicker.tsx`):
-  - Slot grid uses the full `ALL_TIME_SLOTS` range, not `getStudioTimeSlots` — closed hours render dashed with a « Hors horaires » tooltip and stay clickable
+  - Slot grid uses the full `ALL_TIME_SLOTS` range, not `getStudioTimeSlots` — closed hours stay clickable
   - `checkSlotBooked` ignores `todayFullyBlocked`; a slot missing from the API payload is treated as free, not booked
   - Occupied slots stay red but are selectable (`cursor-pointer`)
   - Range validity collapses to `isOverrideRangeValid` (end after start) — the 1h minimum, opening hours, and occupancy checks do not apply, so 30-min bookings are allowed
   - `"00:00"` remains end-only
   - The calendar allows past dates, full days, and ±730 days of navigation, and snaps to the week holding `selectedDate`
+- Two distinct conflict states, both red so they're impossible to miss, but visually different so an admin can tell them apart at a glance:
+  - **Booked/blocked** (`checkSlotBooked`): solid red fill (`bg-red-500/30 border-red-500/50`), « Déjà réservé » hint — a hard conflict being overridden.
+  - **Outside opening hours** (`isSlotOutsideOpeningHours`): dashed, lower-fill red (`bg-red-500/[0.08] border-dashed border-red-500/40`), « Hors horaires » hint — a softer "fermé" flag.
+  - Both stay red in every selection mode — start, end/hover-preview, and the confirmed "done" range. Inside a selected/hovered range the fill leans back toward the selection color (primary tint) with a red border/ring so the slot still reads as "in range" while flagging the conflict; on the exact DÉBUT/FIN boundary the red is more dominant (ring + solid or dashed red border) since that's the slot the admin explicitly chose.
+  - A compact two-chip legend (« Déjà réservé » / « Hors horaires ») renders under the per-studio price legend when `allowOverride` is on.
 - Styling is isolated in `getOverrideSlotStyle`; the public `getSlotStyle` is untouched.
 - Admin surfaces show warnings from `getAdminSlotWarnings` (`src/lib/booking.ts`) instead of blocking — `POST/PUT /api/admin/bookings` no longer reject conflicts or blocked slots. Public `POST /api/bookings` still rejects them.
 
