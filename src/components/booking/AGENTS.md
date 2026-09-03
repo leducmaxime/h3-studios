@@ -104,11 +104,10 @@ interface ExtendedBookingState {
   - Range validity collapses to `isOverrideRangeValid` (end after start) — the 1h minimum, opening hours, and occupancy checks do not apply, so 30-min bookings are allowed
   - `"00:00"` remains end-only
   - The calendar allows past dates, full days, and ±730 days of navigation, and snaps to the week holding `selectedDate`
-- Two distinct conflict states, both red so they're impossible to miss, but visually different so an admin can tell them apart at a glance:
-  - **Booked/blocked** (`checkSlotBooked`): solid red fill (`bg-red-500/30 border-red-500/50`), « Déjà réservé » hint — a hard conflict being overridden.
-  - **Outside opening hours** (`isSlotOutsideOpeningHours`): dashed, lower-fill red (`bg-red-500/[0.08] border-dashed border-red-500/40`), « Hors horaires » hint — a softer "fermé" flag.
-  - Both stay red in every selection mode — start, end/hover-preview, and the confirmed "done" range. Inside a selected/hovered range the fill leans back toward the selection color (primary tint) with a red border/ring so the slot still reads as "in range" while flagging the conflict; on the exact DÉBUT/FIN boundary the red is more dominant (ring + solid or dashed red border) since that's the slot the admin explicitly chose.
-  - A compact two-chip legend (« Déjà réservé » / « Hors horaires ») renders under the per-studio price legend when `allowOverride` is on.
+- Booked/blocked (`checkSlotBooked`) is the only color-affecting state: solid red fill (`bg-red-500/30 border-red-500/50`), « Déjà réservé » hint — a hard conflict being overridden.
+  - It stays red in every selection mode — start, end/hover-preview, and the confirmed "done" range. Inside a selected/hovered range the fill leans back toward the selection color (primary tint) with a red border/ring so the slot still reads as "in range" while flagging the conflict; on the exact DÉBUT/FIN boundary the red is more dominant (solid ring + border) since that's the slot the admin explicitly chose.
+  - A compact « Déjà réservé » chip renders under the per-studio price legend when `allowOverride` is on.
+  - **Outside opening hours is NOT a color state**: a closed-hours slot renders with the exact same classes as an in-hours slot in the same booked/free/peak/selection state — free stays neutral, booked stays red, no dashed border or dimming just for being closed. It only gets a hover/focus hint (« Hors horaires », superseded by « Déjà réservé » if both apply) — same mechanism as the min-duration tooltip, purely informational, no visual difference from an equivalent in-hours slot.
 - Styling is isolated in `getOverrideSlotStyle`; the public `getSlotStyle` is untouched.
 - Admin surfaces show warnings from `getAdminSlotWarnings` (`src/lib/booking.ts`) instead of blocking — `POST/PUT /api/admin/bookings` no longer reject conflicts or blocked slots. Public `POST /api/bookings` still rejects them.
 

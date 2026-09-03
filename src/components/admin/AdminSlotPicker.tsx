@@ -68,7 +68,7 @@ export function AdminSlotPicker({
     }
     const gen = ++fetchGenRef.current;
     setSlotsLoading(true);
-    const params = new URLSearchParams({ date });
+    const params = new URLSearchParams({ date, fullRange: "1" });
     if (excludeBookingId) params.set("excludeBookingId", excludeBookingId);
     fetch(`/api/availability?${params}`)
       .then((res) => res.json())

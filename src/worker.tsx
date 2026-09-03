@@ -1025,6 +1025,7 @@ const app = defineApp([
       const url = new URL(request.url);
       const date = url.searchParams.get("date");
       if (!date) return jsonError("Date requise", 400);
+      const fullRange = ["1", "true"].includes(url.searchParams.get("fullRange")?.toLowerCase() ?? "");
 
       const excludeBookingId = url.searchParams.get("excludeBookingId");
       const bookings = (await getBookingsByDate(env.DB, date)).filter((b) => b.id !== excludeBookingId);
@@ -1061,7 +1062,7 @@ const app = defineApp([
       const result: Record<string, Array<{ time: string; available: boolean; groupType?: string; bookingId?: string }>> = {};
 
       for (const studioId of ["la-scene", "le-podium"] as StudioId[]) {
-        const studioSlots = getStudioTimeSlots(studioId, bookingDate);
+        const studioSlots = fullRange ? ALL_TIME_SLOTS : getStudioTimeSlots(studioId, bookingDate);
         result[studioId] = studioSlots.map((time) => {
           const occupant = occupantMap[studioId][time];
           if (!occupant) return { time, available: true };

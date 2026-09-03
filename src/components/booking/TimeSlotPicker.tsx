@@ -520,46 +520,40 @@ export function TimeSlotPicker({
 
   const getOverrideSlotStyle = useCallback(
     (slot: string, studioId: StudioId): SlotPresentation => {
-      // Conflicts (booked/blocked, or outside opening hours) must stay
-      // legible in every selection mode — this is the whole point of the
-      // admin override picker. Both checks are read up front so every
-      // branch below can consult them instead of the old order where the
-      // selection/hover branches returned early and hid the conflict.
+      // Booked/blocked is the only color-affecting state — it must stay
+      // visibly red in every selection mode, which the branch order below
+      // guarantees (previously the selection/hover branches returned early
+      // and hid it once a start time was clicked). Outside-opening-hours is
+      // NOT a color state: those slots render exactly like in-hours slots
+      // (free = neutral, booked = red) and only carry a hover hint, because
+      // the public tunnel already applies the same "closed = just another
+      // slot, occupancy decides the color" rule.
       const isBooked = checkSlotBooked(slot, studioId);
-      const isOutside = !isBooked && isSlotOutsideOpeningHours(studioId, date, slot);
-      const conflictHint = isBooked ? "Déjà réservé" : isOutside ? "Hors horaires" : null;
+      const isOutside = isSlotOutsideOpeningHours(studioId, date, slot);
+      const hint = isBooked ? "Déjà réservé" : isOutside ? "Hors horaires" : null;
       const isSameStudio = activeStudio === studioId;
       const isSelectedStart = selectedStart === slot && isSameStudio;
       const isSelectedEnd = selectedEnd === slot && isSameStudio;
       const isPeak = studioHasPeakPricing(studioId) && isPeakTime(date, slot);
-      const ok = (className: string, hint: string | null = null): SlotPresentation => ({ className, hint });
-
-      // Booked slots: solid red — a hard conflict being overridden.
-      // Outside-hours slots: dashed, lower-fill red — a softer "fermé" flag,
-      // kept visually distinct from "déjà réservé" per the reported issue.
+      const ok = (className: string): SlotPresentation => ({ className, hint });
       const bookedStyle = "bg-red-500/30 border-red-500/50 cursor-pointer hover:bg-red-500/45";
-      const outsideStyle = "bg-red-500/[0.08] border-dashed border-red-500/40 text-red-300/60 cursor-pointer hover:bg-red-500/15";
 
       // 1) Exact DÉBUT/FIN boundary — selection always wins the fill, but a
-      // conflicting boundary still carries a red border/ring so the admin
-      // sees they're overriding right where they clicked.
+      // booked boundary still carries a red ring so the admin sees they're
+      // overriding right where they clicked.
       if (isSelectedStart || isSelectedEnd) {
         if (isBooked) {
-          return ok("bg-red-500/40 border-red-500 ring-2 ring-red-400 ring-offset-1 ring-offset-black cursor-pointer", conflictHint);
-        }
-        if (isOutside) {
-          return ok("bg-primary/30 border-dashed border-red-400 ring-2 ring-red-400/70 ring-offset-1 ring-offset-black cursor-pointer", conflictHint);
+          return ok("bg-red-500/40 border-red-500 ring-2 ring-red-400 ring-offset-1 ring-offset-black cursor-pointer");
         }
         return ok(isPeak ? "bg-primary/50 border-amber-400 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer" : "bg-primary/40 border-primary/60 ring-2 ring-primary ring-offset-1 ring-offset-black cursor-pointer");
       }
 
       // 2) Confirmed range interior — fill still reads as "selected", a red
-      // border/dash marks the conflict without hiding it.
+      // border marks a booked slot without hiding it.
       if (selectionMode === "done" && isSameStudio && selectedStart && selectedEnd) {
         const range = slotsInBookingRange(selectedStart, selectedEnd);
         if (range.includes(slot) && slot !== selectedStart) {
-          if (isBooked) return ok("bg-red-500/35 border-red-500/70 ring-1 ring-primary/30 cursor-pointer", conflictHint);
-          if (isOutside) return ok("bg-primary/10 border-dashed border-red-400/70 cursor-pointer", conflictHint);
+          if (isBooked) return ok("bg-red-500/35 border-red-500/70 ring-1 ring-primary/30 cursor-pointer");
           return ok(isPeak ? "bg-primary/25 border-amber-400/50 cursor-pointer" : "bg-primary/20 border-primary/30 cursor-pointer");
         }
       }
@@ -573,20 +567,17 @@ export function TimeSlotPicker({
         if (hoveredSlotOnStudio && isOverrideRangeValid(selectedStart, hoveredSlotOnStudio)) {
           const hoverRange = slotsInBookingRange(selectedStart, hoveredSlotOnStudio);
           if (hoverRange.includes(slot) && slot !== selectedStart) {
-            if (isBooked) return ok("bg-red-500/35 border-red-500/70 ring-1 ring-primary/30 cursor-pointer", conflictHint);
-            if (isOutside) return ok("bg-primary/10 border-dashed border-red-400/70 cursor-pointer", conflictHint);
+            if (isBooked) return ok("bg-red-500/35 border-red-500/70 ring-1 ring-primary/30 cursor-pointer");
             return ok("bg-primary/30 border-primary/50 cursor-pointer");
           }
         }
-        if (isBooked) return ok(bookedStyle, conflictHint);
-        if (isOutside) return ok(outsideStyle, conflictHint);
+        if (isBooked) return ok(bookedStyle);
         return ok(isPeak ? "bg-white/10 hover:bg-white/20 border-amber-400/50 hover:border-amber-400/80 cursor-pointer" : "bg-white/10 hover:bg-white/20 border-white/20 cursor-pointer");
       }
 
       // 4) Everything else (start/done mode default, or end mode on the
       // other studio where every slot is a potential new start).
-      if (isBooked) return ok(bookedStyle, conflictHint);
-      if (isOutside) return ok(outsideStyle, conflictHint);
+      if (isBooked) return ok(bookedStyle);
       return ok(isPeak ? "bg-white/5 hover:bg-white/10 border-amber-400/50 hover:border-amber-400/80 cursor-pointer" : "bg-white/5 hover:bg-white/10 border-white/10 cursor-pointer");
     },
     [checkSlotBooked, date, activeStudio, selectedStart, selectedEnd, studioHasPeakPricing, selectionMode, hoveredSlot]
@@ -822,19 +813,14 @@ export function TimeSlotPicker({
             </span>
           )}
           {/* Admin override only: the price legend above doesn't explain the
-              two red conflict states, so append a compact pair of chips
-              instead of introducing a separate legend block. */}
+              red "already booked" state, so append a compact chip instead of
+              introducing a separate legend block. Out-of-hours slots don't
+              get a chip — they render identically to in-hours slots. */}
           {allowOverride && (
-            <>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3.5 w-3.5 rounded border border-red-500/50 bg-red-500/30" />
-                <span>Déjà réservé</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3.5 w-3.5 rounded border border-dashed border-red-500/40 bg-red-500/[0.08]" />
-                <span>Hors horaires</span>
-              </span>
-            </>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3.5 w-3.5 rounded border border-red-500/50 bg-red-500/30" />
+              <span>Déjà réservé</span>
+            </span>
           )}
         </div>
       </div>
