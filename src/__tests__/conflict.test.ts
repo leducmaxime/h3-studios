@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, it, expect } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import { bookingEndMinutes, clockMinutes, slotDurationSlots, timeRangesOverlap } from "@/lib/booking";
+import { sqlBookingEndInstant, sqlBookingStartInstant } from "@/lib/db";
 
 interface TimeSlot {
   startTime: string;
@@ -6,29 +9,55 @@ interface TimeSlot {
 }
 
 function hasConflict(existing: TimeSlot[], newSlot: TimeSlot): boolean {
-  for (const slot of existing) {
-    const existingStart = clockMinutes(slot.startTime);
-    const existingEnd = bookingEndMinutes(slot.startTime, slot.endTime);
-    const newStart = clockMinutes(newSlot.startTime);
-    const newEnd = bookingEndMinutes(newSlot.startTime, newSlot.endTime);
-
-    if (newStart < existingEnd && newEnd > existingStart) {
-      return true;
-    }
-  }
-  return false;
+  return existing.some((slot) => timeRangesOverlap(
+    slot.startTime,
+    slot.endTime,
+    newSlot.startTime,
+    newSlot.endTime,
+  ));
 }
 
-function clockMinutes(time: string): number {
-  return time.split(":").map(Number).reduce((total, value, index) => total + value * (index === 0 ? 60 : 1), 0);
-}
-function bookingEndMinutes(start: string, end: string): number {
-  if (end === "00:00") return 1440;
-  const value = clockMinutes(end);
-  return value <= clockMinutes(start) ? value + 1440 : value;
+let sqlite: DatabaseSync;
+beforeAll(() => {
+  sqlite = new DatabaseSync(":memory:");
+  sqlite.exec("CREATE TABLE bookings (studio_id TEXT, date TEXT, status TEXT, start_time TEXT, end_time TEXT);");
+});
+afterAll(() => sqlite.close());
+
+function sqlHasConflict(existing: TimeSlot, candidate: TimeSlot): boolean {
+  sqlite.exec("DELETE FROM bookings;");
+  sqlite.prepare("INSERT INTO bookings VALUES (?, ?, ?, ?, ?)").run("la-scene", "2026-01-01", "confirmed", existing.startTime, existing.endTime);
+  const row = sqlite.prepare(`
+    SELECT 1 AS conflict
+    FROM bookings b
+    WHERE ${sqlBookingStartInstant("b")} < datetime(?, '+' || ? || ' minutes')
+      AND ${sqlBookingEndInstant("b")} > datetime(?, '+' || ? || ' minutes')
+    LIMIT 1
+  `).get(
+    "2026-01-01",
+    bookingEndMinutes(candidate.startTime, candidate.endTime),
+    "2026-01-01",
+    clockMinutes(candidate.startTime),
+  ) as { conflict?: number } | undefined;
+  return row?.conflict === 1;
 }
 
 describe("Conflict Detection", () => {
+  it("uses the shared clock and end-minute rules", () => {
+    expect(bookingEndMinutes("10:00", "10:00") - clockMinutes("10:00")).toBe(0);
+    expect(hasConflict([{ startTime: "10:00", endTime: "10:00" }], { startTime: "14:00", endTime: "16:00" })).toBe(false);
+  });
+
+  it("rejects zero-length ranges while retaining the sub-hour admin allowance", () => {
+    expect(slotDurationSlots("10:00", "10:00")).toBe(0);
+    expect(slotDurationSlots("10:00", "10:30")).toBe(1);
+  });
+
+  it("uses the corrected shared SQL conflict predicate", () => {
+    expect(sqlHasConflict({ startTime: "10:00", endTime: "10:00" }, { startTime: "14:00", endTime: "16:00" })).toBe(false);
+    expect(sqlHasConflict({ startTime: "10:00", endTime: "12:00" }, { startTime: "11:00", endTime: "13:00" })).toBe(true);
+  });
+
   it("should detect no conflict when slots don't overlap", () => {
     const existing: TimeSlot[] = [
       { startTime: "10:00", endTime: "12:00" },

@@ -172,6 +172,12 @@ export function isValidPhone(value: string): boolean {
   return value.replace(/\D/g, "").length === 10;
 }
 
+/** Tolerant server-side contact check for existing and international records. */
+export function isPlausiblePhone(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 15;
+}
+
 /** French postal code: exactly 5 digits. */
 export function isValidPostalCode(value: string): boolean {
   return value.replace(/\D/g, "").length === 5;

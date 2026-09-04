@@ -2,7 +2,7 @@ import { render, route, layout } from "rwsdk/router";
 import { bookingAllowsCollection, getBookingAmountDue, getBookingGrossTotal, getManualDiscountBlockMessage, isBookingPast, round2 } from "@/lib/booking-totals";
 import { allocateCollectPayments, isCollectMethod, type CollectPaymentInput } from "@/lib/recouvrement-collect";
 import { groupTypeLabel, paymentMethodLabelShort, studioLabel } from "@/lib/labels";
-import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, CLIENT_TYPE_RULES, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
+import { CGV_NOT_ACCEPTED_CODE, CGV_NOT_ACCEPTED_ERROR, CLIENT_TYPE_RULES, DEFAULT_CLIENT_TYPE, isAcceptedCgv, isClientType, resolvedDisplayName, isValidEmail, isPlausiblePhone, isValidRna, isValidSiret, normalizeRna, normalizeSiret, pruneToClientType, resolveBookingIdentity, resolveClientType, validateBookingUserFields, type BookingUserBody, type BookingUserFields } from "@/lib/booking-fields";
 import { buildBookingConfirmationEmailPayload, buildBookingReminderEmailPayload, canResendBookingConfirmation, canSendBookingReminder, finalizePaidCheckoutSession, type FinalizePaidSessionDeps } from "@/lib/payment-confirmation";
 import type { RouteMiddleware } from "rwsdk/router";
 import { defineApp } from "rwsdk/worker";
@@ -159,6 +159,8 @@ import {
   getPushSubscriptionsForAdmin,
   setPushPreference,
   upsertPushSubscription,
+  bookingDurationExpression,
+  isValidPricingCents,
 } from "@/lib/db";
 import { validateLoyaltySettings } from "@/lib/loyalty";
 import { buildRescheduleAmountAudit, deriveRescheduledAmounts, getOperatorProposedRescheduleRefund } from "@/lib/admin-reschedule";
@@ -174,9 +176,9 @@ import { type BookingFilters, type AuditLogFilters, type BookingStatus, type DbB
 import type { PushEventType } from "@/lib/db-types";
 import { buildPushNotification, resolvePreferences, sendPushToAdmin, sendPushToAdmins, type PushDeps, type PushNotification, type PushNotificationInput, type PushNotificationInputByEvent, type PushDispatchResult } from "@/lib/push";
 
-import { ALL_TIME_SLOTS, STUDIO_HOURS, STUDIOS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
+import { ALL_TIME_SLOTS, STUDIO_HOURS, STUDIOS, bookingEndMinutes, getStudioTimeSlots, setOpeningHours, computeBookingQuote, parseBookingEquipmentLines, computeMinAdvance, isMinAdvanceViolation, parseMinAdvanceHours, parseAllowCash, isCashPaymentForbidden, slotDurationSlots, type StudioId, type GroupType, type QuoteEquipmentItem, type QuoteEquipmentCatalogueItem } from "@/lib/booking";
 import { computeEquipmentAvailability } from "@/lib/booking";
-import { buildPricingGridAsOf, listScheduledEffectiveDates } from "@/lib/pricing";
+import { buildPricingGridAsOf, listScheduledEffectiveDates, MAX_PRICING_CENTS } from "@/lib/pricing";
 import type { TarifsData, TarifsGroupType } from "@/lib/tarifs";
 import { formatEuro } from "@/lib/tax";
 import {
@@ -2261,6 +2263,11 @@ const app = defineApp([
         if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
           return jsonError("Format de date invalide", 400);
         }
+        // Les réservations admin peuvent rester sub-1h, mais une plage vide
+        // (hors du sentinelle 00:00 de fin de journée) n'est jamais valide.
+        if (slotDurationSlots(body.start_time, body.end_time) < 1 && body.start_time === body.end_time && body.end_time !== "00:00") {
+          return jsonError("La fin doit être postérieure au début", 400);
+        }
 
         // Admin may force overlapping / blocked / off-hours / sub-1h slots.
         // Public POST /api/bookings still rejects those.
@@ -3329,6 +3336,16 @@ const app = defineApp([
         if (!body.name) {
           return jsonError("Champ obligatoire manquant: name", 400);
         }
+        if (body.email !== undefined && body.email !== null && (typeof body.email !== "string" || (body.email.trim() !== "" && !isValidEmail(body.email)))) {
+          return jsonError("Adresse e-mail invalide", 400);
+        }
+        if (body.phone !== undefined && body.phone !== null) {
+          if (typeof body.phone !== "string") return jsonError("Numéro de téléphone invalide", 400);
+          body.phone = body.phone.trim();
+          if (body.phone !== "" && !isPlausiblePhone(body.phone)) {
+            return jsonError("Numéro de téléphone invalide", 400);
+          }
+        }
         if (body.client_type !== undefined && !isClientType(body.client_type)) return jsonError("Type de client invalide", 400);
         if (body.siret !== undefined && isValidSiret(body.siret)) body.siret = normalizeSiret(body.siret);
         if (body.rna !== undefined && isValidRna(body.rna)) body.rna = normalizeRna(body.rna);
@@ -3499,6 +3516,19 @@ const app = defineApp([
           Object.assign(body, loyalty.value);
         }
 
+        const existingUserForContact = typeof body.phone === "string" ? await getUserById(env.DB, id) : null;
+        if (body.email !== undefined && body.email !== null && (typeof body.email !== "string" || (body.email.trim() !== "" && !isValidEmail(body.email)))) {
+          return jsonError("Adresse e-mail invalide", 400);
+        }
+        if (body.phone !== undefined && body.phone !== null) {
+          if (typeof body.phone !== "string") return jsonError("Numéro de téléphone invalide", 400);
+          body.phone = body.phone.trim();
+          const submittedPhone = body.phone;
+          const storedPhone = existingUserForContact?.phone?.trim() ?? null;
+          if (submittedPhone !== "" && submittedPhone !== storedPhone && !isPlausiblePhone(submittedPhone)) {
+            return jsonError("Numéro de téléphone invalide", 400);
+          }
+        }
         if (body.email) {
           body.email = body.email.trim().toLowerCase();
         }
@@ -4242,6 +4272,9 @@ const app = defineApp([
           return jsonError("Champs obligatoires manquants: email, name, password", 400);
         }
 
+        if (typeof body.email !== "string" || !isValidEmail(body.email)) {
+          return jsonError("Adresse e-mail invalide", 400);
+        }
         const normalizedEmail = body.email.trim().toLowerCase();
 
         const existing = await env.DB
@@ -4535,9 +4568,7 @@ const app = defineApp([
             typeof price.studio_id !== "string" || !studios.has(price.studio_id) ||
             typeof price.group_type !== "string" || !groupTypes.has(price.group_type) ||
             (price.is_peak !== 0 && price.is_peak !== 1) ||
-            typeof price.price_per_half_hour !== "number" ||
-            !Number.isFinite(price.price_per_half_hour) ||
-            !Number.isInteger(price.price_per_half_hour) || price.price_per_half_hour < 0
+            !isValidPricingCents(price.price_per_half_hour)
           ) {
             invalidGrid = true;
             continue;
@@ -4602,8 +4633,8 @@ const app = defineApp([
 
     try {
       const body = await request.json() as { price?: number };
-      if (body.price === undefined || body.price < 0) {
-        return jsonError("Champ obligatoire manquant: price (>= 0)", 400);
+      if (!isValidPricingCents(body.price)) {
+        return jsonError(`Tarif invalide : montant entier en centimes compris entre 0 et ${MAX_PRICING_CENTS} (≤ ${MAX_PRICING_CENTS * 2 / 100} €/h)`, 400);
       }
 
       const result = await updatePricing(env.DB, params.id, body.price);
@@ -5261,7 +5292,7 @@ const app = defineApp([
          WHERE date >= ? AND date <= ? AND status != 'cancelled'
          ORDER BY date ASC, start_time ASC`,
       ).bind(fromStr, toStr);
-      const durationExpression = `(CASE WHEN b.end_time = '00:00' THEN 1440 ELSE (CAST(substr(b.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.end_time, 4, 2) AS INTEGER)) END) - (CASE WHEN b.start_time = '00:00' THEN 1440 ELSE (CAST(substr(b.start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.start_time, 4, 2) AS INTEGER)) END)`;
+      const durationExpression = bookingDurationExpression("b");
       const durationRowsStmt = env.DB.prepare(
         // La durée minimale d'une réservation est 1h (2 créneaux) : tout ce qui
         // serait plus court est ramené au bucket 1h, et 4h30+ agrège la queue.

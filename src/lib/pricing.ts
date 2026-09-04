@@ -7,6 +7,112 @@ import {
 } from "./booking";
 import type { DbPricing } from "./db-types";
 
+/**
+ * Plafond de saisie d'un tarif dans l'admin, exprimé en € par heure.
+ * Les tarifs actuels culminent à 22 €/h : cette borne laisse une marge large
+ * tout en bloquant une erreur de saisie d'un facteur 100.
+ */
+export const MAX_ADMIN_PRICE_PER_HOUR_EUR = 200;
+
+/**
+ * Même plafond exprimé dans l'unité de stockage (`pricing.price_per_half_hour`,
+ * en centimes). Dérivé pour que l'UI et la garde serveur ne puissent pas diverger.
+ */
+export const MAX_PRICING_CENTS = (MAX_ADMIN_PRICE_PER_HOUR_EUR * 100) / 2;
+
+export type PricingInputResult =
+  | {
+      valid: true;
+      normalized: string;
+      pricePerHalfHourCents: number;
+    }
+  | {
+      valid: false;
+      normalized: string;
+      error: string;
+    };
+
+/**
+ * Parse un tarif saisi en €/h et le convertit en centimes par demi-heure.
+ * La conversion utilise uniquement des centimes entiers afin d'éviter les
+ * artefacts flottants. Les tarifs horaires non représentables sont refusés.
+ */
+export function parsePricePerHour(value: string): PricingInputResult {
+  const normalizedInput = value.trim().replace(/,/g, ".");
+
+  if (normalizedInput === "") {
+    return { valid: false, normalized: normalizedInput, error: "Le tarif est obligatoire." };
+  }
+  if (normalizedInput.startsWith("-")) {
+    return { valid: false, normalized: normalizedInput, error: "Le tarif ne peut pas être négatif." };
+  }
+  if (!/^\d+(?:\.\d*)?$/.test(normalizedInput)) {
+    return {
+      valid: false,
+      normalized: normalizedInput,
+      error: "Veuillez saisir un montant valide en euros (ex. 12,50).",
+    };
+  }
+
+  const [wholePart, fractionalPart] = normalizedInput.split(".");
+  if (fractionalPart !== undefined && fractionalPart.length > 2) {
+    return {
+      valid: false,
+      normalized: normalizedInput,
+      error: "Le tarif doit comporter au maximum deux décimales.",
+    };
+  }
+  if (fractionalPart === "") {
+    return {
+      valid: false,
+      normalized: normalizedInput,
+      error: "Veuillez saisir les chiffres après la virgule.",
+    };
+  }
+
+  const whole = Number(wholePart);
+  if (!Number.isSafeInteger(whole) || whole > MAX_ADMIN_PRICE_PER_HOUR_EUR) {
+    return {
+      valid: false,
+      normalized: normalizedInput,
+      error: `Le tarif ne peut pas dépasser ${MAX_ADMIN_PRICE_PER_HOUR_EUR.toLocaleString("fr-FR")} € par heure.`,
+    };
+  }
+
+  const hourlyCents = whole * 100 + Number((fractionalPart ?? "").padEnd(2, "0"));
+  if (hourlyCents > MAX_ADMIN_PRICE_PER_HOUR_EUR * 100) {
+    return {
+      valid: false,
+      normalized: normalizedInput,
+      error: `Le tarif ne peut pas dépasser ${MAX_ADMIN_PRICE_PER_HOUR_EUR.toLocaleString("fr-FR")} € par heure.`,
+    };
+  }
+  if (hourlyCents % 2 !== 0) {
+    return {
+      valid: false,
+      normalized: normalizedInput,
+      error: "Le tarif horaire doit être un multiple de 0,02 € (il est enregistré par demi-heure).",
+    };
+  }
+
+  const normalized = `${wholePart.replace(/^0+(?=\d)/, "")}${fractionalPart === undefined ? "" : `.${fractionalPart}`}`;
+  return {
+    valid: true,
+    normalized,
+    pricePerHalfHourCents: hourlyCents / 2,
+  };
+}
+
+export function halfHourCentsToHourly(cents: number): number {
+  return cents * 2 / 100;
+}
+
+export function formatHourlyInput(cents: number): string {
+  const hourlyCents = cents * 2;
+  if (hourlyCents % 100 === 0) return String(hourlyCents / 100);
+  return `${Math.floor(hourlyCents / 100)}.${String(hourlyCents % 100).padStart(2, "0")}`;
+}
+
 export interface PricingGrid {
   [studioId: string]: {
     [groupType: string]: {

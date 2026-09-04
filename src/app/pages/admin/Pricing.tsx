@@ -48,6 +48,12 @@ import {
 } from "@/components/ui/select";
 import { STUDIOS, type StudioId } from "@/lib/booking";
 import { type DbPricing, type DbPromoCode, type DbUser } from "@/lib/db-types";
+import {
+  formatHourlyInput,
+  halfHourCentsToHourly,
+  MAX_ADMIN_PRICE_PER_HOUR_EUR,
+  parsePricePerHour,
+} from "@/lib/pricing";
 import { groupTypeLabel } from "@/lib/labels";
 import { getParisDateISO, isPromoCodeExpired } from "@/lib/utils";
 import {
@@ -66,7 +72,7 @@ interface PricingRow {
   studioId: string;
   groupType: string;
   isPeak: boolean;
-  price: number;
+  pricePerHalfHourCents: number;
   effectiveFrom: string;
 }
 
@@ -94,8 +100,11 @@ const EMPTY_FORM: PromoFormData = {
 
 const GROUP_ORDER = ["solo", "duo", "group"];
 
-function formatPriceLocal(cents: number): string {
-  return `${cents}€ TTC`;
+function formatPriceLocal(eurosPerHour: number): string {
+  return `${eurosPerHour.toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}€ TTC`;
 }
 
 function transformPricing(rows: DbPricing[]): PricingRow[] {
@@ -104,7 +113,7 @@ function transformPricing(rows: DbPricing[]): PricingRow[] {
     studioId: row.studio_id,
     groupType: row.group_type,
     isPeak: row.is_peak === 1,
-    price: row.price_per_half_hour / 100,
+    pricePerHalfHourCents: row.price_per_half_hour,
     effectiveFrom: row.effective_from,
   }));
 }
@@ -545,13 +554,17 @@ function PeakHoursSection() {
 function StudioPricingTables({
   rows,
   editing,
-  editedPrices,
+  priceDrafts,
+  priceErrors,
   onPriceChange,
+  onPriceBlur,
 }: {
   rows: PricingRow[];
   editing: boolean;
-  editedPrices: Map<string, number>;
+  priceDrafts: Map<string, string>;
+  priceErrors: Map<string, string>;
   onPriceChange: (id: string, value: string) => void;
+  onPriceBlur: (id: string, value: string) => void;
 }) {
   const studioEntries = Object.entries(STUDIOS) as [StudioId, (typeof STUDIOS)[StudioId]][];
 
@@ -563,12 +576,32 @@ function StudioPricingTables({
 
   const getDisplayPrice = (row: PricingRow | undefined): number => {
     if (!row) return 0;
-    if (editing && editedPrices.has(row.id)) {
-      // La valeur stockée est déjà en €/h
-      return editedPrices.get(row.id)!;
-    }
-    // Afficher en heure (multiplier par 2 car stocké en demi-heure)
-    return row.price * 2;
+    // La base stocke les centimes par demi-heure ; l'interface affiche €/h.
+    return halfHourCentsToHourly(row.pricePerHalfHourCents);
+  };
+
+  const renderPriceInput = (row: PricingRow) => {
+    const error = priceErrors.get(row.id);
+    const errorId = `${row.id}-price-error`;
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label={`Tarif ${row.groupType} ${row.isPeak ? "heures pleines" : "heures creuses"} en euros par heure`}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
+            value={priceDrafts.get(row.id) ?? formatHourlyInput(row.pricePerHalfHourCents)}
+            onChange={(e) => onPriceChange(row.id, e.target.value)}
+            onBlur={(e) => onPriceBlur(row.id, e.target.value)}
+            className="w-24 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm font-medium tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <span className="text-sm text-zinc-500">€/h</span>
+        </div>
+        {error && <p id={errorId} className="text-xs text-red-400">{error}</p>}
+      </div>
+    );
   };
 
   return (
@@ -585,7 +618,10 @@ function StudioPricingTables({
               </div>
               <div>
                 <h2 className="text-lg font-bold">{studio.name}</h2>
-                <p className="text-sm text-zinc-400">{studio.size} — Prix par heure</p>
+                <p className="text-sm text-zinc-400">
+                  {studio.size} — Prix par heure (€/h, virgule ou point, 2 décimales max,
+                  plafond {MAX_ADMIN_PRICE_PER_HOUR_EUR} €)
+                </p>
               </div>
             </div>
           </div>
@@ -625,16 +661,7 @@ function StudioPricingTables({
 
                       <td className="px-6 py-4">
                         {editing && offPeakRow ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={getDisplayPrice(offPeakRow)}
-                              onChange={(e) => onPriceChange(offPeakRow.id, e.target.value)}
-                              className="w-24 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm font-medium tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                            <span className="text-sm text-zinc-500">€/h</span>
-                          </div>
+                          renderPriceInput(offPeakRow)
                         ) : (
                           <span className="text-sm font-medium tabular-nums">
                             {formatPriceLocal(getDisplayPrice(offPeakRow))}/h
@@ -644,16 +671,7 @@ function StudioPricingTables({
 
                       <td className="px-6 py-4">
                         {editing && peakRow ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={getDisplayPrice(peakRow)}
-                              onChange={(e) => onPriceChange(peakRow.id, e.target.value)}
-                              className="w-24 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm font-medium tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                            <span className="text-sm text-zinc-500">€/h</span>
-                          </div>
+                          renderPriceInput(peakRow)
                         ) : (
                           <span className="text-sm font-medium tabular-nums">
                             {formatPriceLocal(getDisplayPrice(peakRow))}/h
@@ -680,10 +698,14 @@ function PricingTab() {
   const [editingFrom, setEditingFrom] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editedPrices, setEditedPrices] = useState<Map<string, number>>(new Map());
+  const [priceDrafts, setPriceDrafts] = useState<Map<string, string>>(new Map());
+  const [priceErrors, setPriceErrors] = useState<Map<string, string>>(new Map());
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleCells, setScheduleCells] = useState<Map<string, number>>(new Map());
+  const [scheduleDrafts, setScheduleDrafts] = useState<Map<string, string>>(new Map());
+  const [scheduleErrors, setScheduleErrors] = useState<Map<string, string>>(new Map());
   const [scheduling, setScheduling] = useState(false);
 
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
@@ -717,26 +739,56 @@ function PricingTab() {
   const handleStartEdit = (effectiveFrom: string) => {
     setEditingFrom(effectiveFrom);
     setEditedPrices(new Map());
+    setPriceDrafts(new Map());
+    setPriceErrors(new Map());
   };
 
   const handleCancelEdit = () => {
     setEditingFrom(null);
     setEditedPrices(new Map());
+    setPriceDrafts(new Map());
+    setPriceErrors(new Map());
   };
 
   const handlePriceChange = (id: string, value: string) => {
-    const numValue = parseInt(value, 10);
-    if (isNaN(numValue) || numValue < 0) return;
+    const parsed = parsePricePerHour(value);
+
+    setPriceDrafts((prev) => {
+      const next = new Map(prev);
+      next.set(id, value);
+      return next;
+    });
+    setPriceErrors((prev) => {
+      const next = new Map(prev);
+      if (parsed.valid) next.delete(id);
+      else next.set(id, parsed.error);
+      return next;
+    });
 
     setEditedPrices((prev) => {
       const next = new Map(prev);
-      // Stocker la valeur saisie en €/h (conversion en demi-heure à la sauvegarde)
-      next.set(id, numValue);
+      if (parsed.valid) next.set(id, parsed.pricePerHalfHourCents);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const handlePriceBlur = (id: string, value: string) => {
+    const parsed = parsePricePerHour(value);
+    if (!parsed.valid) return;
+
+    setPriceDrafts((prev) => {
+      const next = new Map(prev);
+      next.set(id, parsed.normalized);
       return next;
     });
   };
 
   const handleSave = async () => {
+    if (priceErrors.size > 0) {
+      toast.error("Corrigez les tarifs signalés avant de sauvegarder.");
+      return;
+    }
     if (editedPrices.size === 0) {
       toast.info("Aucune modification à sauvegarder");
       setEditingFrom(null);
@@ -747,12 +799,12 @@ function PricingTab() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const [id, pricePerHour] of editedPrices.entries()) {
+    for (const [id, pricePerHalfHourCents] of editedPrices.entries()) {
       try {
         const res = await fetch(`/api/admin/pricing/${id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ price: Math.round(pricePerHour * 100 / 2) }),
+          body: JSON.stringify({ price: pricePerHalfHourCents }),
         });
 
         const json = (await res.json()) as { success: boolean; error?: string };
@@ -776,6 +828,8 @@ function PricingTab() {
 
     setEditingFrom(null);
     setEditedPrices(new Map());
+    setPriceDrafts(new Map());
+    setPriceErrors(new Map());
     setSaving(false);
     fetchPricing();
   };
@@ -789,29 +843,53 @@ function PricingTab() {
     if (!active) return;
     const cells = new Map<string, number>();
     for (const row of active.rows) {
-      // Pré-remplir avec les tarifs de la grille active, en €/h
-      cells.set(cellKey(row.studioId, row.groupType, row.isPeak), row.price * 2);
+      // Pré-remplir avec les centimes par demi-heure de la grille active.
+      cells.set(cellKey(row.studioId, row.groupType, row.isPeak), row.pricePerHalfHourCents);
     }
     setScheduleCells(cells);
+    setScheduleDrafts(new Map());
+    setScheduleErrors(new Map());
     setScheduleDate(tomorrowParisISO());
     setScheduleOpen(true);
   };
 
   const handleScheduleCellChange = (key: string, value: string) => {
-    const numValue = parseInt(value, 10);
-    if (value !== "" && (isNaN(numValue) || numValue < 0)) return;
+    const parsed = parsePricePerHour(value);
+    setScheduleDrafts((prev) => {
+      const next = new Map(prev);
+      next.set(key, value);
+      return next;
+    });
+    setScheduleErrors((prev) => {
+      const next = new Map(prev);
+      if (parsed.valid) next.delete(key);
+      else next.set(key, parsed.error);
+      return next;
+    });
     setScheduleCells((prev) => {
       const next = new Map(prev);
-      if (value === "") {
-        next.delete(key);
-      } else {
-        next.set(key, numValue);
-      }
+      if (parsed.valid) next.set(key, parsed.pricePerHalfHourCents);
+      else next.delete(key);
+      return next;
+    });
+  };
+
+  const handleScheduleCellBlur = (key: string, value: string) => {
+    const parsed = parsePricePerHour(value);
+    if (!parsed.valid) return;
+
+    setScheduleDrafts((prev) => {
+      const next = new Map(prev);
+      next.set(key, parsed.normalized);
       return next;
     });
   };
 
   const handleSchedule = async () => {
+    if (scheduleErrors.size > 0) {
+      toast.error("Corrigez les tarifs signalés avant de programmer la grille.");
+      return;
+    }
     if (!scheduleDate) {
       toast.error("Choisissez une date d'entrée en vigueur");
       return;
@@ -831,8 +909,8 @@ function PricingTab() {
     for (const studioId of Object.keys(STUDIOS)) {
       for (const groupType of GROUP_ORDER) {
         for (const isPeak of [false, true]) {
-          const eurPerHour = scheduleCells.get(cellKey(studioId, groupType, isPeak));
-          if (eurPerHour === undefined || eurPerHour < 0) {
+          const pricePerHalfHourCents = scheduleCells.get(cellKey(studioId, groupType, isPeak));
+          if (pricePerHalfHourCents === undefined || pricePerHalfHourCents < 0) {
             toast.error("Tous les tarifs doivent être renseignés (montants positifs)");
             return;
           }
@@ -840,7 +918,7 @@ function PricingTab() {
             studio_id: studioId,
             group_type: groupType,
             is_peak: isPeak ? 1 : 0,
-            price_per_half_hour: Math.round(eurPerHour * 100 / 2),
+            price_per_half_hour: pricePerHalfHourCents,
           });
         }
       }
@@ -919,7 +997,7 @@ function PricingTab() {
                 <X className="mr-2 h-4 w-4" />
                 Annuler
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={handleSave} disabled={saving || priceErrors.size > 0}>
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -975,8 +1053,10 @@ function PricingTab() {
           <StudioPricingTables
             rows={active.rows}
             editing={isEditingActive}
-            editedPrices={editedPrices}
+            priceDrafts={priceDrafts}
+            priceErrors={priceErrors}
             onPriceChange={handlePriceChange}
+            onPriceBlur={handlePriceBlur}
           />
         </section>
       ) : (
@@ -1024,7 +1104,7 @@ function PricingTab() {
                       <X className="mr-1.5 h-3.5 w-3.5" />
                       Annuler
                     </Button>
-                    <Button size="sm" onClick={handleSave} disabled={saving}>
+                    <Button size="sm" onClick={handleSave} disabled={saving || priceErrors.size > 0}>
                       {saving ? (
                         <>
                           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1067,8 +1147,10 @@ function PricingTab() {
             <StudioPricingTables
               rows={version.rows}
               editing={isEditingThis}
-              editedPrices={editedPrices}
+              priceDrafts={priceDrafts}
+              priceErrors={priceErrors}
               onPriceChange={handlePriceChange}
+              onPriceBlur={handlePriceBlur}
             />
           </section>
         );
@@ -1149,17 +1231,28 @@ function PricingTab() {
                             const key = cellKey(studioId, groupType, isPeak);
                             return (
                               <td key={key} className="px-3 py-2">
-                                <div className="flex items-center gap-1.5">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={scheduleCells.get(key) ?? ""}
-                                    onChange={(e) =>
-                                      handleScheduleCellChange(key, e.target.value)
-                                    }
-                                    className="w-20 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                                  />
-                                  <span className="text-xs text-zinc-500">€/h</span>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      aria-label={`Tarif ${studio.name} ${groupType} ${isPeak ? "heures pleines" : "heures creuses"} en euros par heure`}
+                                      aria-invalid={Boolean(scheduleErrors.get(key))}
+                                      aria-describedby={scheduleErrors.has(key) ? `${key}-price-error` : undefined}
+                                      value={scheduleDrafts.get(key) ?? formatHourlyInput(scheduleCells.get(key) ?? 0)}
+                                      onChange={(e) =>
+                                        handleScheduleCellChange(key, e.target.value)
+                                      }
+                                      onBlur={(e) => handleScheduleCellBlur(key, e.target.value)}
+                                      className="w-20 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    />
+                                    <span className="text-xs text-zinc-500">€/h</span>
+                                  </div>
+                                  {scheduleErrors.get(key) && (
+                                    <p id={`${key}-price-error`} className="text-xs text-red-400">
+                                      {scheduleErrors.get(key)}
+                                    </p>
+                                  )}
                                 </div>
                               </td>
                             );
@@ -1171,7 +1264,8 @@ function PricingTab() {
                 </table>
               </div>
               <p className="text-xs text-zinc-500">
-                Pré-remplie avec les tarifs actuellement en vigueur.
+                Pré-remplie avec les tarifs actuellement en vigueur. Saisissez un montant en €/h,
+                avec une virgule ou un point et deux décimales maximum.
               </p>
             </div>
           </div>
@@ -1180,7 +1274,7 @@ function PricingTab() {
             <Button variant="outline" onClick={() => setScheduleOpen(false)} disabled={scheduling}>
               Annuler
             </Button>
-            <Button onClick={handleSchedule} disabled={scheduling}>
+            <Button onClick={handleSchedule} disabled={scheduling || scheduleErrors.size > 0}>
               {scheduling ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

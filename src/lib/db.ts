@@ -36,6 +36,7 @@ import {
 } from "./db-types";
 import { getParisDateISO, getParisNow, getISOWeekStartUTCNoon, isPromoCodeExpired } from "./utils";
 import { ALL_TIME_SLOTS, STUDIO_HOURS, bookingEndMinutes, clockMinutes, type StudioId } from "./booking";
+import { MAX_PRICING_CENTS } from "./pricing";
 import { applyDiscountRounding } from "./booking-totals";
 import { computeClientBookingInsights, type BookingStatSource } from "./user-booking-stats";
 import { addDaysToDateISO, generateLoyaltyCode } from "./loyalty";
@@ -48,6 +49,22 @@ import {
 } from "./ledger";
 
 export { isPromoCodeExpired } from "./utils";
+
+/**
+ * SQL equivalent of bookingEndMinutes(start_time, end_time).
+ *
+ * The alias is supplied by each caller because some queries use a bookings
+ * alias while others select directly from the table. A booking start is
+ * always a plain clock value: unlike an end boundary, 00:00 means minute
+ * zero here.
+ */
+export function bookingDurationExpression(tableAlias = ""): string {
+  const column = (name: "start_time" | "end_time") => tableAlias ? `${tableAlias}.${name}` : name;
+  const start = column("start_time");
+  const startMinutes = sqlClockMinutes(start);
+
+  return `(${sqlBookingEndMinutes(tableAlias || undefined)} - ${startMinutes})`;
+}
 
 export interface PromoCartLine {
   ref: string;
@@ -284,15 +301,18 @@ function endCmp(alias: string): string {
 function sqlClockMinutes(column: string): string {
   return `(CAST(substr(${column}, 1, 2) AS INTEGER) * 60 + CAST(substr(${column}, 4, 2) AS INTEGER))`;
 }
-function sqlBookingEndMinutes(alias: string): string {
-  const start = sqlClockMinutes(`${alias}.start_time`);
-  const end = sqlClockMinutes(`${alias}.end_time`);
-  return `(CASE WHEN ${alias}.end_time = '00:00' THEN 1440 WHEN ${end} <= ${start} THEN ${end} + 1440 ELSE ${end} END)`;
+function sqlBookingEndMinutes(alias?: string): string {
+  const column = (name: "start_time" | "end_time") => alias ? `${alias}.${name}` : name;
+  const startColumn = column("start_time");
+  const endColumn = column("end_time");
+  const start = sqlClockMinutes(startColumn);
+  const end = sqlClockMinutes(endColumn);
+  return `(CASE WHEN ${endColumn} = '00:00' THEN 1440 WHEN ${end} < ${start} THEN ${end} + 1440 ELSE ${end} END)`;
 }
-function sqlBookingStartInstant(alias: string): string {
+export function sqlBookingStartInstant(alias: string): string {
   return `datetime(${alias}.date, '+' || ${sqlClockMinutes(`${alias}.start_time`)} || ' minutes')`;
 }
-function sqlBookingEndInstant(alias: string): string {
+export function sqlBookingEndInstant(alias: string): string {
   return `datetime(${alias}.date, '+' || ${sqlBookingEndMinutes(alias)} || ' minutes')`;
 }
 function candidateRange(date: string, startTime: string, endTime: string): { date: string; start: number; end: number } {
@@ -641,13 +661,7 @@ export const USER_BOOKING_STATS_SQL = `
     COALESCE(SUM(CASE WHEN status != 'cancelled' THEN COALESCE(equipment_price, 0) ELSE 0 END), 0) as total_equipment,
     COALESCE(SUM(CASE WHEN status != 'cancelled' THEN
       (
-        CASE WHEN end_time = '00:00' THEN 1440
-        ELSE (CAST(substr(end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(end_time, 4, 2) AS INTEGER))
-        END
-      ) - (
-        CASE WHEN start_time = '00:00' THEN 1440
-        ELSE (CAST(substr(start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(start_time, 4, 2) AS INTEGER))
-        END
+        ${bookingDurationExpression()}
       )
     ELSE 0 END), 0) as total_minutes,
     SUM(CASE WHEN status != 'cancelled' AND studio_id = 'la-scene' THEN 1 ELSE 0 END) as total_bookings_la_scene,
@@ -1606,6 +1620,11 @@ export const PRICING_AS_OF_SQL =
 export const PRICING_EARLIEST_SQL =
   "SELECT price_per_half_hour FROM pricing WHERE studio_id = ? AND group_type = ? AND is_peak = ? ORDER BY effective_from ASC LIMIT 1";
 
+export function isValidPricingCents(value: unknown): value is number {
+  // Le plafond partagé est de 100 € par demi-heure, soit 200 €/h.
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0 && value <= MAX_PRICING_CENTS;
+}
+
 export async function getPricing(db: D1Database): Promise<DbPricing[]> {
   const result = await db.prepare(
     "SELECT * FROM pricing ORDER BY studio_id, group_type, is_peak, effective_from",
@@ -2496,19 +2515,7 @@ export async function getDashboardStats(
     db.prepare(
       `SELECT
         COALESCE(SUM(
-          (
-            CASE WHEN end_time = '00:00'
-              THEN 1440
-              ELSE (CAST(substr(end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(end_time, 4, 2) AS INTEGER))
-            END
-          )
-          -
-          (
-            CASE WHEN start_time = '00:00'
-              THEN 1440
-              ELSE (CAST(substr(start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(start_time, 4, 2) AS INTEGER))
-            END
-          )
+          ${bookingDurationExpression()}
         ), 0) as minutes
       FROM bookings
       WHERE date >= ? AND date <= ?
@@ -2761,20 +2768,7 @@ export async function getTopClients(
     today,
   });
 
-  const durationExpression = `
-    (
-      CASE WHEN b.end_time = '00:00'
-        THEN 1440
-        ELSE (CAST(substr(b.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.end_time, 4, 2) AS INTEGER))
-      END
-    )
-    -
-    (
-      CASE WHEN b.start_time = '00:00'
-        THEN 1440
-        ELSE (CAST(substr(b.start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(b.start_time, 4, 2) AS INTEGER))
-      END
-    )`;
+  const durationExpression = bookingDurationExpression("b");
   const topClientsSql = (orderBy: string) => `
     SELECT
       b.user_id as user_id,
