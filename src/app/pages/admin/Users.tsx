@@ -322,7 +322,7 @@ export function AdminUsers() {
                 Nouveau client
               </Button>
             </DialogTrigger>
-          <DialogContent className="flex max-h-[90vh] flex-col border-zinc-800 bg-zinc-900 lg:max-w-2xl">
+          <DialogContent className="flex max-h-[90dvh] flex-col border-zinc-800 bg-zinc-900 lg:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Nouveau client</DialogTitle>
               <DialogDescription>
@@ -652,7 +652,7 @@ export function AdminUsers() {
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-touch">
           <table className="w-full min-w-[700px]">
             <thead className="border-b border-zinc-800 bg-zinc-900">
               <tr>

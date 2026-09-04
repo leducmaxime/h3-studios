@@ -256,7 +256,7 @@ export function AdminStudios() {
               <p>Aucun équipement configuré</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto scroll-touch">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">

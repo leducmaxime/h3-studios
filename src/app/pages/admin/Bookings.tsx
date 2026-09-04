@@ -347,13 +347,13 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                 type="date"
                 value={customDateFrom}
                 onChange={(e) => { setCustomDateFrom(e.target.value); setPage(1); }}
-                className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
               />
               <input
                 type="date"
                 value={customDateTo}
                 onChange={(e) => { setCustomDateTo(e.target.value); setPage(1); }}
-                className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
               />
             </>
           )}
@@ -417,7 +417,7 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-touch">
           <table className="w-full min-w-[800px]">
             <thead className="border-b border-zinc-800 bg-zinc-900">
               <tr>

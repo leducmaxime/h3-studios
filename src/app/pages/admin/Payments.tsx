@@ -570,7 +570,7 @@ export function GroupCollectDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!submitting) onOpenChange(next); }}>
-      <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Encaisser un client</DialogTitle>
           <DialogDescription>
@@ -1071,14 +1071,14 @@ export function AdminPayments() {
                 type="date"
                 value={customDateFrom}
                 onChange={e => { setCustomDateFrom(e.target.value); setPage(1); }}
-                className="h-8 text-xs bg-zinc-900 border-zinc-700 w-36"
+                className="h-8 text-base lg:text-sm bg-zinc-900 border-zinc-700 w-36"
               />
               <span className="text-zinc-500 text-xs">→</span>
               <Input
                 type="date"
                 value={customDateTo}
                 onChange={e => { setCustomDateTo(e.target.value); setPage(1); }}
-                className="h-8 text-xs bg-zinc-900 border-zinc-700 w-36"
+                className="h-8 text-base lg:text-sm bg-zinc-900 border-zinc-700 w-36"
               />
             </div>
           )}
@@ -1141,7 +1141,7 @@ export function AdminPayments() {
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-touch">
           <table className="w-full min-w-[700px]">
             <thead className="border-b border-zinc-800 bg-zinc-900">
               <tr>

@@ -856,17 +856,17 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     <div className="border-t border-zinc-800 pt-4">
                       <p className="text-sm font-medium text-zinc-400 mb-3">Adresse</p>
                       <div className="grid gap-2 text-sm">
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           <span className="text-zinc-500">Nom et numéro de rue</span>
-                          <span className="col-span-2">{user.address_line1 || "—"}</span>
+                          <span className="sm:col-span-1 lg:col-span-2">{user.address_line1 || "—"}</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           <span className="text-zinc-500">Code postal</span>
-                          <span className="col-span-2">{user.postal_code || "—"}</span>
+                          <span className="sm:col-span-1 lg:col-span-2">{user.postal_code || "—"}</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           <span className="text-zinc-500">Ville</span>
-                          <span className="col-span-2">{user.city || "—"}</span>
+                          <span className="sm:col-span-1 lg:col-span-2">{user.city || "—"}</span>
                         </div>
                       </div>
                     </div>
@@ -1160,7 +1160,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       Aucun code fidélité n'a encore été généré pour ce client.
                     </p>
                   ) : (
-                    <div className="overflow-x-auto rounded-lg border border-zinc-800">
+                    <div className="overflow-x-auto scroll-touch rounded-lg border border-zinc-800">
                       <table className="w-full">
                         <thead className="border-b border-zinc-800 bg-zinc-900/50">
                           <tr>
@@ -1364,13 +1364,13 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       type="date"
                       value={customDateFrom}
                       onChange={(e) => setCustomDateFrom(e.target.value)}
-                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
                     />
                     <input
                       type="date"
                       value={customDateTo}
                       onChange={(e) => setCustomDateTo(e.target.value)}
-                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
                     />
                   </>
                 )}

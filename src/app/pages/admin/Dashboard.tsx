@@ -410,7 +410,7 @@ function ActivityCalendarWeek({
           Chargement...
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-touch">
           <div className="grid min-w-[760px] grid-cols-7 gap-2">
             {days.map((d) => {
               const items = (byDay.get(d.dateISO) || []).slice(0, 6);
@@ -1751,7 +1751,7 @@ export function AdminDashboard() {
                   type="date"
                   value={customDateFrom}
                   onChange={(e) => setCustomDateFrom(e.target.value)}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
                 />
                 <span className="text-xs text-zinc-500">→</span>
                 <input
@@ -1759,7 +1759,7 @@ export function AdminDashboard() {
                   value={customDateTo}
                   min={customDateFrom}
                   onChange={(e) => setCustomDateTo(e.target.value)}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
                 />
               </>
             )}

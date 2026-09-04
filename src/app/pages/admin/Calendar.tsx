@@ -735,7 +735,7 @@ export function AdminCalendar() {
     const bands = hourBands(scale);
 
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto scroll-touch">
         <div className="min-w-[900px] lg:min-w-[1100px]">
           <div className="grid grid-cols-[52px_repeat(7,_minmax(0,1fr))] border-b border-zinc-800">
             <div className="px-2 py-3 text-xs font-medium text-zinc-400">Studio</div>
@@ -1010,7 +1010,7 @@ export function AdminCalendar() {
     const bands = hourBands(scale);
 
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto scroll-touch">
         <div className="min-w-[350px]">
           {/* Header with date */}
           <div className={`border-b border-zinc-800 p-4 text-center ${isToday ? "bg-primary/5" : ""}`}>
@@ -1233,7 +1233,7 @@ export function AdminCalendar() {
     };
 
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto scroll-touch">
         <div className="min-w-[350px] lg:min-w-[700px]">
           {/* Day names header */}
           <div className="grid grid-cols-7 border-b border-zinc-800">
@@ -1631,7 +1631,7 @@ export function AdminCalendar() {
       {/* Navigation + Tabs — pinned under the admin top bar (h-16) on mobile
           so the date, prev/next and view switch stay visible while scanning.
           Full-bleed via -mx-4 to offset main's padding. */}
-      <div className="sticky top-16 z-20 -mx-4 flex items-center gap-1 border-b border-zinc-800 bg-zinc-950/90 px-3 py-2 backdrop-blur lg:static lg:mx-0 lg:justify-between lg:gap-3 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+      <div className="sticky top-16 z-20 -mx-4 flex items-center gap-1 border-b border-zinc-800 bg-zinc-950/90 px-3 py-2 pl-safe pr-safe backdrop-blur lg:static lg:mx-0 lg:justify-between lg:gap-3 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
         <div className="flex items-center gap-1 lg:gap-2">
           <button
             type="button"
@@ -1697,7 +1697,7 @@ export function AdminCalendar() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
-        className="rounded-xl border border-zinc-800 bg-zinc-900"
+        className="touch-none rounded-xl border border-zinc-800 bg-zinc-900"
       >
         {view === "day" && renderDayView()}
         {view === "week" && (isMobile ? renderDayView() : renderWeekView())}
@@ -1722,7 +1722,7 @@ export function AdminCalendar() {
 
       {/* Reschedule dialog */}
       <Dialog open={calRescheduleOpen} onOpenChange={setCalRescheduleOpen}>
-        <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="border-zinc-800 bg-zinc-900 lg:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Déplacer la réservation</DialogTitle>
             <DialogDescription>{selectedBooking?.booking_ref}</DialogDescription>

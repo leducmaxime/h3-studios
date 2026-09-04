@@ -455,7 +455,7 @@ export function CancelBookingDialog({
       }}
     >
       <DialogContent
-        className={contentClassName ?? "border-zinc-800 bg-zinc-900 lg:max-w-lg max-h-[85vh] overflow-y-auto"}
+        className={contentClassName ?? "border-zinc-800 bg-zinc-900 lg:max-w-lg max-h-[85dvh] overflow-y-auto scroll-touch"}
       >
         {result ? (
           <>
@@ -875,7 +875,7 @@ export function RefundPaymentDialog({
         if (!submitting) onOpenChange(o);
       }}
     >
-      <DialogContent className="border-zinc-800 bg-zinc-900 max-h-[85vh] overflow-y-auto">
+      <DialogContent className="border-zinc-800 bg-zinc-900 max-h-[85dvh] overflow-y-auto scroll-touch">
         <DialogHeader>
           <DialogTitle>Rembourser le paiement</DialogTitle>
           <DialogDescription>

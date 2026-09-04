@@ -944,14 +944,14 @@ export function AdminAuditLog() {
             aria-label="Date de début"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
           />
           <input
             type="date"
             aria-label="Date de fin"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
           />
           {hasActiveFilters && (
             <Button
@@ -997,7 +997,7 @@ export function AdminAuditLog() {
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-touch">
           <table className="w-full min-w-[800px]">
             <thead className="border-b border-zinc-800 bg-zinc-900">
               <tr>

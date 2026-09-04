@@ -98,7 +98,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   };
 
   return (
-    <div className="flex min-h-screen bg-zinc-950">
+    <div className="flex min-h-dvh bg-zinc-950">
       <button
         type="button"
         className={`fixed inset-0 z-40 bg-black/50 transition-opacity lg:hidden ${
@@ -109,7 +109,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zinc-900 transition-all duration-200 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-zinc-900 pt-safe pb-safe pl-safe transition-all duration-200 lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } ${sidebarCollapsed ? "w-16" : "w-56"}`}
       >
@@ -142,7 +142,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </button>
         </div>
 
-        <nav className={`flex-1 p-2 ${sidebarCollapsed ? "overflow-visible" : "overflow-y-auto"}`}>
+        <nav className={`flex-1 p-2 ${sidebarCollapsed ? "overflow-visible" : "overflow-y-auto scroll-touch"}`}>
           <ul className="space-y-1">
             {navItems.map((item) => {
               const isActive = item.exact
@@ -197,7 +197,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           sidebarCollapsed ? "lg:pl-16" : "lg:pl-56"
         }`}
       >
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-zinc-800 bg-zinc-900/90 px-4 backdrop-blur-md lg:px-6">
+        {/* min-h (au lieu de h-16) + pt-safe : la barre grandit pour dégager
+            l'encoche/Dynamic Island en paysage au lieu d'écraser son contenu.
+            pl-safe/pr-safe sont combinés en `calc()` avec le padding existant
+            (px-4/lg:px-6) plutôt que d'utiliser les classes utilitaires
+            `.pl-safe`/`.pr-safe` seules, pour ne pas perdre ce padding.
+            will-change + translateZ : évite le scintillement connu de
+            `backdrop-filter` sur un élément sticky pendant le scroll iOS. */}
+        <header className="sticky top-0 z-30 flex min-h-16 items-center gap-4 border-b border-zinc-800 bg-zinc-900/95 lg:bg-zinc-900/90 pt-safe pl-[calc(1rem_+_env(safe-area-inset-left,0px))] pr-[calc(1rem_+_env(safe-area-inset-right,0px))] backdrop-blur-md [transform:translateZ(0)] will-change-transform lg:px-6">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -242,8 +249,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
         {/* No overflow here: the body is the scroller, which keeps the sticky
             header anchored to the viewport and lets sticky bars inside admin
-            pages (e.g. calendar controls) stick below it. */}
-        <main className="flex-1 p-4 lg:p-6">
+            pages (e.g. calendar controls) stick below it.
+            pb is combined with the home-indicator inset via calc() so page
+            content (and any bottom action bar inside admin pages) never
+            ends up flush against — or hidden under — the iOS home bar. */}
+        <main className="flex-1 p-4 pb-[calc(1rem_+_env(safe-area-inset-bottom,0px))] lg:p-6">
           {children}
         </main>
       </div>

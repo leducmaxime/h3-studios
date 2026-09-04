@@ -256,7 +256,7 @@ export function AdminBlockedSlots() {
 
     return (
       <div className={`overflow-hidden rounded-xl border ${border} ${bg}`}>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-touch">
           <table className="w-full min-w-[900px]">
             <thead className={`border-b ${border} bg-white/15`}>
               <tr>
@@ -358,14 +358,14 @@ export function AdminBlockedSlots() {
                     aria-label="Date de début"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
                   />
                   <input
                     type="date"
                     aria-label="Date de fin"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-xs focus:border-primary focus:outline-none"
+                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
                   />
                   <Button
                     variant="ghost"
@@ -480,7 +480,7 @@ export function AdminBlockedSlots() {
                 id="date"
                 type="date"
                 min={getMinDate()}
-                className="border-white/10 bg-white/15 text-white"
+                className="border-white/10 bg-white/15 text-base lg:text-sm text-white"
                 value={formData.date}
                 onChange={(e) => {
                   const nextDate = e.target.value;
@@ -498,7 +498,7 @@ export function AdminBlockedSlots() {
                 id="dateTo"
                 type="date"
                 min={formData.date || getMinDate()}
-                className="border-white/10 bg-white/15 text-white"
+                className="border-white/10 bg-white/15 text-base lg:text-sm text-white"
                 value={formData.dateTo}
                 onChange={(e) => setFormData({ ...formData, dateTo: e.target.value })}
               />

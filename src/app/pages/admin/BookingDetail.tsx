@@ -567,7 +567,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
             </div>
             <div className="p-6">
               {/* Infos principales */}
-              <div className="grid grid-cols-3 gap-6 mb-8">
+              <div className="grid grid-cols-1 gap-6 mb-8 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Studio</p>
                   <p className="text-lg font-semibold">{studioLabel(booking.studio_id)}</p>
@@ -1202,7 +1202,7 @@ export function AdminBookingDetail({ bookingId }: BookingDetailProps) {
 
       {/* Reschedule Dialog */}
       <Dialog open={rescheduleOpen} onOpenChange={(open) => { if (!open) { setRescheduleOpen(false); setRescheduleError(""); } }}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 lg:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-zinc-900 border-zinc-800 lg:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Déplacer la réservation</DialogTitle>
             <DialogDescription>Choisissez une nouvelle date et un nouveau créneau.</DialogDescription>

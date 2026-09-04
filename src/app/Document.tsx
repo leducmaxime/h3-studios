@@ -149,7 +149,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce,
     <html lang="fr" className="dark">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         
         <title>{seo.title}</title>
         <meta name="title" content={seo.title} />
@@ -218,7 +218,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce,
 
         <link rel="modulepreload" href="/src/client.tsx" />
       </head>
-      <body className="flex min-h-screen flex-col bg-[url('/images/background.webp')] bg-[length:500px] bg-repeat font-secondary">
+      <body className="flex min-h-dvh flex-col bg-[url('/images/background.webp')] bg-[length:500px] bg-repeat font-secondary">
         <noscript>
           <iframe
             src="https://www.googletagmanager.com/ns.html?id=G-B3TYEET971"
@@ -234,7 +234,7 @@ export const Document: React.FC<DocumentProps> = ({ children, path = "/", nonce,
             `sticky` de l'admin s'ancrent bien sur le document. */}
         <div
           id="root"
-          className="flex min-h-screen w-screen flex-col text-white"
+          className="flex min-h-dvh w-screen flex-col text-white"
         >
           {children}
         </div>

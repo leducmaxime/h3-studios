@@ -349,7 +349,7 @@ function PublicHolidaysSection() {
             aria-label="Date du jour férié"
             value={newDate}
             onChange={(e) => setNewDate(e.target.value)}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-base lg:text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <Button size="sm" onClick={handleAdd} disabled={saving || !newDate}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -590,7 +590,7 @@ function StudioPricingTables({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scroll-touch">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
@@ -1098,7 +1098,7 @@ function PricingTab() {
                 min={tomorrowParisISO()}
                 value={scheduleDate}
                 onChange={(e) => setScheduleDate(e.target.value)}
-                className="w-auto"
+                className="w-auto text-base lg:text-sm"
               />
               <p className="text-xs text-zinc-500">
                 La date doit être postérieure à aujourd&apos;hui.
@@ -1107,7 +1107,7 @@ function PricingTab() {
 
             <div className="space-y-2">
               <Label>Tarifs de la nouvelle grille (€ par heure)</Label>
-              <div className="overflow-x-auto rounded-lg border border-zinc-800">
+              <div className="overflow-x-auto scroll-touch rounded-lg border border-zinc-800">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-800 text-left text-xs text-zinc-400">
@@ -1354,7 +1354,7 @@ function PromoCodeDialog({
           </div>
 
           {/* Type + Value */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Type de réduction</Label>
               <Select
@@ -1658,7 +1658,7 @@ function PromoCodesTab() {
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto scroll-touch">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
@@ -1816,7 +1816,7 @@ function PromoCodesTab() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto scroll-touch">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
