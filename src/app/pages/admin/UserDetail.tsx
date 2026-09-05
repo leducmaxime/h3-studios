@@ -1160,8 +1160,8 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       Aucun code fidélité n'a encore été généré pour ce client.
                     </p>
                   ) : (
-                    <div className="overflow-x-auto scroll-touch rounded-lg border border-zinc-800">
-                      <table className="w-full">
+                    <div className="overflow-x-auto scroll-x-touch rounded-lg border border-zinc-800">
+                      <table className="w-full min-w-[600px]">
                         <thead className="border-b border-zinc-800 bg-zinc-900/50">
                           <tr>
                             <th className="px-4 py-2.5 text-left text-xs font-medium text-zinc-400">Code</th>
@@ -1451,87 +1451,89 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 <p className="text-zinc-400">Aucune réservation trouvée</p>
               ) : (
                 <div className="overflow-hidden rounded-lg border border-zinc-800">
-                  <table className="w-full">
-                    <thead className="border-b border-zinc-800 bg-zinc-900/50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "date") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("date"); } }}>
-                          Date {sortBy === "date" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "start_time") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("start_time"); } }}>
-                          Créneau {sortBy === "start_time" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Studio</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "status") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("status"); } }}>
-                          Statut {sortBy === "status" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "payment_status") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("payment_status"); } }}>
-                          Paiement {sortBy === "payment_status" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "total_price") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("total_price"); } }}>
-                          Montant {sortBy === "total_price" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800">
-                      {sortedBookings.map((b) => (
-                        <tr key={b.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
-                          <td className="px-4 py-3">
-                            <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline block">
-                              {b.booking_ref}
-                            </a>
-                            <span className="text-xs text-zinc-500">{formatDate(new Date(b.date + "T00:00:00"), "short")}</span>
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                             {b.start_time} - {b.end_time}
-                             <span className="ml-1 text-xs text-zinc-500">({formatDuration(b.start_time, b.end_time)})</span>
-                           </td>
-                          <td className="px-4 py-3 text-sm">{studioLabel(b.studio_id)}</td>
-                          <td className="px-4 py-3 text-sm">{groupTypeLabel(b.group_type)}</td>
-                          <td className="px-4 py-3">
-                            <Badge className={`text-xs ${
-                              b.status === 'confirmed' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                              b.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
-                              b.status === 'cancelled' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                              'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-                            }`}>
-                              {bookingStatusLabel(b.status)}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3">
-                            {(() => {
-                              const payDisplay = getDisplayPaymentStatusFromSummary(
-                                b.status,
-                                b.payment_status,
-                                b.total_collected ?? b.total_paid ?? 0,
-                                b.total_refunded ?? 0,
-                                { keepBalanceDue: isKeepBalanceDue(b), remaining: b.remaining ?? 0 },
-                              );
-                              if (payDisplay === "cancelled") {
-                                return <span className="text-zinc-600">—</span>;
-                              }
-                              if (payDisplay === "paid-before-cancel" || payDisplay === "refunded") {
-                                return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">{displayPaymentStatusLabel(payDisplay)}</Badge>;
-                              }
-                              return <BookingPaymentState remaining={b.remaining ?? 0} size="sm" />;
-                            })()}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {b.status === "cancelled" && !isKeepBalanceDue(b) ? (
-                              <span className="font-medium text-zinc-600">—</span>
-                            ) : (
-                              <>
-                                <span className="font-medium">{formatPrice(b.remaining ?? getBookingAmountDue(b))}</span>
-                                {b.promo_discount > 0 && (
-                                  <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
-                                )}
-                              </>
-                            )}
-                          </td>
+                  <div className="overflow-x-auto scroll-x-touch">
+                    <table className="w-full min-w-[760px]">
+                      <thead className="border-b border-zinc-800 bg-zinc-900/50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "date") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("date"); } }}>
+                            Date {sortBy === "date" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "start_time") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("start_time"); } }}>
+                            Créneau {sortBy === "start_time" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Studio</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "status") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("status"); } }}>
+                            Statut {sortBy === "status" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "payment_status") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("payment_status"); } }}>
+                            Paiement {sortBy === "payment_status" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                          </th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400 cursor-pointer hover:text-zinc-200" onClick={() => { if (sortBy === "total_price") { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); } else { setSortBy("total_price"); } }}>
+                            Montant {sortBy === "total_price" && (sortOrder === "asc" ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />)}
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800">
+                        {sortedBookings.map((b) => (
+                          <tr key={b.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
+                            <td className="px-4 py-3">
+                              <a href={`/admin/bookings/${b.id}`} className="font-mono text-sm text-primary hover:underline block">
+                                {b.booking_ref}
+                              </a>
+                              <span className="text-xs text-zinc-500">{formatDate(new Date(b.date + "T00:00:00"), "short")}</span>
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                               {b.start_time} - {b.end_time}
+                               <span className="ml-1 text-xs text-zinc-500">({formatDuration(b.start_time, b.end_time)})</span>
+                             </td>
+                            <td className="px-4 py-3 text-sm">{studioLabel(b.studio_id)}</td>
+                            <td className="px-4 py-3 text-sm">{groupTypeLabel(b.group_type)}</td>
+                            <td className="px-4 py-3">
+                              <Badge className={`text-xs ${
+                                b.status === 'confirmed' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                                b.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                                b.status === 'cancelled' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                                'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                              }`}>
+                                {bookingStatusLabel(b.status)}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3">
+                              {(() => {
+                                const payDisplay = getDisplayPaymentStatusFromSummary(
+                                  b.status,
+                                  b.payment_status,
+                                  b.total_collected ?? b.total_paid ?? 0,
+                                  b.total_refunded ?? 0,
+                                  { keepBalanceDue: isKeepBalanceDue(b), remaining: b.remaining ?? 0 },
+                                );
+                                if (payDisplay === "cancelled") {
+                                  return <span className="text-zinc-600">—</span>;
+                                }
+                                if (payDisplay === "paid-before-cancel" || payDisplay === "refunded") {
+                                  return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs">{displayPaymentStatusLabel(payDisplay)}</Badge>;
+                                }
+                                return <BookingPaymentState remaining={b.remaining ?? 0} size="sm" />;
+                              })()}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {b.status === "cancelled" && !isKeepBalanceDue(b) ? (
+                                <span className="font-medium text-zinc-600">—</span>
+                              ) : (
+                                <>
+                                  <span className="font-medium">{formatPrice(b.remaining ?? getBookingAmountDue(b))}</span>
+                                  {b.promo_discount > 0 && (
+                                    <p className="text-xs text-emerald-500">-{formatPrice(b.promo_discount)}</p>
+                                  )}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -1545,53 +1547,55 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
               <p className="text-zinc-400">Aucun paiement enregistré</p>
             ) : (
               <div className="overflow-hidden rounded-lg border border-zinc-800">
-                <table className="w-full">
-                  <thead className="border-b border-zinc-800 bg-zinc-900/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Réservation</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Moyen</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Statut</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400">Montant</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800">
-                    {payments.map((payment) => (
-                      <tr key={payment.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
-                        <td className="px-4 py-3 text-sm">
-                          {payment.created_at ? formatDate(new Date(payment.created_at), "short") : "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          {payment.booking_refs ? (
-                            <span className="font-mono text-sm text-primary">
-                              {payment.booking_refs}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-zinc-500">—</span>
-                          )}
-                          {payment.booking_date && (
-                            <p className="text-xs text-zinc-500">{formatDate(new Date(payment.booking_date + "T00:00:00"), "short")}</p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">{paymentMethodLabelShort(payment.method)}</td>
-                        <td className="px-4 py-3 text-sm">{paymentTypeLabel(payment.payment_type)}</td>
-                        <td className="px-4 py-3">
-                          <Badge className={`text-xs ${
-                            payment.status === "settled" && payment.amount > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
-                            payment.status === "pending" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
-                            "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
-                          }`}>
-                            {paymentRecordStatusLabel(payment.status, { amount: payment.amount, refundableAmount: payment.refundable_amount })}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <span className="font-medium">{formatPrice(payment.amount)}</span>
-                        </td>
+                <div className="overflow-x-auto scroll-x-touch">
+                  <table className="w-full min-w-[680px]">
+                    <thead className="border-b border-zinc-800 bg-zinc-900/50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Réservation</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Moyen</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400">Statut</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-zinc-400">Montant</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                      {payments.map((payment) => (
+                        <tr key={payment.id} className="bg-zinc-900/30 hover:bg-zinc-800/50 transition-colors">
+                          <td className="px-4 py-3 text-sm">
+                            {payment.created_at ? formatDate(new Date(payment.created_at), "short") : "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            {payment.booking_refs ? (
+                              <span className="font-mono text-sm text-primary">
+                                {payment.booking_refs}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-zinc-500">—</span>
+                            )}
+                            {payment.booking_date && (
+                              <p className="text-xs text-zinc-500">{formatDate(new Date(payment.booking_date + "T00:00:00"), "short")}</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm">{paymentMethodLabelShort(payment.method)}</td>
+                          <td className="px-4 py-3 text-sm">{paymentTypeLabel(payment.payment_type)}</td>
+                          <td className="px-4 py-3">
+                            <Badge className={`text-xs ${
+                              payment.status === "settled" && payment.amount > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" :
+                              payment.status === "pending" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
+                              "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+                            }`}>
+                              {paymentRecordStatusLabel(payment.status, { amount: payment.amount, refundableAmount: payment.refundable_amount })}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="font-medium">{formatPrice(payment.amount)}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

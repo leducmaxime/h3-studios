@@ -410,7 +410,7 @@ function ActivityCalendarWeek({
           Chargement...
         </div>
       ) : (
-        <div className="overflow-x-auto scroll-touch">
+        <div className="overflow-x-auto scroll-x-touch">
           <div className="grid min-w-[760px] grid-cols-7 gap-2">
             {days.map((d) => {
               const items = (byDay.get(d.dateISO) || []).slice(0, 6);

@@ -306,7 +306,9 @@
    Contrat partagé avec le @fixer qui applique ces classes sur les pages
    admin (src/app/pages/admin/**). Noms figés, ne pas renommer :
      .pt-safe / .pb-safe / .pl-safe / .pr-safe → padding = env(safe-area-inset-*)
-     .scroll-touch → momentum scroll iOS + containment du scroll
+     .scroll-touch → momentum scroll iOS + containment du scroll (Y ET X)
+     .scroll-x-touch → momentum scroll iOS pour un scroller HORIZONTAL,
+       sans bloquer le scroll vertical de la page
 
    `env(safe-area-inset-*)` vaut 0px sur tout appareil sans encoche/Dynamic
    Island (donc sur desktop et la plupart des Android) : ces classes sont
@@ -319,7 +321,23 @@
    ajoutée plus tard sur le même élément (ex: `p-4 pt-safe`). Là où un
    padding de base existe déjà sur le MÊME côté (ex: header `px-4`), on
    combine avec `calc()` directement dans le composant plutôt que d'utiliser
-   ces classes seules, pour ne pas perdre le padding existant. */
+   ces classes seules, pour ne pas perdre le padding existant.
+
+   `.scroll-touch` vs `.scroll-x-touch` : `overscroll-behavior` (raccourci)
+   met `contain` sur X ET Y. Sur un élément qui n'a QUE `overflow-x: auto`
+   (ex: wrapper de tableau `overflow-x-auto`), le CSS force quand même
+   `overflow-y` à `auto` (règle de calcul des paires overflow-x/overflow-y),
+   ce qui en fait un scroll container sur les deux axes — même sans
+   dépassement vertical réel. Avec `overscroll-behavior-y: contain`, un
+   swipe vertical démarré sur cet élément ne peut plus être chaîné (délégué)
+   au scroll de la page (voir `AdminLayout.tsx` : c'est le body qui scrolle).
+   Résultat sur mobile : la page se bloque dès qu'on touche un tableau ou
+   le calendrier. `.scroll-x-touch` ne contient que l'axe X et laisse l'axe Y
+   en `auto` pour que le swipe vertical remonte normalement à la page.
+   → `.scroll-touch` reste réservé aux scrollers VERTICAUX (sidebar nav,
+   dialogs, dropdowns, select) où `overscroll-behavior-y: contain` est
+   voulu. `.scroll-x-touch` est pour les wrappers `overflow-x-auto`
+   (tableaux, calendrier). Ne pas les inverser. */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
 }
@@ -336,5 +354,11 @@
 .scroll-touch {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+.scroll-x-touch {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
 }
 /* ========================================================================= */

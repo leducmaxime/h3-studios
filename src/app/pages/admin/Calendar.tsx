@@ -735,7 +735,7 @@ export function AdminCalendar() {
     const bands = hourBands(scale);
 
     return (
-      <div className="overflow-x-auto scroll-touch">
+      <div className="overflow-x-auto scroll-x-touch">
         <div className="min-w-[900px] lg:min-w-[1100px]">
           <div className="grid grid-cols-[52px_repeat(7,_minmax(0,1fr))] border-b border-zinc-800">
             <div className="px-2 py-3 text-xs font-medium text-zinc-400">Studio</div>
@@ -1010,7 +1010,7 @@ export function AdminCalendar() {
     const bands = hourBands(scale);
 
     return (
-      <div className="overflow-x-auto scroll-touch">
+      <div className="overflow-x-auto scroll-x-touch">
         <div className="min-w-[350px]">
           {/* Header with date */}
           <div className={`border-b border-zinc-800 p-4 text-center ${isToday ? "bg-primary/5" : ""}`}>
@@ -1233,7 +1233,7 @@ export function AdminCalendar() {
     };
 
     return (
-      <div className="overflow-x-auto scroll-touch">
+      <div className="overflow-x-auto scroll-x-touch">
         <div className="min-w-[350px] lg:min-w-[700px]">
           {/* Day names header */}
           <div className="grid grid-cols-7 border-b border-zinc-800">

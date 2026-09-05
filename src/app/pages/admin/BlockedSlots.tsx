@@ -256,7 +256,7 @@ export function AdminBlockedSlots() {
 
     return (
       <div className={`overflow-hidden rounded-xl border ${border} ${bg}`}>
-        <div className="overflow-x-auto scroll-touch">
+        <div className="overflow-x-auto scroll-x-touch">
           <table className="w-full min-w-[900px]">
             <thead className={`border-b ${border} bg-white/15`}>
               <tr>

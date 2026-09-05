@@ -626,8 +626,8 @@ function StudioPricingTables({
             </div>
           </div>
 
-          <div className="overflow-x-auto scroll-touch">
-            <table className="w-full">
+          <div className="overflow-x-auto scroll-x-touch">
+            <table className="w-full min-w-[560px]">
               <thead>
                 <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
                   <th className="px-6 py-3 font-medium">Type de groupe</th>
@@ -1189,8 +1189,8 @@ function PricingTab() {
 
             <div className="space-y-2">
               <Label>Tarifs de la nouvelle grille (€ par heure)</Label>
-              <div className="overflow-x-auto scroll-touch rounded-lg border border-zinc-800">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto scroll-x-touch rounded-lg border border-zinc-800">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="border-b border-zinc-800 text-left text-xs text-zinc-400">
                       <th className="px-3 py-2 font-medium">Studio</th>
@@ -1752,8 +1752,8 @@ function PromoCodesTab() {
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto scroll-touch">
-                <table className="w-full">
+              <div className="overflow-x-auto scroll-x-touch">
+                <table className="w-full min-w-[900px]">
                   <thead>
                     <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
                       <th className="px-6 py-3 font-medium">Code</th>
@@ -1910,8 +1910,8 @@ function PromoCodesTab() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto scroll-touch">
-                <table className="w-full">
+              <div className="overflow-x-auto scroll-x-touch">
+                <table className="w-full min-w-[720px]">
                   <thead>
                     <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
                       <th className="px-6 py-3 font-medium">Code</th>

@@ -256,8 +256,8 @@ export function AdminStudios() {
               <p>Aucun équipement configuré</p>
             </div>
           ) : (
-            <div className="overflow-x-auto scroll-touch">
-              <table className="w-full">
+            <div className="overflow-x-auto scroll-x-touch">
+              <table className="w-full min-w-[640px]">
                 <thead>
                   <tr className="border-b border-zinc-800 text-left text-sm text-zinc-400">
                     <th className="px-4 py-3 font-medium">Nom</th>

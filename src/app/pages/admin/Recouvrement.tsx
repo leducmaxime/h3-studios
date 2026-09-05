@@ -423,7 +423,7 @@ function BookingsTable({
 }) {
   return (
     <div className={compact ? "" : "overflow-hidden rounded-xl border border-zinc-800"}>
-      <div className="overflow-x-auto scroll-touch">
+      <div className="overflow-x-auto scroll-x-touch">
         <table className="w-full min-w-[720px] text-left">
           <thead className="border-b border-zinc-800 bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
             <tr>

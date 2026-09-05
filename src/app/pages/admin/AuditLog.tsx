@@ -997,7 +997,7 @@ export function AdminAuditLog() {
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <div className="overflow-x-auto scroll-touch">
+        <div className="overflow-x-auto scroll-x-touch">
           <table className="w-full min-w-[800px]">
             <thead className="border-b border-zinc-800 bg-zinc-900">
               <tr>
