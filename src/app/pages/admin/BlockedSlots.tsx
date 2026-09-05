@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { FilterBar, FilterBarRow, FilterBarSort, filterControlClass, filterDateInputClass } from "@/components/admin/FilterBar";
 import { formatDateISO } from "@/lib/utils";
 import { STUDIOS, ALL_TIME_SLOTS, formatDate, type StudioId } from "@/lib/booking";
 import { STUDIO_LABELS, studioLabel } from "@/lib/labels";
@@ -333,12 +334,12 @@ export function AdminBlockedSlots() {
         <>
           {slots.length > 0 && (
             <div className="space-y-4">
-              <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
-                <div className="flex flex-wrap items-center gap-1.5">
+              <FilterBar>
+                <FilterBarRow>
                   <select
                     value={periodFilter}
                     onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)}
-                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                    className={`${filterControlClass} w-full lg:w-auto`}
                   >
                     <option value="upcoming">À venir</option>
                     <option value="past">Passés</option>
@@ -347,7 +348,7 @@ export function AdminBlockedSlots() {
                   <select
                     value={studioFilter}
                     onChange={(e) => setStudioFilter(e.target.value as StudioId | "all")}
-                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                    className={`${filterControlClass} w-full lg:w-auto`}
                   >
                     <option value="all">Studio</option>
                     <option value="la-scene">{STUDIO_LABELS["la-scene"]}</option>
@@ -358,19 +359,19 @@ export function AdminBlockedSlots() {
                     aria-label="Date de début"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+                    className={`${filterDateInputClass} w-full lg:w-auto`}
                   />
                   <input
                     type="date"
                     aria-label="Date de fin"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+                    className={`${filterDateInputClass} w-full lg:w-auto`}
                   />
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-[10px] text-zinc-400"
+                    className="col-span-2 h-9 px-2 text-xs text-zinc-400 lg:col-span-1 lg:h-7 lg:text-[10px]"
                     onClick={() => {
                       setPeriodFilter("upcoming");
                       setStudioFilter("all");
@@ -382,12 +383,11 @@ export function AdminBlockedSlots() {
                   >
                     Effacer
                   </Button>
-                  <div className="ml-auto flex items-center gap-1">
-                    <span className="text-[10px] text-zinc-500">Tri</span>
+                  <FilterBarSort>
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                      className={`${filterControlClass} w-full lg:w-auto`}
                     >
                       <option value="date">Date</option>
                       <option value="studio">Studio</option>
@@ -397,14 +397,14 @@ export function AdminBlockedSlots() {
                     <select
                       value={sortOrder}
                       onChange={(e) => setSortOrder(e.target.value as typeof sortOrder)}
-                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                      className={`${filterControlClass} w-full lg:w-auto`}
                     >
                       <option value="asc">↑</option>
                       <option value="desc">↓</option>
                     </select>
-                  </div>
-                </div>
-              </div>
+                  </FilterBarSort>
+                </FilterBarRow>
+              </FilterBar>
 
               <div className="flex items-center justify-between">
                 <p className="text-sm text-zinc-400">

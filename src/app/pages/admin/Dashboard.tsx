@@ -1664,7 +1664,7 @@ export function AdminDashboard() {
           <p className="text-zinc-400">Vue d&apos;ensemble de votre activité</p>
         </div>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-row lg:flex-wrap lg:items-center">
             <Select value={rangeMode} onValueChange={(v) => {
               const mode = v as "today" | "week" | "month" | "year" | "custom";
               if (mode === "week") {
@@ -1674,7 +1674,7 @@ export function AdminDashboard() {
               }
               setRangeMode(mode);
             }}>
-              <SelectTrigger className="w-[130px]">
+              <SelectTrigger className="col-span-2 w-full lg:col-span-1 lg:w-[130px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1688,7 +1688,7 @@ export function AdminDashboard() {
 
             {rangeMode === "month" && (
               <Select value={reportMonth} onValueChange={setReportMonth}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-full lg:w-[140px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1704,7 +1704,7 @@ export function AdminDashboard() {
             {rangeMode === "week" && (
               <>
                 <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-                  <SelectTrigger className="w-[160px]">
+                  <SelectTrigger className="w-full lg:w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1716,7 +1716,7 @@ export function AdminDashboard() {
                   </SelectContent>
                 </Select>
                 <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger className="w-[100px]">
+                  <SelectTrigger className="w-full lg:w-[100px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1732,7 +1732,7 @@ export function AdminDashboard() {
 
             {rangeMode === "year" && (
               <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-[100px]">
+                <SelectTrigger className="w-full lg:w-[100px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1746,12 +1746,12 @@ export function AdminDashboard() {
             )}
 
             {rangeMode === "custom" && (
-              <>
+              <div className="col-span-2 flex items-center gap-2 lg:col-span-1">
                 <input
                   type="date"
                   value={customDateFrom}
                   onChange={(e) => setCustomDateFrom(e.target.value)}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+                  className="h-9 flex-1 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base focus:border-primary focus:outline-none lg:h-7 lg:flex-none lg:text-sm"
                 />
                 <span className="text-xs text-zinc-500">→</span>
                 <input
@@ -1759,9 +1759,9 @@ export function AdminDashboard() {
                   value={customDateTo}
                   min={customDateFrom}
                   onChange={(e) => setCustomDateTo(e.target.value)}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+                  className="h-9 flex-1 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base focus:border-primary focus:outline-none lg:h-7 lg:flex-none lg:text-sm"
                 />
-              </>
+              </div>
             )}
 
             <Button
@@ -1770,9 +1770,10 @@ export function AdminDashboard() {
               onClick={handleGenerateReport}
               disabled={!canExportReport || exporting || !stats}
               title="Exporter le rapport de la période affichée"
-              className="border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="col-span-2 gap-2 border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed lg:col-span-1"
             >
               <Download className={`h-4 w-4 ${exporting ? "animate-pulse" : ""}`} />
+              <span className="lg:hidden">Exporter le rapport</span>
             </Button>
           </div>
           <a

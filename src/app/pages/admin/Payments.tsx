@@ -14,7 +14,6 @@ import {
   RefreshCw,
   MoreHorizontal,
   Loader2,
-  Search,
   Ban,
   Download,
 } from "lucide-react";
@@ -52,6 +51,7 @@ import { formatTaxBreakdown } from "@/lib/tax";
 import { exportAllocationsCSV, exportCollectionsCSV, type AllocationExportRow } from "@/lib/export";
 import { RefundPaymentDialog, VoidPaymentDialog } from "@/components/admin/refund";
 import { BookingPaymentState } from "@/components/admin/BookingPaymentState";
+import { FilterBar, FilterBarRow, FilterBarSort, FilterSearchInput, filterControlClass, filterDateInputClass } from "@/components/admin/FilterBar";
 import { paymentRecordStatusLabel, paymentMethodLabelShort, paymentTypeLabel } from "@/lib/labels";
 import { allocateCollectPayments } from "@/lib/recouvrement-collect";
 import type { DbPayment, OverdueBooking } from "@/lib/db-types";
@@ -1042,22 +1042,17 @@ export function AdminPayments() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="relative w-48">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Rechercher..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
-            />
-          </div>
+      <FilterBar>
+        <FilterBarRow>
+          <FilterSearchInput
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Rechercher..."
+          />
           <select
             value={dateFilter}
             onChange={(e) => { setDateFilter(e.target.value as typeof dateFilter); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Date</option>
             <option value="today">Auj.</option>
@@ -1066,26 +1061,26 @@ export function AdminPayments() {
             <option value="custom">Perso.</option>
           </select>
           {dateFilter === "custom" && (
-            <div className="flex items-center gap-2">
+            <div className="col-span-2 flex items-center gap-2 lg:col-span-1">
               <Input
                 type="date"
                 value={customDateFrom}
                 onChange={e => { setCustomDateFrom(e.target.value); setPage(1); }}
-                className="h-8 text-base lg:text-sm bg-zinc-900 border-zinc-700 w-36"
+                className="h-9 flex-1 text-base bg-zinc-900 border-zinc-700 lg:h-8 lg:flex-none lg:w-36 lg:text-sm"
               />
               <span className="text-zinc-500 text-xs">→</span>
               <Input
                 type="date"
                 value={customDateTo}
                 onChange={e => { setCustomDateTo(e.target.value); setPage(1); }}
-                className="h-8 text-base lg:text-sm bg-zinc-900 border-zinc-700 w-36"
+                className="h-9 flex-1 text-base bg-zinc-900 border-zinc-700 lg:h-8 lg:flex-none lg:w-36 lg:text-sm"
               />
             </div>
           )}
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setRefundsOnly(false); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Statut</option>
             <option value="pending">En attente</option>
@@ -1095,7 +1090,7 @@ export function AdminPayments() {
           <select
             value={paymentTypeFilter}
             onChange={(e) => { setPaymentTypeFilter(e.target.value as typeof paymentTypeFilter); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Type</option>
             <option value="on-site">Sur place</option>
@@ -1104,7 +1099,7 @@ export function AdminPayments() {
           <select
             value={methodFilter}
             onChange={(e) => { setMethodFilter(e.target.value as typeof methodFilter); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Méthode</option>
             <option value="cash">Espèces</option>
@@ -1113,12 +1108,11 @@ export function AdminPayments() {
             <option value="check">Chèque</option>
           </select>
 
-          <div className="ml-auto flex items-center gap-1">
-            <span className="text-[10px] text-zinc-500">Tri</span>
+          <FilterBarSort>
             <select
               value={sortBy}
               onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="booking_date">Date</option>
               <option value="amount">€</option>
@@ -1130,14 +1124,14 @@ export function AdminPayments() {
             <select
               value={sortOrder}
               onChange={(e) => { setSortOrder(e.target.value as typeof sortOrder); setPage(1); }}
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="desc">↓</option>
               <option value="asc">↑</option>
             </select>
-          </div>
-        </div>
-      </div>
+          </FilterBarSort>
+        </FilterBarRow>
+      </FilterBar>
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800">

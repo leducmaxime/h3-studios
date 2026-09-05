@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Search,
   FileText,
   User,
   CreditCard,
@@ -26,6 +25,7 @@ import {
   REFUND_FAILURE_CODE_LABELS,
   STRIPE_REFUND_STATUS_LABELS,
 } from "@/components/admin/refund";
+import { FilterBar, FilterBarRow, FilterBarSort, FilterSearchInput, filterControlClass, filterDateInputClass } from "@/components/admin/FilterBar";
 import { adminRoleLabel, bookingStatusLabel, groupTypeLabel, paymentMethodLabel, storedPaymentStatusLabel, studioLabel } from "@/lib/labels";
 import {
   Dialog,
@@ -861,22 +861,17 @@ export function AdminAuditLog() {
       </div>
 
       {/* Search + Filters */}
-      <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="relative w-48">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Rechercher..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
-            />
-          </div>
+      <FilterBar>
+        <FilterBarRow>
+          <FilterSearchInput
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Rechercher..."
+          />
           <select
             value={entityTypeFilter}
             onChange={(e) => setEntityTypeFilter(e.target.value)}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Type</option>
             <option value="booking">Réservation</option>
@@ -895,7 +890,7 @@ export function AdminAuditLog() {
           <select
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Action</option>
             <option value="create">Création</option>
@@ -930,7 +925,7 @@ export function AdminAuditLog() {
           <select
             value={adminFilter}
             onChange={(e) => setAdminFilter(e.target.value)}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Admin</option>
             {admins.map((admin) => (
@@ -944,32 +939,31 @@ export function AdminAuditLog() {
             aria-label="Date de début"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+            className={`${filterDateInputClass} w-full lg:w-auto`}
           />
           <input
             type="date"
             aria-label="Date de fin"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+            className={`${filterDateInputClass} w-full lg:w-auto`}
           />
           {hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
               onClick={clearFilters}
-              className="h-7 shrink-0 px-2 text-[10px] text-zinc-400"
+              className="col-span-2 h-9 shrink-0 px-2 text-xs text-zinc-400 lg:col-span-1 lg:h-7 lg:text-[10px]"
             >
               <X className="mr-1 h-3 w-3" />
               Effacer
             </Button>
           )}
-          <div className="ml-auto flex items-center gap-1">
-            <span className="text-[10px] text-zinc-500">Tri</span>
+          <FilterBarSort>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="date">Date</option>
               <option value="action">Action</option>
@@ -978,14 +972,14 @@ export function AdminAuditLog() {
             <select
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="desc">↓</option>
               <option value="asc">↑</option>
             </select>
-          </div>
-        </div>
-      </div>
+          </FilterBarSort>
+        </FilterBarRow>
+      </FilterBar>
 
       {/* Loading indicator */}
       {loading && (

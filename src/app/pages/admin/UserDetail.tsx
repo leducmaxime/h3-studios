@@ -10,7 +10,6 @@ import {
   Ban,
   Edit,
   Save,
-  Search,
   Download,
   Plus,
   ChevronUp,
@@ -32,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FilterBar, FilterBarRow, FilterBarSort, FilterSearchInput, filterControlClass, filterDateInputClass } from "@/components/admin/FilterBar";
 import { formatDateISO, getParisDateISO } from "@/lib/utils";
 import { formatSiret, resolveUserClientIdentity } from "@/lib/client-identity";
 import { bookingFieldLabel, getVisibleBookingFields, isClientType, type ClientType } from "@/lib/booking-fields";
@@ -1333,22 +1333,17 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
         <TabsContent value="bookings">
           <div className="space-y-4">
             {/* Filters */}
-            <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <div className="relative w-48">
-                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    type="text"
-                    placeholder="Rechercher..."
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
-                  />
-                </div>
+            <FilterBar>
+              <FilterBarRow>
+                <FilterSearchInput
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Rechercher..."
+                />
                 <select
                   value={dateFilter}
                   onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                  className={`${filterControlClass} w-full lg:w-auto`}
                 >
                   <option value="all">Date</option>
                   <option value="today">Auj.</option>
@@ -1364,20 +1359,20 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       type="date"
                       value={customDateFrom}
                       onChange={(e) => setCustomDateFrom(e.target.value)}
-                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+                      className={`${filterDateInputClass} w-full lg:w-auto`}
                     />
                     <input
                       type="date"
                       value={customDateTo}
                       onChange={(e) => setCustomDateTo(e.target.value)}
-                      className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+                      className={`${filterDateInputClass} w-full lg:w-auto`}
                     />
                   </>
                 )}
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as BookingStatus | "all")}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                  className={`${filterControlClass} w-full lg:w-auto`}
                 >
                   <option value="all">Statut</option>
                   <option value="confirmed">Confirmé</option>
@@ -1388,7 +1383,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 <select
                   value={studioFilter}
                   onChange={(e) => setStudioFilter(e.target.value as StudioId | "all")}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                  className={`${filterControlClass} w-full lg:w-auto`}
                 >
                   <option value="all">Studio</option>
                   <option value="la-scene">La Scène</option>
@@ -1397,18 +1392,17 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                 <select
                   value={paymentStatusFilter}
                   onChange={(e) => setPaymentStatusFilter(e.target.value as "all" | "paid" | "remaining")}
-                  className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                  className={`${filterControlClass} w-full lg:w-auto`}
                 >
                   <option value="all">Paiement</option>
                   <option value="paid">Payé</option>
                   <option value="remaining">Reste à payer</option>
                 </select>
-                <div className="ml-auto flex items-center gap-1">
-                  <span className="text-[10px] text-zinc-500">Tri</span>
+                <FilterBarSort>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as BookingSortField)}
-                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                    className={`${filterControlClass} w-full lg:w-auto`}
                   >
                     <option value="date">Date</option>
                     <option value="start_time">Heure</option>
@@ -1420,14 +1414,14 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                   <select
                     value={sortOrder}
                     onChange={(e) => setSortOrder(e.target.value as BookingSortOrder)}
-                    className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+                    className={`${filterControlClass} w-full lg:w-auto`}
                   >
                     <option value="desc">↓</option>
                     <option value="asc">↑</option>
                   </select>
-                </div>
-              </div>
-            </div>
+                </FilterBarSort>
+              </FilterBarRow>
+            </FilterBar>
 
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
               <div className="mb-4 flex items-center justify-between gap-2">

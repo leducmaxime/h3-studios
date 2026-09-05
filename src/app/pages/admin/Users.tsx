@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  Search,
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
@@ -44,6 +43,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FilterBar, FilterBarRow, FilterSearchInput, filterControlClass } from "@/components/admin/FilterBar";
 import { formatPrice } from "@/lib/booking";
 import { type DbUser } from "@/lib/db-types";
 import { exportUsersCSV } from "@/lib/export";
@@ -493,26 +493,21 @@ export function AdminUsers() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="relative w-48">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Nom, groupe, email, tél..."
-              aria-label="Rechercher un client"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
-            />
-          </div>
+      <FilterBar>
+        <FilterBarRow>
+          <FilterSearchInput
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Nom, groupe, email, tél..."
+            ariaLabel="Rechercher un client"
+          />
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-400">Statut</span>
+            <span className="shrink-0 text-xs text-zinc-400">Statut</span>
             <select
               value={blockedFilter}
               onChange={(e) => { setBlockedFilter(e.target.value as typeof blockedFilter); setPage(1); setSelectedIds(new Set()); }}
               aria-label="Filtrer par statut"
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} flex-1 lg:w-auto lg:flex-none`}
             >
               <option value="all">Tous</option>
               <option value="active">Actifs</option>
@@ -520,12 +515,12 @@ export function AdminUsers() {
             </select>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-400">Type de client</span>
+            <span className="shrink-0 text-xs text-zinc-400">Type de client</span>
             <select
               value={clientTypeFilter}
               onChange={(e) => { setClientTypeFilter(e.target.value as typeof clientTypeFilter); setPage(1); setSelectedIds(new Set()); }}
               aria-label="Filtrer par type de client"
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} flex-1 lg:w-auto lg:flex-none`}
             >
               <option value="all">Tous</option>
               {CLIENT_TYPES.map((t) => (
@@ -534,25 +529,25 @@ export function AdminUsers() {
             </select>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-400">Fidélité</span>
+            <span className="shrink-0 text-xs text-zinc-400">Fidélité</span>
             <select
               value={loyaltyFilter}
               onChange={(e) => { setLoyaltyFilter(e.target.value as typeof loyaltyFilter); setPage(1); setSelectedIds(new Set()); }}
               aria-label="Filtrer par remise de fidélité"
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} flex-1 lg:w-auto lg:flex-none`}
             >
               <option value="all">Tous</option>
               <option value="enabled">Activée</option>
               <option value="disabled">Désactivée</option>
             </select>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-400">Tri</span>
+          <div className="col-span-2 flex items-center gap-1.5 border-t border-zinc-800 pt-2 lg:col-span-1 lg:border-t-0 lg:pt-0">
+            <span className="shrink-0 text-xs text-zinc-400">Tri</span>
             <select
               value={sortBy}
               onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setPage(1); setSelectedIds(new Set()); }}
               aria-label="Trier par"
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} flex-1 lg:w-auto lg:flex-none`}
             >
               <option value="created_at">Date de création</option>
               <option value="name">Nom</option>
@@ -563,14 +558,14 @@ export function AdminUsers() {
               value={sortOrder}
               onChange={(e) => { setSortOrder(e.target.value as typeof sortOrder); setPage(1); setSelectedIds(new Set()); }}
               aria-label="Ordre de tri"
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-auto`}
             >
               <option value="desc">Décroissant</option>
               <option value="asc">Croissant</option>
             </select>
           </div>
-        </div>
-      </div>
+        </FilterBarRow>
+      </FilterBar>
 
       {/* Merge selection bar */}
       {selectedIds.size >= 2 && (

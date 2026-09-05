@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FilterBarSort, filterControlClass } from "@/components/admin/FilterBar";
 import { formatPrice } from "@/lib/booking";
 import { getDisplayStatus } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, studioLabel } from "@/lib/labels";
@@ -266,15 +267,15 @@ export function AdminRecouvrement() {
             placeholder="Réf, client, email, tél…"
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
+            className="h-9 w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-sm focus:border-primary focus:outline-none lg:h-7 lg:text-xs"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
           <div className="flex rounded-lg border border-zinc-700 bg-zinc-800 p-0.5">
             <button
               type="button"
               onClick={() => setViewMode("bookings")}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors lg:flex-none lg:py-1.5 ${
                 view === "bookings" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
               }`}
             >
@@ -283,19 +284,18 @@ export function AdminRecouvrement() {
             <button
               type="button"
               onClick={() => setViewMode("clients")}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors lg:flex-none lg:py-1.5 ${
                 view === "clients" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
               }`}
             >
               Par client
             </button>
           </div>
-          <div className="ml-auto flex items-center gap-1">
-            <span className="text-[10px] text-zinc-500">Tri</span>
+          <FilterBarSort>
             <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value as SortField)}
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="date">Date</option>
               <option value="client">Client</option>
@@ -308,12 +308,12 @@ export function AdminRecouvrement() {
             <select
               value={sortOrder}
               onChange={(event) => setSortOrder(event.target.value as SortOrder)}
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="desc">↓</option>
               <option value="asc">↑</option>
             </select>
-          </div>
+          </FilterBarSort>
         </div>
       </div>
 

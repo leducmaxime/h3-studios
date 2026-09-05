@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Search,
   Download,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CancelBookingDialog } from "@/components/admin/refund";
 import { BookingPaymentState } from "@/components/admin/BookingPaymentState";
+import { FilterBar, FilterBarRow, FilterBarSort, FilterSearchInput, filterControlClass, filterDateInputClass } from "@/components/admin/FilterBar";
 import { formatDateISO, formatDbTimestamp } from "@/lib/utils";
 import { getBookingAmountDue, getDisplayStatus, getDisplayPaymentStatusFromSummary, isBookingPast, isKeepBalanceDue } from "@/lib/booking-totals";
 import { BOOKING_STATUS_LABELS, displayPaymentStatusLabel, studioLabel } from "@/lib/labels";
@@ -316,22 +316,17 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="relative w-48">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Rechercher..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-800 py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
-            />
-          </div>
+      <FilterBar>
+        <FilterBarRow>
+          <FilterSearchInput
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Rechercher..."
+          />
           <select
             value={dateFilter}
             onChange={(e) => { setDateFilter(e.target.value as BookingsDateFilter); setExtraDateDirection(""); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Toutes les dates</option>
             <option value="today">Aujourd'hui</option>
@@ -347,20 +342,20 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                 type="date"
                 value={customDateFrom}
                 onChange={(e) => { setCustomDateFrom(e.target.value); setPage(1); }}
-                className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+                className={`${filterDateInputClass} w-full lg:w-auto`}
               />
               <input
                 type="date"
                 value={customDateTo}
                 onChange={(e) => { setCustomDateTo(e.target.value); setPage(1); }}
-                className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-1.5 text-base lg:text-sm focus:border-primary focus:outline-none"
+                className={`${filterDateInputClass} w-full lg:w-auto`}
               />
             </>
           )}
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value as BookingStatus | "all" | "not-cancelled"); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Tous les statuts</option>
             <option value="not-cancelled">Hors annulées</option>
@@ -372,7 +367,7 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
           <select
             value={studioFilter}
             onChange={(e) => { setStudioFilter(e.target.value as StudioId | "all"); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Studio</option>
             <option value="la-scene">La Scène</option>
@@ -381,7 +376,7 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
           <select
             value={paymentStatusFilter}
             onChange={(e) => { setPaymentStatusFilter(e.target.value as "all" | "paid" | "remaining" | "on-site-due"); setPage(1); }}
-            className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+            className={`${filterControlClass} w-full lg:w-auto`}
           >
             <option value="all">Paiement</option>
             <option value="paid">Payé</option>
@@ -389,12 +384,11 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
             <option value="on-site-due">Sur place à encaisser</option>
           </select>
 
-          <div className="ml-auto flex items-center gap-1">
-            <span className="text-[10px] text-zinc-500">Tri</span>
+          <FilterBarSort>
             <select
               value={sortBy}
               onChange={(e) => { setSortBy(e.target.value as BookingSortField); setPage(1); }}
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="date">Date de séance</option>
               <option value="start_time">Heure</option>
@@ -406,14 +400,14 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
             <select
               value={sortOrder}
               onChange={(e) => { setSortOrder(e.target.value as BookingSortOrder); setPage(1); }}
-              className="h-7 rounded-md border border-zinc-700 bg-zinc-800 px-2 text-xs focus:border-primary focus:outline-none"
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="desc">Décroissant</option>
               <option value="asc">Croissant</option>
             </select>
-          </div>
-        </div>
-      </div>
+          </FilterBarSort>
+        </FilterBarRow>
+      </FilterBar>
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800">

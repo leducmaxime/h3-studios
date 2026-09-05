@@ -244,9 +244,7 @@ function BookingRulesTab({ settings, onUpdate }: {
             </Button>
           </div>
         </div>
-      </div>
 
-      <div>
         <ToggleCard
           icon={<Banknote className="h-4 w-4" />}
           label="Paiement sur place"
@@ -980,21 +978,23 @@ export function AdminSettings() {
 
       <Tabs defaultValue="booking" className="w-full">
         <TabsList className="w-full lg:w-auto">
-          <TabsTrigger value="booking" className="gap-2">
-            <Clock className="h-4 w-4" />
-            Règles de réservation
+          <TabsTrigger value="booking" className="min-w-0 gap-2">
+            <Clock className="h-4 w-4 shrink-0" />
+            <span className="truncate lg:hidden">Règles</span>
+            <span className="hidden truncate lg:inline">Règles de réservation</span>
           </TabsTrigger>
-          <TabsTrigger value="banner" className="gap-2">
-            <BadgePercent className="h-4 w-4" />
-            Bandeau tarifs
+          <TabsTrigger value="banner" className="min-w-0 gap-2">
+            <BadgePercent className="h-4 w-4 shrink-0" />
+            <span className="truncate lg:hidden">Bandeau</span>
+            <span className="hidden truncate lg:inline">Bandeau tarifs</span>
           </TabsTrigger>
-          <TabsTrigger value="security" className="gap-2">
-            <Shield className="h-4 w-4" />
-            Sécurité
+          <TabsTrigger value="security" className="min-w-0 gap-2">
+            <Shield className="h-4 w-4 shrink-0" />
+            <span className="truncate">Sécurité</span>
           </TabsTrigger>
-          <TabsTrigger value="instagram" className="gap-2">
-            <Instagram className="h-4 w-4" />
-            Instagram
+          <TabsTrigger value="instagram" className="min-w-0 gap-2">
+            <Instagram className="h-4 w-4 shrink-0" />
+            <span className="truncate">Instagram</span>
           </TabsTrigger>
         </TabsList>
 
