@@ -661,11 +661,11 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="font-semibold">Informations</h2>
                   {editing ? (
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Button size="sm" onClick={handleSave} disabled={saving} className="w-full gap-1 sm:w-auto">
                         <Save className="h-4 w-4" />
                         {saving ? "Sauvegarde..." : "Enregistrer"}
                       </Button>
@@ -674,6 +674,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         variant="outline"
                         onClick={() => setEditing(false)}
                         disabled={saving}
+                        className="w-full sm:w-auto"
                       >
                         Annuler
                       </Button>
@@ -686,7 +687,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         setNotesEditing(false);
                         setEditing(true);
                       }}
-                      className="gap-1"
+                      className="w-full gap-1 sm:w-auto"
                     >
                       <Edit className="h-4 w-4" />
                       Modifier
@@ -926,7 +927,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
               {/* Remise de fidélité — super-admin uniquement */}
               {isSuperAdmin && (
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <h2 className="font-semibold">Remise de fidélité</h2>
                     {loyaltyEnabled ? (
@@ -936,8 +937,8 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                     )}
                   </div>
                   {loyaltyEditing ? (
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSaveLoyalty} disabled={loyaltySaving} className="gap-1">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Button size="sm" onClick={handleSaveLoyalty} disabled={loyaltySaving} className="w-full gap-1 sm:w-auto">
                         <Save className="h-4 w-4" />
                         {loyaltySaving ? "Sauvegarde..." : "Enregistrer"}
                       </Button>
@@ -946,6 +947,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                         variant="outline"
                         onClick={handleCancelLoyalty}
                         disabled={loyaltySaving}
+                        className="w-full sm:w-auto"
                       >
                         Annuler
                       </Button>
@@ -955,7 +957,7 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
                       size="sm"
                       variant="outline"
                       onClick={() => setLoyaltyEditing(true)}
-                      className="gap-1"
+                      className="w-full gap-1 sm:w-auto"
                     >
                       <Edit className="h-4 w-4" />
                       Modifier
@@ -1424,17 +1426,17 @@ export function AdminUserDetail({ userId }: UserDetailProps) {
             </FilterBar>
 
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-              <div className="mb-4 flex items-center justify-between gap-2">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="font-semibold">
                   Réservations ({sortedBookings.length})
                 </h2>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Button variant="outline" size="sm" onClick={handleExportCSV} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" />
                     Exporter CSV
                   </Button>
-                  <a href={`/admin/bookings/new?userId=${user.id}`}>
-                    <Button size="sm">
+                  <a href={`/admin/bookings/new?userId=${user.id}`} className="w-full sm:w-auto">
+                    <Button size="sm" className="w-full sm:w-auto">
                       <Plus className="mr-2 h-4 w-4" />
                       Nouvelle réservation
                     </Button>

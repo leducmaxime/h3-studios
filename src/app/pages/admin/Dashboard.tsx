@@ -1716,7 +1716,9 @@ export function AdminDashboard() {
               <>
                 <Select value={selectedWeek} onValueChange={setSelectedWeek}>
                   <SelectTrigger className="w-full lg:w-[160px]">
-                    <SelectValue />
+                    <SelectValue>
+                      {weekOptions.find((opt) => opt.value === selectedWeek)?.label.replace(/ \(.+\)$/, "")}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {weekOptions.map((opt) => (
@@ -2299,7 +2301,7 @@ export function AdminDashboard() {
                                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                                     style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                                   />
-                                  <span className="truncate text-xs text-zinc-300">{l.method}</span>
+                                  <span className="block truncate text-xs text-zinc-300">{l.method}</span>
                                 </div>
                                 <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-zinc-200">
                                   {formatPrice(l.revenue)} <span className="text-zinc-500">· {l.count} · {l.pct}%</span>

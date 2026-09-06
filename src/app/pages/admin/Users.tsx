@@ -501,26 +501,26 @@ export function AdminUsers() {
             placeholder="Nom, groupe, email, tél..."
             ariaLabel="Rechercher un client"
           />
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-1.5">
             <span className="shrink-0 text-xs text-zinc-400">Statut</span>
             <select
               value={blockedFilter}
               onChange={(e) => { setBlockedFilter(e.target.value as typeof blockedFilter); setPage(1); setSelectedIds(new Set()); }}
               aria-label="Filtrer par statut"
-              className={`${filterControlClass} flex-1 lg:w-auto lg:flex-none`}
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="all">Tous</option>
               <option value="active">Actifs</option>
               <option value="blocked">Bloqués</option>
             </select>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-1.5">
             <span className="shrink-0 text-xs text-zinc-400">Type de client</span>
             <select
               value={clientTypeFilter}
               onChange={(e) => { setClientTypeFilter(e.target.value as typeof clientTypeFilter); setPage(1); setSelectedIds(new Set()); }}
               aria-label="Filtrer par type de client"
-              className={`${filterControlClass} flex-1 lg:w-auto lg:flex-none`}
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="all">Tous</option>
               {CLIENT_TYPES.map((t) => (
@@ -528,13 +528,13 @@ export function AdminUsers() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:gap-1.5">
             <span className="shrink-0 text-xs text-zinc-400">Fidélité</span>
             <select
               value={loyaltyFilter}
               onChange={(e) => { setLoyaltyFilter(e.target.value as typeof loyaltyFilter); setPage(1); setSelectedIds(new Set()); }}
               aria-label="Filtrer par remise de fidélité"
-              className={`${filterControlClass} flex-1 lg:w-auto lg:flex-none`}
+              className={`${filterControlClass} w-full lg:w-auto`}
             >
               <option value="all">Tous</option>
               <option value="enabled">Activée</option>

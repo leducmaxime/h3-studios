@@ -463,7 +463,7 @@ function PeakHoursSection() {
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
       <div className="border-b border-zinc-800 px-6 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <Info className="h-5 w-5 text-primary" />
             <div>
@@ -471,20 +471,20 @@ function PeakHoursSection() {
               <p className="text-sm text-zinc-400">Heure de début des tarifs pleins en semaine</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {editing ? (
               <>
-                <Button variant="outline" size="sm" onClick={() => { setEditing(false); setDraft(peakStartHour ?? 18); }} disabled={saving}>
+                <Button variant="outline" size="sm" onClick={() => { setEditing(false); setDraft(peakStartHour ?? 18); }} disabled={saving} className="w-full sm:w-auto">
                   <X className="mr-1.5 h-3.5 w-3.5" />
                   Annuler
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
+                <Button size="sm" onClick={handleSave} disabled={saving} className="w-full sm:w-auto">
                   {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
                   Sauvegarder
                 </Button>
               </>
             ) : (
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)} disabled={peakStartHour === null}>
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)} disabled={peakStartHour === null} className="w-full sm:w-auto">
                 <Pencil className="mr-1.5 h-3.5 w-3.5" />
                 Modifier
               </Button>
@@ -988,16 +988,16 @@ function PricingTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-zinc-400">Prix par heure selon studio, groupe et créneau</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {isEditingActive ? (
             <>
-              <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={saving} className="w-full sm:w-auto">
                 <X className="mr-2 h-4 w-4" />
                 Annuler
               </Button>
-              <Button onClick={handleSave} disabled={saving || priceErrors.size > 0}>
+              <Button onClick={handleSave} disabled={saving || priceErrors.size > 0} className="w-full sm:w-auto">
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1017,11 +1017,12 @@ function PricingTab() {
                 variant="outline"
                 onClick={() => active && handleStartEdit(active.effectiveFrom)}
                 disabled={!active || editingFrom !== null}
+                className="w-full sm:w-auto"
               >
                 <Pencil className="mr-2 h-4 w-4" />
                 Modifier les prix
               </Button>
-              <Button onClick={openScheduleDialog} disabled={!active || editingFrom !== null}>
+              <Button onClick={openScheduleDialog} disabled={!active || editingFrom !== null} className="w-full sm:w-auto">
                 <CalendarPlus className="mr-2 h-4 w-4" />
                 Programmer un changement
               </Button>

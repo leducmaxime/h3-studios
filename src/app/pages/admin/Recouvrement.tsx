@@ -351,7 +351,7 @@ export function AdminRecouvrement() {
                       {group.userId !== "unknown" ? (
                         <a
                           href={`/admin/users/${group.userId}`}
-                          className="truncate font-medium hover:underline"
+                          className="block truncate font-medium hover:underline"
                           onClick={(event) => event.stopPropagation()}
                         >
                           {group.name}
