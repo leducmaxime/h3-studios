@@ -1146,7 +1146,10 @@ export function AdminDashboard() {
 
   useEffect(() => {
     const refreshBookings = () => {
-      fetch("/api/admin/bookings?dateDirection=upcoming&limit=3&sortBy=date&sortOrder=asc")
+      // On demande large (10) : les séances en cours sont aussi « à venir » côté
+      // serveur et sont retirées ici à l'affichage (widget « En cours maintenant »).
+      // Avec limit=3 elles consommaient les slots et le widget se vidait.
+      fetch("/api/admin/bookings?dateDirection=upcoming&limit=10&sortBy=date&sortOrder=asc")
         .then((res) => res.json())
         .then((json: any) => {
           if (json?.success && json?.data?.data) {
@@ -1185,6 +1188,14 @@ export function AdminDashboard() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
+
+  // Les 3 prochaines séances *non* déjà listées dans « En cours maintenant ».
+  // Le découpage se fait après filtrage, sinon une séance en cours ferait
+  // disparaître une ligne au lieu d'être simplement remplacée.
+  const visibleUpcomingBookings = useMemo(
+    () => upcomingBookings.filter((b) => !nowBookings.some((n) => n.id === b.id)).slice(0, 3),
+    [upcomingBookings, nowBookings],
+  );
 
   useEffect(() => {
     const min = statsMeta?.minYear;
@@ -1907,11 +1918,11 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {upcomingBookings.length > 0 && (
+      {visibleUpcomingBookings.length > 0 && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <h2 className="mb-3 text-sm font-semibold text-zinc-300">Prochaines réservations</h2>
           <div className="space-y-2">
-            {upcomingBookings.filter(b => !nowBookings.some(n => n.id === b.id)).map((booking) => (
+            {visibleUpcomingBookings.map((booking) => (
               <a
                 key={booking.id}
                 href={`/admin/bookings/${booking.id}`}
