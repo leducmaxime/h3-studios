@@ -80,6 +80,53 @@ const STATUS_CLASSES: Record<BookingStatus, string> = {
   "no-show": "bg-yellow-500/15 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/20",
 };
 
+// ─── Booking view model (partagé table + cartes) ──────────────────────────────
+// Calcul unique des champs dérivés d'une réservation, consommé par la ligne de
+// tableau (lg+) et par la carte mobile, pour ne pas dupliquer la logique.
+
+interface BookingViewModel {
+  displayStatus: BookingStatus;
+  statusLabel: string;
+  statusClassName: string;
+  studioName: string;
+  displayPaymentStatus: ReturnType<typeof getDisplayPaymentStatusFromSummary>;
+  displayName: string;
+}
+
+function getBookingViewModel(booking: BookingWithUser): BookingViewModel {
+  const displayStatus = getDisplayStatus(booking) as BookingStatus;
+  const statusConfig = STATUS_CONFIG[displayStatus] ?? STATUS_CONFIG[booking.status];
+  const displayPaymentStatus = getDisplayPaymentStatusFromSummary(
+    booking.status,
+    booking.payment_status,
+    booking.total_collected ?? booking.total_paid ?? 0,
+    booking.total_refunded ?? 0,
+    { keepBalanceDue: isKeepBalanceDue(booking), remaining: booking.remaining ?? 0 },
+  );
+
+  return {
+    displayStatus,
+    statusLabel: statusConfig.label,
+    statusClassName: STATUS_CLASSES[displayStatus] ?? STATUS_CLASSES[booking.status],
+    studioName: studioLabel(booking.studio_id),
+    displayPaymentStatus,
+    displayName: booking.band_name || booking.user_name || "—",
+  };
+}
+
+function renderPaymentBadge(
+  displayPaymentStatus: ReturnType<typeof getDisplayPaymentStatusFromSummary>,
+  remaining: number,
+): React.ReactNode {
+  if (displayPaymentStatus === "paid-before-cancel" || displayPaymentStatus === "refunded") {
+    return <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">{displayPaymentStatusLabel(displayPaymentStatus)}</Badge>;
+  }
+  if (displayPaymentStatus === "paid" || displayPaymentStatus === "pay-on-site" || displayPaymentStatus === "pending") {
+    return <BookingPaymentState remaining={remaining} size="sm" />;
+  }
+  return <span className="text-zinc-500">—</span>;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: string; dateDirection?: "past" | "upcoming" } {
@@ -105,6 +152,149 @@ function getDateFilterParams(filter: string): { dateFrom?: string; dateTo?: stri
     default:
       return {};
   }
+}
+
+// ─── Booking Card (mobile, < lg) ───────────────────────────────────────────────
+// Une carte par réservation : référence + client en tête, statut et menu
+// d'actions accessibles sans défilement horizontal, puis les champs
+// secondaires (date, créneau, studio, paiement) et le montant dû en pied de
+// carte. Toute la carte est cliquable vers le détail, comme la ligne du
+// tableau desktop.
+
+function BookingCard({
+  booking,
+  sortBy,
+  onMarkCompleted,
+  onNoShow,
+  onCancel,
+}: {
+  booking: BookingWithUser;
+  sortBy: BookingSortField;
+  onMarkCompleted: (bookingId: string) => void;
+  onNoShow: (bookingId: string, bookingRef: string) => void;
+  onCancel: (bookingId: string, bookingRef: string) => void;
+}) {
+  const vm = getBookingViewModel(booking);
+
+  return (
+    <div
+      className={`rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 transition-colors active:bg-zinc-800/50 ${isBookingPast(booking) ? "opacity-50" : ""}`}
+      onClick={() => { window.location.href = `/admin/bookings/${booking.id}`; }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <a
+            href={`/admin/bookings/${booking.id}`}
+            className="font-mono text-sm text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {booking.booking_ref}
+          </a>
+          {sortBy === "created_at" && booking.created_at && (
+            <p className="text-[10px] text-zinc-500">{formatDbTimestamp(booking.created_at)}</p>
+          )}
+          <a
+            href={`/admin/users/${booking.user_id}`}
+            className="mt-1 block hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="font-medium">{vm.displayName}</p>
+            <p className="text-sm text-zinc-400">{booking.user_email || "—"}</p>
+          </a>
+          {booking.user_phone && (
+            <a
+              href={`tel:${booking.user_phone}`}
+              className="text-xs text-zinc-500 hover:text-primary"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {booking.user_phone}
+            </a>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Badge variant="outline" className={vm.statusClassName}>
+            {vm.statusLabel}
+          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-zinc-700 focus:outline-none"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Actions</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <a href={`/admin/bookings/${booking.id}`} className="flex items-center gap-2">
+                  <Eye className="h-4 w-4" />
+                  Voir détails
+                </a>
+              </DropdownMenuItem>
+              {booking.status === "confirmed" && (
+                <DropdownMenuItem onClick={() => onMarkCompleted(booking.id)}>
+                  <CheckCircle2 className="h-4 w-4 text-blue-400" />
+                  <span>Marquer terminé</span>
+                </DropdownMenuItem>
+              )}
+              {(booking.status === "confirmed" || booking.status === "completed") && <DropdownMenuSeparator />}
+              {(booking.status === "confirmed" || booking.status === "completed") && (
+                <DropdownMenuItem
+                  onClick={() => onNoShow(booking.id, booking.booking_ref)}
+                  className="text-yellow-400 focus:text-yellow-400"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Marquer absent
+                </DropdownMenuItem>
+              )}
+              {booking.status === "confirmed" && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => onCancel(booking.id, booking.booking_ref)}
+                >
+                  <XCircle className="h-4 w-4" />
+                  Annuler
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-zinc-800 pt-3 text-sm">
+        <div>
+          <dt className="text-xs text-zinc-500">Date</dt>
+          <dd>{formatDate(new Date(booking.date + "T00:00:00"), "long")}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Créneau</dt>
+          <dd>
+            {booking.start_time} - {booking.end_time} ({formatDuration(booking.start_time, booking.end_time)})
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Studio</dt>
+          <dd>{vm.studioName}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Paiement</dt>
+          <dd>{renderPaymentBadge(vm.displayPaymentStatus, booking.remaining ?? 0)}</dd>
+        </div>
+      </dl>
+
+      <div className="mt-3 flex items-center justify-between border-t border-zinc-800 pt-3">
+        <span className="text-xs text-zinc-500">Montant</span>
+        <span className="font-semibold">
+          {booking.status === "cancelled" && !isKeepBalanceDue(booking) ? (
+            <span className="text-zinc-600">—</span>
+          ) : (
+            formatPrice(getBookingAmountDue(booking))
+          )}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -409,8 +599,8 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
         </FilterBarRow>
       </FilterBar>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-zinc-800">
+      {/* Table (lg+) */}
+      <div className="hidden overflow-hidden rounded-xl border border-zinc-800 lg:block">
         <div className="overflow-x-auto scroll-x-touch">
           <table className="w-full min-w-[800px]">
             <thead className="border-b border-zinc-800 bg-zinc-900">
@@ -451,26 +641,7 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                 </tr>
                 ) : (
                 bookings.map((booking) => {
-                  const displayStatus = getDisplayStatus(booking) as BookingStatus;
-                  const statusConfig = STATUS_CONFIG[displayStatus] ?? STATUS_CONFIG[booking.status];
-                  const studioName = studioLabel(booking.studio_id);
-
-                  const displayPaymentStatus = getDisplayPaymentStatusFromSummary(
-                    booking.status,
-                    booking.payment_status,
-                    booking.total_collected ?? booking.total_paid ?? 0,
-                    booking.total_refunded ?? 0,
-                    { keepBalanceDue: isKeepBalanceDue(booking), remaining: booking.remaining ?? 0 },
-                  );
-                  let paymentBadge: React.ReactNode = <span className="text-zinc-500">—</span>;
-
-                  if (displayPaymentStatus === "paid-before-cancel" || displayPaymentStatus === "refunded") {
-                    paymentBadge = <Badge className="bg-zinc-500/15 text-zinc-400 border-zinc-500/30">{displayPaymentStatusLabel(displayPaymentStatus)}</Badge>;
-                  } else if (displayPaymentStatus === "paid" || displayPaymentStatus === "pay-on-site" || displayPaymentStatus === "pending") {
-                    paymentBadge = <BookingPaymentState remaining={booking.remaining ?? 0} size="sm" />;
-                  }
-
-                  const displayName = booking.band_name || booking.user_name || "—";
+                  const vm = getBookingViewModel(booking);
 
                   return (
                     <tr key={booking.id} className={`bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors cursor-pointer ${isBookingPast(booking) ? "opacity-50" : ""}`} onClick={() => { window.location.href = `/admin/bookings/${booking.id}`; }}>
@@ -492,7 +663,7 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                           href={`/admin/users/${booking.user_id}`}
                           className="hover:underline"
                         >
-                          <p className="font-medium">{displayName}</p>
+                          <p className="font-medium">{vm.displayName}</p>
                           <p className="text-sm text-zinc-400">{booking.user_email || "—"}</p>
                           {booking.user_phone && (
                             <a href={`tel:${booking.user_phone}`} className="text-xs text-zinc-500 hover:text-primary" onClick={(e) => e.stopPropagation()}>
@@ -509,14 +680,14 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
                           {booking.start_time} - {booking.end_time} ({formatDuration(booking.start_time, booking.end_time)})
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">{studioName}</td>
+                      <td className="px-4 py-3 text-sm">{vm.studioName}</td>
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className={STATUS_CLASSES[displayStatus] ?? STATUS_CLASSES[booking.status]}>
-                          {statusConfig.label}
+                        <Badge variant="outline" className={vm.statusClassName}>
+                          {vm.statusLabel}
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
-                        {paymentBadge}
+                        {renderPaymentBadge(vm.displayPaymentStatus, booking.remaining ?? 0)}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
                         {booking.status === "cancelled" && !isKeepBalanceDue(booking) ? (
@@ -574,6 +745,30 @@ export function AdminBookings({ initialSearch }: { initialSearch?: string }) {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Cartes (< lg) */}
+      <div className="space-y-3 lg:hidden">
+        {loading ? (
+          <div className="flex justify-center rounded-xl border border-zinc-800 bg-zinc-900/50 py-12">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+        ) : bookings.length === 0 ? (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-12 text-center text-sm text-zinc-500">
+            Aucune réservation trouvée
+          </div>
+        ) : (
+          bookings.map((booking) => (
+            <BookingCard
+              key={booking.id}
+              booking={booking}
+              sortBy={sortBy}
+              onMarkCompleted={handleMarkCompleted}
+              onNoShow={(bookingId, bookingRef) => setNoShowDialog({ open: true, bookingId, bookingRef })}
+              onCancel={(bookingId, bookingRef) => setCancelDialog({ open: true, bookingId, bookingRef })}
+            />
+          ))
+        )}
       </div>
 
       {/* Pagination */}

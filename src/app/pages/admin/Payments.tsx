@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/select";
 import { formatBookingSlot, formatPrice } from "@/lib/booking";
 import { isBookingPast, parseAmountInput, round2 } from "@/lib/booking-totals";
+import { cn } from "@/lib/utils";
 import { formatTaxBreakdown } from "@/lib/tax";
 import { exportAllocationsCSV, exportCollectionsCSV, type AllocationExportRow } from "@/lib/export";
 import { RefundPaymentDialog, VoidPaymentDialog } from "@/components/admin/refund";
@@ -290,12 +291,14 @@ function PaymentActions({
   onRefund,
   onVoid,
   onCollect,
+  triggerClassName,
 }: {
   payment: ApiPayment;
   onMarkPaid: (id: string) => void;
   onRefund: (payment: ApiPayment) => void;
   onVoid: (payment: ApiPayment) => void;
   onCollect: (payment: ApiPayment) => void;
+  triggerClassName?: string;
 }) {
   const canPay = payment.status === "pending";
   const canVoid = payment.status === "pending";
@@ -308,7 +311,7 @@ function PaymentActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Button variant="ghost" size="icon" className={cn("h-8 w-8", triggerClassName)}>
           <MoreHorizontal className="h-4 w-4" />
           <span className="sr-only">Actions</span>
         </Button>
@@ -345,6 +348,100 @@ function PaymentActions({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// ─── Payment Card (mobile, < lg) ────────────────────────────────────────────────
+// Une carte par mouvement : référence + client en tête avec statut et menu
+// d'actions à portée du pouce, puis type/méthode/date en champs libellés et
+// le montant mis en avant en pied de carte.
+
+function PaymentCard({
+  payment,
+  onMarkPaid,
+  onRefund,
+  onVoid,
+  onCollect,
+}: {
+  payment: ApiPayment;
+  onMarkPaid: (id: string) => void;
+  onRefund: (payment: ApiPayment) => void;
+  onVoid: (payment: ApiPayment) => void;
+  onCollect: (payment: ApiPayment) => void;
+}) {
+  const statusCfg = statusConfig(payment);
+  const MethodIcon = PAYMENT_METHOD_ICONS[payment.method];
+  const dateValue = payment.paid_at
+    ? formatDate(payment.paid_at)
+    : payment.booking_date
+      ? formatDate(payment.booking_date)
+      : "—";
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-sm text-primary">{payment.booking_refs || "—"}</p>
+          {payment.user_name && payment.user_id ? (
+            <a href={`/admin/users/${payment.user_id}`} className="mt-1 block font-medium hover:underline">
+              {payment.user_name}
+            </a>
+          ) : payment.booking_refs ? (
+            <p className="mt-1 text-sm text-zinc-500">Compte supprimé</p>
+          ) : (
+            <p className="mt-1 text-sm text-zinc-500">—</p>
+          )}
+          {payment.user_band_name && payment.user_id && (
+            <a href={`/admin/users/${payment.user_id}`} className="block text-sm text-zinc-400 hover:underline">
+              {payment.user_band_name}
+            </a>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
+          <PaymentActions
+            payment={payment}
+            onMarkPaid={onMarkPaid}
+            onRefund={onRefund}
+            onVoid={onVoid}
+            onCollect={onCollect}
+            triggerClassName="h-11 w-11"
+          />
+        </div>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-zinc-800 pt-3 text-sm">
+        <div>
+          <dt className="text-xs text-zinc-500">Type paiement</dt>
+          <dd>
+            <Badge variant="outline" className="border-zinc-700 text-zinc-300">
+              {paymentTypeLabel(payment.payment_type)}
+            </Badge>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Méthode</dt>
+          <dd className="flex items-center gap-1.5">
+            {MethodIcon && <MethodIcon className="h-4 w-4" />} {paymentMethodLabelShort(payment.method)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Date</dt>
+          <dd>{dateValue}</dd>
+        </div>
+        {Math.abs(payment.unallocated_amount) > 0.005 && (
+          <div>
+            <dt className="text-xs text-zinc-500">Non affecté</dt>
+            <dd>{formatPrice(payment.unallocated_amount)}</dd>
+          </div>
+        )}
+      </dl>
+
+      <div className="mt-3 flex items-center justify-between border-t border-zinc-800 pt-3">
+        <span className="text-xs text-zinc-500">Montant</span>
+        <span className="font-semibold">{formatPrice(payment.amount)}</span>
+      </div>
+    </div>
   );
 }
 
@@ -1133,8 +1230,8 @@ export function AdminPayments() {
         </FilterBarRow>
       </FilterBar>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-zinc-800">
+      {/* Table (lg+) */}
+      <div className="hidden overflow-hidden rounded-xl border border-zinc-800 lg:block">
         <div className="overflow-x-auto scroll-x-touch">
           <table className="w-full min-w-[700px]">
             <thead className="border-b border-zinc-800 bg-zinc-900">
@@ -1289,6 +1386,26 @@ export function AdminPayments() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Cartes (< lg) */}
+      <div className="space-y-3 lg:hidden">
+        {payments.length === 0 ? (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-8 text-center text-zinc-500">
+            Aucun paiement trouvé
+          </div>
+        ) : (
+          payments.map((payment) => (
+            <PaymentCard
+              key={payment.id}
+              payment={payment}
+              onMarkPaid={handleMarkPaid}
+              onRefund={openRefundDialog}
+              onVoid={openVoidDialog}
+              onCollect={openGroupCollect}
+            />
+          ))
+        )}
       </div>
 
       {/* Pagination */}

@@ -720,6 +720,66 @@ function AuditDetailDialog({
   );
 }
 
+// ─── Audit Log Card (mobile, < lg) ─────────────────────────────────────────────
+// Une carte par entrée : entité + identité en tête avec le badge d'action,
+// puis date/auteur en champs libellés et le premier résumé en pied de carte.
+// Toute la carte ouvre le détail, comme le clic sur la ligne du tableau desktop.
+
+function AuditLogCard({ log, onOpen }: { log: ApiAuditLog; onOpen: (log: ApiAuditLog) => void }) {
+  const entityCfg = getEntityConfig(log.entity_type);
+  const actionCfg = getActionConfig(log.action);
+  const EntityIcon = entityCfg.icon;
+  const summaryLines = summarizeLog(log);
+  const identityLines = getIdentityLines(log);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(log)}
+      className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 text-left transition-colors active:bg-zinc-800/50"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <EntityIcon className={`mt-0.5 h-5 w-5 shrink-0 ${entityCfg.color}`} />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{entityCfg.label}</p>
+            {identityLines.length > 0 ? (
+              identityLines.map((line, i) => (
+                <p key={i} className={`truncate text-xs ${i === 0 ? "text-zinc-400" : "text-zinc-500"}`}>
+                  {line}
+                </p>
+              ))
+            ) : (
+              <p className="truncate font-mono text-xs text-zinc-600">{log.entity_id}</p>
+            )}
+          </div>
+        </div>
+        <Badge variant={actionCfg.variant} className="shrink-0">
+          {actionCfg.label}
+        </Badge>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-zinc-800 pt-3 text-sm">
+        <div>
+          <dt className="text-xs text-zinc-500">Date</dt>
+          <dd>
+            {formatDateShort(log.created_at)} · {formatTime(log.created_at)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Utilisateur</dt>
+          <dd className="truncate">{getActorLabel(log)}</dd>
+        </div>
+      </dl>
+
+      <p className="mt-3 truncate border-t border-zinc-800 pt-3 text-xs text-zinc-400">
+        <span className="text-zinc-500">Détails : </span>
+        {summaryLines[0] ?? "—"}
+      </p>
+    </button>
+  );
+}
+
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
 export function AdminAuditLog() {
@@ -989,8 +1049,8 @@ export function AdminAuditLog() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-zinc-800">
+      {/* Table (lg+) */}
+      <div className="hidden overflow-hidden rounded-xl border border-zinc-800 lg:block">
         <div className="overflow-x-auto scroll-x-touch">
           <table className="w-full min-w-[800px]">
             <thead className="border-b border-zinc-800 bg-zinc-900">
@@ -1134,6 +1194,30 @@ export function AdminAuditLog() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Cartes (< lg) */}
+      <div className="space-y-3 lg:hidden">
+        {filteredLogs.length === 0 ? (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-12 text-center text-zinc-500">
+            <FileText className="mx-auto mb-3 h-8 w-8 text-zinc-600" />
+            <p>Aucune entrée trouvée</p>
+            {hasActiveFilters && (
+              <Button
+                variant="link"
+                size="sm"
+                onClick={clearFilters}
+                className="mt-2 text-primary"
+              >
+                Réinitialiser les filtres
+              </Button>
+            )}
+          </div>
+        ) : (
+          filteredLogs.map((log) => (
+            <AuditLogCard key={log.id} log={log} onOpen={openDetail} />
+          ))
+        )}
       </div>
 
       {/* Pagination */}
