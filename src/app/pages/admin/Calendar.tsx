@@ -692,6 +692,19 @@ export function AdminCalendar() {
     return formatMonthHeader(currentDate);
   }, [view, currentDate, weekDates]);
 
+  // Variante courte pour la barre d'outils mobile (sticky, largeur serrée
+  // entre les flèches et les onglets) : "dimanche 6 septembre 2026" en
+  // `truncate` finissait coupé par une ellipse. "dim. 6 sept." tient sur
+  // une ligne sans perte d'info (le mois/vue reste visible dans le titre
+  // de page juste au-dessus). Semaine n'apparaît jamais en mobile (onglet
+  // masqué sous `lg`), mais reste calculée pour rester cohérente si `view`
+  // changeait par un autre chemin.
+  const subtitleMobile = useMemo(() => {
+    if (view === "day") return formatDate(currentDate, "short");
+    if (view === "week") return `Sem. du ${formatDate(weekDates[0], "short")}`;
+    return formatMonthHeader(currentDate);
+  }, [view, currentDate, weekDates]);
+
   // ─── Week view ──────────────────────────────────────────────────────────
 
   const STUDIO_COLORS: Record<StudioId, { bg: string; text: string; border: string }> = {
@@ -1151,7 +1164,16 @@ export function AdminCalendar() {
                           }}
                         >
                           <p className="truncate text-[12px] font-medium leading-tight">
-                            {booking.start_time}–{booking.end_time} ({formatDuration(booking.start_time, booking.end_time)}) · {groupTypeLabel(booking.group_type)}
+                            {booking.start_time}–{booking.end_time}
+                            {/* Durée + type de groupe : rendaient la ligne
+                                illisible (troncature) dans les colonnes
+                                étroites du mobile — la case ouvre le détail
+                                complet au tap, ces infos y restent
+                                disponibles. Rendu desktop inchangé. */}
+                            <span className="hidden lg:inline">
+                              {" "}
+                              ({formatDuration(booking.start_time, booking.end_time)}) · {groupTypeLabel(booking.group_type)}
+                            </span>
                           </p>
                           <p className="truncate text-[11px] leading-tight opacity-90">
                             {booking.band_name || booking.user_band_name || booking.user_name || booking.booking_ref.slice(-4)}
@@ -1232,8 +1254,126 @@ export function AdminCalendar() {
       return day.some((s) => s.studio_id === null && s.start_time === "09:00" && s.end_time === "00:00");
     };
 
+    // Jours du mois courant, sans les jours de bourrage des semaines
+    // adjacentes que la grille desktop utilise pour aligner ses colonnes
+    // (`monthGrid`) : une liste verticale n'en a pas besoin, un jour hors
+    // mois n'y aurait aucune utilité.
+    const monthDays: Date[] = [];
+    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      monthDays.push(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
+    }
+
+    const goToDayFromMonth = (date: Date) => {
+      setCurrentDate(date);
+      setView("day");
+    };
+
     return (
-      <div className="overflow-x-auto scroll-x-touch">
+      <>
+        {/* Vue agenda mobile/tablette (< lg) — BLOCKER d'audit : la grille à
+            7 colonnes tombe à ~53px/colonne sous 992px, rendant les
+            compteurs ("8 résa", "P:5", "S:5") illisibles et coupant la
+            colonne du dimanche au bord de l'écran. Un simple ajustement CSS
+            de la grille ne suffit pas à 7 colonnes sur un viewport de
+            375px — remplacée ici par une liste verticale d'un jour par
+            ligne (comme un agenda), où chaque ligne ouvre directement la
+            vue Jour de cette date (nouvelle interaction, mobile uniquement :
+            la grille desktop ne devient pas cliquable). Rendu desktop
+            inchangé — la grille existante est simplement masquée sous
+            `lg` (`hidden lg:block` plus bas), aucune de ses classes n'est
+            touchée. */}
+        <div className="divide-y divide-zinc-800 rounded-xl border border-zinc-800 lg:hidden">
+          {monthDays.map((date) => {
+            const dateStr = toDateStr(date);
+            const dayBookings = bookingsByDate.get(dateStr) || [];
+            const dayBlocked = blockedByDate.get(dateStr) || [];
+            const count = dayBookings.length;
+            const occupancyRate = computeDayOccupancyRate(dayBookings, date);
+            const { text: occupancyText } = getOccupancyColor(occupancyRate);
+            const isToday = isSameDay(date, today);
+            const fullyBlocked = isAllStudiosWholeDay(dateStr);
+            const weekdayLabel = date.toLocaleDateString("fr-FR", { weekday: "short" });
+            const studioCounts = (["la-scene", "le-podium"] as StudioId[])
+              .map((studioId) => ({
+                label: studioId === "la-scene" ? "Scène" : "Podium",
+                n: dayBookings.filter((b) => b.studio_id === studioId).length,
+              }))
+              .filter((s) => s.n > 0);
+
+            return (
+              <button
+                key={dateStr}
+                type="button"
+                onClick={() => goToDayFromMonth(date)}
+                aria-label={`Voir le ${date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`}
+                className="flex min-h-[44px] w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-zinc-800/60 active:bg-zinc-800"
+              >
+                <div
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-medium ${
+                    isToday ? "bg-primary text-primary-foreground" : "bg-zinc-800 text-zinc-300"
+                  }`}
+                >
+                  {date.getDate()}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium capitalize text-zinc-200">
+                    {weekdayLabel}
+                    {isToday && <span className="ml-1.5 text-xs font-normal text-primary">Aujourd&apos;hui</span>}
+                  </p>
+                  {count > 0 ? (
+                    <p className={`truncate text-xs ${occupancyText}`}>
+                      {count} résa{count > 1 ? "s" : ""}
+                      {studioCounts.length > 0 && (
+                        <span className="text-zinc-500">
+                          {" · "}
+                          {studioCounts.map((s) => `${s.label} ${s.n}`).join(" · ")}
+                        </span>
+                      )}
+                    </p>
+                  ) : fullyBlocked ? (
+                    <p className="truncate text-xs text-red-300">Bloqué toute la journée</p>
+                  ) : dayBlocked.length > 0 ? (
+                    <p className="truncate text-xs text-zinc-400">
+                      {dayBlocked.length} blocage{dayBlocked.length > 1 ? "s" : ""}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-zinc-600">Aucune réservation</p>
+                  )}
+                </div>
+
+                {count > 0 && (
+                  <div className="h-2 w-8 shrink-0 overflow-hidden rounded-full bg-zinc-800" aria-hidden="true">
+                    <div
+                      className={`h-full rounded-full ${
+                        occupancyRate < 0.5 ? "bg-emerald-500" : occupancyRate <= 0.8 ? "bg-amber-500" : "bg-red-500"
+                      }`}
+                      style={{ width: `${Math.round(occupancyRate * 100)}%` }}
+                    />
+                  </div>
+                )}
+              </button>
+            );
+          })}
+
+          {/* Légende — même contenu que celle de la grille desktop */}
+          <div className="flex flex-wrap items-center gap-3 px-3 py-3 text-xs text-zinc-500">
+            <span>Occupation :</span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> &lt; 50%
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> 50–80%
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> &gt; 80%
+            </span>
+          </div>
+        </div>
+
+        {/* Grille desktop — code inchangé, seulement masquée sous `lg`. */}
+        <div className="hidden overflow-x-auto scroll-x-touch lg:block">
         <div className="min-w-[350px] lg:min-w-[700px]">
           {/* Day names header */}
           <div className="grid grid-cols-7 border-b border-zinc-800">
@@ -1351,7 +1491,8 @@ export function AdminCalendar() {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </>
     );
   };
 
@@ -1368,7 +1509,13 @@ export function AdminCalendar() {
 
     return (
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
-        <DialogContent className="max-w-2xl w-[95vw] border-zinc-800 bg-zinc-900 text-zinc-100">
+        {/* `w-[95vw]` fixait une largeur explicite qui annulait `inset-x-0`
+            (feuille basse pleine largeur) sous `lg` : la boîte se retrouvait
+            collée à gauche avec un vide à droite au lieu d'occuper tout le
+            bas d'écran. Retiré ; `max-w-2xl` (plus large que le `lg:max-w-lg`
+            par défaut de DialogContent) déplacé derrière `lg:` pour garder
+            EXACTEMENT la largeur desktop actuelle. */}
+        <DialogContent className="border-zinc-800 bg-zinc-900 text-zinc-100 lg:max-w-2xl">
           <DialogHeader className="pr-8">
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
               <CalendarDays className="h-6 w-6 shrink-0 text-primary" />
@@ -1654,7 +1801,7 @@ export function AdminCalendar() {
           )}
         </div>
 
-        <p className="min-w-0 flex-1 truncate text-center text-sm text-zinc-400 lg:hidden">{subtitle}</p>
+        <p className="min-w-0 flex-1 truncate text-center text-sm text-zinc-400 lg:hidden">{subtitleMobile}</p>
 
         <div className="flex items-center gap-1 lg:gap-2">
           <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
