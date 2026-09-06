@@ -361,4 +361,58 @@
   overscroll-behavior-x: contain;
   overscroll-behavior-y: auto;
 }
+
+/* Indice visuel de défilement horizontal (mobile/tablette uniquement,
+   < 992px). Constat d'audit : chaque tableau admin (Réservations, Clients,
+   Paiements, Recouvrement, Journal d'audit, Tarification, Équipements,
+   Blocages…) est un `<table>` natif enveloppé dans
+   `overflow-x-auto scroll-x-touch` avec un `min-w-[Npx]` (560 à 988px) —
+   AUCUN n'utilise le composant `<Table>` de `ui/table.tsx` (seule la page
+   publique Tarifs s'en sert). `.scroll-x-touch` est donc le seul point
+   commun réel à tous ces tableaux : l'enrichir ici les corrige tous d'un
+   coup, sans toucher aux ~14 pages admin qui la posent déjà.
+
+   Sur ces largeurs, le contenu (560–988px) dépasse systématiquement le
+   viewport mobile/tablette (< 992px) : le fondu droit est donc correct
+   quasi tout le temps, pas une supposition hasardeuse. Un `mask-image`
+   fond le CONTENU réel en transparence (alpha véritable) plutôt que de
+   peindre une couleur de recouvrement par-dessus — contrairement à la
+   technique classique "background-attachment: local/scroll", ça ne
+   nécessite AUCUNE couleur de fond à faire correspondre à celle, très
+   variable, de chaque carte/page admin qui pose ce wrapper.
+
+   Limite assumée, sans JS : le fondu ne disparaît pas une fois le tableau
+   défilé jusqu'au bout (pas de détection de position de scroll en CSS pur).
+   C'est un compromis correct — l'indice honnête et utile ("il y a plus à
+   droite") l'emporte largement sur l'absence totale d'indice actuelle.
+   Seul le bord droit est fondu : fondre aussi le bord gauche au repos
+   suggérerait à tort du contenu cocher avant la 1ère colonne, alors que ces
+   tableaux démarrent toujours scrollés tout à gauche. */
+@media (max-width: 991px) {
+  .scroll-x-touch {
+    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  }
+}
+
+/* Barre de défilement visible en permanence (pas seulement pendant le
+   geste) sur les navigateurs qui le permettent — Firefox, Chrome Android,
+   Chromium desktop. iOS Safari masque ses barres de défilement quel que
+   soit le CSS (limitation de la plateforme, sans contournement) : c'est
+   précisément pour ce cas que le fondu `mask-image` ci-dessus existe.
+   Discrète (fine, couleur neutre) pour ne pas concurrencer le fondu. */
+.scroll-x-touch {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-zinc-600, #52525b) transparent;
+}
+.scroll-x-touch::-webkit-scrollbar {
+  height: 6px;
+}
+.scroll-x-touch::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-x-touch::-webkit-scrollbar-thumb {
+  background-color: var(--color-zinc-600, #52525b);
+  border-radius: 9999px;
+}
 /* ========================================================================= */

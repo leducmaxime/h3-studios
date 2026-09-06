@@ -81,6 +81,26 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       .catch(console.error);
   }, []);
 
+  // Le tiroir mobile passe par-dessus le contenu (z-50) mais ne bloquait pas
+  // le scroll du <body> en dessous : sur iOS Safari, un swipe démarré sur le
+  // fond noir pouvait quand même faire défiler la page cachée derrière. On
+  // verrouille explicitement le scroll du body tant que le tiroir est ouvert
+  // en mobile/tablette (il ne s'ouvre jamais en desktop, cf. lg:translate-x-0).
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, [sidebarOpen]);
+
+  // Ferme le tiroir après un tap sur un lien du menu : sans ça, naviguer
+  // vers une autre page admin en mobile laisse le tiroir ouvert par-dessus
+  // le nouveau contenu (aucune fermeture automatique n'existait avant).
+  // No-op en desktop, où le tiroir est de toute façon toujours visible.
+  const closeMobileSidebar = () => setSidebarOpen(false);
+
   const navItems = ALL_NAV_ITEMS;
 
   const onLogoClick = () => {
@@ -136,7 +156,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            className="rounded-lg p-2 hover:bg-zinc-800 lg:hidden"
+            aria-label="Fermer le menu"
+            className="-mr-1 rounded-lg p-3 hover:bg-zinc-800 lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
@@ -154,7 +175,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <li key={item.href}>
                   <a
                     href={item.href}
-                    className={`group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                    onClick={closeMobileSidebar}
+                    className={`group relative flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium whitespace-nowrap transition-colors lg:py-2.5 ${
                       isActive
                         ? "bg-primary/10 text-primary"
                         : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
@@ -179,7 +201,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </ul>
         </nav>
 
-        <div className="border-t border-zinc-800 p-2">
+        {/* Replier/déplier n'a de sens que pour la sidebar persistante du
+            desktop : dans le tiroir mobile (temporaire, superposé au contenu
+            puis refermé), réduire sa largeur à une colonne d'icônes n'aide
+            personne et ajoute un contrôle confus. Masqué sous `lg`. */}
+        <div className="hidden border-t border-zinc-800 p-2 lg:block">
           <button
             type="button"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -208,7 +234,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-2 hover:bg-zinc-800 lg:hidden"
+            aria-label="Ouvrir le menu"
+            className="-ml-1 rounded-lg p-3 hover:bg-zinc-800 lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
