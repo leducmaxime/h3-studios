@@ -164,7 +164,7 @@ function BookingRulesTab({ settings, onUpdate }: {
               size="sm"
               onClick={() => persistSetting("booking.min_advance_hours", minAdvanceHours)}
               disabled={saving === "booking.min_advance_hours"}
-              className="ml-auto"
+              className="ml-auto h-11 w-11 shrink-0 lg:h-8 lg:w-8"
             >
               {saving === "booking.min_advance_hours" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -199,7 +199,7 @@ function BookingRulesTab({ settings, onUpdate }: {
               size="sm"
               onClick={() => persistSetting("booking.max_advance_days", maxAdvanceDays)}
               disabled={saving === "booking.max_advance_days"}
-              className="ml-auto"
+              className="ml-auto h-11 w-11 shrink-0 lg:h-8 lg:w-8"
             >
               {saving === "booking.max_advance_days" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -234,7 +234,7 @@ function BookingRulesTab({ settings, onUpdate }: {
               size="sm"
               onClick={() => persistSetting("push.reminder_lead_hours", reminderLeadHours)}
               disabled={saving === "push.reminder_lead_hours"}
-              className="ml-auto"
+              className="ml-auto h-11 w-11 shrink-0 lg:h-8 lg:w-8"
             >
               {saving === "push.reminder_lead_hours" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -526,39 +526,50 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
         {adminUsers.map((user) => (
           <div
             key={user.id}
-            className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4"
+            // La ligne empilait tout sur une seule `flex` qui ne repliait
+            // jamais : le `w-[150px]` du select plus les deux boutons faisaient
+            // ~270px incompressibles, écrasant le bloc identité (`min-w-0
+            // flex-1`) jusqu'à ce que son badge "Super Admin" (`shrink-0` dans
+            // badge.tsx) déborde de sa boîte et se peigne par-dessus le select
+            // qui commençait juste après — d'où les deux libellés superposés.
+            // Sous `sm`, identité et actions passent donc en colonne, et le
+            // select perd sa largeur fixe ; à partir de `sm`, on retrouve la
+            // ligne d'origine.
+            className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:flex-row sm:items-center sm:gap-4"
           >
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-              user.is_active ? "bg-primary/20" : "bg-zinc-800"
-            }`}>
-              <span className={`text-sm font-semibold ${
-                user.is_active ? "text-primary" : "text-zinc-600"
+            <div className="flex min-w-0 flex-1 items-center gap-4">
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                user.is_active ? "bg-primary/20" : "bg-zinc-800"
               }`}>
-                {user.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-medium">{user.name}</p>
-                <Badge variant={user.role === "super-admin" ? "default" : "secondary"}>
-                  {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
-                </Badge>
-                {!user.is_active && (
-                  <Badge variant="destructive">Désactivé</Badge>
-                )}
+                <span className={`text-sm font-semibold ${
+                  user.is_active ? "text-primary" : "text-zinc-600"
+                }`}>
+                  {user.name.charAt(0).toUpperCase()}
+                </span>
               </div>
-              <p className="truncate text-xs text-zinc-500">{user.email}</p>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-medium">{user.name}</p>
+                  <Badge variant={user.role === "super-admin" ? "default" : "secondary"}>
+                    {user.role === "super-admin" ? "Super Admin" : "Opérateur"}
+                  </Badge>
+                  {!user.is_active && (
+                    <Badge variant="destructive">Désactivé</Badge>
+                  )}
+                </div>
+                <p className="truncate text-xs text-zinc-500">{user.email}</p>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {currentUser && user.id !== currentUser.id && (
+            {currentUser && user.id !== currentUser.id && (
+              <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row sm:items-center">
                 <Select
                   value={user.role}
                   onValueChange={(v) => handleRoleChange(user.id, v as AdminUserRow["role"])}
                   disabled={!canManage || updatingRole === user.id}
                 >
-                  <SelectTrigger className="h-9 w-[150px] border-zinc-700 bg-zinc-800 text-zinc-100">
+                  <SelectTrigger className="h-9 w-full border-zinc-700 bg-zinc-800 text-zinc-100 sm:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="border-zinc-800 bg-zinc-900">
@@ -566,43 +577,43 @@ function SecurityTab({ currentUser }: { currentUser: CurrentUser | null }) {
                     <SelectItem value="super-admin">Super Admin</SelectItem>
                   </SelectContent>
                 </Select>
-              )}
 
-              {currentUser && user.id !== currentUser.id && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => openDelete(user)}
-                  disabled={!canManage}
-                >
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Supprimer
-                </Button>
-              )}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => openDelete(user)}
+                    disabled={!canManage}
+                    className="flex-1 sm:flex-none"
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Supprimer
+                  </Button>
 
-              {currentUser && user.id !== currentUser.id && (
-                <Button
-                  size="sm"
-                  variant={user.is_active ? "outline" : "default"}
-                  onClick={() => handleToggle(user.id)}
-                  disabled={toggling === user.id || !canManage}
-                >
-                  {toggling === user.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : user.is_active ? (
-                    <>
-                      <UserX className="mr-1.5 h-3.5 w-3.5" />
-                      Désactiver
-                    </>
-                  ) : (
-                    <>
-                      <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-                      Activer
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
+                  <Button
+                    size="sm"
+                    variant={user.is_active ? "outline" : "default"}
+                    onClick={() => handleToggle(user.id)}
+                    disabled={toggling === user.id || !canManage}
+                    className="flex-1 sm:flex-none"
+                  >
+                    {toggling === user.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : user.is_active ? (
+                      <>
+                        <UserX className="mr-1.5 h-3.5 w-3.5" />
+                        Désactiver
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="mr-1.5 h-3.5 w-3.5" />
+                        Activer
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -828,22 +839,24 @@ function InstagramTab({ settings, onUpdate }: {
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <div className="mb-6 flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-pink-500/10 text-pink-500">
-            <Instagram className="h-6 w-6" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold">Flux Instagram</h3>
-            <p className="text-sm text-zinc-400">
-              Affichez automatiquement vos derniers posts Instagram sur la page "Actualités".
-            </p>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-pink-500/10 text-pink-500">
+              <Instagram className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-semibold">Flux Instagram</h3>
+              <p className="text-sm text-zinc-400">
+                Affichez automatiquement vos derniers posts Instagram sur la page "Actualités".
+              </p>
+            </div>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={handleSync}
             disabled={syncing || (status ? !status.tokenConfigured : !settings["instagram_access_token"])}
-            className="gap-2"
+            className="w-full gap-2 sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
             Synchroniser
@@ -852,23 +865,23 @@ function InstagramTab({ settings, onUpdate }: {
 
         {status && (
           <div className="mb-6 space-y-2.5 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <span className="text-xs text-zinc-500">Dernière synchronisation réussie</span>
               <span className="text-xs font-medium text-zinc-200">
                 {status.lastSyncedAt ? formatSyncDate(status.lastSyncedAt) : "Jamais synchronisé"}
               </span>
             </div>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <span className="text-xs text-zinc-500">Publications en cache</span>
               <span className="text-xs font-medium text-zinc-200">{status.postCount}</span>
             </div>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <span className="text-xs text-zinc-500">Expiration du token</span>
               <span className="text-xs font-medium text-zinc-200">
                 {status.expiresAt ? formatSyncDate(status.expiresAt) : "Inconnue"}
               </span>
             </div>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <span className="text-xs text-zinc-500">Dernier rafraîchissement</span>
               <span className="text-xs font-medium text-zinc-200">
                 {status.lastRefreshedAt ? formatSyncDate(status.lastRefreshedAt) : "Jamais"}
@@ -900,7 +913,7 @@ function InstagramTab({ settings, onUpdate }: {
                 placeholder="Entrez votre token Instagram..."
                 className="bg-zinc-800 border-zinc-700"
               />
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={handleSave} disabled={saving} className="h-11 w-11 shrink-0 lg:h-9 lg:w-9">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               </Button>
             </div>
@@ -977,26 +990,40 @@ export function AdminSettings() {
       </div>
 
       <Tabs defaultValue="booking" className="w-full">
-        <TabsList className="w-full lg:w-auto">
-          <TabsTrigger value="booking" className="min-w-0 gap-2">
-            <Clock className="h-4 w-4 shrink-0" />
-            <span className="truncate lg:hidden">Règles</span>
-            <span className="hidden truncate lg:inline">Règles de réservation</span>
-          </TabsTrigger>
-          <TabsTrigger value="banner" className="min-w-0 gap-2">
-            <BadgePercent className="h-4 w-4 shrink-0" />
-            <span className="truncate lg:hidden">Bandeau</span>
-            <span className="hidden truncate lg:inline">Bandeau tarifs</span>
-          </TabsTrigger>
-          <TabsTrigger value="security" className="min-w-0 gap-2">
-            <Shield className="h-4 w-4 shrink-0" />
-            <span className="truncate">Sécurité</span>
-          </TabsTrigger>
-          <TabsTrigger value="instagram" className="min-w-0 gap-2">
-            <Instagram className="h-4 w-4 shrink-0" />
-            <span className="truncate">Instagram</span>
-          </TabsTrigger>
-        </TabsList>
+        {/* Barre d'onglets défilable horizontalement en dessous de `lg` : avec 4
+            onglets et des libellés français qui ne raccourcissent pas assez
+            (même "Bandeau"/"Sécurité" ne rentrent pas à 4 sur 375px de large),
+            forcer une répartition en largeur égale (`flex-1` + troncature)
+            finissait en libellés coupés illisibles ("Séc…"). On garde les
+            libellés courts sous `lg` pour limiter la distance de défilement,
+            mais chaque onglet a désormais sa largeur naturelle (`shrink-0`,
+            `whitespace-nowrap`) et peut déborder dans un conteneur scrollable
+            plutôt que d'être compressé — `.scroll-x-touch` fournit déjà le
+            fondu de bord et la barre de défilement (même convention que les
+            tableaux admin). Rendu desktop inchangé (`lg:flex-1`, libellés
+            complets, pas de scroll nécessaire vu que tout tient). */}
+        <div className="overflow-x-auto scroll-x-touch">
+          <TabsList className="w-max lg:w-auto">
+            <TabsTrigger value="booking" className="shrink-0 gap-2 lg:flex-1">
+              <Clock className="h-4 w-4 shrink-0" />
+              <span className="whitespace-nowrap lg:hidden">Règles</span>
+              <span className="hidden whitespace-nowrap lg:inline">Règles de réservation</span>
+            </TabsTrigger>
+            <TabsTrigger value="banner" className="shrink-0 gap-2 lg:flex-1">
+              <BadgePercent className="h-4 w-4 shrink-0" />
+              <span className="whitespace-nowrap lg:hidden">Bandeau</span>
+              <span className="hidden whitespace-nowrap lg:inline">Bandeau tarifs</span>
+            </TabsTrigger>
+            <TabsTrigger value="security" className="shrink-0 gap-2 lg:flex-1">
+              <Shield className="h-4 w-4 shrink-0" />
+              <span className="whitespace-nowrap">Sécurité</span>
+            </TabsTrigger>
+            <TabsTrigger value="instagram" className="shrink-0 gap-2 lg:flex-1">
+              <Instagram className="h-4 w-4 shrink-0" />
+              <span className="whitespace-nowrap">Instagram</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="booking" className="mt-6">
           <BookingRulesTab settings={settings} onUpdate={handleSettingUpdate} />
