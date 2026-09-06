@@ -337,11 +337,11 @@ export function AdminRecouvrement() {
             const open = Boolean(openGroups[group.userId]);
             return (
               <div key={group.userId} className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
-                <div className="flex items-center gap-2 px-4 py-3 hover:bg-zinc-800/60">
+                <div className="flex flex-col gap-2 px-4 py-3 hover:bg-zinc-800/60 lg:flex-row lg:items-center">
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.userId)}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    className="flex min-w-0 items-center gap-3 text-left lg:flex-1"
                     aria-expanded={open}
                   >
                     <ChevronDown
@@ -367,24 +367,26 @@ export function AdminRecouvrement() {
                         {group.phone ? ` · ${group.phone}` : ""}
                       </p>
                     </div>
-                    <div className="shrink-0 text-right">
+                  </button>
+                  <div className="flex items-center justify-between gap-3 pl-7 lg:shrink-0 lg:justify-end lg:gap-2 lg:pl-0">
+                    <div className="text-left lg:text-right">
                       <BookingPaymentState remaining={group.remaining} variant="text" urgent className="text-sm" />
                       <p className="text-xs text-zinc-500">
                         {group.bookings.length} réservation{group.bookings.length === 1 ? "" : "s"}
                       </p>
                     </div>
-                  </button>
-                  {group.userId !== "unknown" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={() => openCollectDialog(group)}
-                    >
-                      <Banknote className="mr-1.5 h-4 w-4" />
-                      Encaisser
-                    </Button>
-                  )}
+                    {group.userId !== "unknown" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => openCollectDialog(group)}
+                      >
+                        <Banknote className="mr-1.5 h-4 w-4" />
+                        Encaisser
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {open && (
                   <div className="border-t border-zinc-800">
