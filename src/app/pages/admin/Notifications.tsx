@@ -6,7 +6,6 @@ import {
   BellRing,
   BellOff,
   ShieldAlert,
-  ShieldCheck,
   Share,
   SquarePlus,
   Smartphone,
@@ -172,14 +171,14 @@ function StatusHeader({
 }) {
   const toneClasses: Record<string, string> = {
     neutral: "bg-zinc-800 text-zinc-400",
-    warning: "bg-primary/15 text-primary",
+    warning: "bg-primary/10 text-primary",
     danger: "bg-red-500/10 text-red-400",
     success: "bg-emerald-500/10 text-emerald-400",
   };
 
   return (
     <div className="flex items-start gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${toneClasses[tone]}`}>
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClasses[tone]}`}>
         <Icon className="h-5 w-5" />
       </div>
       <div className="min-w-0">
@@ -208,7 +207,7 @@ function ToggleRow({
   const descriptionId = `push-pref-desc-${eventKey}`;
 
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-zinc-800 py-4 last:border-b-0">
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
       <div className="min-w-0 pt-0.5">
         <span className="text-sm text-zinc-200">{label}</span>
         {description && (
@@ -503,14 +502,14 @@ export function AdminNotifications() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Notifications</h1>
         <p className="text-zinc-400">Alertes push sur votre téléphone ou ordinateur</p>
       </div>
 
       {phase === "ios-install" && (
-        <div className="space-y-4">
+        <div className="max-w-2xl space-y-4">
           <StatusHeader
             icon={Share}
             tone="warning"
@@ -518,8 +517,13 @@ export function AdminNotifications() {
             description="Sur iPhone et iPad, les notifications ne fonctionnent que depuis l'application installée sur l'écran d'accueil, pas depuis Safari."
           />
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-            <h3 className="text-sm font-semibold">Comment installer l'application</h3>
-            <ol className="mt-4 space-y-4">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <SquarePlus className="h-4 w-4" />
+              </div>
+              <h3 className="text-sm font-semibold">Comment installer l'application</h3>
+            </div>
+            <ol className="space-y-4">
               <li className="flex items-start gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
                   1
@@ -569,18 +573,20 @@ export function AdminNotifications() {
       )}
 
       {phase === "unsupported" && (
-        <StatusHeader
-          icon={BellOff}
-          tone="neutral"
-          title="Navigateur non pris en charge"
-          description="Ce navigateur ne prend pas en charge les notifications push. Essayez avec Chrome, Edge ou Safari (iOS 16.4+, une fois l'application installée sur l'écran d'accueil)."
-        />
+        <div className="max-w-2xl">
+          <StatusHeader
+            icon={BellOff}
+            tone="neutral"
+            title="Navigateur non pris en charge"
+            description="Ce navigateur ne prend pas en charge les notifications push. Essayez avec Chrome, Edge ou Safari (iOS 16.4+, une fois l'application installée sur l'écran d'accueil)."
+          />
+        </div>
       )}
 
       {phase === "ready" && (
         <>
           {permission === "default" && (
-            <div className="space-y-4">
+            <div className="max-w-2xl space-y-4">
               <StatusHeader
                 icon={Bell}
                 tone="warning"
@@ -599,19 +605,25 @@ export function AdminNotifications() {
           )}
 
           {permission === "denied" && (
-            <StatusHeader
-              icon={ShieldAlert}
-              tone="danger"
-              title="Autorisation refusée"
-              description={
-                isIOS
-                  ? "Ouvrez Réglages > Notifications > H3 Admin sur votre iPhone pour réactiver, puis revenez sur cette page."
-                  : "Le navigateur ne redemandera pas l'autorisation automatiquement. Ouvrez les réglages du site (cadenas dans la barre d'adresse) et autorisez les notifications, puis revenez sur cette page."
-              }
-            />
+            <div className="max-w-2xl">
+              <StatusHeader
+                icon={ShieldAlert}
+                tone="danger"
+                title="Autorisation refusée"
+                description={
+                  isIOS
+                    ? "Ouvrez Réglages > Notifications > H3 Admin sur votre iPhone pour réactiver, puis revenez sur cette page."
+                    : "Le navigateur ne redemandera pas l'autorisation automatiquement. Ouvrez les réglages du site (cadenas dans la barre d'adresse) et autorisez les notifications, puis revenez sur cette page."
+                }
+              />
+            </div>
           )}
 
-          {permission === "granted" && (
+          {permission === "granted" && (() => {
+            const otherDevices =
+              pushState?.subscriptions.filter((s) => s.endpoint !== localEndpoint) ?? [];
+
+            return (
             <div className="space-y-6">
               {loadError && (
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
@@ -629,69 +641,76 @@ export function AdminNotifications() {
                 </div>
               )}
 
-              {/* Cet appareil */}
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <div
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-                      localEndpoint ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-800 text-zinc-500"
-                    }`}
-                  >
-                    {localEndpoint ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+              <div className={`grid gap-6 ${otherDevices.length > 0 ? "lg:grid-cols-2" : ""}`}>
+                {/* Cet appareil */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                        localEndpoint ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-800 text-zinc-500"
+                      }`}
+                    >
+                      {localEndpoint ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-semibold">Cet appareil</h3>
+                      <p className="text-xs text-zinc-500">
+                        {localEndpoint ? "Notifications actives" : "Notifications inactives"}
+                      </p>
+                    </div>
+                    {localEndpoint && <Badge className="bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/15">Actif</Badge>}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold">Cet appareil</h3>
-                    <p className="text-xs text-zinc-500">
-                      {localEndpoint ? "Notifications actives" : "Non abonné"}
-                    </p>
-                  </div>
-                  {localEndpoint && <Badge className="bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/15">Actif</Badge>}
+
+                  {localEndpoint ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={handleTest} disabled={testing}>
+                        {testing ? (
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-3.5 w-3.5" />
+                        )}
+                        Envoyer une notification de test
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleDisableThisDevice}
+                        disabled={disabling}
+                        className="text-red-400 hover:text-red-400"
+                      >
+                        {disabling ? (
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <BellOff className="mr-2 h-3.5 w-3.5" />
+                        )}
+                        Désactiver sur cet appareil
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" onClick={subscribeThisDevice} disabled={!config}>
+                      <Bell className="mr-2 h-3.5 w-3.5" />
+                      Réactiver sur cet appareil
+                    </Button>
+                  )}
                 </div>
 
-                {localEndpoint ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={handleTest} disabled={testing}>
-                      {testing ? (
-                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-3.5 w-3.5" />
-                      )}
-                      Envoyer une notification de test
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleDisableThisDevice}
-                      disabled={disabling}
-                      className="text-red-400 hover:text-red-400"
-                    >
-                      {disabling ? (
-                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <BellOff className="mr-2 h-3.5 w-3.5" />
-                      )}
-                      Désactiver sur cet appareil
-                    </Button>
-                  </div>
-                ) : (
-                  <Button size="sm" onClick={subscribeThisDevice} disabled={!config}>
-                    <Bell className="mr-2 h-3.5 w-3.5" />
-                    Réactiver sur cet appareil
-                  </Button>
-                )}
-              </div>
-
-              {/* Autres appareils */}
-              {pushState && pushState.subscriptions.filter((s) => s.endpoint !== localEndpoint).length > 0 && (
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-                  <h3 className="mb-1 text-sm font-semibold">Autres appareils</h3>
-                  <p className="mb-4 text-xs text-zinc-500">
-                    Chaque appareil doit être activé individuellement pour recevoir des notifications.
-                  </p>
-                  <div className="space-y-2">
-                    {pushState.subscriptions
-                      .filter((s) => s.endpoint !== localEndpoint)
-                      .map((row) => {
+                {/* Autres appareils */}
+                {otherDevices.length > 0 && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+                    <div className="mb-4 flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Smartphone className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-semibold">Autres appareils</h3>
+                        <p className="text-xs leading-relaxed text-zinc-500">
+                          Chaque appareil doit être activé individuellement pour recevoir des
+                          notifications.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {otherDevices.map((row) => {
                         const Icon = iconForUserAgent(row.userAgent);
                         return (
                           <div
@@ -725,14 +744,20 @@ export function AdminNotifications() {
                           </div>
                         );
                       })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Préférences */}
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold">Types de notifications</h3>
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Bell className="h-4 w-4" />
+                    </div>
+                    <h3 className="text-sm font-semibold">Types de notifications</h3>
+                  </div>
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] text-zinc-400">
                     <Users className="h-3 w-3" />
                     Par compte
@@ -743,7 +768,7 @@ export function AdminNotifications() {
                   Ces réglages s'appliquent à votre compte, donc à tous vos appareils abonnés — pas
                   seulement celui-ci.
                 </p>
-                <div>
+                <div className="grid gap-3 sm:grid-cols-2">
                   {EVENT_TYPES.map((event) => (
                     <ToggleRow
                       key={event.key}
@@ -762,7 +787,8 @@ export function AdminNotifications() {
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
         </>
       )}
     </div>
